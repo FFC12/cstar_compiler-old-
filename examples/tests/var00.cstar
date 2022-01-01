@@ -1,0 +1,71 @@
+//0 
+int8 z = 2;
+int16 l = 20;
+int32 p = 10;
+float32 s = 20;
+float64 k = 30;
+bool b = true;
+int k = 2000;
+size v = sizeof(float32);
+mat2x2 mat = [[0,1],[0,2]];
+vec3 direction = [0,1,3];
+// tensor k  
+
+
+/* 
+    Primitive type domination weight:
+    float* <- int* <- bool 
+
+    - PTD rule is valid only for types on above.
+    - So type conversion is not possible in C* like in C 'int b = (int)a;'. But we can use the cast 
+      operator for making this.
+    - Also using 'int', 'float', 'mat' or 'vec' types has a benefit like the compiler can decide 
+      which type* suits on your need when you declare a variable.
+    - 'mat*' and 'vec*' types cannot be initialized without own initializers or initialization which 
+      is also >=tensor(1) types involved (not expression initializer)
+
+    [== Extra Features]
+    - for pretending data loose in any case which is tried to cast a target type to another type that 
+    has a smaller amount of bits than target type like int32 to int8, we have compiler flag (--conversion-safe)
+    which is also providing optimization and changing the destination variable type to bigger size of type 
+    or if it's not possible (maybe it is maybe using before value assignment) create a new variable with true size.
+    - also when an integer overflow occured (compiler can understand that), it'll pretend that will happen by 
+    doing string-based multiplication or any other operations if it's possible (based on string). this also
+    can be enabled by setting compiler flag (--pretend-integer-overflow) or by directive @pretend_integer_overflow.
+    But there is important thing here. The dev must be aware of directive returns a pointer(unique probably) 
+    which is base address of string. This string holds the result of operation made.
+    
+    < C > 
+    // integer overflow occures
+    int k = 1000000000000000000000 + 10000000000000000000000000000000000000; 
+
+    < C*>
+    // integer overflow occures but can be handled by compiler
+    // note: k_of is a one-dim char pointer which is providing string base pointer of result just performed.
+    // 'safe_add' is a macro which is declared by standard library as a helper. It's making sum operations 
+    // based on string simply.
+    @pretend_integer_overflow -> k_of 
+    int k = 1000000000000000000000 + 10000000000000000000000000000000000000; 
+    if(null(k_of)) {
+        safe_add(k_of, 10); 
+        print(k_of);
+    } else {
+        print(k);
+    }
+    
+    P.S = String-based operations might be slower than normal operations based on integrals and increase the
+    compilation time as well...
+
+*/
+//1 
+int a = 20 + 30 + 40;
+int b = 10 - 30 - 100;
+float32 k = 123.324 - 32.2342;
+float64 c = k + a; // type domination rule occured -> c = 181.0898
+bool y = true;
+float64 x = k + a + y; // type domination rule occured -> c = 182.0898
+
+
+/*
+
+*/

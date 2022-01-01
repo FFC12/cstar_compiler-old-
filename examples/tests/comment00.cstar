@@ -1,0 +1,10 @@
+//This
+//and
+//another
+//when
+func(int32* ptr) as example5 :: any {
+    int32* sharedHere = ptr;
+    sharedHere = instanceof Triangle(); 
+}
+
+

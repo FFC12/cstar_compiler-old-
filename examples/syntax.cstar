@@ -1,0 +1,185 @@
+//Auto importing.
+package involved {
+    'ML',
+    'X',
+    'Y',
+    'std' // this means all standard libraries which needed by this unit to be imported, will be imported by automatically
+}
+
+package {
+    "std.math"
+}
+
+import callMe as func(x,y);
+import cos as func(x) :: float64 from std::math;
+export area<Circle> as func(x,y) :: float32;
+export sin as func(x) :: float64 from std::math;
+
+//This is the way of using features of Metaprogramming..
+attribute as Area<T> {
+    area -> T match {
+        'Triangle':  self.$0 * self.$1 / 2,
+        'Square': self.$0 * self.$1,
+        _: ''
+    }
+}
+
+attribute as Area<Circle> {
+    area -> 2 * math.PI * self.$0;
+}
+
+//meta types for reflectivity
+attribute as IsRef<T> {
+    is_ref -> meta_ref(self.$0);
+}
+
+
+//Classic macro needs
+macro as print(str) {
+    std.out(str)
+}
+
+macro as triangle_area(x,y) {
+    x * y / 2;
+}
+
+macro as unique_vec(expr){
+    vector^ temp_vec = instanceof vector();
+    loop(i in expr){
+        temp_vec.push(i)
+    }
+    ret temp_vec;
+}
+
+prototype as Shape from Area { 
+    float32 x;
+    float32 y;
+    float32 _z; // private
+
+    constructor() { // this is going to be called by instanceof operator
+
+    } 
+
+    func() as area :: float32 {
+        
+    }
+
+    func as area :: float32 {}
+    area :: float32 {}
+    func(x,y) as area<Square> :: float32;
+    func(x,y) as area<Triangle> :: float32;
+}
+
+prototype as Triangle(Shape) {
+
+}
+
+//This means pass by address by ref but it can't be changed
+func([int32&] by_ref) as example :: none {
+
+}
+
+//This means ref it can be changed
+func(int32& by_ref) as example1 :: none {
+
+}
+
+//This means pass by address that unique pointer but it can't be changed
+//and it has an unique ownership which is not able to be shared with
+//another pointer and it can be moved but not allowed by [^]
+func([int32^] ptr) as example2 :: any {
+    //this is not possible because ^ pointers are can't be shared
+    //int32^ movedHere = ptr;
+}
+
+//This means pass by address that unique pointer it 
+//has an unique ownership which is also not able to be shared with
+//another pointer and it can be moved since ^
+func(int32^ ptr) as example3 :: any {
+    //moved here not shared ptr!!
+    int32^ movedHere = ptr;
+    ptr = instance Triangle();
+} 
+
+
+//This means pass by address that shareable pointer but it can't be changed
+//and it can have many ownerships which is able to be shared with
+//another pointer and it can be moved but not allowed by [*]
+func([int32*] ptr) as example4 :: any {
+    int32* sharedHere = ptr;
+
+    //not possible
+    //sharedHere = instanceof Triangle(); 
+}
+
+//This means pass by address that shareable pointer but it can't be changed
+//and it can have many ownerships which is able to be shared with
+//another pointer and it can be moved since *
+//when shareable pointer moved, previous pointer will be nil.. and counter does not increase
+func(int32* ptr) as example5 :: any {
+    int32* sharedHere = ptr;
+    sharedHere = instanceof Triangle(); 
+}
+
+
+func() main :: int32 {
+    int32 x = 30;
+    int32* p = ref x;
+
+    //unsafe cast is trying to save ur ass from trouble with type conversions like uint32 -> int32
+    uint32 a = 1233;
+    int32 p = a; // this will be a stupid assignment here
+    int32 l = unsafe_cast<int32>(a); // it tries to understand what to do and helps implicitly if it can (2's complement)
+    float32 f = 12.3453;
+    int32 r = f; //implicitly casting
+    Shape^ shape = instanceof Triangle();
+    Triangle^ triangle = cast<Triangle^>(shape); 
+
+    if(x == 10) {
+
+    } elif (x > 10) {
+
+    } else {
+
+    }
+
+    loop(true) {
+
+    }
+
+    int32 arr[] = {0,1,2,3}
+    loop(v in arr) {
+        print(v)
+    } 
+
+    //by index
+    loop(i,v in arr){
+        print(i,v)
+    }
+
+    //by index and address p -> pointer -> address
+    loop(i,v,p in arr){
+        print(i,v,p)
+    }
+
+    int32 k = 1;
+    option(k) {
+        0: {
+
+        },
+        1: {
+
+        },
+        2: {
+
+        },
+        3: {
+
+        },
+        _: {
+
+        }
+    }
+
+    ret 0;
+}
