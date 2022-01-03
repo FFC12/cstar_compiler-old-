@@ -99,19 +99,26 @@ enum TokenKind
   I16,
   I32,
   I64,
-  I128,
+  //  I128,
+  INT,
   U8,
   U16,
   U32,
   U64,
   U128,
+  UINT,
   ISIZE,
   USIZE,
   F32,
   F64,
+  FLOAT,
   UCHAR,
   CHAR,
   BOOL,
+  VEC2,
+  VEC3,
+  VEC4,
+  VEC,
   NONE,
   ANY,
   ATTRIB,
@@ -127,6 +134,7 @@ enum TokenKind
   FALSE,
   UNKNOWN,
   UNHANDLED,
+  _EOF
 };
 
 //Making a glue for the parsing phase...
@@ -138,6 +146,20 @@ struct TypeInfo
   //vec2 => row = 1, column = 2
   int row;
   int column;
+};
+
+struct PositionInfo {
+  size_t begin;
+  size_t end;
+  size_t line;
+
+  PositionInfo() = default;
+
+  // It's not good idea that you copy each token.
+  // Because there might be a million token.That's why we moved.
+  PositionInfo(size_t begin,size_t end,size_t line)
+    : begin(begin), end(end), line(line)
+  {}
 };
 
 enum LexerFlags
@@ -154,15 +176,22 @@ private:
   bool m_HasKeyword;
   std::string m_TokenStr;
   TokenKind m_TokenKind;
+  PositionInfo m_PositionInfo;
 
 public:
-  TokenInfo(const TokenKind &pKind, const std::string pTokenStr = "", bool pHasKeyword = false)
+  TokenInfo() = default;
+  TokenInfo(const TokenKind &pKind, PositionInfo pPositionInfo, const std::string pTokenStr = "", bool pHasKeyword = false)
   {
     this->m_HasKeyword = pHasKeyword;
     this->m_TokenKind = pKind;
     this->m_TokenStr = pTokenStr;
+    this->m_PositionInfo = pPositionInfo;
   }
 
+  bool operator==(TokenInfo rhs){
+    return this->getTokenKind() == rhs.getTokenKind();
+  }
+  
   std::string getTokenAsStr() const
   {
     return this->m_TokenStr;
@@ -185,6 +214,7 @@ class CStarLexer
   std::string m_Buffer;
   std::string_view m_BufferView;
   size_t m_Index;
+  size_t m_Line,m_Col;
   char m_CurrChar;
 
   //This is for getting string data from buffer.
@@ -404,9 +434,9 @@ public:
     return ispunct(m_CurrChar) != 0;
   }
 
-  //TODO: You can just hashmaped rather than let it crazy vast branching...
+  //TODO: You can just hashmaped rather than let it make a crazy vast branches...
   TokenKind classifyIdents(const std::string& ident){
-    if(ident == "fn")
+    if(ident == "func")
       return FN;
     else if(ident == "ret")
       return RET;
@@ -460,8 +490,8 @@ public:
       return I32;
     else if(ident == "i64")
       return I64;
-    else if(ident == "i128")
-      return I128;
+    // else if(ident == "i128")
+    //return I128;
     else if(ident == "u8")
       return U8;
     else if(ident == "u16")
@@ -486,6 +516,12 @@ public:
       return CHAR;
     else if(ident == "bool")
       return BOOL;
+    else if(ident == "vec2")
+      return VEC2;
+    else if(ident == "vec3")
+      return VEC3;
+    else if(ident == "vec4")
+      return VEC4;
     else if(ident == "none")
       return NONE;
     else if(ident == "any")
@@ -511,7 +547,6 @@ public:
     else {
       return IDENT;
     }
-
   }
 
   //returns token stream as token info
@@ -525,8 +560,10 @@ public:
 
     while (this->m_LexerFlags == LexerFlags::RUNNING)
     {
-      if (this->m_LexerFlags == LexerFlags::DONE)
-        break;
+      if (this->m_LexerFlags == LexerFlags::DONE) {
+        tokenInfoList.push_back(TokenInfo(TokenKind::_EOF,PositionInfo(this->m_Index,this->m_Index,this->m_Line), "EOF", false));
+	break;
+      }
 
       auto token = nextToken();
       if (token != TokenKind::UNKNOWN || token != TokenKind::UNHANDLED)
@@ -546,7 +583,7 @@ public:
           tokenStr = tokenAsStr(token);
         }
 
-        tokenInfoList.push_back(TokenInfo(token, tokenStr, hasKeyword));
+        tokenInfoList.push_back(TokenInfo(token,PositionInfo(this->m_Index,this->m_Index, this->m_Line), tokenStr, hasKeyword));
 
         //output
 

@@ -1,0 +1,12 @@
+#ifndef VISIBILITY_SPECIFIERS_HPP
+#define VISIBILITY_SPECIFIERS_HPP
+
+enum VisibilitySpecifier{
+  VIS_EXPORT,
+  VIS_IMPORT,
+  VIS_STATIC,
+  VIS_DEFAULT
+};
+
+
+#endif

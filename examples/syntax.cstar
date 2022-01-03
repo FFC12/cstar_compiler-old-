@@ -1,20 +1,38 @@
-//Auto importing.
+//Auto importing with involved. this means all standard libraries which needed by this unit to be imported, will be imported by automatically
 package involved {
     'ML',
     'X',
-    'Y',
-    'std' // this means all standard libraries which needed by this unit to be imported, will be imported by automatically
+    'Y', 
 }
 
+// also particularly we can import a package or even only a function from it as well
 package {
     "std.math"
+    "std.math.cos"
 }
 
-import callMe as func(x,y);
-import cos as func(x) :: float64 from std::math;
-export area<Circle> as func(x,y) :: float32;
-export sin as func(x) :: float64 from std::math;
+// Linkage and storage syntax in C*
+//those are identical since if there is no return type operator exist on the function, compiler treats like its type none
+import func(int8 x,bool y) as callMe :: none; 
+import func(int8 x,bool y) as callMe;
+import {
+    func(int x8,bool y) as callMe;
+    func(int32 x,int64 y) as dontCallMe;
+}
+import glClearColor as func(float r,float g,float b,float a) :: none from "opengl32.lib";
+import from "myLibrary.lib" {
+    printf as func(char*) :: none;
+    callMe as func() :: none;
+}
 
+//float is automatically replaced by float64 or float32 which depends on the system architecture flag
+export area<Circle> as func(float x,float y) :: float32;
+export sin as func(float64 x) :: float64 from "std.math";
+export from "std.math" {
+    abs as func(int32 x) :: int32;
+    fabs as func(float32 x) :: float32;
+}
+if(isType(toke
 //This is the way of using features of Metaprogramming..
 attribute as Area<T> {
     area -> T match {
@@ -60,14 +78,23 @@ prototype as Shape from Area {
 
     } 
 
-    func() as area :: float32 {
-        
-    }
 
+    //if there is no parameters, we can write the function in three different ways
+    func() as area :: float32 {}
     func as area :: float32 {}
     area :: float32 {}
-    func(x,y) as area<Square> :: float32;
-    func(x,y) as area<Triangle> :: float32;
+    // even if its return type is none we can just write like this but this style 
+    // is not valid when we use it as local function inside of another function
+    area {}
+
+    func(int x,int y) as area<Square> :: float32;
+    func(float32 x,float32 y) as area<Triangle> :: float32;
+
+    func(x bool,bool y) as cast_is_not_possible {
+        // it's legal and not breaking PTD (primitive type domination) rule
+        int32 a = x; // but still illegal implicit casting since 'x bool' semantically dictate that you can't cast this parameter in this whole scope
+        int32 b = y; // but this is legal since there is no restriction semantically since 'bool y'.
+    }
 }
 
 prototype as Triangle(Shape) {

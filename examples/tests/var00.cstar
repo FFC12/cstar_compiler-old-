@@ -4,6 +4,9 @@ int16 l = 20;
 int32 p = 10;
 float32 s = 20;
 float64 k = 30;
+int32* r = &p;
+int32^ u = ref s;
+int32 l = deref r;
 bool b = true;
 int k = 2000;
 size v = sizeof(float32);
@@ -16,8 +19,8 @@ vec3 direction = [0,1,3];
     Primitive type domination weight:
     float* <- int* <- bool 
 
-    - PTD rule is valid only for types on above.
-    - So type conversion is not possible in C* like in C 'int b = (int)a;'. But we can use the cast 
+    - PTD rule is valid only for types on above. And in between each of this primitive type can be performed implicitly cast
+    - But there is no type conversion in C* like in C 'int b = (int)a;'. But we can use the cast 
       operator for making this.
     - Also using 'int', 'float', 'mat' or 'vec' types has a benefit like the compiler can decide 
       which type* suits on your need when you declare a variable.
@@ -64,8 +67,4 @@ float32 k = 123.324 - 32.2342;
 float64 c = k + a; // type domination rule occured -> c = 181.0898
 bool y = true;
 float64 x = k + a + y; // type domination rule occured -> c = 182.0898
-
-
-/*
-
-*/
+ 

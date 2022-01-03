@@ -2,4 +2,4 @@
 cd build/
 cmake ..
 make -j8
-./CSTAR ../examples/syntax.cstar
+./CSTAR ../examples/tests/var00.cstar
