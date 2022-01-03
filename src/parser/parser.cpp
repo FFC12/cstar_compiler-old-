@@ -24,6 +24,7 @@ void CStarParser::translationUnit() {
     } else {
       if(isLinkageMark(token)){
 	this->advance(&token);
+
 	if(this->isType(token)){
 	  
 	}
