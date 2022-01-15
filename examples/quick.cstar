@@ -1,0 +1,5 @@
+int32 i;
+float32 k;
+int32 z = 30;
+int t = 25000;
+intt k = 200; //cannot catch in the pre-parsing. it will be catched on the type checking phase...

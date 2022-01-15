@@ -2,34 +2,43 @@
 
 void CStarParser::parse() {
   m_TokenStream = this->m_Lexer.perform();
-  this->translationUnit();
+  if(this->m_TokenStream.size() >= 1) {
+    this->m_CurrToken = m_TokenStream[m_TokenIndex]; //[0]
+    this->translationUnit();
+  } else {
+    assert(true && "Parser token stream is not enough to parse!\n");
+  }
 }
 
 
 void CStarParser::translationUnit() {
-  TokenInfo token;
-  while(this->advance(&token)) {
-    if(&token == nullptr)
-      abort();
-
-    std::cout << token.getTokenAsStr() << " ";
+  while(!this->m_ParsingEndingFlag) {
+    std::cout << this->m_CurrToken.getTokenAsStr() << "\n";
     //TODO(1): EOF cannot be processed
-    if(token.getTokenKind() == TokenKind::_EOF) {
+    if(this->m_CurrToken.getTokenKind() == TokenKind::_EOF) {
       std::cout << "EOF\n";
       break;
     }
 
-    if(isPackageMark(token)){
+    if(is(TokenKind::COMMENT)) {
+      this->advance();
+      continue;
+    }
+
+    if(isPackageMark(this->m_CurrToken)){
       //package | package involved
     } else {
-      if(isLinkageMark(token)){
-	this->advance(&token);
-
-	if(this->isType(token)){
+      //export | import
+      if(isLinkageMark(this->m_CurrToken)){
+	this->advance();
+	if(this->isType(this->m_CurrToken)){
 	  
 	}
       } else {
-	
+	// int* | float* | uint* ...
+	if(this->isType(this->m_CurrToken)){
+	  varDecl();	  
+	}
       }
     }
   }

@@ -3,6 +3,7 @@
 #include <string_view>
 #include <iostream>
 #include <vector>
+#include <map>
 #include <cassert>
 
 //This section is for compiler frontend
@@ -188,8 +189,8 @@ public:
     this->m_PositionInfo = pPositionInfo;
   }
 
-  bool operator==(TokenInfo rhs){
-    return this->getTokenKind() == rhs.getTokenKind();
+  bool operator==(TokenKind token){
+    return this->getTokenKind() == token;
   }
   
   std::string getTokenAsStr() const
@@ -206,6 +207,10 @@ public:
   {
     return this->m_HasKeyword;
   }
+
+  PositionInfo getTokenPositionInfo() const {
+    return this->m_PositionInfo;
+  }
 };
 
 class CStarLexer
@@ -216,13 +221,20 @@ class CStarLexer
   size_t m_Index;
   size_t m_Line,m_Col;
   char m_CurrChar;
-
-  //This is for getting string data from buffer.
-  //Another good solution might be TokenInfo struct packing to all of them
-  //with TokenKind.But I'm kinda lazy this days...
   bool m_IsKeyword;
   std::string m_LastKeyword;
+  std::map<size_t,size_t> m_CharCountOfLine;
 
+  void preprocess() {
+    size_t charCounter = 0;
+    for(int i = 0, j = 0; i < m_BufferView.size(); i++){
+      if(m_BufferView[i] == '\n' || m_BufferView[i] == '\r') {
+	m_CharCountOfLine[j++] = charCounter;
+      } else 
+	charCounter++;
+    }
+  }
+  
   void restoreLastChar()
   {
     this->m_Index--;
@@ -236,6 +248,11 @@ class CStarLexer
         m_Index = 1;
       auto c = m_BufferView[m_Index];
       m_CurrChar = c;
+
+      if(c == '\n' || c == '\r') {
+	this->m_Line++;
+      }
+
       m_Index++;
       return c;
     }
@@ -264,6 +281,11 @@ public:
     m_Buffer = std::move(pBuffer);
     m_BufferView = m_Buffer;
     m_CurrChar = m_BufferView[0];
+    m_Line = m_Col = 0;
+    /*preprocess();
+    for(auto &el: this->m_CharCountOfLine) {
+      std::cout << el.first << " - " << el.second << std::endl;
+      }*/
   }
 
   std::string getBufferView() const
@@ -434,7 +456,7 @@ public:
     return ispunct(m_CurrChar) != 0;
   }
 
-  //TODO: You can just hashmaped rather than let it make a crazy vast branches...
+  //TODO: You can just hashmapped rather than let it make a crazy vast branches...
   TokenKind classifyIdents(const std::string& ident){
     if(ident == "func")
       return FN;
@@ -560,12 +582,13 @@ public:
 
     while (this->m_LexerFlags == LexerFlags::RUNNING)
     {
-      if (this->m_LexerFlags == LexerFlags::DONE) {
-        tokenInfoList.push_back(TokenInfo(TokenKind::_EOF,PositionInfo(this->m_Index,this->m_Index,this->m_Line), "EOF", false));
-	break;
-      }
+      
 
+      PositionInfo posInfo;
+      posInfo.begin = this->m_Index;
       auto token = nextToken();
+      posInfo.end = this->m_Index;
+      posInfo.line = this->m_Line;
       if (token != TokenKind::UNKNOWN || token != TokenKind::UNHANDLED)
       {
         bool hasKeyword = false;
@@ -583,7 +606,7 @@ public:
           tokenStr = tokenAsStr(token);
         }
 
-        tokenInfoList.push_back(TokenInfo(token,PositionInfo(this->m_Index,this->m_Index, this->m_Line), tokenStr, hasKeyword));
+        tokenInfoList.push_back(TokenInfo(token,posInfo, tokenStr, hasKeyword));
 
         //output
 
@@ -595,7 +618,9 @@ public:
        */
       }
     }
-
+    /*if (this->m_LexerFlags == LexerFlags::DONE) {
+        tokenInfoList.push_back(TokenInfo(TokenKind::_EOF,PositionInfo(this->m_Index,this->m_Index,this->m_Line), "EOF", false));
+	}*/
     return tokenInfoList;
   }
 
@@ -858,12 +883,13 @@ public:
     case '$':
       return DOLLAR;
     case '@':
-    case '`':
+    case '`': {
       return UNHANDLED;
+    }
     case '\0':
     {
       this->m_LexerFlags = LexerFlags::DONE;
-      return UNKNOWN;
+      return _EOF;
     }
     default:
       return UNKNOWN;
