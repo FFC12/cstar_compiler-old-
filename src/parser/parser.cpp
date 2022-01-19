@@ -30,15 +30,15 @@ void CStarParser::translationUnit() {
     } else {
       //export | import
       if(isLinkageMark(this->m_CurrToken)){
-	this->advance();
-	if(this->isType(this->m_CurrToken)){
-	  
-	}
-      } else {
-	// int* | float* | uint* ...
-	if(this->isType(this->m_CurrToken)){
-	  varDecl();	  
-	}
+				this->advance();
+				if(this->isType(this->m_CurrToken)){
+					
+				}
+			} else {
+				// int* | float* | uint* ...
+				if(this->isType(this->m_CurrToken)){
+					varDecl();	  
+				}
       }
     }
   }
