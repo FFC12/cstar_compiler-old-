@@ -1,0 +1,70 @@
+int k = 20 + (10 * 2 + k) - 23 & 0xFF;
+
+expression stack machine
+
+stack => [ '20'  '+'        '('     '10'      '*'       '2'         '+'         'k'        ')'      '-'         '23'        '&'         '0xFF' ]  
+           -1  (-2,13,2)   (-3,0)    -4    (-5,11,2)    -6       (-7,13,2)      -8        (-9,0)   (-10,13,2)    -11      (-12,6,2)       -13
+
+vals = [20,10,2,k,23,0xFF]  
+
+
+  addOpPrecMap(COLONCOLON, 16, true);
+  addOpPrecMap(LPAREN, 15, true);
+  addOpPrecMap(LSQPAR, 15, true);
+  addOpPrecMap(PLUSPLUS, 15, true);
+  addOpPrecMap(MINUSMINUS, 15, true);
+
+  //member access operators
+  addOpPrecMap(DOT, 15, true);
+  addOpPrecMap(ARROW, 15, true);
+
+  addOpPrecMap(LPAREN, 14, false);
+
+  addOpPrecMap(PLUSPLUS, 13, false);
+  addOpPrecMap(MINUSMINUS, 13, false);
+  addOpPrecMap(PLUS, 13, false);
+  addOpPrecMap(MINUS, 13, false);
+  addOpPrecMap(NOT, 13, false);
+  addOpPrecMap(TILDE, 13, false);
+  addOpPrecMap(STAR, 13, false);
+  addOpPrecMap(AND, 13, false);
+  addOpPrecMap(SIZEOF, 13, false);
+  addOpPrecMap(INSTANCEOF, 13, false);
+  addOpPrecMap(UNSAFE_CAST, 13, false);
+  addOpPrecMap(CAST, 13, false);
+  addOpPrecMap(DEREF, 13, false);
+  addOpPrecMap(REF, 13, false);
+  addOpPrecMap(AS, 13, true);
+
+  addOpPrecMap(STAR, 11, true);
+  addOpPrecMap(MOD, 11, true);
+  addOpPrecMap(DIV, 11, true);
+  addOpPrecMap(PLUS, 11, true);
+  addOpPrecMap(MINUS, 11, true);
+
+  addOpPrecMap(LSHIFT, 10, true);
+  addOpPrecMap(RSHIFT, 10, true);
+  addOpPrecMap(LT, 8, true);
+  addOpPrecMap(LTEQ, 8, true);
+  addOpPrecMap(GT, 8, true);
+  addOpPrecMap(GTEQ, 8, true);
+  addOpPrecMap(EQUALEQUAL, 7, true);
+  addOpPrecMap(NOTEQUAL, 7, true);
+  addOpPrecMap(AND, 6, true);
+  addOpPrecMap(XOR, 5, true);
+  addOpPrecMap(OR, 4, true);
+  addOpPrecMap(LAND, 3, true);
+  addOpPrecMap(LOR, 2, true);
+
+  addOpPrecMap(EQUAL, 1, true);
+  addOpPrecMap(PLUSEQ, 1, true);
+  addOpPrecMap(MINUSEQ, 1, true);
+  addOpPrecMap(STAREQ, 1, true);
+  addOpPrecMap(DIVEQ, 1, true);
+  addOpPrecMap(MODEQ, 1, true);
+  addOpPrecMap(LSHIFTEQ, 1, true);
+  addOpPrecMap(RSHIFTEQ, 1, true);
+  addOpPrecMap(ANDEQ, 1, true);
+  addOpPrecMap(XOREQ, 1, true);
+  addOpPrecMap(OREQ, 1, true);
+  addOpPrecMap(COMMA, 1, true);
