@@ -8,7 +8,7 @@
 
 /*
   translation_unit :== 
-                     var_decl 
+         var_decl 
 		   | func_decl 
 		   | proto_decl 
 		   | attrib_decl 
@@ -17,8 +17,8 @@
  
 
   var_decl        :==
-                     type_resolver IDENT ';'
-                   | type_resolver IDENT '=' initializer ';'
+         type_resolver IDENT ';'
+       | type_resolver IDENT '=' initializer ';'
 		   | storage_specifier type_resolver IDENT ';'
 		   | storage_specifier type_resolver IDENT '=' initializer ';'
 
@@ -88,7 +88,7 @@ class CStarParser {
     return m_TokenStream[m_TokenIndex] == token;
   }
 
-  //Is it matched with we look for?
+  //Is it matched with that what we look for?
   bool expected(TokenKind expected) {
     if(is(expected)) {
       return true;
@@ -113,6 +113,8 @@ class CStarParser {
   void translationUnit();
   IAST varDecl();
   IAST initializer();
+	IAST initializer_list();
+	IAST expression();
   TypeSpecifier typeResolver(TokenInfo token);
 
 public:

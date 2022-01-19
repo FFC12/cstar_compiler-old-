@@ -3,8 +3,7 @@ float32 k;
 int32 z = 30;
 int t = 25000;
 intt k = 200; //cannot catch in the pre-parsing. it will be catched on the type checking phase...
-int l = 123 + 123;
-int* r = 20022;
-int* s = r;
-int* v = &l;
-
+int l = 123;
+//int* r = 20022;
+//int* s = r;
+//int* v = &l;

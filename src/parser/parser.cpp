@@ -13,7 +13,6 @@ void CStarParser::parse() {
 
 void CStarParser::translationUnit() {
   while(!this->m_ParsingEndingFlag) {
-    std::cout << this->m_CurrToken.getTokenAsStr() << "\n";
     //TODO(1): EOF cannot be processed
     if(this->m_CurrToken.getTokenKind() == TokenKind::_EOF) {
       std::cout << "EOF\n";

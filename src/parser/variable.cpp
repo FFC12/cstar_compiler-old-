@@ -19,11 +19,20 @@ IAST CStarParser::varDecl() {
   }
 }
 
-//TODO: We need to have done expression parsing rule.
+//TODO: We need to have done that expression parsing rule.
 IAST CStarParser::initializer() {
   std::cout << "Initializer\n";
+	std::cout << "This is a value -> " << this->m_CurrToken.getTokenAsStr() << "\n";
   this->advance();
   expected(TokenKind::SEMICOLON);
   std::cout << "Variable declaration is done\n";
   this->advance();
+}
+
+IAST CStarParser::initializer_list() {
+		
+}
+
+IAST CStarParser::expression() {
+	
 }

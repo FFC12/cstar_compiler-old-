@@ -582,8 +582,6 @@ public:
 
     while (this->m_LexerFlags == LexerFlags::RUNNING)
     {
-      
-
       PositionInfo posInfo;
       posInfo.begin = this->m_Index;
       auto token = nextToken();
