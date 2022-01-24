@@ -1,0 +1,2 @@
+#!/usr/bin/bash
+nvim -p src/parser/parser.cpp src/parser/variable.cpp src/parser/expr.cpp include/parser/parser.hpp include/lexer/lexer.hpp

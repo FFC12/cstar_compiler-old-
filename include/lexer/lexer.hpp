@@ -11,7 +11,8 @@ enum TokenKind
 {
   IMPORT,
   NATIVE,
-  SCALAR,
+  SCALARI, //integer scalar like 10, 11
+	SCALARD, //double scalar like 10.03f, 20.0243f
   MATRIX,
   VECTOR,
   IDENT,
@@ -138,7 +139,6 @@ enum TokenKind
   _EOF
 };
 
-//Making a glue for the parsing phase...
 struct TypeInfo
 {
   TokenKind kind;
@@ -156,8 +156,8 @@ struct PositionInfo {
 
   PositionInfo() = default;
 
-  // It's not good idea that you copy each token.
-  // Because there might be a million token.That's why we moved.
+  // It's not good idea that copying each token.
+  // Because there may be a million token.That's why we have to moved.
   PositionInfo(size_t begin,size_t end,size_t line)
     : begin(begin), end(end), line(line)
   {}
@@ -316,6 +316,7 @@ public:
     char _c = this->m_CurrChar;
     bool _is_float = false;
     std::string _keyword = "";
+		TokenKind _scalarType = TokenKind::SCALARI;
 
     while (isdigit(_c) || _c == '.')
     {
@@ -331,12 +332,13 @@ public:
         }
 
         _is_float = true;
+				_scalarType = TokenKind::SCALARD;
       }
     }
     restoreLastChar();
     this->m_LastKeyword = _keyword;
     this->m_IsKeyword = true;
-    return SCALAR;
+    return _scalarType;
   }
 
   TokenKind advanceLiteral()
@@ -504,33 +506,37 @@ public:
       return TYPEOF;
     else if(ident == "instanceof")
       return INSTANCEOF;
-    else if(ident == "i8")
+    else if(ident == "int8")
       return I8;
-    else if(ident == "i16")
+    else if(ident == "int16")
       return I16;
-    else if(ident == "i32")
+    else if(ident == "int32")
       return I32;
-    else if(ident == "i64")
+    else if(ident == "int64")
       return I64;
-    // else if(ident == "i128")
-    //return I128;
-    else if(ident == "u8")
+    else if(ident == "int")
+    	return INT;
+    else if(ident == "uint8")
       return U8;
-    else if(ident == "u16")
+    else if(ident == "uint16")
       return U16;
-    else if(ident == "u32")
+    else if(ident == "uint32")
       return U32;
-    else if(ident == "u64")
+    else if(ident == "uint64")
       return U64;
-    else if(ident == "u128")
+    else if(ident == "uint128")
       return U128;
+		else if(ident == "uint")
+			return UINT;
     else if(ident == "isize")
       return ISIZE;
     else if(ident == "usize")
       return USIZE;
-    else if(ident == "f32")
+		else if(ident == "float")
+			return FLOAT;
+    else if(ident == "float32")
       return F32;
-    else if(ident == "f64")
+    else if(ident == "float64")
       return F64;
     else if(ident == "uchar")
       return UCHAR;
@@ -906,8 +912,10 @@ public:
       return "\""; 
     case IDENT:
       return "IDENTIFIER";
-    case SCALAR:
-      return "SCALAR";
+    case SCALARI:
+      return "INTEGER SCALAR";
+		case SCALARD:
+			return "FLOAT SCALAR";
     case LITERAL:
       return "LITERAL";
     case LETTER:
@@ -937,7 +945,8 @@ public:
     case RANGE:
       return "..";
     case TRIPLET:
-      return "...";
+      return "...";
+
     case SEMICOLON:
       return ";";
     case DOLLAR:

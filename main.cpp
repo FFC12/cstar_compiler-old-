@@ -4,6 +4,7 @@
 #include <sstream>
 #include <lexer/lexer.hpp>
 #include <parser/parser.hpp>
+#include <base.hpp>
 
 int main(int argc, char** argv) {
   if(argc > 1) {
@@ -16,8 +17,8 @@ int main(int argc, char** argv) {
     parser.parse();
 
   } else {
-    std::cerr << "No argument specified!\n\n";
-    std::cerr << "  Usage: ./CSTAR.exe file.cstar";
+    Message("No argument specified!\n");
+    Message("--- Usage: ./CSTAR file.cstar\n");
   }
   return 0;
 }

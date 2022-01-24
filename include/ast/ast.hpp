@@ -3,8 +3,8 @@
 
 class IAST {
 public:
-  ~IAST() {};
+  ~IAST() {}; 
 };
-
+ 
 
 #endif
