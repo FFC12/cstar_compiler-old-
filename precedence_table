@@ -37,10 +37,13 @@ op_s = [sizeof, cast<int>, *]
 
 ---------------------------
 
+2 + (5 + 2) + 3
+a ?    b    : 3
+
 uint p = 20;
 int r = -1 + func(10) * cast<int>(sizeof(uint)) + *i + &k + s[*p++];   
 
-stack = [ '-1' '+' 'func(10)' '*'  'cast<int>' '(' 'sizeof' '(' 'uint' ')' ')' '+' '*' 'i' '+' '&' 'k' '+' 's' '[' '*' 'p' '++' ']' ]
+stack = [ '-' '1' '+' 'func' '(' '10' ')' '*'  'cast<int>' '(' 'sizeof' '(' 'uint' ')' ')' '+' '*' 'i' '+' '&' 'k' '+' 's' '[' '*' 'p' '++' ']' ]
                         |               |
                     1 thing           1 thing
                     advance expr    advance expr                     
@@ -65,7 +68,5 @@ op_s = [sizeof, cast<int>, *]
 2 - determine assoc of type and also precedence level for each operator (check is it binary op or not?)
 3 - extract values into another list
 4 - process subexpressions if any and go to step 1
-5 - sort operators by precedence
-6 - advance each operator and build an AST for the expression
-
-
+5 - sort operators by precedencing and assoc type (ltr or rtl)
+6 - advance each operator and build an AST for the expression 

@@ -11,19 +11,25 @@ package {
     "std:math:cos"
 }
 
+// PI is acting like a constant but just a symbol
+package "std:math:PI" as PI 
+//is equal to
+package "std:math" as math
+const int32 PI = math.PI;
+
 // Linkage and storage syntax in C*
 //those are identical since if there is no return type operator exist on the function, compiler treats like 
-//its type is none
-import callMe(int8 x,bool y) :: none; 
+//its type is void
+import callMe(int8 x,bool y) :: void; 
 import callMe(int8 x,bool y);
 import {
     callMe(int x8,bool y);
     dontCallMe(int32 x,int64 y);
 }
-import glClearColor(float r,float g,float b,float a) :: none from "opengl32.lib";
+import glClearColor(float r,float g,float b,float a) :: void from "opengl32.lib";
 import from "myLibrary.lib" {
-    printf(char*) :: none;
-    callMe() :: none;
+    printf(char*) :: void;
+    callMe() :: void;
 }
 
 //float is automatically replaced by float64 or float32 which depends on the system architecture flag
@@ -70,6 +76,8 @@ macro unique_vec(expr){
     ret temp_vec;
 }
 
+
+//Attributing functions from Area (this is like a interface but not exactly interface...)
 prototype Shape<T> from Area<T> { 
     float32 x;
     float32 y;
@@ -86,13 +94,21 @@ prototype Shape<T> from Area<T> {
     area<Square>(int x,int y) :: float32;
     area<Triangle>(float32 x,float32 y) :: float32;
 
-    cast_is_not_possible(x bool,bool y) :: none {
+    cast_is_not_possible(x bool,bool y) :: void {
         // it's legal and not breaking PTD (primitive type domination) rule
         int32 a = x; // but still illegal implicit casting since 'x bool' semantically dictate that you can't cast this parameter in this whole scope
+                     // ? maybe we can use this for preventing to cast that would be occured by the compiler
         int32 b = y; // but this is legal since there is no restriction semantically since 'bool y'.
     }
 }
 
+//This is inheritance just like in OOP (so the Triangle prototype is inheriting the Shape prototype)
+//prototypes are like classes but they are more powerful than classes and concept of behind it.
+//with a prototype, you can also create new primitive types for your needs and customize them
+//with attributes and traits. traits are using when if there's common and shared features between
+//prototypes. in that way your prototypes has not to be derived from each other possibly. and also
+//traits offers a strong type checking and flexibility with some equalities features(https://en.wikipedia.org/wiki/Partial_equivalence_relation)
+//just like in Rust and C++ but maybe in the better and stronger ways.
 prototype Triangle(Shape) {
 
 }
@@ -102,19 +118,19 @@ a_func(int32, int);
 
 
 //This means pass by address by ref but it can't be changed
-example(int32& by_ref) :: none {
+example(int32& by_ref) :: void {
 
 }
 
 //This means ref it can be changed
-example1(int32& by_ref) :: none {
+example1(constref int32& by_ref) :: void {
 
 }
 
 //This means pass by address that unique pointer but it can't be changed
 //and it has an unique ownership which is not able to be shared with
 //another pointer and it can be moved but not allowed by [^]
-example2(int32^ ptr) :: any {
+example2(constptr int32^ ptr) :: any {
     //this is not possible because ^ pointers are can't be shared
     //int32^ movedHere = ptr;
 }
@@ -132,7 +148,7 @@ example3(int32^ ptr) :: any {
 //This means pass by address that shareable pointer but it can't be changed
 //and it can have many ownerships which is able to be shared with
 //another pointer and it can be moved but not allowed by [*]
-example4([int32*] ptr) :: any {
+example4(constptr int32* ptr) :: any {
     int32* sharedHere = ptr;
 
     //not possible
@@ -149,7 +165,59 @@ example5(int32* ptr) :: any {
 }
 
 
- main() :: int32 {
+example6(readonly char* str) async ::  any {
+    bool success = await a_function_must_be_awaited();
+    ret success ? str : "not succeded!";
+}
+
+
+//built-in directive which'll be called while compiling the source code
+@compiler_hook()
+__greater_than_hook() :: void {
+
+}
+
+
+
+//This is directive defination here. It can take param or not.
+//Depends on what it'll do. If need to take params then must be matched
+//all params with the target function 
+#this_function_may_throw_an_error(bool a_param) {
+    //$func, $line,, $col,
+    // this means function will be copied here
+    $func(a_param)::onexcept{
+        print("has thrown an error by function" + $func::name + " " + $line + " " + $col);
+    }::noexcept{
+
+    };
+}
+
+#pretend_integer_overflow -> k_of {
+
+}
+
+//this is directive and can be used for functions or variables.
+//they are able to wrap the function or variable that qualified.
+//it's a thing between macro and try-catch statements. they can
+//expand and run on the run time.
+@this_function_may_throw_an_error
+example7(bool a_param) except :: int32 {
+    // integer overflow occures but can be handled by compiler
+    // note: k_of is a one-dim char pointer which is providing string base pointer of result just performed.
+    // 'safe_add' is a macro which is declared by standard library as a helper. It's making sum operations 
+    // based on string simply.
+    @pretend_integer_overflow -> k_of 
+    int k = 1000000000000000000000 + 10000000000000000000000000000000000000; 
+    if(null(k_of)) {
+        safe_add(k_of, 10); 
+        print(k_of);
+    } else {
+        print(k);
+        throw;
+    } 
+}
+
+main() :: int32 {
     int32 x = 30;
     int32* p = ref x;
     x = deref p;
@@ -162,9 +230,9 @@ example5(int32* ptr) :: any {
     int32 r = f; //implicitly casting
     Shape^ shape = Triangle(); 
     Triangle^ triangle = cast<Triangle^>(shape);
-    
+
     const Shape^ ptr = Triangle(); // the address is not constant and the value it holds cannot be changed.
-    constptr Shape^ ptr = Triangle(); // the address is constant and but the value it holds can be changed.
+    constptr Shape^ ptr = Triangle(); // the address is constant but the value it holds can be changed.
     readonly Shape^ ptr = Triangle(); // the address and the value are constant and this is readonly.
 
     //for stack-kind variables.

@@ -76,6 +76,18 @@ bool CStarParser::isType(TokenInfo token) {
   }
 }
 
+bool CStarParser::isCastableOperator(TokenInfo token) {
+	switch(token.getTokenKind()) {
+		case UNSAFE_CAST:
+		case CAST:
+		case AS:
+			return true;
+		default:
+			return false;
+	}	
+}
+
+
 bool CStarParser::isOperator(TokenInfo token) {
   switch(token.getTokenKind()) {
     case LPAREN:
@@ -87,7 +99,6 @@ bool CStarParser::isOperator(TokenInfo token) {
     case DOT:
     case ARROW:
     case SIZEOF:
-    case INSTANCEOF:
     case DEREF:
     case REF:
     case AS:

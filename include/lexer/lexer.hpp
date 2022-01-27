@@ -74,7 +74,10 @@ enum TokenKind
   COLONCOLON,
   COLON,
   PAREQ, // partial eq ===
-  FN,  
+  CONST,
+  CONSTPTR,
+  CONSTREF,
+  READONLY,  
   RET,
   IN,
   AS,
@@ -95,8 +98,7 @@ enum TokenKind
   CAST,
   UNSAFE_CAST,
   SIZEOF,
-  TYPEOF,
-  INSTANCEOF,
+  TYPEOF, 
   I8,
   I16,
   I32,
@@ -121,7 +123,7 @@ enum TokenKind
   VEC3,
   VEC4,
   VEC,
-  NONE,
+  VOID,
   ANY,
   ATTRIB,
   PROTO,
@@ -460,9 +462,7 @@ public:
 
   //TODO: You can just hashmapped rather than let it make a crazy vast branches...
   TokenKind classifyIdents(const std::string& ident){
-    if(ident == "func")
-      return FN;
-    else if(ident == "ret")
+    if(ident == "ret")
       return RET;
     else if(ident == "in")
       return IN;
@@ -504,8 +504,14 @@ public:
       return SIZEOF;
     else if(ident == "typeof")
       return TYPEOF;
-    else if(ident == "instanceof")
-      return INSTANCEOF;
+    else if(ident == "const")
+      return CONST;
+    else if(ident == "constptr")
+      return CONSTPTR;
+    else if(ident == "constref")
+      return CONSTREF;
+    else if(ident == "readonly")
+      return READONLY;
     else if(ident == "int8")
       return I8;
     else if(ident == "int16")
@@ -550,13 +556,13 @@ public:
       return VEC3;
     else if(ident == "vec4")
       return VEC4;
-    else if(ident == "none")
-      return NONE;
+    else if(ident == "void")
+      return VOID;
     else if(ident == "any")
       return ANY;
-    else if(ident == "attrib")
+    else if(ident == "attribute")
       return ATTRIB;
-    else if(ident == "proto")
+    else if(ident == "prototype")
       return PROTO;
     else if(ident == "enum")
       return ENUM;

@@ -11,14 +11,13 @@
 #include <ast/var_ast.hpp>
 #include <ast/scalar_ast.hpp>
 
-using ASTNode = std::unique_ptr<IAST>; 
-
 class CStarParser {
 	PrecedenceInfoTable m_PrecTableUnary, m_PrecTableBinary, m_PrecTableCast;
   PrecedenceTable m_PrecTable;
   CStarLexer m_Lexer;
   size_t m_TokenIndex;
   TokenInfo m_CurrToken;
+	TokenInfo m_PrevToken;
   std::vector<TokenInfo> m_TokenStream;
   std::vector<ASTNode> m_AST;
   bool m_ErrorFlag;
@@ -43,6 +42,7 @@ class CStarParser {
   }
 
   bool isOperator(TokenInfo token);
+	bool isCastableOperator(TokenInfo token);
 
   //Is it matched with that what we look for?
   bool expected(TokenKind expected) {
@@ -59,20 +59,47 @@ class CStarParser {
 
   void advance() {
     if (m_TokenIndex < m_TokenStream.size()) {
+			this->m_PrevToken = m_TokenStream[m_TokenIndex];
       this->m_CurrToken = m_TokenStream[++m_TokenIndex];
       this->m_ParsingEndingFlag = false;
     } else {
       this->m_ParsingEndingFlag = true;
     }
   }
+
+	TokenInfo prevTokenInfo() const noexcept {
+		return this->m_PrevToken;
+	}
+
+	TokenKind prevTokenKind() const noexcept {
+		return this->m_PrevToken.getTokenKind();
+	}
 	
+	TokenInfo currentTokenInfo() const noexcept {
+		return this->m_CurrToken;
+	}
+
 	TokenKind currentTokenKind() const noexcept {
 		return this->m_CurrToken.getTokenKind();
+	}
+
+	//It has not a token kind version since has an argument
+	//and it need to a lot of work to handle it in another function
+	///which it'll be a param as well.
+	TokenInfo nextTokenInfo(bool& outOfSize) const noexcept {
+    if (m_TokenIndex + 1 <= m_TokenStream.size()) {
+			outOfSize = false;
+			return m_TokenStream[m_TokenIndex + 1];
+    } else {
+			outOfSize = true;
+			return TokenInfo();
+    }
 	}
 
 	std::string currentTokenStr() const noexcept {
 		return this->m_CurrToken.getTokenAsStr();
 	}
+
 
   void addToPrecTable(OpType op,TokenKind kind, int prec, bool isLeftToRight) {
     switch(op) {
@@ -101,6 +128,10 @@ class CStarParser {
 	size_t advancePointerType(bool isUniquePtr);
 
 	//expr.cpp
+	bool isUnaryOp();
+	bool isBinOp();
+	bool isCastOp();
+	void reduceExpression();
 	ASTNode expression();
 	ASTNode advanceConstantOrLiteral();
 	ASTNode advanceRef();
@@ -118,10 +149,9 @@ public:
     : m_Lexer(std::move(pLexer)), m_TokenIndex(0),
       m_ErrorFlag(false), m_ParsingEndingFlag(false)
   {
-    addToPrecTable(OpType::OP_BINARY, COLONCOLON, 16, true);
-    //Paranthesis will be interpreted as sub-expression and will call the function itself again (recursively)
-    //addToPrecTable(OpType:: ,LPAREN, 15, true);
-    //addToPrecTable(OpType::OP_BINARY, LSQPAR, 15, true);
+    addToPrecTable(OpType::OP_BINARY, COLONCOLON, 16, true); 
+    addToPrecTable(OpType::OP_BINARY, LPAREN, 15, true);
+    addToPrecTable(OpType::OP_BINARY, LSQPAR, 15, true);
 
     //those are functional cast
     addToPrecTable(OpType::OP_CAST, UNSAFE_CAST, 15, true);
@@ -155,11 +185,11 @@ public:
     addToPrecTable(OpType::OP_BINARY, STAR, 11, true);
     addToPrecTable(OpType::OP_BINARY, MOD, 11, true);
     addToPrecTable(OpType::OP_BINARY, DIV, 11, true);
-    addToPrecTable(OpType::OP_BINARY, PLUS, 11, true);
-    addToPrecTable(OpType::OP_BINARY, MINUS, 11, true);
+    addToPrecTable(OpType::OP_BINARY, PLUS, 10, true);
+    addToPrecTable(OpType::OP_BINARY, MINUS, 10, true);
     
-    addToPrecTable(OpType::OP_BINARY, LSHIFT, 10, true);
-    addToPrecTable(OpType::OP_BINARY, RSHIFT, 10, true);
+    addToPrecTable(OpType::OP_BINARY, LSHIFT, 9, true);
+    addToPrecTable(OpType::OP_BINARY, RSHIFT, 9, true);
     addToPrecTable(OpType::OP_BINARY, LT, 8, true);
     addToPrecTable(OpType::OP_BINARY, LTEQ, 8, true);
     addToPrecTable(OpType::OP_BINARY, GT, 8, true);
