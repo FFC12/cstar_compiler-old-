@@ -24,17 +24,13 @@ enum TypeSpecifier {
   SPEC_VEC2,
   SPEC_VEC3,
   SPEC_VEC4,
-  //MATXxX - MAT
+  // MATXxX - MAT
   SPEC_NIL,
-  
-  //User defined types
-  SPEC_DEFINED, //This will be checked in next phase (type checker)
+
+  // User defined types
+  SPEC_DEFINED, // This will be checked in next phase (type checker)
 };
 
-enum FunctionReturnType {
-  Primitives,
-  None,
-  Any
-};
+enum FunctionReturnType { Primitives, None, Any };
 
 #endif

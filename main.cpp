@@ -1,17 +1,17 @@
-#include <iostream>
-#include <vector>
+#include <base.hpp>
 #include <fstream>
-#include <sstream>
+#include <iostream>
 #include <lexer/lexer.hpp>
 #include <parser/parser.hpp>
-#include <base.hpp>
+#include <sstream>
+#include <vector>
 
-int main(int argc, char** argv) {
-  if(argc > 1) {
+int main(int argc, char **argv) {
+  if (argc > 1) {
     std::ifstream file;
     file.open(argv[1]);
     std::stringstream ss;
-    ss << file.rdbuf(); 
+    ss << file.rdbuf();
     CStarLexer lexer(ss.str());
     CStarParser parser(std::move(lexer));
     parser.parse();

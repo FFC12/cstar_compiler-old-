@@ -3,19 +3,13 @@
 #include <ast/ast.hpp>
 
 class DeclaratorAST : public IAST {
-    ASTNode 
-public:
-    DeclaratorAST() {}
+  ASTNode public : DeclaratorAST() {}
 };
 
 class DeclaratorInitListAST : public IAST {
 
-
 public:
-    DeclaratorInitListAST() {
-
-    }
-
+  DeclaratorInitListAST() {}
 };
 
 #endif

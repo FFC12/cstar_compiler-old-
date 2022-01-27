@@ -1,18 +1,18 @@
 #ifndef LEXER_HPP
 #define LEXER_HPP
-#include <string_view>
-#include <iostream>
-#include <vector>
-#include <map>
 #include <cassert>
+#include <iostream>
+#include <map>
+#include <string_view>
+#include <vector>
 
-//This section is for compiler frontend
-enum TokenKind
-{
+
+// This section is for compiler frontend
+enum TokenKind {
   IMPORT,
   NATIVE,
-  SCALARI, //integer scalar like 10, 11
-	SCALARD, //double scalar like 10.03f, 20.0243f
+  SCALARI, // integer scalar like 10, 11
+  SCALARD, // double scalar like 10.03f, 20.0243f
   MATRIX,
   VECTOR,
   IDENT,
@@ -77,7 +77,7 @@ enum TokenKind
   CONST,
   CONSTPTR,
   CONSTREF,
-  READONLY,  
+  READONLY,
   RET,
   IN,
   AS,
@@ -87,9 +87,9 @@ enum TokenKind
   REF,
   DEREF,
   PACKAGE,
-  INVOLVED, 
+  INVOLVED,
   OPTION,
-  LOOP,  
+  LOOP,
   DEFAULT,
   EXTERN,
   FROM,
@@ -98,7 +98,7 @@ enum TokenKind
   CAST,
   UNSAFE_CAST,
   SIZEOF,
-  TYPEOF, 
+  TYPEOF,
   I8,
   I16,
   I32,
@@ -128,7 +128,7 @@ enum TokenKind
   ATTRIB,
   PROTO,
   ENUM,
-  FOR, 
+  FOR,
   BREAK,
   CONTINUE,
   SQUOTE,
@@ -141,12 +141,11 @@ enum TokenKind
   _EOF
 };
 
-struct TypeInfo
-{
+struct TypeInfo {
   TokenKind kind;
-  //For the matrix and vector
-  //mat2x2 => row = 2, column = 2
-  //vec2 => row = 1, column = 2
+  // For the matrix and vector
+  // mat2x2 => row = 2, column = 2
+  // vec2 => row = 1, column = 2
   int row;
   int column;
 };
@@ -160,21 +159,13 @@ struct PositionInfo {
 
   // It's not good idea that copying each token.
   // Because there may be a million token.That's why we have to moved.
-  PositionInfo(size_t begin,size_t end,size_t line)
-    : begin(begin), end(end), line(line)
-  {}
+  PositionInfo(size_t begin, size_t end, size_t line)
+      : begin(begin), end(end), line(line) {}
 };
 
-enum LexerFlags
-{
-  IDLE,
-  JUST_STARTED,
-  RUNNING,
-  DONE
-};
+enum LexerFlags { IDLE, JUST_STARTED, RUNNING, DONE };
 
-struct TokenInfo
-{
+struct TokenInfo {
 private:
   bool m_HasKeyword;
   std::string m_TokenStr;
@@ -183,93 +174,71 @@ private:
 
 public:
   TokenInfo() = default;
-  TokenInfo(const TokenKind &pKind, PositionInfo pPositionInfo, const std::string pTokenStr = "", bool pHasKeyword = false)
-  {
+  TokenInfo(const TokenKind &pKind, PositionInfo pPositionInfo,
+            const std::string pTokenStr = "", bool pHasKeyword = false) {
     this->m_HasKeyword = pHasKeyword;
     this->m_TokenKind = pKind;
     this->m_TokenStr = pTokenStr;
     this->m_PositionInfo = pPositionInfo;
   }
 
-  bool operator==(TokenKind token){
-    return this->getTokenKind() == token;
-  }
-  
-  std::string getTokenAsStr() const
-  {
-    return this->m_TokenStr;
-  }
+  bool operator==(TokenKind token) { return this->getTokenKind() == token; }
 
-  TokenKind getTokenKind() const
-  {
-    return this->m_TokenKind;
-  }
+  std::string getTokenAsStr() const { return this->m_TokenStr; }
 
-  bool getHasKeyword() const
-  {
-    return this->m_HasKeyword;
-  }
+  TokenKind getTokenKind() const { return this->m_TokenKind; }
 
-  PositionInfo getTokenPositionInfo() const {
-    return this->m_PositionInfo;
-  }
+  bool getHasKeyword() const { return this->m_HasKeyword; }
+
+  PositionInfo getTokenPositionInfo() const { return this->m_PositionInfo; }
 };
 
-class CStarLexer
-{
+class CStarLexer {
   LexerFlags m_LexerFlags;
   std::string m_Buffer;
   std::string_view m_BufferView;
   size_t m_Index;
-  size_t m_Line,m_Col;
+  size_t m_Line, m_Col;
   char m_CurrChar;
   bool m_IsKeyword;
   std::string m_LastKeyword;
-  std::map<size_t,size_t> m_CharCountOfLine;
+  std::map<size_t, size_t> m_CharCountOfLine;
 
   void preprocess() {
     size_t charCounter = 0;
-    for(int i = 0, j = 0; i < m_BufferView.size(); i++){
-      if(m_BufferView[i] == '\n' || m_BufferView[i] == '\r') {
-	m_CharCountOfLine[j++] = charCounter;
-      } else 
-	charCounter++;
+    for (int i = 0, j = 0; i < m_BufferView.size(); i++) {
+      if (m_BufferView[i] == '\n' || m_BufferView[i] == '\r') {
+        m_CharCountOfLine[j++] = charCounter;
+      } else
+        charCounter++;
     }
   }
-  
-  void restoreLastChar()
-  {
-    this->m_Index--;
-  }
 
-  char nextChar()
-  {
-    if (m_Index < m_BufferView.size() + 1)
-    {
-      if(m_Index == 0)
+  void restoreLastChar() { this->m_Index--; }
+
+  char nextChar() {
+    if (m_Index < m_BufferView.size() + 1) {
+      if (m_Index == 0)
         m_Index = 1;
       auto c = m_BufferView[m_Index];
       m_CurrChar = c;
 
-      if(c == '\n' || c == '\r') {
-	this->m_Line++;
+      if (c == '\n' || c == '\r') {
+        this->m_Line++;
       }
 
       m_Index++;
       return c;
-    }
-    else if (m_Index == m_BufferView.size() + 1)
-    {
+    } else if (m_Index == m_BufferView.size() + 1) {
       this->m_LexerFlags = LexerFlags::DONE;
 
-      // Well, this may be moved to the function 'perform'. But for now, I don't care.
+      // Well, this may be moved to the function 'perform'. But for now, I don't
+      // care.
       //      if(this->m_LexerFlags == LexerFlags::DONE){
       //	    std::exit(0);
       //      }
       return ' '; // for making the compiler silent
-    }
-    else
-    {
+    } else {
       std::cerr << "Out of index in the buffer...Probably corrupted data\n\n";
       std::abort();
       return ' '; // for making the compiler silent
@@ -277,9 +246,10 @@ class CStarLexer
   }
 
 public:
-  //Potentially big buffers will be passed here so let it moved by move semantics...
-  CStarLexer(const std::string &&pBuffer) : m_IsKeyword(false), m_Index(0), m_LexerFlags(LexerFlags::IDLE)
-  {
+  // Potentially big buffers will be passed here so let it moved by move
+  // semantics...
+  CStarLexer(const std::string &&pBuffer)
+      : m_IsKeyword(false), m_Index(0), m_LexerFlags(LexerFlags::IDLE) {
     m_Buffer = std::move(pBuffer);
     m_BufferView = m_Buffer;
     m_CurrChar = m_BufferView[0];
@@ -290,51 +260,42 @@ public:
       }*/
   }
 
-  std::string getBufferView() const
-  {
+  std::string getBufferView() const {
     return std::string(this->m_BufferView.begin(), this->m_BufferView.end());
   }
 
-  bool lookAhead(char expected)
-  {
+  bool lookAhead(char expected) {
     bool isExpectedChar = false;
 
     // if (m_BufferView[m_Index + 1] == expected)
-    if (m_BufferView[m_Index] == expected)
-    {
+    if (m_BufferView[m_Index] == expected) {
       isExpectedChar = true;
       nextChar();
-    }
-    else
-    {
+    } else {
       isExpectedChar = false;
     }
 
     return isExpectedChar;
   }
 
-  TokenKind advanceConstant()
-  {
+  TokenKind advanceConstant() {
     char _c = this->m_CurrChar;
     bool _is_float = false;
     std::string _keyword = "";
-		TokenKind _scalarType = TokenKind::SCALARI;
+    TokenKind _scalarType = TokenKind::SCALARI;
 
-    while (isdigit(_c) || _c == '.')
-    {
+    while (isdigit(_c) || _c == '.') {
       _keyword += _c;
       _c = nextChar();
 
-      if (_c == '.')
-      {
-        if (_is_float)
-        {
+      if (_c == '.') {
+        if (_is_float) {
           _is_float = false;
           break;
         }
 
         _is_float = true;
-				_scalarType = TokenKind::SCALARD;
+        _scalarType = TokenKind::SCALARD;
       }
     }
     restoreLastChar();
@@ -343,14 +304,11 @@ public:
     return _scalarType;
   }
 
-  TokenKind advanceLiteral()
-  {
+  TokenKind advanceLiteral() {
     char _c = nextChar(); // skip '"'
     std::string _keyword = "";
-    while (_c != '"')
-    {
-      if (m_Index > m_BufferView.size())
-      {
+    while (_c != '"') {
+      if (m_Index > m_BufferView.size()) {
         std::cerr << "Missing terminating \" character\n";
         std::abort();
       }
@@ -364,20 +322,14 @@ public:
     return LITERAL;
   }
 
-  TokenKind advanceComments()
-  {
-    if (m_CurrChar == '/')
-    {
+  TokenKind advanceComments() {
+    if (m_CurrChar == '/') {
       char _c = nextChar(); // skip '/'
 
-      while (_c != '\n' && _c != '\0')
-      {
-        if (m_Index > m_BufferView.size())
-        {
+      while (_c != '\n' && _c != '\0') {
+        if (m_Index > m_BufferView.size()) {
           break;
-        }
-        else
-        {
+        } else {
           _c = nextChar();
         }
       }
@@ -388,22 +340,17 @@ public:
       restoreLastChar();
 
       return COMMENT;
-    }
-    else if (m_CurrChar == '*')
-    {
+    } else if (m_CurrChar == '*') {
       char _c = nextChar(); // skip '*'
 
-      while (true)
-      {
-        if (m_Index > m_BufferView.size())
-        {
+      while (true) {
+        if (m_Index > m_BufferView.size()) {
           std::cerr << "Missing terminating '*/' multi-line comment\n";
           std::abort();
         }
 
         _c = nextChar();
-        if (_c == '*')
-        {
+        if (_c == '*') {
           if (lookAhead('/'))
             break;
         }
@@ -411,22 +358,17 @@ public:
       nextChar();
 
       return COMMENT;
-    }
-    else
-    {
+    } else {
       assert("This is not possible");
       return UNKNOWN; // for making the compiler silent
     }
   }
 
-  TokenKind advanceLetter()
-  {
+  TokenKind advanceLetter() {
     char _c = nextChar(); // skip '"'
     std::string _keyword = "";
-    while (_c != '\'')
-    {
-      if (m_Index > m_BufferView.size())
-      {
+    while (_c != '\'') {
+      if (m_Index > m_BufferView.size()) {
         std::cerr << "Missing terminating \' character\n";
         std::abort();
       }
@@ -439,220 +381,208 @@ public:
     return LETTER;
   }
 
-  TokenKind advanceIdentifier()
-  {
+  TokenKind advanceIdentifier() {
     char _c = this->m_CurrChar;
     std::string _keyword = "";
-    while (isalnum(_c) || _c == '_')
-    {
+    while (isalnum(_c) || _c == '_') {
       _keyword += _c;
       _c = nextChar();
     }
-    restoreLastChar(); //restore last character..
+    restoreLastChar(); // restore last character..
 
     this->m_LastKeyword = _keyword;
     this->m_IsKeyword = true;
     return IDENT;
   }
 
-  bool isSymbol()
-  {
-    return ispunct(m_CurrChar) != 0;
-  }
+  bool isSymbol() { return ispunct(m_CurrChar) != 0; }
 
-  //TODO: You can just hashmapped rather than let it make a crazy vast branches...
-  TokenKind classifyIdents(const std::string& ident){
-    if(ident == "ret")
+  // TODO: You can just hashmapped rather than let it make a crazy vast
+  // branches...
+  TokenKind classifyIdents(const std::string &ident) {
+    if (ident == "ret")
       return RET;
-    else if(ident == "in")
+    else if (ident == "in")
       return IN;
-    else if(ident == "as")
+    else if (ident == "as")
       return AS;
-    else if(ident == "if")
+    else if (ident == "if")
       return IF;
-    else if(ident == "elif")
+    else if (ident == "elif")
       return ELIF;
-    else if(ident == "else")
+    else if (ident == "else")
       return ELSE;
-    else if(ident == "ref")
+    else if (ident == "ref")
       return REF;
-    else if(ident == "deref")
+    else if (ident == "deref")
       return DEREF;
-    else if(ident == "package")
+    else if (ident == "package")
       return PACKAGE;
-    else if(ident == "involved")
+    else if (ident == "involved")
       return INVOLVED;
-    else if(ident == "option")
+    else if (ident == "option")
       return OPTION;
-    else if(ident == "loop")
+    else if (ident == "loop")
       return LOOP;
-    else if(ident == "default")
+    else if (ident == "default")
       return DEFAULT;
-    else if(ident == "extern")
+    else if (ident == "extern")
       return EXTERN;
-    else if(ident == "from")
+    else if (ident == "from")
       return FROM;
-    else if(ident == "export")
+    else if (ident == "export")
       return EXPORT;
-    else if(ident == "static")
+    else if (ident == "static")
       return STATIC;
-    else if(ident == "cast")
+    else if (ident == "cast")
       return CAST;
-    else if(ident == "unsafe_cast")
+    else if (ident == "unsafe_cast")
       return UNSAFE_CAST;
-    else if(ident == "sizeof")
+    else if (ident == "sizeof")
       return SIZEOF;
-    else if(ident == "typeof")
+    else if (ident == "typeof")
       return TYPEOF;
-    else if(ident == "const")
+    else if (ident == "const")
       return CONST;
-    else if(ident == "constptr")
+    else if (ident == "constptr")
       return CONSTPTR;
-    else if(ident == "constref")
+    else if (ident == "constref")
       return CONSTREF;
-    else if(ident == "readonly")
+    else if (ident == "readonly")
       return READONLY;
-    else if(ident == "int8")
+    else if (ident == "int8")
       return I8;
-    else if(ident == "int16")
+    else if (ident == "int16")
       return I16;
-    else if(ident == "int32")
+    else if (ident == "int32")
       return I32;
-    else if(ident == "int64")
+    else if (ident == "int64")
       return I64;
-    else if(ident == "int")
-    	return INT;
-    else if(ident == "uint8")
+    else if (ident == "int")
+      return INT;
+    else if (ident == "uint8")
       return U8;
-    else if(ident == "uint16")
+    else if (ident == "uint16")
       return U16;
-    else if(ident == "uint32")
+    else if (ident == "uint32")
       return U32;
-    else if(ident == "uint64")
+    else if (ident == "uint64")
       return U64;
-    else if(ident == "uint128")
+    else if (ident == "uint128")
       return U128;
-		else if(ident == "uint")
-			return UINT;
-    else if(ident == "isize")
+    else if (ident == "uint")
+      return UINT;
+    else if (ident == "isize")
       return ISIZE;
-    else if(ident == "usize")
+    else if (ident == "usize")
       return USIZE;
-		else if(ident == "float")
-			return FLOAT;
-    else if(ident == "float32")
+    else if (ident == "float")
+      return FLOAT;
+    else if (ident == "float32")
       return F32;
-    else if(ident == "float64")
+    else if (ident == "float64")
       return F64;
-    else if(ident == "uchar")
+    else if (ident == "uchar")
       return UCHAR;
-    else if(ident == "char")
+    else if (ident == "char")
       return CHAR;
-    else if(ident == "bool")
+    else if (ident == "bool")
       return BOOL;
-    else if(ident == "vec2")
+    else if (ident == "vec2")
       return VEC2;
-    else if(ident == "vec3")
+    else if (ident == "vec3")
       return VEC3;
-    else if(ident == "vec4")
+    else if (ident == "vec4")
       return VEC4;
-    else if(ident == "void")
+    else if (ident == "void")
       return VOID;
-    else if(ident == "any")
+    else if (ident == "any")
       return ANY;
-    else if(ident == "attribute")
+    else if (ident == "attribute")
       return ATTRIB;
-    else if(ident == "prototype")
+    else if (ident == "prototype")
       return PROTO;
-    else if(ident == "enum")
+    else if (ident == "enum")
       return ENUM;
-    else if(ident == "for")
+    else if (ident == "for")
       return FOR;
-    else if(ident == "break")
+    else if (ident == "break")
       return BREAK;
-    else if(ident == "continue")
-      return CONTINUE; 
-    else if(ident == "nil")
+    else if (ident == "continue")
+      return CONTINUE;
+    else if (ident == "nil")
       return NIL;
-    else if(ident == "true")
+    else if (ident == "true")
       return TRUE;
-    else if(ident == "false")
+    else if (ident == "false")
       return FALSE;
     else {
       return IDENT;
     }
   }
 
-  //returns token stream as token info
-  std::vector<TokenInfo> perform()
-  {
-    if (this->m_LexerFlags == LexerFlags::IDLE)
-    {
+  // returns token stream as token info
+  std::vector<TokenInfo> perform() {
+    if (this->m_LexerFlags == LexerFlags::IDLE) {
       this->m_LexerFlags = LexerFlags::RUNNING;
     }
     std::vector<TokenInfo> tokenInfoList;
 
-    while (this->m_LexerFlags == LexerFlags::RUNNING)
-    {
+    while (this->m_LexerFlags == LexerFlags::RUNNING) {
       PositionInfo posInfo;
       posInfo.begin = this->m_Index;
       auto token = nextToken();
       posInfo.end = this->m_Index;
       posInfo.line = this->m_Line;
-      if (token != TokenKind::UNKNOWN || token != TokenKind::UNHANDLED)
-      {
+      if (token != TokenKind::UNKNOWN || token != TokenKind::UNHANDLED) {
         bool hasKeyword = false;
         std::string tokenStr = "";
-        if (this->m_IsKeyword)
-        {
+        if (this->m_IsKeyword) {
           hasKeyword = true;
           tokenStr = this->m_LastKeyword;
-          if(token == TokenKind::IDENT) {
+          if (token == TokenKind::IDENT) {
             token = classifyIdents(tokenStr);
           }
-        }
-        else
-        {
+        } else {
           tokenStr = tokenAsStr(token);
         }
 
-        tokenInfoList.push_back(TokenInfo(token,posInfo, tokenStr, hasKeyword));
+        tokenInfoList.push_back(
+            TokenInfo(token, posInfo, tokenStr, hasKeyword));
 
-        //output
+        // output
 
         /*std::cout << tokenAsStr(token);
        if (this->m_IsKeyword)
-	 std::cout << "---" << this->m_LastKeyword << std::endl;
+         std::cout << "---" << this->m_LastKeyword << std::endl;
        else
-	 std::cout << std::endl;
+         std::cout << std::endl;
        */
       }
     }
     /*if (this->m_LexerFlags == LexerFlags::DONE) {
-        tokenInfoList.push_back(TokenInfo(TokenKind::_EOF,PositionInfo(this->m_Index,this->m_Index,this->m_Line), "EOF", false));
-	}*/
+        tokenInfoList.push_back(TokenInfo(TokenKind::_EOF,PositionInfo(this->m_Index,this->m_Index,this->m_Line),
+       "EOF", false));
+        }*/
     return tokenInfoList;
   }
 
-  TokenKind nextToken()
-  {
-    //reset the last keyword flags
+  TokenKind nextToken() {
+    // reset the last keyword flags
     this->m_IsKeyword = false;
 
     // improve this...
     char _c = ' ';
-    if(this->m_Index != 0)
+    if (this->m_Index != 0)
       _c = nextChar();
-    else 
+    else
       _c = m_BufferView[0];
 
-    while (isspace(_c))
-    {
+    while (isspace(_c)) {
       _c = nextChar();
     }
 
-    switch (_c)
-    {
+    switch (_c) {
     // Integer or Float Constants
     case '0':
     case '1':
@@ -745,10 +675,8 @@ public:
     case '#':
       return HASH;
     case '.':
-      if (lookAhead('.'))
-      {
-        if (lookAhead('.'))
-        {
+      if (lookAhead('.')) {
+        if (lookAhead('.')) {
           return TRIPLET;
         }
         return RANGE;
@@ -757,136 +685,94 @@ public:
     case ',':
       return COMMA;
     case '|':
-      if (lookAhead('|'))
-      {
+      if (lookAhead('|')) {
         return LOR;
-      }
-      else if (lookAhead('='))
-      {
+      } else if (lookAhead('=')) {
         return OREQ;
-      }
-      else
-      {
+      } else {
         return OR;
       }
     case '&':
-      if (lookAhead('&'))
-      {
+      if (lookAhead('&')) {
         return LAND;
-      }
-      else if (lookAhead('='))
-      {
+      } else if (lookAhead('=')) {
         return ANDEQ;
-      }
-      else
-      {
+      } else {
         return AND;
       }
-    case '*':
-    {
+    case '*': {
       if (lookAhead('='))
         return STAREQ;
       return STAR;
     }
     case '+':
-      if (lookAhead('+'))
-      {
+      if (lookAhead('+')) {
         return PLUSPLUS;
-      }
-      else if (lookAhead('='))
-      {
+      } else if (lookAhead('=')) {
         return PLUSEQ;
-      }
-      else
-      {
+      } else {
         return PLUS;
       }
     case '-':
-      if (lookAhead('-'))
-      {
+      if (lookAhead('-')) {
         return MINUSMINUS;
-      }
-      else if (lookAhead('='))
-      {
+      } else if (lookAhead('=')) {
         return MINUSEQ;
-      }
-      else
-      {
+      } else {
         return MINUS;
       }
     case '%':
-      if (lookAhead('='))
-      {
+      if (lookAhead('=')) {
         return MODEQ;
       }
       return MOD;
     case '=':
-      if (lookAhead('='))
-      {
+      if (lookAhead('=')) {
         return EQUALEQUAL;
       }
       return EQUAL;
     case '~':
-      if (lookAhead('='))
-      {
+      if (lookAhead('=')) {
         return TILDEEQ;
       }
       return TILDE;
     case '/':
       // If it's comment then skip..
-      if (lookAhead('/') || lookAhead('*'))
-      {
+      if (lookAhead('/') || lookAhead('*')) {
         return advanceComments();
-      }
-      else
-      {
-        if (lookAhead('='))
-        {
+      } else {
+        if (lookAhead('=')) {
           return DIVEQ;
         }
         return DIV;
       }
     case '<':
-      if (lookAhead('<'))
-      {
+      if (lookAhead('<')) {
         return LSHIFT;
-      }
-      else if (lookAhead('='))
-      {
+      } else if (lookAhead('=')) {
         return LTEQ;
-      }
-      else
-      {
+      } else {
         return LT;
       }
     case '>':
-      if (lookAhead('>'))
-      {
+      if (lookAhead('>')) {
         return RSHIFT;
-      }
-      else if (lookAhead('='))
-      {
+      } else if (lookAhead('=')) {
         return GTEQ;
-      }
-      else
-      {
+      } else {
         return GT;
       }
     case '^':
-      if (lookAhead('='))
-      {
+      if (lookAhead('=')) {
         return XOREQ;
       }
       return XOR;
     case ';':
       return SEMICOLON;
     case ':':
-      if (lookAhead('='))
-      {
+      if (lookAhead('=')) {
         return TYPEINF;
-      }
-      else if (lookAhead(':'))
-      {
+      } else if (lookAhead(':')) {
         return COLONCOLON;
       }
       return COLON;
@@ -896,8 +782,7 @@ public:
     case '`': {
       return UNHANDLED;
     }
-    case '\0':
-    {
+    case '\0': {
       this->m_LexerFlags = LexerFlags::DONE;
       return _EOF;
     }
@@ -908,20 +793,18 @@ public:
     return UNKNOWN;
   }
 
-  const char *tokenAsStr(TokenKind token)
-  {
-    switch (token)
-    {
+  const char *tokenAsStr(TokenKind token) {
+    switch (token) {
     case SQUOTE:
       return "'";
     case DQUOTE:
-      return "\""; 
+      return "\"";
     case IDENT:
       return "IDENTIFIER";
     case SCALARI:
       return "INTEGER SCALAR";
-		case SCALARD:
-			return "FLOAT SCALAR";
+    case SCALARD:
+      return "FLOAT SCALAR";
     case LITERAL:
       return "LITERAL";
     case LETTER:
