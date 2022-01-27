@@ -155,3 +155,56 @@ bool CStarParser::isPackageMark(TokenInfo token) {
     return false;
   }
 }
+
+Type CStarParser::typeOf(TokenInfo token) {
+  switch (token.getTokenKind()) {
+  case I8:
+		return Type::T_I8;
+  case I16:
+		return Type::T_I16;
+  case I32:
+		return Type::T_I32;
+  case I64:
+		return Type::T_I64;
+  case INT:
+		return Type::T_INT;
+  case U8:
+		return Type::T_U8;
+  case U16:
+		return Type::T_U16;
+  case U32:
+		return Type::T_U32;
+  case U64:
+		return Type::T_U64;
+  case U128:
+		return Type::T_U128;
+  case UINT:
+		return Type::T_UINT;
+  case ISIZE:
+		return Type::T_ISIZE;
+  case USIZE:
+		return Type::T_USIZE;
+  case F32:
+		return Type::T_F32;
+  case F64:
+		return Type::T_F64;
+  case FLOAT:
+		return Type::T_FLOAT;
+  case UCHAR:
+		return Type::T_UCHAR;
+  case CHAR:
+		return Type::T_CHAR;
+  case BOOL:
+		return Type::T_BOOL;
+  case VEC2:
+		return Type::T_VEC2;
+  case VEC3:
+		return Type::T_VEC3;
+  case VEC4:
+		return Type::T_VEC4;
+  case IDENT:
+    return Type::T_DEFINED;
+  default:
+    assert(false && "Unreacheable");
+  }
+}

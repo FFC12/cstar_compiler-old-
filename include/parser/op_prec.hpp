@@ -8,18 +8,20 @@ enum OpType {
   OP_UNARY,
   OP_BINARY,
   OP_CAST,
-  OP_VEC, // Vector
-  OP_MAT  // Matrix
+  OP_VEC,  // Vector
+  OP_MAT   // Matrix
 };
 
+#include <iostream>
+
 class PrecedenceInfo {
-  int m_Precedence;
+  size_t m_Precedence;
   bool m_IsLeftToRight;
 
-public:
+ public:
   PrecedenceInfo() {}
 
-  PrecedenceInfo(int prec, bool isLeftToRight)
+  PrecedenceInfo(size_t prec, bool isLeftToRight)
       : m_Precedence(prec), m_IsLeftToRight(isLeftToRight) {}
 
   bool operator>(PrecedenceInfo &p) {
@@ -35,20 +37,31 @@ public:
   }
 
   bool isLtr() const { this->m_IsLeftToRight; }
+
+  // Debuggin purpose
+  int getPrec() { return this->m_Precedence; }
 };
 
 class PrecedenceEntry {
+  OpType m_OpType;
   TokenKind m_Token;
   size_t m_Id;
   bool m_IsFirst;
   bool m_IsLast;
+  bool m_HasTypeAttrib;
   PrecedenceInfo m_PrecedenceInfo;
 
-public:
-  PrecedenceEntry(const TokenKind &kind, const PrecedenceInfo &precInfo,
-                  size_t id, bool isFirst, bool isLast)
-      : m_Token(kind), m_PrecedenceInfo(precInfo), m_Id(id), m_IsFirst(isFirst),
-        m_IsLast(isLast) {}
+ public:
+  PrecedenceEntry(const TokenKind &kind, const OpType &opType,
+                  const PrecedenceInfo &precInfo, size_t id, bool isFirst,
+                  bool isLast, bool hasTypeAttrib)
+      : m_Token(kind),
+        m_OpType(opType),
+        m_PrecedenceInfo(precInfo),
+        m_Id(id),
+        m_IsFirst(isFirst),
+        m_IsLast(isLast),
+        m_HasTypeAttrib(hasTypeAttrib) {}
 
   bool operator>(PrecedenceEntry &e) {
     return this->m_PrecedenceInfo > e.m_PrecedenceInfo;
@@ -75,16 +88,19 @@ public:
   bool operator==(PrecedenceEntry &e) {
     return this->m_PrecedenceInfo == e.m_PrecedenceInfo;
   }
+
+  TokenKind entryTokenKind() const noexcept { return this->m_Token; }
+  OpType entryOpType() const noexcept { return this->m_OpType; }
+
+  // Debuggin purpose
+  size_t getPrec() { return this->m_PrecedenceInfo.getPrec(); }
 };
 
-class PrecedenceInfoTable
-    : public std::unordered_map<TokenKind, PrecedenceInfo> {};
-
-class PrecedenceTable : public std::unordered_map<OpType, PrecedenceInfoTable> {
-};
+using PrecedenceInfoTable = std::unordered_map<TokenKind, PrecedenceInfo>;
+using PrecedenceTable = std::unordered_map<OpType, PrecedenceInfoTable>;
 
 // Expression Precedence Bucket for the calculation of values
 // with associated by operator itself
-class OpPrecBucket : public std::vector<PrecedenceEntry> {};
+using OpPrecBucket = std::vector<PrecedenceEntry>;
 
 #endif

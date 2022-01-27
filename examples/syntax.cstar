@@ -113,8 +113,21 @@ prototype Triangle(Shape) {
 
 }
 
-
 a_func(int32, int); 
+
+
+enum Colors {
+	RED(int32),
+	GREEN(const char*),
+	BLUE(int32)
+}
+
+//enum can derive from a prototype
+//that means Colors will be acting like a enum but it will be 
+//also a struct which has only member variables of the base prototype it derived from.1
+enum Colors(Triangle) {
+	
+}
 
 
 //This means pass by address by ref but it can't be changed

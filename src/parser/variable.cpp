@@ -67,7 +67,7 @@ not_needed_type:
   this->advance();
 }
 
-ASTNode CStarParser::initializer() { return this->expression(); }
+ASTNode CStarParser::initializer() { return this->expression(false); }
 
 ASTNode CStarParser::initializerList() {}
 

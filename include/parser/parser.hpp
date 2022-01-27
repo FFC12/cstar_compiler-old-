@@ -2,6 +2,7 @@
 #define PARSER_HPP
 #include <ast/ast.hpp>
 #include <ast/scalar_ast.hpp>
+#include <ast/type_ast.hpp>
 #include <ast/var_ast.hpp>
 #include <base.hpp>
 #include <cassert>
@@ -23,7 +24,9 @@ class CStarParser {
   bool m_ErrorFlag;
   bool m_ParsingEndingFlag;
 
-  const char *tokenToStr(TokenKind kind) { return m_Lexer.tokenAsStr(kind); }
+  const char *tokenToStr(TokenKind kind) noexcept {
+    return m_Lexer.tokenAsStr(kind);
+  }
 
   // INT,FLOAT,...
   bool isType(TokenInfo token);
@@ -35,7 +38,9 @@ class CStarParser {
   bool isPackageMark(TokenInfo token);
 
   // Is it what we look for?
-  bool is(TokenKind token) { return m_TokenStream[m_TokenIndex] == token; }
+  bool is(TokenKind token) noexcept {
+    return m_TokenStream[m_TokenIndex] == token;
+  }
 
   bool isOperator(TokenInfo token);
   bool isCastableOperator(TokenInfo token);
@@ -95,23 +100,26 @@ class CStarParser {
 
   void addToPrecTable(OpType op, TokenKind kind, int prec, bool isLeftToRight) {
     switch (op) {
-    case OpType::OP_UNARY:
-      m_PrecTableUnary[kind] = PrecedenceInfo(prec, isLeftToRight);
-      break;
-    case OpType::OP_BINARY:
-      m_PrecTableBinary[kind] = PrecedenceInfo(prec, isLeftToRight);
-      break;
-    case OpType::OP_CAST:
-      m_PrecTableCast[kind] = PrecedenceInfo(prec, isLeftToRight);
-      break;
-    default:
-      std::cerr << "Not implemented yet!\n";
-      break;
+      case OpType::OP_UNARY:
+        m_PrecTableUnary.emplace(kind, PrecedenceInfo(prec, isLeftToRight));
+
+        break;
+      case OpType::OP_BINARY:
+        m_PrecTableBinary.emplace(kind, PrecedenceInfo(prec, isLeftToRight));
+
+        break;
+      case OpType::OP_CAST:
+        m_PrecTableCast.emplace(kind, PrecedenceInfo(prec, isLeftToRight));
+        break;
+      default:
+        std::cerr << "Not implemented yet!\n";
+        break;
     }
   }
 
   // parser.cpp
   void translationUnit();
+  Type typeOf(TokenInfo token);
 
   // variable.cpp
   void varDecl();
@@ -123,8 +131,10 @@ class CStarParser {
   bool isUnaryOp();
   bool isBinOp();
   bool isCastOp();
-  void reduceExpression();
-  ASTNode expression();
+  ASTNode reduceExpression(
+      const std::unordered_map<size_t, ASTNode> &exprBucket,
+      const OpPrecBucket &opPrecBucket);
+  ASTNode expression(bool isSubExpr);
   ASTNode advanceConstantOrLiteral();
   ASTNode advanceRef();
   ASTNode advanceIndirect();
@@ -132,14 +142,15 @@ class CStarParser {
   ASTNode advanceUnaryOp();
   ASTNode advanceFunctionCall();
   ASTNode advanceArraySubscript();
+  ASTNode advanceType();
 
   TypeSpecifier typeResolver(TokenInfo token);
 
-public:
-  // Interesting topic.. When you overload an operator - what's happening to
-  // precedence -
+ public:
   CStarParser(const CStarLexer &&pLexer)
-      : m_Lexer(std::move(pLexer)), m_TokenIndex(0), m_ErrorFlag(false),
+      : m_Lexer(std::move(pLexer)),
+        m_TokenIndex(0),
+        m_ErrorFlag(false),
         m_ParsingEndingFlag(false) {
     addToPrecTable(OpType::OP_BINARY, COLONCOLON, 16, true);
     addToPrecTable(OpType::OP_BINARY, LPAREN, 15, true);
@@ -148,6 +159,8 @@ public:
     // those are functional cast
     addToPrecTable(OpType::OP_CAST, UNSAFE_CAST, 15, true);
     addToPrecTable(OpType::OP_CAST, CAST, 15, true);
+
+    addToPrecTable(OpType::OP_UNARY, LT, 15, true);
 
     // inceremental or decremental operator as suffix/postfix
     addToPrecTable(OpType::OP_UNARY, PLUSPLUS, 15, true);
@@ -207,12 +220,10 @@ public:
     addToPrecTable(OpType::OP_BINARY, OREQ, 1, false);
     addToPrecTable(OpType::OP_BINARY, COMMA, 1, false);
     addToPrecTable(OpType::OP_UNARY, QMARK, 1, false);
-    // can't show ternary operator here since it has 2 different part
-    // it will be handled as an exception
 
-    m_PrecTable[OpType::OP_UNARY] = m_PrecTableUnary;
-    m_PrecTable[OpType::OP_BINARY] = m_PrecTableBinary;
-    m_PrecTable[OpType::OP_CAST] = m_PrecTableCast;
+    m_PrecTable[OpType::OP_UNARY] = std::move(m_PrecTableUnary);
+    m_PrecTable[OpType::OP_BINARY] = std::move(m_PrecTableBinary);
+    m_PrecTable[OpType::OP_CAST] = std::move(m_PrecTableCast);
   }
 
   void parse();

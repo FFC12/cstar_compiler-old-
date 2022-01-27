@@ -1,0 +1,62 @@
+prototype String { 
+    //fancy methods for String ds
+}
+
+// How does it work?
+// -Well, that might make you thoughtful about what about the checking is it null or not would not be have a cost?
+// +No, actually it just needs a memory to register references and its updates to a book(simple hashmap).
+// 
+
+// as unary '.' means 'this'
+policy for String {
+    on_null_reference() :: void {
+        rterror("It's breaking our policy of the String!");
+    }
+
+    on_null_reference_from_function() :: void {
+        rterror("It's breaking our policy of the String from another function call!");
+    }
+
+    on_catch() :: void {
+        
+    }
+
+    on_problematic_stuff_goes_here() :: void{
+
+    }
+
+    make_null() :: void {
+        . = nil;
+    }
+}
+
+
+#try() {
+    $func::on_null_reference();
+}
+
+#try_recursive() {
+    @try
+    $func::on_null_reference_from_function();
+}
+
+main () :: int32 {
+    String str("Current string data."); //constructor will be called
+
+    str::make_null();
+
+    str.append("Another string will be added at the end of the current string data.")::on_null_reference();  // this is going to be fucked up here since it's null???
+
+
+    //or even you can use the directives for a particular policy handler
+
+    @try
+    str.append("Another string will be added at the end of the current string data."):
+
+
+    @try_recursive
+    str.getAnotherString().call();
+
+    ret 0;
+}
+
