@@ -12,8 +12,7 @@ not_needed_type:
 
   //* | ^
   while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
-    size_t indirection_level = advancePointerType(
-        this->currentTokenKind() == TokenKind::XOR ? true : false);
+    size_t indirection_level = advancePointerType(this->currentTokenKind() == TokenKind::XOR);
     std::cout << "Indirection level: " << indirection_level << "\n";
   }
 
@@ -30,9 +29,9 @@ not_needed_type:
   // then will take any other expressions like ConstExpr or *Expr .
   if (is(TokenKind::EQUAL)) {
     // advance the value or expression..
-    rhs = this->initializer();
-    auto *expr = static_cast<ScalarAST *>(rhs.get());
-    std::cout << expr->getValue() << std::endl;
+    rhs = std::move(this->initializer());
+    rhs->debugNode();
+    std::cout << std::endl;
   }
 
   if (is(TokenKind::COMMA)) {
@@ -67,7 +66,7 @@ not_needed_type:
   this->advance();
 }
 
-ASTNode CStarParser::initializer() { return this->expression(false); }
+ASTNode CStarParser::initializer() { return std::move(this->expression(false)); }
 
 ASTNode CStarParser::initializerList() {}
 
@@ -90,12 +89,14 @@ size_t CStarParser::advancePointerType(bool isUniquePtr) {
 
     if (pointerType == TokenKind::STAR &&
         this->currentTokenKind() == TokenKind::XOR) {
-      ErrorMessage("Next pointer type [^] is not matching with type before "
-                   "level [*]. This is not supported yet!");
+      ErrorMessage(
+          "Next pointer type [^] is not matching with type before "
+          "level [*]. This is not supported yet!");
     } else if (pointerType == TokenKind::XOR &&
                this->currentTokenKind() == TokenKind::STAR) {
-      ErrorMessage("Next pointer type [*] is not matching with type before "
-                   "level [^]. This is not supported yet!");
+      ErrorMessage(
+          "Next pointer type [*] is not matching with type before "
+          "level [^]. This is not supported yet!");
     }
 
     level += 1;

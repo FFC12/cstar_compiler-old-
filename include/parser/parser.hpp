@@ -1,11 +1,16 @@
 #ifndef PARSER_HPP
 #define PARSER_HPP
 #include <ast/ast.hpp>
+#include <ast/binary_op_ast.hpp>
+#include <ast/cast_op_ast.hpp>
 #include <ast/scalar_ast.hpp>
+#include <ast/symbol_ast.hpp>
 #include <ast/type_ast.hpp>
+#include <ast/unary_op_ast.hpp>
 #include <ast/var_ast.hpp>
 #include <base.hpp>
 #include <cassert>
+#include <deque>
 #include <lexer/lexer.hpp>
 #include <memory>
 #include <parser/op_prec.hpp>
@@ -24,26 +29,26 @@ class CStarParser {
   bool m_ErrorFlag;
   bool m_ParsingEndingFlag;
 
-  const char *tokenToStr(TokenKind kind) noexcept {
+  const char* tokenToStr(TokenKind kind) noexcept {
     return m_Lexer.tokenAsStr(kind);
   }
 
   // INT,FLOAT,...
-  bool isType(TokenInfo token);
+  bool isType(const TokenInfo& token);
 
   // IMPORT, EXPORT, STATIC
-  bool isLinkageMark(TokenInfo token);
+  bool isLinkageMark(const TokenInfo& token);
 
   // PACKAGE, PACKAGE INVOLVED
-  bool isPackageMark(TokenInfo token);
+  bool isPackageMark(const TokenInfo& token);
 
   // Is it what we look for?
   bool is(TokenKind token) noexcept {
     return m_TokenStream[m_TokenIndex] == token;
   }
 
-  bool isOperator(TokenInfo token);
-  bool isCastableOperator(TokenInfo token);
+  bool isOperator(const TokenInfo& token);
+  bool isCastableOperator(const TokenInfo& token);
 
   // Is it matched with that what we look for?
   bool expected(TokenKind expected) {
@@ -55,8 +60,37 @@ class CStarParser {
       auto currTokenStr = this->m_CurrToken.getTokenAsStr();
       std::cerr << "Unexpected token \"" << currTokenStr << "\" instead \""
                 << tokenToStr(expected) << "\"" << std::endl;
+      assert(false && "Unexpected token");
       return false;
     }
+  }
+
+  bool expected(std::initializer_list<TokenKind> expectedTokens) {
+    bool isOkay = false;
+    for (auto& expected : expectedTokens) {
+      if (is(expected)) {
+        isOkay = true;
+        break;
+      } else {
+        isOkay = false;
+      }
+    }
+
+    if (!isOkay) {
+      // Error message here..
+      this->m_ErrorFlag = false;
+      auto currTokenStr = this->m_CurrToken.getTokenAsStr();
+      std::cerr << "Unexpected token \"" << currTokenStr
+                << "\" instead one of them ";
+
+      for (auto& expected : expectedTokens)
+        std::cout << "\"" << tokenToStr(expected) << "\" ";
+
+      std::cout << std::endl;
+      assert(false && "Unexpected token");
+    }
+
+    return isOkay;
   }
 
   void advance() {
@@ -84,7 +118,7 @@ class CStarParser {
   // It has not a token kind version since has an argument
   // and it need to a lot of work to handle it in another function
   /// which it'll be a param as well.
-  TokenInfo nextTokenInfo(bool &outOfSize) const noexcept {
+  TokenInfo nextTokenInfo(bool& outOfSize) const noexcept {
     if (m_TokenIndex + 1 <= m_TokenStream.size()) {
       outOfSize = false;
       return m_TokenStream[m_TokenIndex + 1];
@@ -119,7 +153,7 @@ class CStarParser {
 
   // parser.cpp
   void translationUnit();
-  Type typeOf(TokenInfo token);
+  Type typeOf(const TokenInfo& token);
 
   // variable.cpp
   void varDecl();
@@ -131,9 +165,8 @@ class CStarParser {
   bool isUnaryOp();
   bool isBinOp();
   bool isCastOp();
-  ASTNode reduceExpression(
-      const std::unordered_map<size_t, ASTNode> &exprBucket,
-      const OpPrecBucket &opPrecBucket);
+  ASTNode reduceExpression(std::deque<ASTNode>& exprBucket,
+                           OpPrecBucket& opPrecBucket);
   ASTNode expression(bool isSubExpr);
   ASTNode advanceConstantOrLiteral();
   ASTNode advanceRef();
@@ -143,11 +176,12 @@ class CStarParser {
   ASTNode advanceFunctionCall();
   ASTNode advanceArraySubscript();
   ASTNode advanceType();
+  ASTNode advanceSymbol();
 
   TypeSpecifier typeResolver(TokenInfo token);
 
  public:
-  CStarParser(const CStarLexer &&pLexer)
+  CStarParser(const CStarLexer&& pLexer)
       : m_Lexer(std::move(pLexer)),
         m_TokenIndex(0),
         m_ErrorFlag(false),
@@ -175,6 +209,12 @@ class CStarParser {
     addToPrecTable(OpType::OP_UNARY, MINUSMINUS, 13, false);
 
     addToPrecTable(OpType::OP_UNARY, SIZEOF, 13, false);
+    addToPrecTable(OpType::OP_UNARY, TYPEOF, 13, false);
+
+    // Well not sure right now but this probably must to consume
+    // as a special case rather than a normal operator.
+    addToPrecTable(OpType::OP_UNARY, MOVE, 13, false);
+
     //    addToPrecTable(OpType::OP_UNARY, INSTANCEOF, 13, false);
     addToPrecTable(OpType::OP_UNARY, DEREF, 13, false);
     addToPrecTable(OpType::OP_UNARY, REF, 13, false);
@@ -219,7 +259,7 @@ class CStarParser {
     addToPrecTable(OpType::OP_BINARY, XOREQ, 1, false);
     addToPrecTable(OpType::OP_BINARY, OREQ, 1, false);
     addToPrecTable(OpType::OP_BINARY, COMMA, 1, false);
-    addToPrecTable(OpType::OP_UNARY, QMARK, 1, false);
+    addToPrecTable(OpType::OP_BINARY, QMARK, 1, false);
 
     m_PrecTable[OpType::OP_UNARY] = std::move(m_PrecTableUnary);
     m_PrecTable[OpType::OP_BINARY] = std::move(m_PrecTableBinary);

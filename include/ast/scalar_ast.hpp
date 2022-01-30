@@ -17,11 +17,18 @@ public:
     this->m_Value = value;
     this->m_IsFloat = isFloat;
     this->m_IsIntegral = isIntegral;
+    this->m_ASTKind = ASTKind::Expr;
+    this->m_ExprKind = ExprKind::ScalarExpr;
+  }
+
+  void debugNode() override {
+    std::cout << this->m_Value;
   }
 
   std::string getValue() const { return m_Value; }
 
   bool isFloat() const { return m_IsFloat; }
+
 };
 
 #endif

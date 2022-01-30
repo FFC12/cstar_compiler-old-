@@ -33,9 +33,21 @@ enum Type {
 
 class TypeAST : public IAST {
   Type m_TypeSpec;
+  size_t m_IndirectLevel;
+  bool m_IsUniquePtr;
 
  public:
-  TypeAST(Type typeSpec) {}
+  TypeAST(Type typeSpec, bool isUniquePtr, size_t indirectLevel)
+      : m_TypeSpec(typeSpec), m_IsUniquePtr(isUniquePtr), m_IndirectLevel(indirectLevel) {
+    this->m_ASTKind = ASTKind::Expr;
+    this->m_ExprKind = ExprKind::TypeExpr;
+  }
+
+  void debugNode() override {
+    std::cout << this->m_TypeSpec << " as type";
+    for(size_t i = 0; i < this->m_IndirectLevel; i++)
+      std::cout << (this->m_IsUniquePtr ? "^" : "*");
+  }
 };
 
 #endif

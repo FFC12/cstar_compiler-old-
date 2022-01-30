@@ -1,12 +1,15 @@
-int x = cast<int64>(3 + 20 * 10) + 20 * 20; // + sizeof(10);
+int r = sizeof(p) + cast(x + y) / 2;
+int k = sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3) * sizeof(int) + cast<int64>(10) + 20 * 20; // + sizeof(10);
+int z = unsafe_cast<int32^>(cast<int32**>(30 + 2 / 2) % 2) * 3 * 3 * 3 + 4;
+int v = sizeof(float) / 2;
 
-char* str = "hello world\n";
-int i = 20;
+/*
+int i = 20 + *k + ***p;
 int ^^^^^^^^k, ***l = &x;
 int***** l = &k;
 
 int x, s = 20, p = 30;
-float k = 30;
+float k= 30;
 int32 z = 30;
 int t = 25000;
 intt k = 200; //cannot catch in the pre-parsing. it will be catched on the type checking phase...
@@ -36,12 +39,6 @@ readonly Shape^ ptr = Triangle(); // the address and the value are constant and 
 const Shape shape; 
 int p = &i; 
 
-int s[2] = {0,1}, k[3] = {0,1,2}, a[2][3] = {{0,1,2},{3,4,5}};
+int s[2] = {0,1}, k[3] = {0,1,2}, a[2][3] = {{0,1,2},{3,4,5}}; 
 
-/*
-
-This is the multiline comment!
-
-*/
-
-// Hello from end of the file
+*/ 

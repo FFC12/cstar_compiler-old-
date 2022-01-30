@@ -46,6 +46,7 @@ class PrecedenceEntry {
   OpType m_OpType;
   TokenKind m_Token;
   size_t m_Id;
+  size_t m_Stride;
   bool m_IsFirst;
   bool m_IsLast;
   bool m_HasTypeAttrib;
@@ -53,11 +54,12 @@ class PrecedenceEntry {
 
  public:
   PrecedenceEntry(const TokenKind &kind, const OpType &opType,
-                  const PrecedenceInfo &precInfo, size_t id, bool isFirst,
-                  bool isLast, bool hasTypeAttrib)
+                  const PrecedenceInfo &precInfo, size_t stride, size_t id,
+                  bool isFirst, bool isLast, bool hasTypeAttrib)
       : m_Token(kind),
         m_OpType(opType),
         m_PrecedenceInfo(precInfo),
+        m_Stride(stride),
         m_Id(id),
         m_IsFirst(isFirst),
         m_IsLast(isLast),
@@ -91,6 +93,10 @@ class PrecedenceEntry {
 
   TokenKind entryTokenKind() const noexcept { return this->m_Token; }
   OpType entryOpType() const noexcept { return this->m_OpType; }
+  bool entryHasTypeAttrib() const noexcept { return this->m_HasTypeAttrib; }
+  size_t entryId() const noexcept { return this->m_Id; }
+  size_t entryStride() const noexcept { return this->m_Stride; }
+  void decreaseStride() noexcept { this->m_Stride -= 1; }
 
   // Debuggin purpose
   size_t getPrec() { return this->m_PrecedenceInfo.getPrec(); }

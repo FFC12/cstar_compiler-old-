@@ -3,8 +3,8 @@ prototype String {
 }
 
 // How does it work?
-// -Well, that might make you thoughtful about what about the checking is it null or not would not be have a cost?
-// +No, actually it just needs a memory to register references and its updates to a book(simple hashmap).
+// -Well, that might make you thoughtful about what about the checking is it null or it would not be have a cost?
+// +No, actually it just needs a memory to register references and update (to a book -simple hashmap).
 // 
 
 // as unary '.' means 'this'
@@ -25,9 +25,16 @@ policy for String {
 
     }
 
+    // well you have to manually delete
+    // to the allocated memory...
     make_null() :: void {
         . = nil;
     }
+
+    new(const char* data) :: void* {
+        ret malloc(ssizeof(data));
+    }
+
 }
 
 
@@ -41,7 +48,7 @@ policy for String {
 }
 
 main () :: int32 {
-    String str("Current string data."); //constructor will be called
+    String* str = String::new("Current string data."); //constructor will be called
 
     str::make_null();
 

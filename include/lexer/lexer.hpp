@@ -6,24 +6,23 @@
 #include <string_view>
 #include <vector>
 
-
 // This section is for compiler frontend
 enum TokenKind {
   IMPORT,
   NATIVE,
-  SCALARI, // integer scalar like 10, 11
-  SCALARD, // double scalar like 10.03f, 20.0243f
+  SCALARI,  // integer scalar like 10, 11
+  SCALARD,  // double scalar like 10.03f, 20.0243f
   MATRIX,
   VECTOR,
   IDENT,
   LITERAL,
   DOT,
-  DOLLAR, // $
+  DOLLAR,  // $
   RANGE,
   TRIPLET,
   SEMICOLON,
   COMMA,
-  UNDERSCORE, // _
+  UNDERSCORE,  // _
   TYPEINF,
   PLUS,
   PLUSEQ,
@@ -31,13 +30,13 @@ enum TokenKind {
   MINUS,
   MINUSMINUS,
   MINUSEQ,
-  QMARK,  //?
-  ARROW,  //->
-  DARROW, // =>
+  QMARK,   //?
+  ARROW,   //->
+  DARROW,  // =>
   DIV,
   DIVEQ,
-  STAR,   // *
-  STAREQ, // *=
+  STAR,    // *
+  STAREQ,  // *=
   MOD,
   MODEQ,
   LSHIFT,
@@ -73,7 +72,7 @@ enum TokenKind {
   HASH,
   COLONCOLON,
   COLON,
-  PAREQ, // partial eq ===
+  PAREQ,  // partial eq ===
   CONST,
   CONSTPTR,
   CONSTREF,
@@ -99,6 +98,7 @@ enum TokenKind {
   UNSAFE_CAST,
   SIZEOF,
   TYPEOF,
+  MOVE,
   I8,
   I16,
   I32,
@@ -166,13 +166,13 @@ struct PositionInfo {
 enum LexerFlags { IDLE, JUST_STARTED, RUNNING, DONE };
 
 struct TokenInfo {
-private:
+ private:
   bool m_HasKeyword;
   std::string m_TokenStr;
   TokenKind m_TokenKind;
   PositionInfo m_PositionInfo;
 
-public:
+ public:
   TokenInfo() = default;
   TokenInfo(const TokenKind &pKind, PositionInfo pPositionInfo,
             const std::string pTokenStr = "", bool pHasKeyword = false) {
@@ -218,8 +218,7 @@ class CStarLexer {
 
   char nextChar() {
     if (m_Index < m_BufferView.size() + 1) {
-      if (m_Index == 0)
-        m_Index = 1;
+      if (m_Index == 0) m_Index = 1;
       auto c = m_BufferView[m_Index];
       m_CurrChar = c;
 
@@ -237,15 +236,15 @@ class CStarLexer {
       //      if(this->m_LexerFlags == LexerFlags::DONE){
       //	    std::exit(0);
       //      }
-      return ' '; // for making the compiler silent
+      return ' ';  // for making the compiler silent
     } else {
       std::cerr << "Out of index in the buffer...Probably corrupted data\n\n";
       std::abort();
-      return ' '; // for making the compiler silent
+      return ' ';  // for making the compiler silent
     }
   }
 
-public:
+ public:
   // Potentially big buffers will be passed here so let it moved by move
   // semantics...
   CStarLexer(const std::string &&pBuffer)
@@ -305,7 +304,7 @@ public:
   }
 
   TokenKind advanceLiteral() {
-    char _c = nextChar(); // skip '"'
+    char _c = nextChar();  // skip '"'
     std::string _keyword = "";
     while (_c != '"') {
       if (m_Index > m_BufferView.size()) {
@@ -324,7 +323,7 @@ public:
 
   TokenKind advanceComments() {
     if (m_CurrChar == '/') {
-      char _c = nextChar(); // skip '/'
+      char _c = nextChar();  // skip '/'
 
       while (_c != '\n' && _c != '\0') {
         if (m_Index > m_BufferView.size()) {
@@ -341,7 +340,7 @@ public:
 
       return COMMENT;
     } else if (m_CurrChar == '*') {
-      char _c = nextChar(); // skip '*'
+      char _c = nextChar();  // skip '*'
 
       while (true) {
         if (m_Index > m_BufferView.size()) {
@@ -351,8 +350,7 @@ public:
 
         _c = nextChar();
         if (_c == '*') {
-          if (lookAhead('/'))
-            break;
+          if (lookAhead('/')) break;
         }
       }
       nextChar();
@@ -360,12 +358,12 @@ public:
       return COMMENT;
     } else {
       assert("This is not possible");
-      return UNKNOWN; // for making the compiler silent
+      return UNKNOWN;  // for making the compiler silent
     }
   }
 
   TokenKind advanceLetter() {
-    char _c = nextChar(); // skip '"'
+    char _c = nextChar();  // skip '"'
     std::string _keyword = "";
     while (_c != '\'') {
       if (m_Index > m_BufferView.size()) {
@@ -388,7 +386,7 @@ public:
       _keyword += _c;
       _c = nextChar();
     }
-    restoreLastChar(); // restore last character..
+    restoreLastChar();  // restore last character..
 
     this->m_LastKeyword = _keyword;
     this->m_IsKeyword = true;
@@ -442,6 +440,8 @@ public:
       return SIZEOF;
     else if (ident == "typeof")
       return TYPEOF;
+    else if (ident == "move")
+      return MOVE;
     else if (ident == "const")
       return CONST;
     else if (ident == "constptr")
@@ -583,211 +583,209 @@ public:
     }
 
     switch (_c) {
-    // Integer or Float Constants
-    case '0':
-    case '1':
-    case '2':
-    case '3':
-    case '4':
-    case '5':
-    case '6':
-    case '7':
-    case '8':
-    case '9':
-      return advanceConstant();
-      // Identifier
-    case 'A':
-    case 'B':
-    case 'C':
-    case 'D':
-    case 'E':
-    case 'F':
-    case 'G':
-    case 'H':
-    case 'I':
-    case 'J':
-    case 'K':
-    case 'L':
-    case 'M':
-    case 'N':
-    case 'O':
-    case 'P':
-    case 'Q':
-    case 'R':
-    case 'S':
-    case 'T':
-    case 'U':
-    case 'V':
-    case 'W':
-    case 'X':
-    case 'Y':
-    case 'Z':
-    case 'a':
-    case 'b':
-    case 'c':
-    case 'd':
-    case 'e':
-    case 'f':
-    case 'g':
-    case 'h':
-    case 'i':
-    case 'j':
-    case 'k':
-    case 'l':
-    case 'm':
-    case 'n':
-    case 'o':
-    case 'p':
-    case 'q':
-    case 'r':
-    case 's':
-    case 't':
-    case 'u':
-    case 'v':
-    case 'w':
-    case 'x':
-    case 'y':
-    case 'z':
-    case '_':
-      return advanceIdentifier();
-    case '{':
-      return LBRACK;
-    case '}':
-      return RBRACK;
-    case '(':
-      return LPAREN;
-    case ')':
-      return RPAREN;
-    case '[':
-      return LSQPAR;
-    case ']':
-      return RSQPAR;
-    case '?':
-      return QMARK;
-    case '"':
-      return advanceLiteral();
-    case '\'':
-      return advanceLetter();
-    case '!':
-      if (lookAhead('='))
-        return NOTEQUAL;
-      return NOT;
-    case '#':
-      return HASH;
-    case '.':
-      if (lookAhead('.')) {
+      // Integer or Float Constants
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+        return advanceConstant();
+        // Identifier
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+      case 'G':
+      case 'H':
+      case 'I':
+      case 'J':
+      case 'K':
+      case 'L':
+      case 'M':
+      case 'N':
+      case 'O':
+      case 'P':
+      case 'Q':
+      case 'R':
+      case 'S':
+      case 'T':
+      case 'U':
+      case 'V':
+      case 'W':
+      case 'X':
+      case 'Y':
+      case 'Z':
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+      case 'g':
+      case 'h':
+      case 'i':
+      case 'j':
+      case 'k':
+      case 'l':
+      case 'm':
+      case 'n':
+      case 'o':
+      case 'p':
+      case 'q':
+      case 'r':
+      case 's':
+      case 't':
+      case 'u':
+      case 'v':
+      case 'w':
+      case 'x':
+      case 'y':
+      case 'z':
+      case '_':
+        return advanceIdentifier();
+      case '{':
+        return LBRACK;
+      case '}':
+        return RBRACK;
+      case '(':
+        return LPAREN;
+      case ')':
+        return RPAREN;
+      case '[':
+        return LSQPAR;
+      case ']':
+        return RSQPAR;
+      case '?':
+        return QMARK;
+      case '"':
+        return advanceLiteral();
+      case '\'':
+        return advanceLetter();
+      case '!':
+        if (lookAhead('=')) return NOTEQUAL;
+        return NOT;
+      case '#':
+        return HASH;
+      case '.':
         if (lookAhead('.')) {
-          return TRIPLET;
+          if (lookAhead('.')) {
+            return TRIPLET;
+          }
+          return RANGE;
         }
-        return RANGE;
+        return DOT;
+      case ',':
+        return COMMA;
+      case '|':
+        if (lookAhead('|')) {
+          return LOR;
+        } else if (lookAhead('=')) {
+          return OREQ;
+        } else {
+          return OR;
+        }
+      case '&':
+        if (lookAhead('&')) {
+          return LAND;
+        } else if (lookAhead('=')) {
+          return ANDEQ;
+        } else {
+          return AND;
+        }
+      case '*': {
+        if (lookAhead('=')) return STAREQ;
+        return STAR;
       }
-      return DOT;
-    case ',':
-      return COMMA;
-    case '|':
-      if (lookAhead('|')) {
-        return LOR;
-      } else if (lookAhead('=')) {
-        return OREQ;
-      } else {
-        return OR;
-      }
-    case '&':
-      if (lookAhead('&')) {
-        return LAND;
-      } else if (lookAhead('=')) {
-        return ANDEQ;
-      } else {
-        return AND;
-      }
-    case '*': {
-      if (lookAhead('='))
-        return STAREQ;
-      return STAR;
-    }
-    case '+':
-      if (lookAhead('+')) {
-        return PLUSPLUS;
-      } else if (lookAhead('=')) {
-        return PLUSEQ;
-      } else {
-        return PLUS;
-      }
-    case '-':
-      if (lookAhead('-')) {
-        return MINUSMINUS;
-      } else if (lookAhead('=')) {
-        return MINUSEQ;
-      } else {
-        return MINUS;
-      }
-    case '%':
-      if (lookAhead('=')) {
-        return MODEQ;
-      }
-      return MOD;
-    case '=':
-      if (lookAhead('=')) {
-        return EQUALEQUAL;
-      }
-      return EQUAL;
-    case '~':
-      if (lookAhead('=')) {
-        return TILDEEQ;
-      }
-      return TILDE;
-    case '/':
-      // If it's comment then skip..
-      if (lookAhead('/') || lookAhead('*')) {
-        return advanceComments();
-      } else {
+      case '+':
+        if (lookAhead('+')) {
+          return PLUSPLUS;
+        } else if (lookAhead('=')) {
+          return PLUSEQ;
+        } else {
+          return PLUS;
+        }
+      case '-':
+        if (lookAhead('-')) {
+          return MINUSMINUS;
+        } else if (lookAhead('=')) {
+          return MINUSEQ;
+        } else {
+          return MINUS;
+        }
+      case '%':
         if (lookAhead('=')) {
-          return DIVEQ;
+          return MODEQ;
         }
-        return DIV;
+        return MOD;
+      case '=':
+        if (lookAhead('=')) {
+          return EQUALEQUAL;
+        }
+        return EQUAL;
+      case '~':
+        if (lookAhead('=')) {
+          return TILDEEQ;
+        }
+        return TILDE;
+      case '/':
+        // If it's comment then skip..
+        if (lookAhead('/') || lookAhead('*')) {
+          return advanceComments();
+        } else {
+          if (lookAhead('=')) {
+            return DIVEQ;
+          }
+          return DIV;
+        }
+      case '<':
+        if (lookAhead('<')) {
+          return LSHIFT;
+        } else if (lookAhead('=')) {
+          return LTEQ;
+        } else {
+          return LT;
+        }
+      case '>':
+        if (lookAhead('>')) {
+          return RSHIFT;
+        } else if (lookAhead('=')) {
+          return GTEQ;
+        } else {
+          return GT;
+        }
+      case '^':
+        if (lookAhead('=')) {
+          return XOREQ;
+        }
+        return XOR;
+      case ';':
+        return SEMICOLON;
+      case ':':
+        if (lookAhead('=')) {
+          return TYPEINF;
+        } else if (lookAhead(':')) {
+          return COLONCOLON;
+        }
+        return COLON;
+      case '$':
+        return DOLLAR;
+      case '@':
+      case '`': {
+        return UNHANDLED;
       }
-    case '<':
-      if (lookAhead('<')) {
-        return LSHIFT;
-      } else if (lookAhead('=')) {
-        return LTEQ;
-      } else {
-        return LT;
+      case '\0': {
+        this->m_LexerFlags = LexerFlags::DONE;
+        return _EOF;
       }
-    case '>':
-      if (lookAhead('>')) {
-        return RSHIFT;
-      } else if (lookAhead('=')) {
-        return GTEQ;
-      } else {
-        return GT;
-      }
-    case '^':
-      if (lookAhead('=')) {
-        return XOREQ;
-      }
-      return XOR;
-    case ';':
-      return SEMICOLON;
-    case ':':
-      if (lookAhead('=')) {
-        return TYPEINF;
-      } else if (lookAhead(':')) {
-        return COLONCOLON;
-      }
-      return COLON;
-    case '$':
-      return DOLLAR;
-    case '@':
-    case '`': {
-      return UNHANDLED;
-    }
-    case '\0': {
-      this->m_LexerFlags = LexerFlags::DONE;
-      return _EOF;
-    }
-    default:
-      return UNKNOWN;
+      default:
+        return UNKNOWN;
     }
 
     return UNKNOWN;
@@ -795,139 +793,139 @@ public:
 
   const char *tokenAsStr(TokenKind token) {
     switch (token) {
-    case SQUOTE:
-      return "'";
-    case DQUOTE:
-      return "\"";
-    case IDENT:
-      return "IDENTIFIER";
-    case SCALARI:
-      return "INTEGER SCALAR";
-    case SCALARD:
-      return "FLOAT SCALAR";
-    case LITERAL:
-      return "LITERAL";
-    case LETTER:
-      return "LETTER";
-    case LBRACK:
-      return "{";
-    case RBRACK:
-      return "}";
-    case LPAREN:
-      return "(";
-    case RPAREN:
-      return ")";
-    case LSQPAR:
-      return "[";
-    case RSQPAR:
-      return "]";
-    case COLONCOLON:
-      return "::";
-    case COLON:
-      return ":";
-    case TYPEINF:
-      return ":=";
-    case HASH:
-      return "#";
-    case DOT:
-      return ".";
-    case RANGE:
-      return "..";
-    case TRIPLET:
-      return "...";
+      case SQUOTE:
+        return "'";
+      case DQUOTE:
+        return "\"";
+      case IDENT:
+        return "IDENTIFIER";
+      case SCALARI:
+        return "INTEGER SCALAR";
+      case SCALARD:
+        return "FLOAT SCALAR";
+      case LITERAL:
+        return "LITERAL";
+      case LETTER:
+        return "LETTER";
+      case LBRACK:
+        return "{";
+      case RBRACK:
+        return "}";
+      case LPAREN:
+        return "(";
+      case RPAREN:
+        return ")";
+      case LSQPAR:
+        return "[";
+      case RSQPAR:
+        return "]";
+      case COLONCOLON:
+        return "::";
+      case COLON:
+        return ":";
+      case TYPEINF:
+        return ":=";
+      case HASH:
+        return "#";
+      case DOT:
+        return ".";
+      case RANGE:
+        return "..";
+      case TRIPLET:
+        return "...";
 
-    case SEMICOLON:
-      return ";";
-    case DOLLAR:
-      return "$";
-    case COMMA:
-      return ",";
-    case UNDERSCORE:
-      return "_";
-    case PLUS:
-      return "+";
-    case PLUSEQ:
-      return "+=";
-    case PLUSPLUS:
-      return "++";
-    case MINUS:
-      return "-";
-    case MINUSMINUS:
-      return "--";
-    case MINUSEQ:
-      return "-=";
-    case QMARK:
-      return "?";
-    case NOT:
-      return "!";
-    case ARROW:
-      return "->";
-    case DARROW:
-      return "=>";
-    case DIV:
-      return "/";
-    case DIVEQ:
-      return "/=";
-    case STAR:
-      return "*";
-    case STAREQ:
-      return "*=";
-    case MOD:
-      return "%";
-    case MODEQ:
-      return "%=";
-    case LSHIFT:
-      return "<<";
-    case LSHIFTEQ:
-      return "<<=";
-    case RSHIFT:
-      return ">>";
-    case RSHIFTEQ:
-      return ">>=";
-    case EQUAL:
-      return "=\0";
-    case EQUALEQUAL:
-      return "==";
-    case NOTEQUAL:
-      return "!=";
-    case TILDE:
-      return "~";
-    case TILDEEQ:
-      return "~=";
-    case LAND:
-      return "&&";
-    case AND:
-      return "&";
-    case ANDEQ:
-      return "&=";
-    case LOR:
-      return "||";
-    case OR:
-      return "=";
-    case OREQ:
-      return "|=";
-    case XOR:
-      return "^";
-    case XOREQ:
-      return "^=";
-    case LTEQ:
-      return "<=";
-    case LT:
-      return "<";
-    case GTEQ:
-      return ">=";
-    case GT:
-      return ">";
-    case COMMENT:
-      return "COMMENT";
-    case UNKNOWN:
-      return "UNKNOWN";
-    default:
-      return "UNHANDLED";
+      case SEMICOLON:
+        return ";";
+      case DOLLAR:
+        return "$";
+      case COMMA:
+        return ",";
+      case UNDERSCORE:
+        return "_";
+      case PLUS:
+        return "+";
+      case PLUSEQ:
+        return "+=";
+      case PLUSPLUS:
+        return "++";
+      case MINUS:
+        return "-";
+      case MINUSMINUS:
+        return "--";
+      case MINUSEQ:
+        return "-=";
+      case QMARK:
+        return "?";
+      case NOT:
+        return "!";
+      case ARROW:
+        return "->";
+      case DARROW:
+        return "=>";
+      case DIV:
+        return "/";
+      case DIVEQ:
+        return "/=";
+      case STAR:
+        return "*";
+      case STAREQ:
+        return "*=";
+      case MOD:
+        return "%";
+      case MODEQ:
+        return "%=";
+      case LSHIFT:
+        return "<<";
+      case LSHIFTEQ:
+        return "<<=";
+      case RSHIFT:
+        return ">>";
+      case RSHIFTEQ:
+        return ">>=";
+      case EQUAL:
+        return "=\0";
+      case EQUALEQUAL:
+        return "==";
+      case NOTEQUAL:
+        return "!=";
+      case TILDE:
+        return "~";
+      case TILDEEQ:
+        return "~=";
+      case LAND:
+        return "&&";
+      case AND:
+        return "&";
+      case ANDEQ:
+        return "&=";
+      case LOR:
+        return "||";
+      case OR:
+        return "=";
+      case OREQ:
+        return "|=";
+      case XOR:
+        return "^";
+      case XOREQ:
+        return "^=";
+      case LTEQ:
+        return "<=";
+      case LT:
+        return "<";
+      case GTEQ:
+        return ">=";
+      case GT:
+        return ">";
+      case COMMENT:
+        return "COMMENT";
+      case UNKNOWN:
+        return "UNKNOWN";
+      default:
+        return "UNHANDLED";
     }
   }
 
   ~CStarLexer() {}
 };
 
-#endif // !LEXER_HPP
+#endif  // !LEXER_HPP

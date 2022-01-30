@@ -77,7 +77,7 @@ macro unique_vec(expr){
 }
 
 
-//Attributing functions from Area (this is like a interface but not exactly interface...)
+//Attributing functions from Area (this is like an interface but not exactly interface...)
 prototype Shape<T> from Area<T> { 
     float32 x;
     float32 y;
@@ -87,9 +87,12 @@ prototype Shape<T> from Area<T> {
     } 
 
     //if there is no parameters, we can write the function in three different ways
-    area() :: float32 {}
-    area() :: float32 {}
+    area() :: void {}
+    area :: void {}
     area() {} 
+    area {
+
+    }
 
     area<Square>(int x,int y) :: float32;
     area<Triangle>(float32 x,float32 y) :: float32;
@@ -130,37 +133,47 @@ enum Colors(Triangle) {
 }
 
 
-//This means pass by address by ref but it can't be changed
 example(int32& by_ref) :: void {
 
 }
 
-//This means ref it can be changed
 example1(constref int32& by_ref) :: void {
 
 }
 
-//This means pass by address that unique pointer but it can't be changed
-//and it has an unique ownership which is not able to be shared with
-//another pointer and it can be moved but not allowed by [^]
+// This means passed by address which holds by an unique pointer (it had moved probably) 
+// and its ownership had been transfered and it's not able to be shared with
+// another pointer since it's an unique ptr but you can move it by move or assignment-move
+// but in some cases, you don't wanna let to be passed a moveable unique_ptr 
+// to the function itself as a param. In this cases you can use nomove qualifier
+// so by this qualifier compiler will be complaining that this passed pointer as moveable unique ptr.
+// example2(nomove constptr int32^ ptr) 
+// 
+// also if the unique_ptr passed as constptr 
+// it means it cannot be moved during entire the function scope
+// but this is semantically a lit bit awkward since when 
+// you moved your unique ptr and its lifetime 
+// to be limited function's scope. but in some rare cases
+// it'll be good to have.
 example2(constptr int32^ ptr) :: any {
     //this is not possible because ^ pointers are can't be shared
     //int32^ movedHere = ptr;
+
+    //you can move like
+    int32^ movedHere = move ptr;
+    //or
+    int32^ movedHere2 := ptr;
+    // this is ':=' usually using as type inf in the other languages but we don't have a feature like type inf
+
 }
 
-//This means pass by address that unique pointer it 
-//has an unique ownership which is also not able to be shared with
-//another pointer and it can be moved since ^
 example3(int32^ ptr) :: any {
-    //moved here not shared ptr!!
-    int32^ movedHere = ptr;
-    ptr = Triangle();
 } 
 
 
 //This means pass by address that shareable pointer but it can't be changed
 //and it can have many ownerships which is able to be shared with
-//another pointer and it can be moved but not allowed by [*]
+//another pointer and it can be moved but not allowed by constptr
 example4(constptr int32* ptr) :: any {
     int32* sharedHere = ptr;
 
@@ -243,6 +256,11 @@ main() :: int32 {
     int32 r = f; //implicitly casting
     Shape^ shape = Triangle(); 
     Triangle^ triangle = cast<Triangle^>(shape);
+    
+    //move it (transfer ownership) to the left side.
+    Shape^ anotherShape := shape; 
+    //or maybe
+    Shape^ anotherShape2 = move anotherShape;
 
     const Shape^ ptr = Triangle(); // the address is not constant and the value it holds cannot be changed.
     constptr Shape^ ptr = Triangle(); // the address is constant but the value it holds can be changed.
