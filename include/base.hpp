@@ -1,19 +1,18 @@
 #ifndef BASE_HPP
 #define BASE_HPP
-#include <fmt/color.h>
-#include <fmt/core.h>
+#include <iostream>
 
-enum MessageType { INFO, WARN, ERROR, HINT };
+#define RED "\x1B[31m"
+#define GRN "\x1B[32m"
+#define YEL "\x1B[33m"
+#define BLU "\x1B[34m"
+#define MAG "\x1B[35m"
+#define CYN "\x1B[36m"
+#define WHT "\x1B[37m"
+#define RESET "\x1B[0m"
 
-enum MessageStyle { NORMAL, BOLD, ITALIC };
-
-static void Message(const char *mesg, MessageType type = MessageType::INFO,
-                    MessageStyle style = MessageStyle::NORMAL) {
-  fmt::print(mesg);
-}
-
-static void ErrorMessage(const char *mesg) {
-  fmt::print(fg(fmt::color::crimson) | fmt::emphasis::bold, mesg);
+static void LogError(const char *mesg) {
+  std::cout << RED << mesg << RESET << std::endl;
 }
 
 #endif

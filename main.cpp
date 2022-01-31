@@ -1,6 +1,5 @@
 #include <stdlib.h>  // for realpath
 
-#include <base.hpp>
 #include <fstream>
 #include <iostream>
 #include <lexer/lexer.hpp>
@@ -25,8 +24,8 @@ int main(int argc, char** argv) {
     parser.parse();
 
   } else {
-    Message("No argument specified!\n");
-    Message("--- Usage: ./CSTAR file.cstar\n");
+    LogError("No argument specified!\n");
+    LogError("--- Usage: ./CSTAR file.cstar\n");
   }
   return 0;
 }

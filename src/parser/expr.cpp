@@ -96,9 +96,9 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       }
 
       stride += 1;
-      opBucket.push_back(PrecedenceEntry(prevCurrToken, opType,
-                                         precInfo, stride, i,
-                                         isFirst, isLast, hasTypeAttrib));
+      opBucket.push_back(PrecedenceEntry(prevCurrToken, opType, precInfo,
+                                         stride, i, isFirst, isLast,
+                                         hasTypeAttrib));
       exprBucket.push_back(std::move(args));
     } else if (is(TokenKind::LPAREN) &&
                this->isUnaryOp()) {  // this is for functional casts and
@@ -134,8 +134,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       } else {
         // well we're sure this is not binary op for the type attrib
         // so go to jump_operator and keep going from there
-        if(isOperator(this->currentTokenInfo()))
-          goto jump_operator;
+        if (isOperator(this->currentTokenInfo())) goto jump_operator;
       }
     } else if (isOperator(this->currentTokenInfo())) {
     jump_operator:
@@ -167,7 +166,6 @@ ASTNode CStarParser::expression(bool isSubExpr) {
 
       // debuggin purpose
 
-
       bool isOutOfSize = false;
       auto nextToken = this->nextTokenInfo(isOutOfSize).getTokenKind();
       if (isOutOfSize)
@@ -185,8 +183,8 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       // stride += hasTypeAttrib ? 1 : 0;
 
       opBucket.emplace_back(PrecedenceEntry(this->currentTokenKind(), opType,
-                                         precInfo, stride, i,
-                                         isFirst, isLast, hasTypeAttrib));
+                                            precInfo, stride, i, isFirst,
+                                            isLast, hasTypeAttrib));
       this->advance();
     } else {
       // and perform	parsing the expression by recursive-descent way.
@@ -205,7 +203,9 @@ ASTNode CStarParser::expression(bool isSubExpr) {
   if (is(TokenKind::SEMICOLON)) {  // initialization
     // let's be sure that all the open parenthesis are closed or not?
     if (closedPar % 2 != 0) {
-      assert(false && ") mismatch");
+      // assert(false && ") mismatch");
+      ParserError("')' mismatch parenthesis. Be sure you have closed it!",
+                  currentTokenInfo());
     }
 
     // build top-level AST here..
@@ -227,7 +227,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
   } else if (is(TokenKind::GT)) {
     // must be only 1 ast node as TypeAST
     if ((exprBucket.size() > 1 || exprBucket.empty()))
-      std::cerr << "It must be only type. Invalid type attribute.\n";
+      ParserError("It must be only type. Invalid type attribute.\n", currentTokenInfo());
 
     // advance >
     this->advance();
@@ -278,7 +278,7 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
         default: {
           std::cout << "Iteration : " << i << std::endl;
           std::cout << "Op Count: " << opPrecBucket.size() << std::endl;
-          for(auto &op_d : opPrecBucket) {
+          for (auto& op_d : opPrecBucket) {
             op_d.print();
             std::cout << " ---------------- \n";
           }
@@ -295,7 +295,7 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
 
       // Debuggin purpose
       char opCharacter = this->m_Lexer.tokenAsStr(op.entryTokenKind())[0];
-     // std::cout << opCharacter << std::endl;
+      // std::cout << opCharacter << std::endl;
 
       bool funcCall = false;
 
@@ -329,7 +329,7 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
         default: {
           std::cout << "Iteration : " << i << std::endl;
           std::cout << "Op Count: " << opPrecBucket.size() << std::endl;
-          for(auto &op_d : opPrecBucket) {
+          for (auto& op_d : opPrecBucket) {
             op_d.print();
             std::cout << " ---------------- \n";
           }
@@ -422,11 +422,10 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
                                                castOpKind, false);
         insertNode(pos, std::move(node));
       }
-    }
-    else {
+    } else {
       std::cout << "Iteration : " << i << std::endl;
       std::cout << "Op Count: " << opPrecBucket.size() << std::endl;
-      for(auto &op_d : opPrecBucket) {
+      for (auto& op_d : opPrecBucket) {
         op_d.print();
         std::cout << " ---------------- \n";
       }

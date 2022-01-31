@@ -1,5 +1,6 @@
 #ifndef LEXER_HPP
 #define LEXER_HPP
+#include <memory>
 #include <cassert>
 #include <iostream>
 #include <map>

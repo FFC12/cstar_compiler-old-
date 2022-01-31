@@ -155,9 +155,9 @@ class CStarParser {
   // parser.cpp
   void translationUnit();
   Type typeOf(const TokenInfo& token);
-  PositionInfo getPosInfo(TokenInfo tokenInfo);
   void ParserError(std::string mesg, TokenInfo tokenInfo);
-  std::string_view::iterator viewLine(size_t line, size_t& offset);
+  std::string_view::iterator viewLine(size_t line, size_t& rlbegin,
+                                      size_t& rlend, size_t& offset);
 
   // variable.cpp
   void varDecl();

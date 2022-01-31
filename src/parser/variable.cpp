@@ -93,14 +93,14 @@ size_t CStarParser::advancePointerType(bool isUniquePtr) {
 
     if (pointerType == TokenKind::STAR &&
         this->currentTokenKind() == TokenKind::XOR) {
-      ErrorMessage(
-          "Next pointer type [^] is not matching with type before "
-          "level [*]. This is not supported yet!");
+      ParserError(
+          "Next pointer type [^] is not matching with type of before "
+          "level's [*]. This is not supported yet!",currentTokenInfo());
     } else if (pointerType == TokenKind::XOR &&
                this->currentTokenKind() == TokenKind::STAR) {
-      ErrorMessage(
-          "Next pointer type [*] is not matching with type before "
-          "level [^]. This is not supported yet!");
+      ParserError(
+          "Next pointer type [*] is not matching with type of before "
+          "level's [^]. This is not supported yet!",currentTokenInfo());
     }
 
     level += 1;

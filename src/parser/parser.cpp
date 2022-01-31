@@ -44,7 +44,7 @@ void CStarParser::translationUnit() {
       } else {
         // int* | float* | uint* ...
         if (this->isType(this->m_CurrToken)) {
-          this->ParserError("hello", this->currentTokenInfo());
+          //          this->ParserError("hello", this->currentTokenInfo());
           varDecl();
         } else {
         }
@@ -224,18 +224,16 @@ Type CStarParser::typeOf(const TokenInfo& token) {
   }
 }
 
-PositionInfo CStarParser::getPosInfo(TokenInfo tokenInfo) {
-  return tokenInfo.getTokenPositionInfo();
-}
-
 // Parsing errors doesn't let you accumulate error and warning messages.
 // This means when a parser error occured it will be exited (1) unlike
 // semantic analyzer what it does
 void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo) {
-  auto posInfo = this->getPosInfo(tokenInfo);
+  auto posInfo = tokenInfo.getTokenPositionInfo();
 
   // copy one time for each translation unit
   static std::string messageHeader(this->m_Lexer.getFilepath().get());
+  const size_t CHAR_LIMIT = 128;
+  const size_t MARGIN_LEFT = 5;
 
   // token pos
   size_t tok_begin = posInfo.begin;
@@ -245,33 +243,56 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo) {
   // line
   size_t offset = 0;
 
-  auto buffer_it = this->viewLine(line, offset);
+  // tok_begin will be relative begin according to the line.
+  auto buffer_it = this->viewLine(line, tok_begin, tok_end, offset);
 
-  messageHeader += ":" + std::to_string(tok_begin) + ":" +
-                   std::to_string(line) + "\x20 error: " + mesg + "\n";
-  ErrorMessage(messageHeader.c_str());
+  // message header
+  messageHeader += ":" + std::to_string(line + 1) + ":" +
+                   std::to_string(tok_begin + 1) + RED "\x20 error: " RESET +
+                   mesg + "\n";
 
+  std::cout << BLU + messageHeader + RESET;
+
+  // line beginning
+  std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
+
+  // linw
   for (int i = 0; i < offset; i++) {
-    std::cout << buffer_it[i];
-  }
-
-  std::cout << std::endl;
-
-  for (int i = 0; i < offset; i++) {
-    if (i >= tok_begin && i < tok_end) {
-      putchar('~');
+    if (i < CHAR_LIMIT)
+      std::cout << buffer_it[i];
+    else {
+      std::cout << "...";
+      break;
     }
   }
 
   std::cout << std::endl;
 
-  //	std::string fmt_mesg =
-  //	ErrorMessage(fmt_mesg);
+  // for margin
+  for (int i = 0; i < MARGIN_LEFT; i++)
+    if (i == 3)
+      putchar('|');
+    else
+      putchar('\x20');
+
+  // indicator
+  std::cout << BLU;
+  for (int i = 0; i < offset; i++) {
+    if (i >= tok_begin && i < tok_end) {
+      putchar('~');
+    } else {
+      putchar('\x20');
+    }
+  }
+  std::cout << RESET;
+  std::cout << std::endl << std::endl;
 
   exit(0);
 }
 
-std::string_view::iterator CStarParser::viewLine(size_t line, size_t& offset) {
+std::string_view::iterator CStarParser::viewLine(size_t line, size_t& rlbegin,
+                                                 size_t& rlend,
+                                                 size_t& offset) {
   auto buffer_view = this->m_Lexer.getBufferView();
   size_t lbegin = 0;
   // first line
@@ -306,6 +327,8 @@ std::string_view::iterator CStarParser::viewLine(size_t line, size_t& offset) {
         lbegin = i + 1;
         begin_mark = true;
       } else if (line_walker - 1 == line) {
+        rlbegin -= lbegin;
+        rlend -= lbegin;
         offset = i - lbegin;
         break;
       } else {
