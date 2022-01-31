@@ -17,7 +17,9 @@ enum ExprKind {
   TypeExpr,
   IndirectExpr,
   RefExpr,
-  AssignmentExpr
+  AssignmentExpr,
+  FuncCallExpr,
+  SymbolExpr,
 };
 
 enum DeclKind {
@@ -48,9 +50,9 @@ class IAST {
   DeclKind m_DeclKind;
 
  public:
-  virtual void debugNode() {
-      std::cout << "Root\n";
-  };
+  virtual void debugNode() { std::cout << "Root\n"; };
+
+  ExprKind getExprKind() const { return this->m_ExprKind; }
   // we'll change the return-type by LLVM types
   // or our self codegenerator type
 };

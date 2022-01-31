@@ -2,6 +2,7 @@
 #define SYMBOL_AST_HPP
 #include <ast/ast.hpp>
 #include <string>
+#include <utility>
 
 class SymbolAST : public IAST {
   // it can be whether a type name or variable name.
@@ -9,8 +10,12 @@ class SymbolAST : public IAST {
   std::string m_SymbolName;
 
  public:
-  SymbolAST(std::string symbolName) : m_SymbolName(symbolName) {}
-  void debugNode() override {}
+  // Maybe we need to use that token infos so preventing to move it...
+  explicit SymbolAST(std::string symbolName) : m_SymbolName(symbolName) {
+    this->m_ASTKind = ASTKind::Expr;
+    this->m_ExprKind = ExprKind::SymbolExpr;
+  }
+  void debugNode() override { std::cout << m_SymbolName; }
 };
 
 #endif

@@ -100,6 +100,17 @@ class PrecedenceEntry {
 
   // Debuggin purpose
   size_t getPrec() { return this->m_PrecedenceInfo.getPrec(); }
+
+  void print() {
+    std::cout << "Op Type: " << std::to_string(m_OpType) << std::endl;
+    std::cout << "Op Token Kind: " << std::to_string(m_Token) << std::endl;
+    std::cout << "Has Type Attrib: " << std::to_string(m_HasTypeAttrib) << std::endl;
+    std::cout << "Stride: " << std::to_string(m_Stride) << std::endl;
+    std::cout << "Entry Id: " << m_Id << std::endl;
+    std::cout << "Precedence: " << m_PrecedenceInfo.getPrec() << std::endl;
+    std::cout << "Is Left to Right: " << m_PrecedenceInfo.isLtr() << std::endl;
+  }
+
 };
 
 using PrecedenceInfoTable = std::unordered_map<TokenKind, PrecedenceInfo>;

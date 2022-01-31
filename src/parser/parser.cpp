@@ -66,9 +66,10 @@ bool CStarParser::isType(const TokenInfo& token) {
     case BOOL:
     case VEC2:
     case VEC3:
+	  // Every single IDENT is going to be interpreted as Symbol
+		//case IDENT:
     case VEC4:
-    case IDENT:
-      return true;
+		  return true;
     default:
       return false;
   }
@@ -205,9 +206,20 @@ Type CStarParser::typeOf(const TokenInfo& token) {
       return Type::T_VEC3;
     case VEC4:
       return Type::T_VEC4;
-    case IDENT:
-      return Type::T_DEFINED;
+	 // every single IDENT is going to be interpreted as Symbol...
+   // case IDENT:
+   //   return Type::T_DEFINED;
     default:
       assert(false && "Unreacheable");
   }
+}
+
+
+PositionInfo CStarParser::getPosInfo(TokenInfo tokenInfo) {
+	return tokenInfo.getTokenPositionInfo();
+}
+
+
+void CStarParser::ParserError(std::string mesg) {
+
 }

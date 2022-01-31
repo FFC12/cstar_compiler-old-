@@ -28,24 +28,31 @@ enum Type {
   // MATXxX - MAT
 
   // User defined types
-  T_DEFINED,  // This will be checked in next phase (type checker)
+  T_DEFINED,  // This will be checked in the next phase (type checker)
 };
 
 class TypeAST : public IAST {
   Type m_TypeSpec;
+  ASTNode m_Symbol;
   size_t m_IndirectLevel;
   bool m_IsUniquePtr;
+  bool m_IsPrimitiveType;
 
  public:
-  TypeAST(Type typeSpec, bool isUniquePtr, size_t indirectLevel)
-      : m_TypeSpec(typeSpec), m_IsUniquePtr(isUniquePtr), m_IndirectLevel(indirectLevel) {
+  TypeAST(Type typeSpec, ASTNode symbol, bool isUniquePtr, bool isPrimitive,
+          size_t indirectLevel)
+      : m_TypeSpec(typeSpec),
+        m_Symbol(std::move(symbol)),
+        m_IsUniquePtr(isUniquePtr),
+        m_IsPrimitiveType(isPrimitive),
+        m_IndirectLevel(indirectLevel) {
     this->m_ASTKind = ASTKind::Expr;
     this->m_ExprKind = ExprKind::TypeExpr;
   }
 
   void debugNode() override {
     std::cout << this->m_TypeSpec << " as type";
-    for(size_t i = 0; i < this->m_IndirectLevel; i++)
+    for (size_t i = 0; i < this->m_IndirectLevel; i++)
       std::cout << (this->m_IsUniquePtr ? "^" : "*");
   }
 };

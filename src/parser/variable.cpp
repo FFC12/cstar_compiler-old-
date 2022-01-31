@@ -12,7 +12,8 @@ not_needed_type:
 
   //* | ^
   while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
-    size_t indirection_level = advancePointerType(this->currentTokenKind() == TokenKind::XOR);
+    size_t indirection_level =
+        advancePointerType(this->currentTokenKind() == TokenKind::XOR);
     std::cout << "Indirection level: " << indirection_level << "\n";
   }
 
@@ -66,7 +67,9 @@ not_needed_type:
   this->advance();
 }
 
-ASTNode CStarParser::initializer() { return std::move(this->expression(false)); }
+ASTNode CStarParser::initializer() {
+  return std::move(this->expression(false));
+}
 
 ASTNode CStarParser::initializerList() {}
 

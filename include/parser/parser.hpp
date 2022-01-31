@@ -3,6 +3,7 @@
 #include <ast/ast.hpp>
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
+#include <ast/func_call_ast.hpp>
 #include <ast/scalar_ast.hpp>
 #include <ast/symbol_ast.hpp>
 #include <ast/type_ast.hpp>
@@ -154,6 +155,8 @@ class CStarParser {
   // parser.cpp
   void translationUnit();
   Type typeOf(const TokenInfo& token);
+  PositionInfo getPosInfo(TokenInfo tokenInfo);
+  void ParserError(std::string mesg);
 
   // variable.cpp
   void varDecl();
@@ -171,8 +174,6 @@ class CStarParser {
   ASTNode advanceConstantOrLiteral();
   ASTNode advanceRef();
   ASTNode advanceIndirect();
-  ASTNode advanceBinOp();
-  ASTNode advanceUnaryOp();
   ASTNode advanceFunctionCall();
   ASTNode advanceArraySubscript();
   ASTNode advanceType();
@@ -259,6 +260,7 @@ class CStarParser {
     addToPrecTable(OpType::OP_BINARY, XOREQ, 1, false);
     addToPrecTable(OpType::OP_BINARY, OREQ, 1, false);
     addToPrecTable(OpType::OP_BINARY, COMMA, 1, false);
+    // ternary op
     addToPrecTable(OpType::OP_BINARY, QMARK, 1, false);
 
     m_PrecTable[OpType::OP_UNARY] = std::move(m_PrecTableUnary);

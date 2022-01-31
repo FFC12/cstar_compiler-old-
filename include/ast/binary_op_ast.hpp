@@ -18,7 +18,8 @@ enum BinOpKind {
   B_LT,
   B_SHL,
   B_SHR,
-  B_EQ
+  B_EQ,
+  B_COMM  // ','
 };
 
 class BinaryOpAST : public IAST {
@@ -43,6 +44,12 @@ class BinaryOpAST : public IAST {
     std::cout << this->m_Op;
     this->m_RHS->debugNode();
   }
+};
+
+class CommaNode : public BinaryOpAST {
+ public:
+  CommaNode(ASTNode lhs, ASTNode rhs, BinOpKind binOpKind, char op)
+      : BinaryOpAST(std::move(lhs), std::move(rhs), binOpKind, op) {}
 };
 
 class AdditionNode : public BinaryOpAST {
@@ -75,5 +82,5 @@ class ModuloNode : public BinaryOpAST {
       : BinaryOpAST(std::move(lhs), std::move(rhs), binOpKind, op) {}
 };
 
-// &, &&, |, ||, ~, >, <, >>, <<, ==,
+// &, &&, |, ||, ~, >, <, >>, <<, ==, ','
 #endif

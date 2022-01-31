@@ -16,7 +16,10 @@ class CastOpAST : public IAST {
       : m_Node(std::move(node)),
         m_TypeNode(std::move(typeNode)),
         m_CastOpKind(castOpKind),
-        m_HasTypeAttrib(hasTypeAttrib) {}
+        m_HasTypeAttrib(hasTypeAttrib) 
+        {
+          
+        }
 
   void debugNode() override {
     switch (m_CastOpKind) {
