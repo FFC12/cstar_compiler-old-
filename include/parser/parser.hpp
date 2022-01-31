@@ -156,7 +156,8 @@ class CStarParser {
   void translationUnit();
   Type typeOf(const TokenInfo& token);
   PositionInfo getPosInfo(TokenInfo tokenInfo);
-  void ParserError(std::string mesg);
+  void ParserError(std::string mesg, TokenInfo tokenInfo);
+  std::string_view::iterator viewLine(size_t line, size_t& offset);
 
   // variable.cpp
   void varDecl();
@@ -182,8 +183,8 @@ class CStarParser {
   TypeSpecifier typeResolver(TokenInfo token);
 
  public:
-  CStarParser(const CStarLexer&& pLexer)
-      : m_Lexer(std::move(pLexer)),
+  explicit CStarParser(CStarLexer&& pLexer)
+      : m_Lexer(pLexer),
         m_TokenIndex(0),
         m_ErrorFlag(false),
         m_ParsingEndingFlag(false) {

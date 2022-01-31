@@ -19,6 +19,15 @@ void CStarParser::translationUnit() {
       break;
     }
 
+    // for (int n = 0; n < 3; n++) {
+    //   size_t offset;
+    //   auto it = this->viewLine(n, offset);
+    //   for (int i = 0; i < offset; i++) {
+    //     std::cout << it[i];
+    //   }
+    //   std::cout << std::endl;
+    // }
+
     if (is(TokenKind::COMMENT)) {
       this->advance();
       continue;
@@ -35,6 +44,7 @@ void CStarParser::translationUnit() {
       } else {
         // int* | float* | uint* ...
         if (this->isType(this->m_CurrToken)) {
+          this->ParserError("hello", this->currentTokenInfo());
           varDecl();
         } else {
         }
@@ -66,10 +76,10 @@ bool CStarParser::isType(const TokenInfo& token) {
     case BOOL:
     case VEC2:
     case VEC3:
-	  // Every single IDENT is going to be interpreted as Symbol
-		//case IDENT:
+      // Every single IDENT is going to be interpreted as Symbol
+      // case IDENT:
     case VEC4:
-		  return true;
+      return true;
     default:
       return false;
   }
@@ -206,20 +216,103 @@ Type CStarParser::typeOf(const TokenInfo& token) {
       return Type::T_VEC3;
     case VEC4:
       return Type::T_VEC4;
-	 // every single IDENT is going to be interpreted as Symbol...
-   // case IDENT:
-   //   return Type::T_DEFINED;
+      // every single IDENT is going to be interpreted as Symbol...
+      // case IDENT:
+      //   return Type::T_DEFINED;
     default:
       assert(false && "Unreacheable");
   }
 }
 
-
 PositionInfo CStarParser::getPosInfo(TokenInfo tokenInfo) {
-	return tokenInfo.getTokenPositionInfo();
+  return tokenInfo.getTokenPositionInfo();
 }
 
+// Parsing errors doesn't let you accumulate error and warning messages.
+// This means when a parser error occured it will be exited (1) unlike
+// semantic analyzer what it does
+void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo) {
+  auto posInfo = this->getPosInfo(tokenInfo);
 
-void CStarParser::ParserError(std::string mesg) {
+  // copy one time for each translation unit
+  static std::string messageHeader(this->m_Lexer.getFilepath().get());
 
+  // token pos
+  size_t tok_begin = posInfo.begin;
+  size_t tok_end = posInfo.end;
+  size_t line = posInfo.line;
+
+  // line
+  size_t offset = 0;
+
+  auto buffer_it = this->viewLine(line, offset);
+
+  messageHeader += ":" + std::to_string(tok_begin) + ":" +
+                   std::to_string(line) + "\x20 error: " + mesg + "\n";
+  ErrorMessage(messageHeader.c_str());
+
+  for (int i = 0; i < offset; i++) {
+    std::cout << buffer_it[i];
+  }
+
+  std::cout << std::endl;
+
+  for (int i = 0; i < offset; i++) {
+    if (i >= tok_begin && i < tok_end) {
+      putchar('~');
+    }
+  }
+
+  std::cout << std::endl;
+
+  //	std::string fmt_mesg =
+  //	ErrorMessage(fmt_mesg);
+
+  exit(0);
+}
+
+std::string_view::iterator CStarParser::viewLine(size_t line, size_t& offset) {
+  auto buffer_view = this->m_Lexer.getBufferView();
+  size_t lbegin = 0;
+  // first line
+  if (line == 0) {
+    bool oneLineFlag = true;
+    for (size_t i = 0; i < buffer_view.size(); i++) {
+      if (buffer_view[i] == '\n') {
+        oneLineFlag = false;
+
+        lbegin = 0;
+        offset = i;
+        break;
+      }
+    }
+
+    // that means we have only one line in the source file.
+    // and it's not ending up with '\n'
+    if (oneLineFlag) {
+      lbegin = 0;
+      offset = buffer_view.size();
+    }
+  } else {
+    auto line_walker = 0;
+    bool begin_mark = false;
+
+    for (size_t i = 0; i < buffer_view.size(); ++i) {
+      if (buffer_view[i] == '\n') {
+        line_walker += 1;
+      }
+
+      if (line_walker == line && !begin_mark) {
+        lbegin = i + 1;
+        begin_mark = true;
+      } else if (line_walker - 1 == line) {
+        offset = i - lbegin;
+        break;
+      } else {
+        continue;
+      }
+    }
+  }
+
+  return buffer_view.begin() + lbegin;
 }

@@ -31,7 +31,8 @@ not_needed_type:
   if (is(TokenKind::EQUAL)) {
     // advance the value or expression..
     rhs = std::move(this->initializer());
-    rhs->debugNode();
+
+    //rhs->debugNode();
     std::cout << std::endl;
   }
 

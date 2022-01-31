@@ -1,3 +1,5 @@
+#include <stdlib.h>  // for realpath
+
 #include <base.hpp>
 #include <fstream>
 #include <iostream>
@@ -6,13 +8,19 @@
 #include <sstream>
 #include <vector>
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc > 1) {
+    char* relativePath = argv[1];
+
     std::ifstream file;
-    file.open(argv[1]);
+    file.open(relativePath);
     std::stringstream ss;
     ss << file.rdbuf();
-    CStarLexer lexer(ss.str());
+
+    // Initialize unique_ptr
+    const std::shared_ptr<char> realPath(realpath(relativePath, NULL));
+
+    CStarLexer lexer(ss.str(), realPath);
     CStarParser parser(std::move(lexer));
     parser.parse();
 

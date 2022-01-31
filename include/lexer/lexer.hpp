@@ -4,6 +4,7 @@
 #include <iostream>
 #include <map>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 // This section is for compiler frontend
@@ -163,6 +164,15 @@ struct PositionInfo {
       : begin(begin), end(end), line(line) {}
 };
 
+struct FileInfo {
+  std::shared_ptr<char> filename;
+  std::shared_ptr<char> filepath;
+
+  FileInfo() = default;
+  FileInfo(std::shared_ptr<char> filename, std::shared_ptr<char> filepath)
+      : filename(std::move(filename)), filepath(std::move(filepath)) {}
+};
+
 enum LexerFlags { IDLE, JUST_STARTED, RUNNING, DONE };
 
 struct TokenInfo {
@@ -202,6 +212,7 @@ class CStarLexer {
   char m_CurrChar;
   bool m_IsKeyword;
   std::string m_LastKeyword;
+  FileInfo m_FileInfo;
   std::map<size_t, size_t> m_CharCountOfLine;
 
   void preprocess() {
@@ -247,9 +258,12 @@ class CStarLexer {
  public:
   // Potentially big buffers will be passed here so let it moved by move
   // semantics...
-  CStarLexer(const std::string &&pBuffer)
-      : m_IsKeyword(false), m_Index(0), m_LexerFlags(LexerFlags::IDLE) {
-    m_Buffer = std::move(pBuffer);
+  CStarLexer(const std::string &&pBuffer, const std::shared_ptr<char> realpath)
+      : m_IsKeyword(false),
+        m_Index(0),
+        m_LexerFlags(LexerFlags::IDLE),
+        m_FileInfo(nullptr, realpath) {
+    m_Buffer = pBuffer;
     m_BufferView = m_Buffer;
     m_CurrChar = m_BufferView[0];
     m_Line = m_Col = 0;
@@ -259,8 +273,13 @@ class CStarLexer {
       }*/
   }
 
-  std::string getBufferView() const {
-    return std::string(this->m_BufferView.begin(), this->m_BufferView.end());
+  std::shared_ptr<char> getFilepath() const {
+    return this->m_FileInfo.filepath;
+  }
+
+  std::string_view getBufferView() const {
+    return this->m_BufferView;  // std::string(this->m_BufferView.begin(),
+                                // this->m_BufferView.end());
   }
 
   bool lookAhead(char expected) {

@@ -1,5 +1,5 @@
 int s = func<int>(func2(b),func3(a), a+b) + 20 - 20;
-
+int r = sizeof int + 10 *;
 
 int r = func<int>(10,20) + sizeof(p) + cast(x + y) / 2 + unsafe_cast<int>(10 + 20) - sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3) * sizeof(int) + cast<int64>(10) + 20 * 20;
 
@@ -17,7 +17,7 @@ int x, s = 20, p = 30;
 float k= 30;
 int32 z = 30;
 int t = 25000;
-intt k = 200; //cannot catch in the pre-parsing. it will be catched on the type checking phase...
+intt k = 200; //cannot catch while parsing. it will be catched on the type checking phase...
 int l = 123;
 
 int32 x = 30;
