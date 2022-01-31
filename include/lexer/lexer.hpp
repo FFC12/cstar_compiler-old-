@@ -1,9 +1,9 @@
 #ifndef LEXER_HPP
 #define LEXER_HPP
-#include <memory>
 #include <cassert>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -813,6 +813,14 @@ class CStarLexer {
 
   const char *tokenAsStr(TokenKind token) {
     switch (token) {
+      case SIZEOF:
+        return "sizeof";
+      case MOVE:
+        return "move";
+      case CAST:
+        return "cast";
+      case UNSAFE_CAST:
+        return "unsafe_cast";
       case SQUOTE:
         return "'";
       case DQUOTE:
@@ -903,7 +911,7 @@ class CStarLexer {
       case RSHIFTEQ:
         return ">>=";
       case EQUAL:
-        return "=\0";
+        return "=";
       case EQUALEQUAL:
         return "==";
       case NOTEQUAL:

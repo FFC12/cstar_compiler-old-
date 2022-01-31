@@ -2,7 +2,19 @@
 #define UNARY_OP_AST_HPP
 #include <ast/ast.hpp>
 
-enum UnaryOpKind { U_SIZEOF, U_TYPEOF, U_MOVE };
+enum UnaryOpKind {
+  U_SIZEOF,
+  U_TYPEOF,
+  U_MOVE,
+  U_PREFIX,
+  U_POSTFIX,
+  U_POSITIVE,
+  U_NEGATIVE,
+  U_NOT,
+  U_XOR,
+  U_DEREF,
+  U_REF
+};
 
 class UnaryOpAST : public IAST {
   ASTNode m_Node;

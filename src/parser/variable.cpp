@@ -33,7 +33,7 @@ not_needed_type:
     rhs = std::move(this->initializer());
 
     //rhs->debugNode();
-    std::cout << std::endl;
+   // std::cout << std::endl;
   }
 
   if (is(TokenKind::COMMA)) {

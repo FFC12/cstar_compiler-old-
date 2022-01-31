@@ -203,18 +203,16 @@ class CStarParser {
     addToPrecTable(OpType::OP_UNARY, MINUSMINUS, 15, true);
 
     // member access operators
-    addToPrecTable(OpType::OP_UNARY, DOT, 14, true);
-    addToPrecTable(OpType::OP_UNARY, ARROW, 14, true);
+    addToPrecTable(OpType::OP_BINARY, DOT, 14, true);
+    addToPrecTable(OpType::OP_BINARY, ARROW, 14, true);
 
     // inceremental or decremental operator as prefix
-    addToPrecTable(OpType::OP_UNARY, PLUSPLUS, 13, false);
-    addToPrecTable(OpType::OP_UNARY, MINUSMINUS, 13, false);
+    // we handle this in the isOperator check manually
+    // addToPrecTable(OpType::OP_UNARY, PLUSPLUS, 13, false);
+    // addToPrecTable(OpType::OP_UNARY, MINUSMINUS, 13, false);
 
     addToPrecTable(OpType::OP_UNARY, SIZEOF, 13, false);
     addToPrecTable(OpType::OP_UNARY, TYPEOF, 13, false);
-
-    // Well not sure right now but this probably must to consume
-    // as a special case rather than a normal operator.
     addToPrecTable(OpType::OP_UNARY, MOVE, 13, false);
 
     //    addToPrecTable(OpType::OP_UNARY, INSTANCEOF, 13, false);

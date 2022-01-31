@@ -28,6 +28,11 @@ void CStarParser::translationUnit() {
     //   std::cout << std::endl;
     // }
 
+    if(is(TokenKind::UNHANDLED)) {
+
+      auto t = this->currentTokenInfo();
+    }
+
     if (is(TokenKind::COMMENT)) {
       this->advance();
       continue;

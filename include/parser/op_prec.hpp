@@ -36,15 +36,19 @@ class PrecedenceInfo {
     return this->m_Precedence == p.m_Precedence;
   }
 
-  bool isLtr() const { this->m_IsLeftToRight; }
+  bool isLtr() { return this->m_IsLeftToRight; }
 
   // Debuggin purpose
   int getPrec() { return this->m_Precedence; }
+
+  void setLtr(bool s) { this->m_IsLeftToRight = s; }
+
+  void setPrec(size_t prec) { this->m_Precedence = prec; }
 };
 
 class PrecedenceEntry {
   OpType m_OpType;
-  TokenKind m_Token;
+  TokenInfo m_Token;
   size_t m_Id;
   size_t m_Stride;
   bool m_IsFirst;
@@ -53,10 +57,10 @@ class PrecedenceEntry {
   PrecedenceInfo m_PrecedenceInfo;
 
  public:
-  PrecedenceEntry(const TokenKind &kind, const OpType &opType,
+  PrecedenceEntry(const TokenInfo &tokenInfo, const OpType &opType,
                   const PrecedenceInfo &precInfo, size_t stride, size_t id,
                   bool isFirst, bool isLast, bool hasTypeAttrib)
-      : m_Token(kind),
+      : m_Token(tokenInfo),
         m_OpType(opType),
         m_PrecedenceInfo(precInfo),
         m_Stride(stride),
@@ -91,8 +95,10 @@ class PrecedenceEntry {
     return this->m_PrecedenceInfo == e.m_PrecedenceInfo;
   }
 
-  TokenKind entryTokenKind() const noexcept { return this->m_Token; }
+  TokenKind entryTokenKind() const noexcept { return this->m_Token.getTokenKind(); }
+  TokenInfo entryTokenInfo() const noexcept { return this->m_Token; }
   OpType entryOpType() const noexcept { return this->m_OpType; }
+  PrecedenceInfo entryPrecInfo() { return this->m_PrecedenceInfo; }
   bool entryHasTypeAttrib() const noexcept { return this->m_HasTypeAttrib; }
   size_t entryId() const noexcept { return this->m_Id; }
   size_t entryStride() const noexcept { return this->m_Stride; }
@@ -103,7 +109,7 @@ class PrecedenceEntry {
 
   void print() {
     std::cout << "Op Type: " << std::to_string(m_OpType) << std::endl;
-    std::cout << "Op Token Kind: " << std::to_string(m_Token) << std::endl;
+    std::cout << "Op Token Kind: " << std::to_string(m_Token.getTokenKind()) << std::endl;
     std::cout << "Has Type Attrib: " << std::to_string(m_HasTypeAttrib) << std::endl;
     std::cout << "Stride: " << std::to_string(m_Stride) << std::endl;
     std::cout << "Entry Id: " << m_Id << std::endl;

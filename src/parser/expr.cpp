@@ -13,9 +13,7 @@ bool CStarParser::isUnaryOp() {
 }
 
 // if it's not a unary or cast operator then it is binary operator
-bool CStarParser::isBinOp() {
-  return this->isUnaryOp() ? false : (!this->isCastOp() ? true : false);
-}
+bool CStarParser::isBinOp() { return !this->isUnaryOp() && !this->isCastOp(); }
 
 // check if it's cast operator
 bool CStarParser::isCastOp() {
@@ -57,29 +55,35 @@ ASTNode CStarParser::expression(bool isSubExpr) {
     }
 
     // this is for function call
-    // Todo: lastCastOpPos and TypeAttribPos is not as expected
     if (is(TokenKind::LPAREN) &&
         (this->isBinOp() ||
          (lastTypeAttribPos + 1 == i && lastCastOpPos + 2 != i))) {
       // assert(false && "Function call");
+      if (prevTokenKind() == TokenKind::EQUAL) goto jump_unary_paranthesis;
+
       closedPar += 1;
-      auto prevCurrToken = this->currentTokenKind();
+      auto prevCurrToken = this->currentTokenInfo();
       auto args = this->expression(true);
+      // empty parenthesis block like ()
+      if (args == nullptr)
+        ParserError("Unexpected token '" +
+                        std::string(tokenToStr(prevTokenKind())) +
+                        "'. You missed operator or name before parenthesis!",
+                    prevTokenInfo());
       closedPar += 1;
 
       auto opType = OpType::OP_BINARY;
       auto precTableType = this->m_PrecTable[opType];
-      if (precTableType.count(prevCurrToken) == 0)
+      if (precTableType.count(prevCurrToken.getTokenKind()) == 0)
         assert(false && "Operator Prec: critical unreacheable!");
 
-      auto precInfo = precTableType[prevCurrToken];
+      auto precInfo = precTableType[prevCurrToken.getTokenKind()];
 
       bool isOutOfSize = false;
       auto nextToken = this->nextTokenInfo(isOutOfSize).getTokenKind();
       if (isOutOfSize)
-        assert(
-            false &&
-            "The stream is done but left parenthesis '(' did not closed ')'");
+        ParserError("')' mismatch parenthesis. Be sure you have closed it!",
+                    currentTokenInfo());
 
       bool isFirst = i == 0;
       bool isLast =
@@ -103,6 +107,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
     } else if (is(TokenKind::LPAREN) &&
                this->isUnaryOp()) {  // this is for functional casts and
                                      // expression reducing (recursively)
+    jump_unary_paranthesis:
       closedPar += 1;
       auto subExpr = this->expression(true);
       closedPar += 1;  // it's always returning back after handled that
@@ -111,9 +116,8 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       bool isOutOfSize = false;
       auto nextToken = this->nextTokenInfo(isOutOfSize).getTokenKind();
       if (isOutOfSize)
-        assert(false &&
-               "The stream is done but still yet paranthesis '(' did "
-               "not closed ')'");
+        ParserError("')' mismatch parenthesis. Be sure you have closed it!",
+                    currentTokenInfo());
 
       exprBucket.push_back(std::move(subExpr));
     } else if (is(TokenKind::LT) && this->isUnaryOp()) {  // <TYPE>
@@ -121,6 +125,15 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       //  advance '<'
       // this->advance();
       lastTypeAttribPos = i;
+      if (this->prevTokenKind() == TokenKind::EQUAL &&
+          (!isCastableOperator(prevTokenInfo()) ||
+           this->prevTokenKind() != IDENT))
+        ParserError("Unexpected token '" +
+                        std::string(tokenToStr(currentTokenKind())) +
+                        "'. Type attribute must be used after functional cast "
+                        "operators or function call (generic).",
+                    currentTokenInfo());
+
       auto typeAst = this->expression(
           true);  // this->advanceType();  // this->expression(true);
       exprBucket.push_back(std::move(typeAst));
@@ -141,19 +154,35 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       PrecedenceInfo precInfo;
       PrecedenceInfoTable precTableType;
       OpType opType = OpType::OP_UNARY;
+      std::string opCharacter = tokenToStr(this->currentTokenKind());
+      bool prefixFlag = false;
 
-      // stride checking perfomed 'cause if it's first operator then we should
-      // not increase
-      if (this->isUnaryOp()) {
+      if (is(TokenKind::PLUSPLUS) || is(TokenKind::MINUSMINUS)) {
+        // prefix flag will be used to set prec info lower value
+        // and from ltr to rtl
+        if (isUnaryOp()) prefixFlag = true;
+
         opType = OpType::OP_UNARY;
-      } else if (this->isBinOp()) {
-        opType = OpType::OP_BINARY;
-        stride += 1;  // i != 0 ? 1 : 0;
-      } else if (this->isCastOp()) {
-        opType = OpType::OP_CAST;
-        lastCastOpPos = i;
       } else {
-        assert(false && "Operator Prec: unreachable!");
+        if (this->isUnaryOp()) {
+          if (is(TokenKind::PLUS) || is(TokenKind::MINUS)) {
+            if (prevTokenKind() == TokenKind::PLUSPLUS ||
+                prevTokenKind() == TokenKind::MINUSMINUS) {
+              opType = OpType::OP_BINARY;
+              stride += 1;
+            } else {
+              opType = OpType::OP_UNARY;
+            }
+          }
+        } else if (this->isBinOp()) {
+          opType = OpType::OP_BINARY;
+          stride += 1;  // i != 0 ? 1 : 0;
+        } else if (this->isCastOp()) {
+          opType = OpType::OP_CAST;
+          lastCastOpPos = i;
+        } else {
+          assert(false && "Operator Prec: unreachable!");
+        }
       }
 
       // check the operator existence, it might be '0' and not found in the
@@ -164,27 +193,41 @@ ASTNode CStarParser::expression(bool isSubExpr) {
 
       precInfo = precTableType[this->currentTokenKind()];
 
+      // for ++p
+      if (prefixFlag) {
+        precInfo.setLtr(false);
+        precInfo.setPrec(13);
+      }
+
       // debuggin purpose
 
       bool isOutOfSize = false;
-      auto nextToken = this->nextTokenInfo(isOutOfSize).getTokenKind();
+      auto nextTokenInfo = this->nextTokenInfo(isOutOfSize);
+      auto nextToken = nextTokenInfo.getTokenKind();
       if (isOutOfSize)
-        assert(
-            false &&
-            "The stream is done but left paranthesis '(' did not closed ')'");
+        ParserError("')' mismatch parenthesis. Be sure you have closed it!",
+                    currentTokenInfo());
 
       bool isFirst = i == 0;
       bool isLast =
           (nextToken == TokenKind::RPAREN || nextToken == TokenKind::SEMICOLON);
       bool hasTypeAttrib = (nextToken == TokenKind::LT);
 
+      if (!isOperator(nextTokenInfo) && nextToken != IDENT &&
+          nextToken != SCALARD && nextToken != SCALARI &&
+          nextToken != LITERAL && !isType(nextTokenInfo)) {
+        ParserError("Unexpected token '" + std::string(tokenToStr(nextToken)) +
+                        "' after binary operator '" + opCharacter + "'",
+                    nextTokenInfo);
+      }
+
       // well <type> is not orphon so we should not think that
       // it'll be reduced by cast operators which has high precedence
       // stride += hasTypeAttrib ? 1 : 0;
 
-      opBucket.emplace_back(PrecedenceEntry(this->currentTokenKind(), opType,
-                                            precInfo, stride, i, isFirst,
-                                            isLast, hasTypeAttrib));
+      opBucket.push_back(PrecedenceEntry(this->currentTokenInfo(), opType,
+                                         precInfo, stride, i, isFirst, isLast,
+                                         hasTypeAttrib));
       this->advance();
     } else {
       // and perform	parsing the expression by recursive-descent way.
@@ -215,19 +258,23 @@ ASTNode CStarParser::expression(bool isSubExpr) {
     this->advance();
 
     // if there's only one atom exist in the ExprBucket
-    // pop it to return quickly.
-    if (opBucket.empty()) {
+    // pop it for returning quickly.
+    if (opBucket.empty() && exprBucket.size() == 1) {
       auto atom = std::move(exprBucket.front());
       exprBucket.pop_front();
       return std::move(atom);
     } else {
-      auto expr = this->reduceExpression(exprBucket, opBucket);
-      return std::move(expr);
+      if (!exprBucket.empty()) {
+        auto expr = this->reduceExpression(exprBucket, opBucket);
+        return std::move(expr);
+      }
+      { return nullptr; }
     }
   } else if (is(TokenKind::GT)) {
     // must be only 1 ast node as TypeAST
     if ((exprBucket.size() > 1 || exprBucket.empty()))
-      ParserError("It must be only type. Invalid type attribute.\n", currentTokenInfo());
+      ParserError("It must be only type. Invalid type attribute.\n",
+                  currentTokenInfo());
 
     // advance >
     this->advance();
@@ -247,7 +294,10 @@ ASTNode CStarParser::expression(bool isSubExpr) {
 
 ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
                                       OpPrecBucket& opPrecBucket) {
-  auto popAtom = [&](size_t pos) -> ASTNode {
+  auto popAtom = [&](const PrecedenceEntry& pe, size_t pos) -> ASTNode {
+    if (pos > exprBucket.size())
+      ParserError("Unexpected token", pe.entryTokenInfo());
+
     auto atom = std::move(exprBucket[pos]);
     exprBucket.erase(exprBucket.begin() + pos);
     return std::move(atom);
@@ -275,6 +325,32 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
         case TokenKind::MOVE:
           unaryOpKind = UnaryOpKind::U_MOVE;
           break;
+        case TokenKind::PLUSPLUS:
+        case TokenKind::MINUSMINUS:
+          if (op.entryPrecInfo().isLtr())
+            unaryOpKind = UnaryOpKind::U_POSTFIX;
+          else
+            unaryOpKind = UnaryOpKind::U_PREFIX;
+          break;
+        case TokenKind::PLUS:
+          ParserError(
+              "You don't need to put an extra '+' before expression. Only "
+              "'-' "
+              "is meaningful.",
+              op.entryTokenInfo());
+          break;
+        case TokenKind::MINUS:
+          break;
+        case TokenKind::NOT:
+          break;
+        case TokenKind::XOR:
+          break;
+        case TokenKind::DEREF:
+        case TokenKind::STAR:
+          break;
+        case TokenKind::REF:
+        case TokenKind::AND:
+          break;
         default: {
           std::cout << "Iteration : " << i << std::endl;
           std::cout << "Op Count: " << opPrecBucket.size() << std::endl;
@@ -286,7 +362,7 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
         }
       }
       size_t pos = op.entryStride();
-      auto expr = std::move(popAtom(pos));
+      auto expr = std::move(popAtom(op, pos));
       auto node = std::make_unique<UnaryOpAST>(std::move(expr), unaryOpKind);
 
       insertNode(pos, std::move(node));
@@ -341,8 +417,8 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
       // Popping the element at the same loc [0,1,2] -> pop(1) -> [0,2] ->
       // pop(1) -> [0]
       if (!funcCall) {
-        auto lhs = std::move(popAtom(pos - 1));
-        auto rhs = std::move(popAtom(pos - 1));
+        auto lhs = std::move(popAtom(op, pos - 1));
+        auto rhs = std::move(popAtom(op, pos - 1));
 
         for (auto& walkOp : opPrecBucket) {
           if (walkOp.entryStride() > pos) walkOp.decreaseStride();
@@ -354,9 +430,9 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
       } else {
         // Maybe it has type attrib
         if (op.entryHasTypeAttrib()) {
-          auto lhs = std::move(popAtom(pos - 2));
-          auto type = std::move(popAtom(pos - 2));
-          auto rhs = std::move(popAtom(pos - 2));
+          auto lhs = std::move(popAtom(op, pos - 2));
+          auto type = std::move(popAtom(op, pos - 2));
+          auto rhs = std::move(popAtom(op, pos - 2));
 
           for (auto& walkOp : opPrecBucket) {
             if (walkOp.entryStride() > pos) {
@@ -370,8 +446,8 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
               std::move(lhs), std::move(type), std::move(rhs));
           insertNode(pos - 2, std::move(node));
         } else {
-          auto lhs = std::move(popAtom(pos - 1));
-          auto rhs = std::move(popAtom(pos - 1));
+          auto lhs = std::move(popAtom(op, pos - 1));
+          auto rhs = std::move(popAtom(op, pos - 1));
 
           for (auto& walkOp : opPrecBucket) {
             if (walkOp.entryStride() > pos) {
@@ -408,15 +484,15 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
 
       if (op.entryHasTypeAttrib()) {
         size_t pos = op.entryStride();
-        auto type = std::move(popAtom(pos));
-        auto expr = std::move(popAtom(pos));
+        auto type = std::move(popAtom(op, pos));
+        auto expr = std::move(popAtom(op, pos));
 
         auto node = std::make_unique<CastNode>(std::move(expr), std::move(type),
                                                castOpKind, true);
         insertNode(pos, std::move(node));
       } else {
         size_t pos = op.entryStride();
-        auto expr = std::move(popAtom(pos));
+        auto expr = std::move(popAtom(op, pos));
 
         auto node = std::make_unique<CastNode>(std::move(expr), nullptr,
                                                castOpKind, false);
@@ -435,7 +511,14 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
   }
 
   if (exprBucket.empty() || exprBucket.size() > 1) {
-    assert(false && "PANIC");
+    if (opPrecBucket.size() > 0) {
+      auto tokenInfo = opPrecBucket[opPrecBucket.size() - 1].entryTokenInfo();
+
+      ParserError("Unexpected token '" +
+                      std::string(tokenToStr(tokenInfo.getTokenKind())) + "'",
+                  tokenInfo);
+      //    assert(false && "PANIC");
+    }
   }
 
   return std::move(exprBucket[0]);
@@ -479,8 +562,8 @@ ASTNode CStarParser::advanceSymbol() {
     size_t indirectionLevel = 0;
 
     // This is symbol to type transition (Actually this can be done while
-    // semantically analysis this node but we make things easier or maybe not...
-    // Not sure really)
+    // semantically analysis this node but we make things easier or maybe
+    // not... Not sure really)
     // * | ^
     while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
       isUniquePtr = this->currentTokenKind() == TokenKind::XOR;
