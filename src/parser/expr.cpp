@@ -46,7 +46,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
   size_t stride = 0;
 
   // this is for offset from beginning of parenthesis
-  if (!isSubExpr) m_ParenthesisPos.clear();
+  std::deque<size_t> parenthesisPos;
 
   while (true) {
     // well RPAREN checking is a little bit confused since LPAREN is not
@@ -63,7 +63,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
          (lastTypeAttribPos + 1 == i && lastCastOpPos + 2 != i))) {
       // assert(false && "Function call");
       if (prevTokenKind() == TokenKind::EQUAL) goto jump_unary_paranthesis;
-      m_ParenthesisPos.push_back(
+      parenthesisPos.push_back(
           currentTokenInfo().getTokenPositionInfo().begin);
 
       closedPar += 1;
@@ -114,7 +114,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
                this->isUnaryOp()) {  // this is for functional casts and
                                      // expression reducing (recursively)
     jump_unary_paranthesis:
-      m_ParenthesisPos.push_back(
+      parenthesisPos.push_back(
           currentTokenInfo().getTokenPositionInfo().begin);
 
       closedPar += 1;
@@ -256,7 +256,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
     // let's be sure that all the open parenthesis are closed or not?
     if (closedPar % 2 != 0) {
       // assert(false && ") mismatch");
-      auto val = m_ParenthesisPos.front();
+      auto val = parenthesisPos.front();
       ParserError("'(' mismatch parenthesis. Be sure you have closed it!",
                   prevTokenInfo(), val);
     }
@@ -268,10 +268,10 @@ ASTNode CStarParser::expression(bool isSubExpr) {
     this->advance();
 
     // this is for statements
-    prevTokenInfo().getTokenPositionInfo().setBegin(m_ParenthesisPos[0]);
+    prevTokenInfo().getTokenPositionInfo().setBegin(parenthesisPos[0]);
     if (closedPar % 2 != 0) {
       // assert(false && ") mismatch");
-      auto val = m_ParenthesisPos.front();
+      auto val = parenthesisPos.front();
       ParserError("'(' mismatch parenthesis. Be sure you have closed it!",
                   prevTokenInfo(), val);
     }

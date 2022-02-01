@@ -14,7 +14,7 @@ not_needed_type:
   while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
     size_t indirection_level =
         advancePointerType(this->currentTokenKind() == TokenKind::XOR);
-    std::cout << "Indirection level: " << indirection_level << "\n";
+    //std::cout << "Indirection level: " << indirection_level << "\n";
   }
 
   // expect ident (name of the variable)

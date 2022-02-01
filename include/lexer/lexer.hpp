@@ -1,6 +1,8 @@
 #ifndef LEXER_HPP
 #define LEXER_HPP
+#include <base.hpp>
 #include <cassert>
+#include <ctime>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -164,9 +166,7 @@ struct PositionInfo {
   PositionInfo(size_t begin, size_t end, size_t line)
       : begin(begin), end(end), line(line) {}
 
-  void setBegin(size_t b) {
-    this->begin = b;
-  }
+  void setBegin(size_t b) { this->begin = b; }
 };
 
 struct FileInfo {
@@ -189,16 +189,17 @@ struct TokenInfo {
 
  public:
   TokenInfo() = default;
-  TokenInfo(const TokenKind &pKind,const PositionInfo& pPositionInfo,
-            const std::string& pTokenStr = "", bool pHasKeyword = false)
-    : m_PositionInfo(pPositionInfo)
-  {
+  TokenInfo(const TokenKind &pKind, const PositionInfo &pPositionInfo,
+            const std::string &pTokenStr = "", bool pHasKeyword = false)
+      : m_PositionInfo(pPositionInfo) {
     this->m_HasKeyword = pHasKeyword;
     this->m_TokenKind = pKind;
     this->m_TokenStr = pTokenStr;
   }
 
-  bool operator==(TokenKind token) const { return this->getTokenKind() == token; }
+  bool operator==(TokenKind token) const {
+    return this->getTokenKind() == token;
+  }
 
   [[nodiscard]] std::string getTokenAsStr() const { return this->m_TokenStr; }
 
@@ -206,10 +207,13 @@ struct TokenInfo {
 
   [[nodiscard]] bool getHasKeyword() const { return this->m_HasKeyword; }
 
-  [[nodiscard]] PositionInfo getTokenPositionInfo() { return this->m_PositionInfo; }
+  [[nodiscard]] PositionInfo getTokenPositionInfo() {
+    return this->m_PositionInfo;
+  }
 };
 
 class CStarLexer {
+  time_t m_StartTime;
   LexerFlags m_LexerFlags;
   std::string m_Buffer;
   std::string_view m_BufferView;
@@ -271,6 +275,7 @@ class CStarLexer {
         m_LastBegin(0),
         m_LexerFlags(LexerFlags::IDLE),
         m_FileInfo(nullptr, realpath) {
+    m_StartTime = time(nullptr);
     m_Buffer = pBuffer;
     m_BufferView = m_Buffer;
     m_CurrChar = m_BufferView[0];
@@ -563,7 +568,7 @@ class CStarLexer {
       posInfo.end = this->m_Index;
       posInfo.line = this->m_Line;
 
-      //TODO: This will be changed after all ops implemented to &&
+      // TODO: This will be changed after all ops implemented to &&
       if (token != TokenKind::UNKNOWN || token != TokenKind::UNHANDLED) {
         bool hasKeyword = false;
         std::string tokenStr = "";
@@ -964,6 +969,14 @@ class CStarLexer {
       default:
         return "UNHANDLED";
     }
+  }
+
+  void lexerStats() const {
+    time_t endTime = time(nullptr);
+    std::cout << GRN "======= Lexical Analysis =======" RESET << std::endl;
+    double dif = difftime (endTime,this->m_StartTime);
+    printf ("-  Elasped time : %.2lf seconds\n", dif );
+    std::cout << "-  Total LoC    : " << this->m_Line + 1<< std::endl << std::endl;
   }
 
   ~CStarLexer() {}

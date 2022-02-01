@@ -1,4 +1,4 @@
-int r = +(10+ (2));
+int r = 10 + 2;
 int s = 10 + 30 * *10 + ();
 int x = 10++ + 20;
 int a = cast<int>(10 + 20) + unsafe_cast<int>(x + func(10,20 + ());

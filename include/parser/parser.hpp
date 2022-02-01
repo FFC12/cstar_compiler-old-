@@ -30,7 +30,8 @@ class CStarParser {
   std::vector<ASTNode> m_AST;
   bool m_ErrorFlag;
   bool m_ParsingEndingFlag;
-  std::deque<size_t> m_ParenthesisPos;
+  time_t m_StartTime;
+
 
   const char* tokenToStr(TokenKind kind) noexcept {
     return m_Lexer.tokenAsStr(kind);
@@ -193,6 +194,13 @@ class CStarParser {
   ASTNode advanceSymbol();
 
   TypeSpecifier typeResolver(TokenInfo token);
+
+  void parserStats() const {
+    time_t endTime = time(nullptr);
+    std::cout << GRN "======= Syntantic Analysis =======" RESET << std::endl;
+    double dif = difftime (endTime,this->m_StartTime);
+    printf ("-  Elasped time : %.2lf seconds\n", dif );
+  }
 
  public:
   explicit CStarParser(CStarLexer&& pLexer)

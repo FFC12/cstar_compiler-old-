@@ -2,12 +2,17 @@
 
 void CStarParser::parse() {
   m_TokenStream = this->m_Lexer.perform();
-  if (this->m_TokenStream.size() >= 1) {
+  this->m_Lexer.lexerStats();
+  this->m_StartTime = time(nullptr);
+
+  if (!this->m_TokenStream.empty()) {
     this->m_CurrToken = m_TokenStream[m_TokenIndex];  //[0]
     this->translationUnit();
   } else {
     assert(false && "Parser token stream is not enough to parse!\n");
   }
+
+ this->parserStats();
 }
 
 void CStarParser::translationUnit() {
