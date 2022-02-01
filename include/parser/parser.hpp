@@ -17,6 +17,7 @@
 #include <parser/op_prec.hpp>
 #include <parser/type_specifiers.hpp>
 #include <parser/visibility_specifiers.hpp>
+#include <queue>
 
 class CStarParser {
   PrecedenceInfoTable m_PrecTableUnary, m_PrecTableBinary, m_PrecTableCast;
@@ -29,6 +30,7 @@ class CStarParser {
   std::vector<ASTNode> m_AST;
   bool m_ErrorFlag;
   bool m_ParsingEndingFlag;
+  std::deque<size_t> m_ParenthesisPos;
 
   const char* tokenToStr(TokenKind kind) noexcept {
     return m_Lexer.tokenAsStr(kind);
@@ -59,9 +61,10 @@ class CStarParser {
       // Error message here..
       this->m_ErrorFlag = false;
       auto currTokenStr = this->m_CurrToken.getTokenAsStr();
-      std::cerr << "Unexpected token \"" << currTokenStr << "\" instead \""
-                << tokenToStr(expected) << "\"" << std::endl;
-      assert(false && "Unexpected token");
+      std::string mesg = "Unexpected token \"" + currTokenStr +
+                         "\" instead \"" + tokenToStr(expected) + "\"";
+      ParserError(mesg, currentTokenInfo());
+      //      assert(false && "Unexpected token");
       return false;
     }
   }
@@ -81,14 +84,14 @@ class CStarParser {
       // Error message here..
       this->m_ErrorFlag = false;
       auto currTokenStr = this->m_CurrToken.getTokenAsStr();
-      std::cerr << "Unexpected token \"" << currTokenStr
-                << "\" instead one of them ";
+      std::string mesg =
+          "Unexpected token \"" + currTokenStr + "\" instead one of them \"";
 
       for (auto& expected : expectedTokens)
-        std::cout << "\"" << tokenToStr(expected) << "\" ";
+        mesg += tokenToStr(expected) + std::string("\"");
 
-      std::cout << std::endl;
-      assert(false && "Unexpected token");
+      ParserError(mesg, currentTokenInfo());
+      //      assert(false && "Unexpected token");
     }
 
     return isOkay;
@@ -104,10 +107,18 @@ class CStarParser {
     }
   }
 
-  TokenInfo prevTokenInfo() const noexcept { return this->m_PrevToken; }
+  TokenInfo prevTokenInfo() noexcept { return this->m_PrevToken; }
 
   TokenKind prevTokenKind() const noexcept {
     return this->m_PrevToken.getTokenKind();
+  }
+
+  TokenKind prevOfPrevTokenKind() const noexcept {
+    return m_TokenStream[m_TokenIndex - 2].getTokenKind();
+  }
+
+  TokenInfo prevOfPrevTokenInfo() const noexcept {
+    return m_TokenStream[m_TokenIndex - 2];
   }
 
   TokenInfo currentTokenInfo() const noexcept { return this->m_CurrToken; }
@@ -156,6 +167,7 @@ class CStarParser {
   void translationUnit();
   Type typeOf(const TokenInfo& token);
   void ParserError(std::string mesg, TokenInfo tokenInfo);
+  void ParserError(std::string mesg, TokenInfo tokenInfo, size_t new_begin);
   std::string_view::iterator viewLine(size_t line, size_t& rlbegin,
                                       size_t& rlend, size_t& offset);
 

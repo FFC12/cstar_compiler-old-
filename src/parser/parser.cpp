@@ -28,8 +28,7 @@ void CStarParser::translationUnit() {
     //   std::cout << std::endl;
     // }
 
-    if(is(TokenKind::UNHANDLED)) {
-
+    if (is(TokenKind::UNHANDLED)) {
       auto t = this->currentTokenInfo();
     }
 
@@ -242,6 +241,71 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo) {
 
   // token pos
   size_t tok_begin = posInfo.begin;
+  size_t tok_end = posInfo.end;
+  size_t line = posInfo.line;
+
+  // line
+  size_t offset = 0;
+
+  // tok_begin will be relative begin according to the line.
+  auto buffer_it = this->viewLine(line, tok_begin, tok_end, offset);
+
+  // message header
+  messageHeader += ":" + std::to_string(line + 1) + ":" +
+                   std::to_string(tok_begin + 1) + RED "\x20 error: " RESET +
+                   mesg + "\n";
+
+  std::cout << BLU + messageHeader + RESET;
+
+  // line beginning
+  std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
+
+  // linw
+  for (int i = 0; i < offset; i++) {
+    if (i < CHAR_LIMIT)
+      std::cout << buffer_it[i];
+    else {
+      std::cout << "...";
+      break;
+    }
+  }
+
+  std::cout << std::endl;
+
+  // for margin
+  for (int i = 0; i < MARGIN_LEFT; i++)
+    if (i == 3)
+      putchar('|');
+    else
+      putchar('\x20');
+
+  // indicator
+  std::cout << BLU;
+  for (int i = 0; i < offset; i++) {
+    if (i >= tok_begin && i < tok_end) {
+      putchar('~');
+    } else {
+      putchar('\x20');
+    }
+  }
+  std::cout << RESET;
+  std::cout << std::endl << std::endl;
+
+  exit(0);
+}
+
+// This is for indicating to the long expressions/buffers.
+void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo,
+                              size_t new_begin) {
+  auto posInfo = tokenInfo.getTokenPositionInfo();
+
+  // copy one time for each translation unit
+  static std::string messageHeader(this->m_Lexer.getFilepath().get());
+  const size_t CHAR_LIMIT = 128;
+  const size_t MARGIN_LEFT = 5;
+
+  // token pos
+  size_t tok_begin = new_begin;
   size_t tok_end = posInfo.end;
   size_t line = posInfo.line;
 

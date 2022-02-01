@@ -163,6 +163,10 @@ struct PositionInfo {
   // Because there may be a million token.That's why we have to moved.
   PositionInfo(size_t begin, size_t end, size_t line)
       : begin(begin), end(end), line(line) {}
+
+  void setBegin(size_t b) {
+    this->begin = b;
+  }
 };
 
 struct FileInfo {
@@ -185,23 +189,24 @@ struct TokenInfo {
 
  public:
   TokenInfo() = default;
-  TokenInfo(const TokenKind &pKind, PositionInfo pPositionInfo,
-            const std::string pTokenStr = "", bool pHasKeyword = false) {
+  TokenInfo(const TokenKind &pKind,const PositionInfo& pPositionInfo,
+            const std::string& pTokenStr = "", bool pHasKeyword = false)
+    : m_PositionInfo(pPositionInfo)
+  {
     this->m_HasKeyword = pHasKeyword;
     this->m_TokenKind = pKind;
     this->m_TokenStr = pTokenStr;
-    this->m_PositionInfo = pPositionInfo;
   }
 
-  bool operator==(TokenKind token) { return this->getTokenKind() == token; }
+  bool operator==(TokenKind token) const { return this->getTokenKind() == token; }
 
-  std::string getTokenAsStr() const { return this->m_TokenStr; }
+  [[nodiscard]] std::string getTokenAsStr() const { return this->m_TokenStr; }
 
-  TokenKind getTokenKind() const { return this->m_TokenKind; }
+  [[nodiscard]] TokenKind getTokenKind() const { return this->m_TokenKind; }
 
-  bool getHasKeyword() const { return this->m_HasKeyword; }
+  [[nodiscard]] bool getHasKeyword() const { return this->m_HasKeyword; }
 
-  PositionInfo getTokenPositionInfo() const { return this->m_PositionInfo; }
+  [[nodiscard]] PositionInfo getTokenPositionInfo() { return this->m_PositionInfo; }
 };
 
 class CStarLexer {
@@ -211,6 +216,7 @@ class CStarLexer {
   size_t m_Index;
   size_t m_Line, m_Col;
   char m_CurrChar;
+  size_t m_LastBegin;
   bool m_IsKeyword;
   std::string m_LastKeyword;
   FileInfo m_FileInfo;
@@ -262,6 +268,7 @@ class CStarLexer {
   CStarLexer(const std::string &&pBuffer, const std::shared_ptr<char> realpath)
       : m_IsKeyword(false),
         m_Index(0),
+        m_LastBegin(0),
         m_LexerFlags(LexerFlags::IDLE),
         m_FileInfo(nullptr, realpath) {
     m_Buffer = pBuffer;
@@ -550,10 +557,13 @@ class CStarLexer {
 
     while (this->m_LexerFlags == LexerFlags::RUNNING) {
       PositionInfo posInfo;
-      posInfo.begin = this->m_Index;
+
       auto token = nextToken();
+      posInfo.begin = this->m_LastBegin - 1;
       posInfo.end = this->m_Index;
       posInfo.line = this->m_Line;
+
+      //TODO: This will be changed after all ops implemented to &&
       if (token != TokenKind::UNKNOWN || token != TokenKind::UNHANDLED) {
         bool hasKeyword = false;
         std::string tokenStr = "";
@@ -601,6 +611,9 @@ class CStarLexer {
     while (isspace(_c)) {
       _c = nextChar();
     }
+
+    // we mark first place after whitespace.
+    m_LastBegin = this->m_Index;
 
     switch (_c) {
       // Integer or Float Constants
