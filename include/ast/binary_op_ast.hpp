@@ -18,7 +18,7 @@ enum BinOpKind {
   B_LT,
   B_SHL,
   B_SHR,
-  B_EQ,
+  B_EQ, // "=="
   B_COMM  // ','
 };
 

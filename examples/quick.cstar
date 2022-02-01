@@ -1,8 +1,12 @@
-int r = 10 + 2;
-int s = 10 + 30 * *10 + ();
+int f = unsafe_cast<int>(10 + 20); int k = sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3) * sizeof(int) + cast<int64>(10) + 20 * 20;  
+int r = func<int>(10,20) + sizeof(p) + cast(x + y) / 2 + unsafe_cast<int>(10 + 20) /* hell */ - sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3) * sizeof(int) + cast<int64>(10) + 20 * 20;
+int s = 10 + 30 * *10 + deref p + (x >> 20 ^ 3 & 5 | 3) + move p + typeof x;
+int z = x >> 10;
+
+int r = ref(unsafe_cast<int>(a));
 int x = 10++ + 20;
-int a = cast<int>(10 + 20) + unsafe_cast<int>(x + func(10,20 + ());
-int s = func<int + float>(func2(b),func3(a), a+b) + 20 - 20;
+int a = cast<int>(10 + 20) + unsafe_cast<int>(x + func(10,20) + ());
+int s = func<int>(func2(b),func3(a), a+b) + 20 - 20;
 int r = sizeof(int) + (10 + 20+ 30 + (2 + 40 + (20 + 30)));
 
 int r = func<int>(10,20) + sizeof(p) + cast(x + y) / 2 + unsafe_cast<int>(10 + 20) - sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3) * sizeof(int) + cast<int64>(10) + 20 * 20;

@@ -46,13 +46,23 @@ ASTNode CStarParser::expression(bool isSubExpr) {
   size_t stride = 0;
 
   // this is for offset from beginning of parenthesis
-  std::deque<size_t> parenthesisPos;
+  std::deque<size_t> parenthesesPos;
 
   while (true) {
     // well RPAREN checking is a little bit confused since LPAREN is not
     // included to the expression itself example: if( [expr )]
     if (is(TokenKind::SEMICOLON) || is(TokenKind::RPAREN) ||
-        is(TokenKind::GT)) {
+        is(TokenKind::GT) || is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) {
+      // well we're out of token and not consumed semicolon
+      // or ) so probably missing semicolon or )
+      if ((is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) && !is(TokenKind::RPAREN) &&
+          !is(TokenKind::SEMICOLON)) {
+        ParserError(
+            "Unexpected token end of file (EOF). Probably you missed the ';' "
+            "or ')'.",
+            prevTokenInfo());
+      }
+
       if (is(TokenKind::RPAREN)) closedPar += 1;
       break;
     }
@@ -63,8 +73,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
          (lastTypeAttribPos + 1 == i && lastCastOpPos + 2 != i))) {
       // assert(false && "Function call");
       if (prevTokenKind() == TokenKind::EQUAL) goto jump_unary_paranthesis;
-      parenthesisPos.push_back(
-          currentTokenInfo().getTokenPositionInfo().begin);
+      parenthesesPos.push_back(currentTokenInfo().getTokenPositionInfo().begin);
 
       closedPar += 1;
       auto prevCurrToken = this->currentTokenInfo();
@@ -88,8 +97,9 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       bool isOutOfSize = false;
       auto nextToken = this->nextTokenInfo(isOutOfSize).getTokenKind();
       if (isOutOfSize)
-        ParserError("')' mismatch parenthesis. Be sure you have closed it!",
-                    currentTokenInfo());
+        ParserError(
+            "')' mismatched parentheses. Be sure that you have closed it!",
+            currentTokenInfo());
 
       bool isFirst = i == 0;
       bool isLast =
@@ -114,8 +124,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
                this->isUnaryOp()) {  // this is for functional casts and
                                      // expression reducing (recursively)
     jump_unary_paranthesis:
-      parenthesisPos.push_back(
-          currentTokenInfo().getTokenPositionInfo().begin);
+      parenthesesPos.push_back(currentTokenInfo().getTokenPositionInfo().begin);
 
       closedPar += 1;
       auto subExpr = this->expression(true);
@@ -125,8 +134,9 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       bool isOutOfSize = false;
       auto nextToken = this->nextTokenInfo(isOutOfSize).getTokenKind();
       if (isOutOfSize)
-        ParserError("')' mismatch parenthesis. Be sure you have closed it!",
-                    currentTokenInfo());
+        ParserError(
+            "')' mismatched parentheses. Be sure that you have closed it!",
+            currentTokenInfo());
 
       exprBucket.push_back(std::move(subExpr));
     } else if (is(TokenKind::LT) && this->isUnaryOp()) {  // <TYPE>
@@ -195,10 +205,27 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       }
 
       // check the operator existence, it might be '0' and not found in the
-      // hashmap.
+      // hashmap. If does not exist and not a op then must be ended declaration
+      // so give an error for expecting ';'
       precTableType = this->m_PrecTable[opType];
-      if (precTableType.count(this->currentTokenKind()) == 0)
-        assert(false && "Operator Prec: critical unreacheable!");
+      if (precTableType.count(this->currentTokenKind()) == 0) {
+        // Trying to use unary operator as binary operator.
+        // This is invalid
+        if (isOperator(currentTokenInfo())) {
+          ParserError(
+              "Unexpected token '" +
+                  std::string(tokenToStr(currentTokenKind())) +
+                  "' instead of ';' or ')'. Probably you're trying to use an "
+                  "unary operator as binary operator which is not allowed!",
+              currentTokenInfo());
+        } else {
+          ParserError("Unexpected token '" +
+                          std::string(tokenToStr(currentTokenKind())) +
+                          "' instead of ';' or ')'",
+                      currentTokenInfo());
+        }
+        // assert(false && "Operator Prec: critical unreacheable!");
+      }
 
       precInfo = precTableType[this->currentTokenKind()];
 
@@ -214,8 +241,9 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       auto nextTokenInfo = this->nextTokenInfo(isOutOfSize);
       auto nextToken = nextTokenInfo.getTokenKind();
       if (isOutOfSize)
-        ParserError("')' mismatch parenthesis. Be sure you have closed it!",
-                    currentTokenInfo());
+        ParserError(
+            "')' mismatched parentheses. Be sure that you have closed it!",
+            currentTokenInfo());
 
       bool isFirst = i == 0;
       bool isLast =
@@ -239,6 +267,16 @@ ASTNode CStarParser::expression(bool isSubExpr) {
                                          hasTypeAttrib));
       this->advance();
     } else {
+      // Maybe inline comment put the between expressions
+      // skip it and continue from where you were.
+      if (this->currentTokenKind() == COMMENT) {
+        this->advance();
+        continue;
+      } else if(this->currentTokenKind() == LINEFEED) {
+        this->advance();
+        continue;
+      }
+
       // and perform	parsing the expression by recursive-descent way.
       auto node = this->advanceConstantOrLiteral();
       exprBucket.push_back(std::move(node));
@@ -256,9 +294,10 @@ ASTNode CStarParser::expression(bool isSubExpr) {
     // let's be sure that all the open parenthesis are closed or not?
     if (closedPar % 2 != 0) {
       // assert(false && ") mismatch");
-      auto val = parenthesisPos.front();
-      ParserError("'(' mismatch parenthesis. Be sure you have closed it!",
-                  prevTokenInfo(), val);
+      auto val = parenthesesPos.front();
+      ParserError(
+          "'(' mismatched parentheses. Be sure that you have closed it!",
+          prevTokenInfo(), val);
     }
 
     // build top-level AST here..
@@ -268,12 +307,13 @@ ASTNode CStarParser::expression(bool isSubExpr) {
     this->advance();
 
     // this is for statements
-    prevTokenInfo().getTokenPositionInfo().setBegin(parenthesisPos[0]);
+    prevTokenInfo().getTokenPositionInfo().setBegin(parenthesesPos[0]);
     if (closedPar % 2 != 0) {
       // assert(false && ") mismatch");
-      auto val = parenthesisPos.front();
-      ParserError("'(' mismatch parenthesis. Be sure you have closed it!",
-                  prevTokenInfo(), val);
+      auto val = parenthesesPos.front();
+      ParserError(
+          "'(' mismatched parentheses. Be sure that you have closed it!",
+          prevTokenInfo(), val);
     }
 
     // if there's only one atom exist in the ExprBucket
@@ -298,7 +338,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
     // advance >
     this->advance();
 
-    // we inside the expression only for <TYPE> so we done and
+    // we're inside the expression only for <TYPE> so we done and
     // have to return the atom
     auto atom = std::move(exprBucket.front());
     exprBucket.pop_front();
@@ -359,16 +399,21 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
               op.entryTokenInfo());
           break;
         case TokenKind::MINUS:
+          unaryOpKind = UnaryOpKind::U_NEGATIVE;
           break;
         case TokenKind::NOT:
+          unaryOpKind = UnaryOpKind::U_NOT;
           break;
         case TokenKind::XOR:
+          unaryOpKind = UnaryOpKind::U_XOR;
           break;
         case TokenKind::DEREF:
         case TokenKind::STAR:
+          unaryOpKind = UnaryOpKind::U_DEREF;
           break;
         case TokenKind::REF:
         case TokenKind::AND:
+          unaryOpKind = UnaryOpKind::U_REF;
           break;
         default: {
           std::cout << "Iteration : " << i << std::endl;
@@ -420,7 +465,34 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
         case AND:
           binOpKind = BinOpKind::B_AND;
           break;
-          // TODO: Add other binary ops
+        case LAND:
+          binOpKind = BinOpKind::B_LAND;
+          break;
+        case OR:
+          binOpKind = BinOpKind::B_OR;
+          break;
+        case LOR:
+          binOpKind = BinOpKind::B_LOR;
+          break;
+        case XOR:
+          binOpKind = BinOpKind::B_XOR;
+          break;
+        case GT:
+          binOpKind = BinOpKind::B_GT;
+          break;
+        case LT:
+          binOpKind = BinOpKind::B_LT;
+          break;
+        case LSHIFT:
+          binOpKind = BinOpKind::B_SHL;
+          break;
+        case RSHIFT:
+          binOpKind = BinOpKind::B_SHR;
+          break;
+        case EQUALEQUAL:
+          binOpKind = BinOpKind::B_EQ;
+          break;
+          // TODO: Add other binary ops if needed
         default: {
           std::cout << "Iteration : " << i << std::endl;
           std::cout << "Op Count: " << opPrecBucket.size() << std::endl;

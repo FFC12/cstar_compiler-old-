@@ -14,7 +14,7 @@ not_needed_type:
   while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
     size_t indirection_level =
         advancePointerType(this->currentTokenKind() == TokenKind::XOR);
-    //std::cout << "Indirection level: " << indirection_level << "\n";
+    // std::cout << "Indirection level: " << indirection_level << "\n";
   }
 
   // expect ident (name of the variable)
@@ -32,8 +32,8 @@ not_needed_type:
     // advance the value or expression..
     rhs = std::move(this->initializer());
 
-    //rhs->debugNode();
-   // std::cout << std::endl;
+    // rhs->debugNode();
+    // std::cout << std::endl;
   }
 
   if (is(TokenKind::COMMA)) {
@@ -95,12 +95,14 @@ size_t CStarParser::advancePointerType(bool isUniquePtr) {
         this->currentTokenKind() == TokenKind::XOR) {
       ParserError(
           "Next pointer type [^] is not matching with type of before "
-          "level's [*]. This is not supported yet!",currentTokenInfo());
+          "level's [*]. This is not supported yet!",
+          currentTokenInfo());
     } else if (pointerType == TokenKind::XOR &&
                this->currentTokenKind() == TokenKind::STAR) {
       ParserError(
           "Next pointer type [*] is not matching with type of before "
-          "level's [^]. This is not supported yet!",currentTokenInfo());
+          "level's [^]. This is not supported yet!",
+          currentTokenInfo());
     }
 
     level += 1;

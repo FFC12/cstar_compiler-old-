@@ -6,6 +6,7 @@ void CStarParser::parse() {
   this->m_StartTime = time(nullptr);
 
   if (!this->m_TokenStream.empty()) {
+    //auto eof = std::move(m_TokenStream[-1]);
     this->m_CurrToken = m_TokenStream[m_TokenIndex];  //[0]
     this->translationUnit();
   } else {
@@ -37,7 +38,7 @@ void CStarParser::translationUnit() {
       auto t = this->currentTokenInfo();
     }
 
-    if (is(TokenKind::COMMENT)) {
+    if (is(TokenKind::COMMENT) || is(TokenKind::LINEFEED)) {
       this->advance();
       continue;
     }
@@ -56,6 +57,7 @@ void CStarParser::translationUnit() {
           //          this->ParserError("hello", this->currentTokenInfo());
           varDecl();
         } else {
+          ParserError("Unexpected token",currentTokenInfo());
         }
       }
     }

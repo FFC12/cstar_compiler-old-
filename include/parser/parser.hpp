@@ -63,7 +63,7 @@ class CStarParser {
       this->m_ErrorFlag = false;
       auto currTokenStr = this->m_CurrToken.getTokenAsStr();
       std::string mesg = "Unexpected token \"" + currTokenStr +
-                         "\" instead \"" + tokenToStr(expected) + "\"";
+                         "\" instead of \"" + tokenToStr(expected) + "\"";
       ParserError(mesg, currentTokenInfo());
       //      assert(false && "Unexpected token");
       return false;

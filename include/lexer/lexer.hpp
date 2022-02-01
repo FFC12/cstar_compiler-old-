@@ -142,6 +142,7 @@ enum TokenKind {
   FALSE,
   UNKNOWN,
   UNHANDLED,
+  LINEFEED,
   _EOF
 };
 
@@ -244,10 +245,6 @@ class CStarLexer {
       auto c = m_BufferView[m_Index];
       m_CurrChar = c;
 
-      if (c == '\n' || c == '\r') {
-        this->m_Line++;
-      }
-
       m_Index++;
       return c;
     } else if (m_Index == m_BufferView.size() + 1) {
@@ -277,6 +274,14 @@ class CStarLexer {
         m_FileInfo(nullptr, realpath) {
     m_StartTime = time(nullptr);
     m_Buffer = pBuffer;
+
+    // Add new line at the end of file
+    // since our ParserError function can
+    // be worked correctly
+    if (!m_Buffer.empty()) {
+      if (m_Buffer[-1] != '\n') m_Buffer.push_back('\n');
+    }
+
     m_BufferView = m_Buffer;
     m_CurrChar = m_BufferView[0];
     m_Line = m_Col = 0;
@@ -566,7 +571,20 @@ class CStarLexer {
       auto token = nextToken();
       posInfo.begin = this->m_LastBegin - 1;
       posInfo.end = this->m_Index;
+
+      // Because we added an extra end of line. And this character also
+      // processed by lexer but we don't need act like there is another
+      // line after newline feed. It's just a hint for ParserError
+      // if (this->m_BufferView.size() == this->m_Index &&
+      //     this->m_CurrChar == '\n')
+      //   posInfo.line = this->m_Line - 1;
+      // else
       posInfo.line = this->m_Line;
+
+      // skip COMMENT
+      if (token == COMMENT) {
+        continue;
+      }
 
       // TODO: This will be changed after all ops implemented to &&
       if (token != TokenKind::UNKNOWN || token != TokenKind::UNHANDLED) {
@@ -582,8 +600,7 @@ class CStarLexer {
           tokenStr = tokenAsStr(token);
         }
 
-        tokenInfoList.push_back(
-            TokenInfo(token, posInfo, tokenStr, hasKeyword));
+        tokenInfoList.emplace_back(token, posInfo, tokenStr, hasKeyword);
 
         // output
 
@@ -613,10 +630,22 @@ class CStarLexer {
     else
       _c = m_BufferView[0];
 
+    bool linefeedFlag = false;
     while (isspace(_c)) {
+      if (_c == '\n' || _c == '\r') {
+        linefeedFlag = true;
+        goto jump_linefeed;
+      }
       _c = nextChar();
     }
+jump_linefeed:
+    if(!linefeedFlag) goto jump_others;
+    this->m_Line++;
+    m_LastBegin = this->m_Index;
+//    nextChar();
+    return TokenKind::LINEFEED;
 
+jump_others:
     // we mark first place after whitespace.
     m_LastBegin = this->m_Index;
 
@@ -822,8 +851,9 @@ class CStarLexer {
         this->m_LexerFlags = LexerFlags::DONE;
         return _EOF;
       }
-      default:
+      default: {
         return UNKNOWN;
+      }
     }
 
     return UNKNOWN;
@@ -839,6 +869,10 @@ class CStarLexer {
         return "cast";
       case UNSAFE_CAST:
         return "unsafe_cast";
+      case REF:
+        return "ref";
+      case DEREF:
+        return "deref";
       case SQUOTE:
         return "'";
       case DQUOTE:
@@ -873,17 +907,18 @@ class CStarLexer {
         return ":=";
       case HASH:
         return "#";
+      case DOLLAR:
+        return "$";
       case DOT:
         return ".";
       case RANGE:
         return "..";
       case TRIPLET:
         return "...";
-
+      case TYPEOF:
+        return ":=";
       case SEMICOLON:
         return ";";
-      case DOLLAR:
-        return "$";
       case COMMA:
         return ",";
       case UNDERSCORE:
@@ -947,7 +982,7 @@ class CStarLexer {
       case LOR:
         return "||";
       case OR:
-        return "=";
+        return "|";
       case OREQ:
         return "|=";
       case XOR:
@@ -962,6 +997,8 @@ class CStarLexer {
         return ">=";
       case GT:
         return ">";
+      case LINEFEED:
+        return "\n";
       case COMMENT:
         return "COMMENT";
       case UNKNOWN:
@@ -974,9 +1011,10 @@ class CStarLexer {
   void lexerStats() const {
     time_t endTime = time(nullptr);
     std::cout << GRN "======= Lexical Analysis =======" RESET << std::endl;
-    double dif = difftime (endTime,this->m_StartTime);
-    printf ("-  Elasped time : %.2lf seconds\n", dif );
-    std::cout << "-  Total LoC    : " << this->m_Line + 1<< std::endl << std::endl;
+    double dif = difftime(endTime, this->m_StartTime);
+    printf("-  Elapsed time : %.2lf seconds\n", dif);
+    std::cout << "-  Total LoC    : " << this->m_Line + 1 << std::endl
+              << std::endl;
   }
 
   ~CStarLexer() {}
