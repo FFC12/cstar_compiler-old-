@@ -1,11 +1,20 @@
 #include <parser/parser.hpp>
 
-void CStarParser::varDecl() {
-  // FLOAT | INT | ...
-  TokenKind type = this->currentTokenKind();
+void CStarParser::varDecl(bool isDefinedType) {
+  TokenKind type = TokenKind::VOID;
 
-  // advance type
-  this->advance();
+  if(isDefinedType) {
+    // will be passed to the VarDeclAST;
+    auto symbol = this->advanceSymbol();
+    type = TokenKind::IDENT;
+  } else {
+    // FLOAT | INT | ...
+    type = this->currentTokenKind();
+
+    // advance type
+    this->advance();
+  }
+
 
 not_needed_type:
   ASTNode rhs = nullptr;

@@ -32,7 +32,6 @@ class CStarParser {
   bool m_ParsingEndingFlag;
   time_t m_StartTime;
 
-
   const char* tokenToStr(TokenKind kind) noexcept {
     return m_Lexer.tokenAsStr(kind);
   }
@@ -64,6 +63,7 @@ class CStarParser {
       auto currTokenStr = this->m_CurrToken.getTokenAsStr();
       std::string mesg = "Unexpected token \"" + currTokenStr +
                          "\" instead of \"" + tokenToStr(expected) + "\"";
+
       ParserError(mesg, currentTokenInfo());
       //      assert(false && "Unexpected token");
       return false;
@@ -173,7 +173,7 @@ class CStarParser {
                                       size_t& rlend, size_t& offset);
 
   // variable.cpp
-  void varDecl();
+  void varDecl(bool definedType);
   ASTNode initializer();
   ASTNode initializerList();
   size_t advancePointerType(bool isUniquePtr);
@@ -198,8 +198,8 @@ class CStarParser {
   void parserStats() const {
     time_t endTime = time(nullptr);
     std::cout << GRN "======= Syntantic Analysis =======" RESET << std::endl;
-    double dif = difftime (endTime,this->m_StartTime);
-    printf ("-  Elasped time : %.2lf seconds\n", dif );
+    double dif = difftime(endTime, this->m_StartTime);
+    printf("-  Elapsed time : %.2lf seconds\n", dif);
   }
 
  public:

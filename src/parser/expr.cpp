@@ -20,16 +20,7 @@ bool CStarParser::isCastOp() {
   return this->isCastableOperator(this->currentTokenInfo());
 }
 
-// Note: When we get '?' token from stream, we'll look for the first ':'
-// and then try to parse it as ternary operator ofc
-// but in our custom algorithm, that might be a little confusing
-// to deal with that so here's the sub-algorithm that can be followed:
-//- first advance '?' until ':'
-//- take all relevant atoms with ops (?, :)
-//- and reduce that ternary operator with atoms to a simple ast_node
-// Note 2 : For function call and  subscript, wee need to think that operators
-// are binary operators and just like '?' operator, we can consume and reduce
-// them into one single atom.
+// parsing expressions
 ASTNode CStarParser::expression(bool isSubExpr) {
   // advance EQUAL.
   this->advance();
@@ -55,10 +46,11 @@ ASTNode CStarParser::expression(bool isSubExpr) {
         is(TokenKind::GT) || is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) {
       // well we're out of token and not consumed semicolon
       // or ) so probably missing semicolon or )
-      if ((is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) && !is(TokenKind::RPAREN) &&
-          !is(TokenKind::SEMICOLON)) {
+      if ((is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) &&
+          !is(TokenKind::RPAREN) && !is(TokenKind::SEMICOLON)) {
         ParserError(
-            "Unexpected token end of file (EOF). Probably you missed the ';' "
+            "Unexpected token end of line (EOL). Probably you missed the ';' "
+            "at th end."
             "or ')'.",
             prevTokenInfo());
       }
@@ -77,9 +69,16 @@ ASTNode CStarParser::expression(bool isSubExpr) {
 
       closedPar += 1;
       auto prevCurrToken = this->currentTokenInfo();
+
+      bool outOfSize = false;
+      auto nextToken = this->nextTokenInfo(outOfSize).getTokenKind();
+      if(outOfSize) {
+
+      }
+
       auto args = this->expression(true);
       // empty parenthesis block like ()
-      if (args == nullptr)
+      if (args == nullptr && nextToken != RPAREN)
         ParserError("Unexpected token '" +
                         std::string(tokenToStr(prevOfPrevTokenKind())) +
                         "'. You missed operator or name before parenthesis!",
@@ -95,7 +94,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       auto precInfo = precTableType[prevCurrToken.getTokenKind()];
 
       bool isOutOfSize = false;
-      auto nextToken = this->nextTokenInfo(isOutOfSize).getTokenKind();
+      nextToken = this->nextTokenInfo(isOutOfSize).getTokenKind();
       if (isOutOfSize)
         ParserError(
             "')' mismatched parentheses. Be sure that you have closed it!",
@@ -258,21 +257,18 @@ ASTNode CStarParser::expression(bool isSubExpr) {
                     nextTokenInfo);
       }
 
-      // well <type> is not orphon so we should not think that
-      // it'll be reduced by cast operators which has high precedence
-      // stride += hasTypeAttrib ? 1 : 0;
-
       opBucket.push_back(PrecedenceEntry(this->currentTokenInfo(), opType,
                                          precInfo, stride, i, isFirst, isLast,
                                          hasTypeAttrib));
       this->advance();
+    } else if (is(TokenKind::QMARK)) {
     } else {
       // Maybe inline comment put the between expressions
       // skip it and continue from where you were.
       if (this->currentTokenKind() == COMMENT) {
         this->advance();
         continue;
-      } else if(this->currentTokenKind() == LINEFEED) {
+      } else if (this->currentTokenKind() == LINEFEED) {
         this->advance();
         continue;
       }
@@ -661,8 +657,8 @@ ASTNode CStarParser::advanceSymbol() {
       transitionFlag = true;
 
       indirectionLevel = advancePointerType(isUniquePtr);
-      std::cout << "Symbol to Type Transition Indirection Level: "
-                << indirectionLevel << "\n";
+     // std::cout << "Symbol to Type Transition Indirection Level: "
+     //           << indirectionLevel << "\n";
     }
 
     if (transitionFlag) {

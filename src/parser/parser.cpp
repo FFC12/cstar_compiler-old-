@@ -6,14 +6,14 @@ void CStarParser::parse() {
   this->m_StartTime = time(nullptr);
 
   if (!this->m_TokenStream.empty()) {
-    //auto eof = std::move(m_TokenStream[-1]);
+    // auto eof = std::move(m_TokenStream[-1]);
     this->m_CurrToken = m_TokenStream[m_TokenIndex];  //[0]
     this->translationUnit();
   } else {
     assert(false && "Parser token stream is not enough to parse!\n");
   }
 
- this->parserStats();
+  this->parserStats();
 }
 
 void CStarParser::translationUnit() {
@@ -53,11 +53,13 @@ void CStarParser::translationUnit() {
         }
       } else {
         // int* | float* | uint* ...
-        if (this->isType(this->m_CurrToken)) {
-          //          this->ParserError("hello", this->currentTokenInfo());
-          varDecl();
+        // we check that is an IDENT or not since because isType for operators
+        // only contains primitives. IDENT means it's a symbol (which needed to
+        // resolved in next phase - Semantic Analysis- )
+        if (this->isType(this->m_CurrToken) || is(TokenKind::IDENT)) {
+          varDecl(is(TokenKind::IDENT));
         } else {
-          ParserError("Unexpected token",currentTokenInfo());
+          ParserError("Unexpected token", currentTokenInfo());
         }
       }
     }
@@ -237,13 +239,13 @@ Type CStarParser::typeOf(const TokenInfo& token) {
 
 // Parsing errors doesn't let you accumulate error and warning messages.
 // This means when a parser error occured it will be exited (1) unlike
-// semantic analyzer what it does
+// semantic analyzer does
 void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo) {
   auto posInfo = tokenInfo.getTokenPositionInfo();
 
   // copy one time for each translation unit
   static std::string messageHeader(this->m_Lexer.getFilepath().get());
-  const size_t CHAR_LIMIT = 128;
+  const size_t CHAR_LIMIT = 256;
   const size_t MARGIN_LEFT = 5;
 
   // token pos
@@ -269,9 +271,9 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo) {
 
   // linw
   for (int i = 0; i < offset; i++) {
-    if (i < CHAR_LIMIT)
+    if (i < CHAR_LIMIT) {
       std::cout << buffer_it[i];
-    else {
+    } else {
       std::cout << "...";
       break;
     }
@@ -279,9 +281,11 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo) {
 
   std::cout << std::endl;
 
+  auto lineNumberLen = std::to_string(line).size();
+
   // for margin
-  for (int i = 0; i < MARGIN_LEFT; i++)
-    if (i == 3)
+  for (int i = 0; i < MARGIN_LEFT + lineNumberLen - 1; i++)
+    if (i == 3 + lineNumberLen - 1)
       putchar('|');
     else
       putchar('\x20');
@@ -308,7 +312,7 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo,
 
   // copy one time for each translation unit
   static std::string messageHeader(this->m_Lexer.getFilepath().get());
-  const size_t CHAR_LIMIT = 128;
+  const size_t CHAR_LIMIT = 256;
   const size_t MARGIN_LEFT = 5;
 
   // token pos
@@ -330,13 +334,13 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo,
   std::cout << BLU + messageHeader + RESET;
 
   // line beginning
-  std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
+  std::cout << std::endl << "\x20" << line << "\x20|\x20";
 
   // linw
   for (int i = 0; i < offset; i++) {
-    if (i < CHAR_LIMIT)
+    if (i < CHAR_LIMIT) {
       std::cout << buffer_it[i];
-    else {
+    } else {
       std::cout << "...";
       break;
     }
@@ -344,9 +348,11 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo,
 
   std::cout << std::endl;
 
+  auto lineNumberLen = std::to_string(line).size();
+
   // for margin
-  for (int i = 0; i < MARGIN_LEFT; i++)
-    if (i == 3)
+  for (int i = 0; i < MARGIN_LEFT + lineNumberLen - 1; i++)
+    if (i == 3 + lineNumberLen - 1)
       putchar('|');
     else
       putchar('\x20');

@@ -143,7 +143,8 @@ enum TokenKind {
   UNKNOWN,
   UNHANDLED,
   LINEFEED,
-  _EOF
+  WHITESAPACE,
+  _EOF,
 };
 
 struct TypeInfo {
@@ -239,7 +240,7 @@ class CStarLexer {
 
   void restoreLastChar() { this->m_Index--; }
 
-  char nextChar() {
+  char nextCharLinefeed() {
     if (m_Index < m_BufferView.size() + 1) {
       if (m_Index == 0) m_Index = 1;
       auto c = m_BufferView[m_Index];
@@ -255,6 +256,27 @@ class CStarLexer {
       //      if(this->m_LexerFlags == LexerFlags::DONE){
       //	    std::exit(0);
       //      }
+      return ' ';  // for making the compiler silent
+    } else {
+      std::cerr << "Out of index in the buffer...Probably corrupted data\n\n";
+      std::abort();
+      return ' ';  // for making the compiler silent
+    }
+  }
+
+  char nextChar() {
+    if (m_Index < m_BufferView.size() + 1) {
+      auto c = m_BufferView[m_Index];
+      m_CurrChar = c;
+
+      /*if (c == '\n' || c == '\r') {
+        m_Line += 1;
+      }*/
+
+      m_Index++;
+      return c;
+    } else if (m_Index == m_BufferView.size() + 1) {
+      this->m_LexerFlags = LexerFlags::DONE;
       return ' ';  // for making the compiler silent
     } else {
       std::cerr << "Out of index in the buffer...Probably corrupted data\n\n";
@@ -378,6 +400,8 @@ class CStarLexer {
       return COMMENT;
     } else if (m_CurrChar == '*') {
       char _c = nextChar();  // skip '*'
+      if(_c == '\n' || _c == '\r')
+        m_Line += 1;
 
       while (true) {
         if (m_Index > m_BufferView.size()) {
@@ -388,10 +412,12 @@ class CStarLexer {
         _c = nextChar();
         if (_c == '*') {
           if (lookAhead('/')) break;
-        }
+        } else if(_c == '\n' || _c == '\r')
+          m_Line += 1;
       }
       nextChar();
 
+      //m_Line -= 1;
       return COMMENT;
     } else {
       assert("This is not possible");
@@ -566,20 +592,19 @@ class CStarLexer {
     std::vector<TokenInfo> tokenInfoList;
 
     while (this->m_LexerFlags == LexerFlags::RUNNING) {
-      PositionInfo posInfo;
+      PositionInfo posInfo{};
 
       auto token = nextToken();
-      posInfo.begin = this->m_LastBegin - 1;
+      posInfo.begin = this->m_LastBegin;
       posInfo.end = this->m_Index;
-
-      // Because we added an extra end of line. And this character also
-      // processed by lexer but we don't need act like there is another
-      // line after newline feed. It's just a hint for ParserError
-      // if (this->m_BufferView.size() == this->m_Index &&
-      //     this->m_CurrChar == '\n')
-      //   posInfo.line = this->m_Line - 1;
-      // else
       posInfo.line = this->m_Line;
+
+      // TODO: Need to debuggin' here...
+      // quick.cstar line 3 insted of 2.. Weird problem
+      // Also last begin is awkward as well. debug them
+      if (token == LINEFEED) {
+        this->m_Line += 1;
+      }
 
       // skip COMMENT
       if (token == COMMENT) {
@@ -587,9 +612,10 @@ class CStarLexer {
       }
 
       // TODO: This will be changed after all ops implemented to &&
-      if (token != TokenKind::UNKNOWN || token != TokenKind::UNHANDLED) {
+      if (token != TokenKind::UNKNOWN && token != TokenKind::UNHANDLED) {
         bool hasKeyword = false;
-        std::string tokenStr = "";
+        std::string tokenStr;
+
         if (this->m_IsKeyword) {
           hasKeyword = true;
           tokenStr = this->m_LastKeyword;
@@ -601,54 +627,19 @@ class CStarLexer {
         }
 
         tokenInfoList.emplace_back(token, posInfo, tokenStr, hasKeyword);
-
-        // output
-
-        /*std::cout << tokenAsStr(token);
-       if (this->m_IsKeyword)
-         std::cout << "---" << this->m_LastKeyword << std::endl;
-       else
-         std::cout << std::endl;
-       */
       }
     }
-    /*if (this->m_LexerFlags == LexerFlags::DONE) {
-        tokenInfoList.push_back(TokenInfo(TokenKind::_EOF,PositionInfo(this->m_Index,this->m_Index,this->m_Line),
-       "EOF", false));
-        }*/
     return tokenInfoList;
   }
 
   TokenKind nextToken() {
     // reset the last keyword flags
     this->m_IsKeyword = false;
+    this->m_LastBegin = this->m_Index;
 
-    // improve this...
-    char _c = ' ';
-    if (this->m_Index != 0)
-      _c = nextChar();
-    else
-      _c = m_BufferView[0];
+    char _c = nextChar();
 
-    bool linefeedFlag = false;
-    while (isspace(_c)) {
-      if (_c == '\n' || _c == '\r') {
-        linefeedFlag = true;
-        goto jump_linefeed;
-      }
-      _c = nextChar();
-    }
-jump_linefeed:
-    if(!linefeedFlag) goto jump_others;
-    this->m_Line++;
-    m_LastBegin = this->m_Index;
-//    nextChar();
-    return TokenKind::LINEFEED;
-
-jump_others:
-    // we mark first place after whitespace.
-    m_LastBegin = this->m_Index;
-
+  jump_retokenize:
     switch (_c) {
       // Integer or Float Constants
       case '0':
@@ -847,9 +838,18 @@ jump_others:
       case '`': {
         return UNHANDLED;
       }
+      case '\n':
+      case '\r': {
+        return LINEFEED;
+      }
       case '\0': {
         this->m_LexerFlags = LexerFlags::DONE;
         return _EOF;
+      }
+      case '\x20': {
+        _c = nextChar();
+        this->m_LastBegin = this->m_Index - 1;
+        goto jump_retokenize;
       }
       default: {
         return UNKNOWN;

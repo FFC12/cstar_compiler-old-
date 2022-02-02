@@ -1,4 +1,6 @@
-int f = unsafe_cast<int>(10 + 20); int k = sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3) * sizeof(int) + cast<int64>(10) + 20 * 20;  
+int p = Triangle<int>();
+int s = !x;
+int f = unsafe_cast<int>(10 + 20); int k = sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3 * sizeof(int) + cast<int64>(10) + 20 * 20);
 int r = func<int>(10,20) + sizeof(p) + cast(x + y) / 2 + unsafe_cast<int>(10 + 20) /* hell */ - sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3) * sizeof(int) + cast<int64>(10) + 20 * 20;
 int s = 10 + 30 * *10 + deref p + (x >> 20 ^ 3 & 5 | 3) + move p + typeof x;
 int z = x >> 10;
@@ -16,12 +18,12 @@ int k = sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3) * sizeof(in
 int z = unsafe_cast<int32^>(cast<int32**>(30 + 2 / 2) % 2) * 3 * 3 * 3 + 4;
 int v = sizeof(float) / 2;
 
-/*
+
 int i = 20 + *k + ***p;
 int ^^^^^^^^k, ***l = &x;
 int***** l = &k;
 
-int x, s = 20, p = 30;
+//int x, s = 20, p = 30;
 float k= 30;
 int32 z = 30;
 int t = 25000;
@@ -33,7 +35,7 @@ int* k = &x;
 int***** l = &k;
 int^^^^^ r = &x;
 int32* p = ref x;
-x = deref p;
+int64 x = deref p;
 
 //unsafe cast is trying to save ur ass from trouble with type conversions like uint32 -> int32
 uint32 a = 1233;
@@ -41,6 +43,7 @@ int32 p = a; // this will be a stupid assignment here
 int32 l = unsafe_cast<int32>(a); // it tries to understand what to do and helps implicitly if it can (2's complement)
 float32 f = 12.3453;
 int32 r = f; //implicitly casting
+int s = Triangle<int>();
 Shape^ shape = Triangle(); 
 Triangle^ triangle = cast<Triangle^>(shape);
 
@@ -52,6 +55,94 @@ readonly Shape^ ptr = Triangle(); // the address and the value are constant and 
 const Shape shape; 
 int p = &i; 
 
+/*
 int s[2] = {0,1}, k[3] = {0,1,2}, a[2][3] = {{0,1,2},{3,4,5}}; 
 
 */ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int r = sizeof(int) + (10 + 20+ 30 + (2 + 40 + (20 + 30)))
