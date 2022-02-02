@@ -18,10 +18,14 @@ enum BinOpKind {
   B_LT,
   B_SHL,
   B_SHR,
-  B_EQ,   // "=="
-  B_TER,  // Ternary cond op
-  B_ARS,  // Array subscript
-  B_COMM  // ','
+  B_EQ,    // "=="
+  B_TER,   // Ternary cond op
+  B_ARS,   // Array subscript
+  B_COMM,  // ','
+  B_DOT,   // a.b
+  B_ARW,   // a->b
+  B_CCOL,   // ::
+  B_SBS    // []
 };
 
 class BinaryOpAST : public IAST {
@@ -37,6 +41,7 @@ class BinaryOpAST : public IAST {
         m_LHS(std::move(lhs)),
         m_RHS(std::move(rhs)),
         m_BinOpKind(binOpKind) {
+    //    this->m_SemLoc = SemanticLoc(0,0,0);
     this->m_ASTKind = ASTKind::Expr;
     this->m_ExprKind = ExprKind::BinOp;
   }
@@ -73,6 +78,28 @@ class TernaryOpAST : public IAST {
     this->m_b0->debugNode();
     std::cout << ":";
     this->m_b1->debugNode();
+  }
+};
+
+class SubscriptOpAST : public BinaryOpAST {
+ protected:
+  BinOpKind m_BinOpKind;
+  char m_Op;
+
+ public:
+  SubscriptOpAST() = default;
+  SubscriptOpAST(ASTNode lhs, ASTNode rhs, BinOpKind binOpKind, char op)
+      : BinaryOpAST(std::move(lhs), std::move(rhs), binOpKind, op),
+        m_BinOpKind(binOpKind) {
+    //    this->m_SemLoc = SemanticLoc(0,0,0);
+    this->m_ASTKind = ASTKind::Expr;
+    this->m_ExprKind = ExprKind::BinOp;
+  }
+
+  void debugNode() override {
+    this->m_LHS->debugNode();
+    std::cout << this->m_Op;
+    this->m_RHS->debugNode();
   }
 };
 

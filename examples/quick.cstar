@@ -1,4 +1,8 @@
-int p = x ? y + 10 ? 10 * 3 : 3 : 3;
+int p = x ? y + 10 ? 10 * 3 ? 3 : (3 - 5) : 2 : 3;
+int f = unsafe_cast<int>(10 + 20); int k = sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3 * sizeof(int) + cast<int64>(10) + 20 * 20);
+
+int k = f[2] + f[3][4] + abc[a[10] + f(20)];
+int s = f.a(10,20) + a->b; 
 int s = !x;
 int f = unsafe_cast<int>(10 + 20); int k = sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3 * sizeof(int) + cast<int64>(10) + 20 * 20);
 int r = func<int>(10,20) + sizeof(p) + cast(x + y) / 2 + unsafe_cast<int>(10 + 20) /* hell */ - sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3) * sizeof(int) + cast<int64>(10) + 20 * 20;
@@ -47,102 +51,18 @@ int s = Triangle<int>();
 Shape^ shape = Triangle(); 
 Triangle^ triangle = cast<Triangle^>(shape);
 
-const Shape^ ptr = Triangle(); // the address is not constant and the value it holds cannot be changed.
+/*const Shape^ ptr = Triangle(); // the address is not constant and the value it holds cannot be changed.
 constptr Shape^ ptr = Triangle(); // the address is constant and but the value it holds can be changed.
 readonly Shape^ ptr = Triangle(); // the address and the value are constant and this is readonly.
 
 //for stack-kind variables.
 const Shape shape; 
-int p = &i; 
+int p = &i; */
 
 /*
 int s[2] = {0,1}, k[3] = {0,1,2}, a[2][3] = {{0,1,2},{3,4,5}}; 
 
 */ 
 
+int r = sizeof(int) + (10 + 20+ 30 + (2 + 40 + (20 + 30)));
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-int r = sizeof(int) + (10 + 20+ 30 + (2 + 40 + (20 + 30)))

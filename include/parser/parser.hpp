@@ -168,6 +168,7 @@ class CStarParser {
   void translationUnit();
   Type typeOf(const TokenInfo& token);
   void ParserHint(std::string mesg, TokenInfo tokenInfo);
+  void ParserHint(std::string mesg, TokenInfo tokenInfo, size_t new_begin);
   void ParserError(std::string mesg, TokenInfo tokenInfo);
   void ParserError(std::string mesg, TokenInfo tokenInfo, size_t new_begin);
   std::string_view::iterator viewLine(size_t line, size_t& rlbegin,
@@ -185,7 +186,7 @@ class CStarParser {
   bool isCastOp();
   ASTNode reduceExpression(std::deque<ASTNode>& exprBucket,
                            OpPrecBucket& opPrecBucket);
-  ASTNode expression(bool isSubExpr);
+  ASTNode expression(bool isSubExpr, int opFor = 0);
   ASTNode advanceConstantOrLiteral();
   ASTNode advanceRef();
   ASTNode advanceIndirect();
@@ -290,6 +291,7 @@ class CStarParser {
   }
 
   void parse();
+
 };
 
 #endif

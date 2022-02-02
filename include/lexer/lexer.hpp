@@ -400,8 +400,7 @@ class CStarLexer {
       return COMMENT;
     } else if (m_CurrChar == '*') {
       char _c = nextChar();  // skip '*'
-      if(_c == '\n' || _c == '\r')
-        m_Line += 1;
+      if (_c == '\n' || _c == '\r') m_Line += 1;
 
       while (true) {
         if (m_Index > m_BufferView.size()) {
@@ -412,12 +411,14 @@ class CStarLexer {
         _c = nextChar();
         if (_c == '*') {
           if (lookAhead('/')) break;
-        } else if(_c == '\n' || _c == '\r')
+        } else if (_c == '\n' || _c == '\r')
           m_Line += 1;
       }
-      nextChar();
+      _c = nextChar();  // skip '*'
+      if (_c == '\n' || _c == '\r') m_Line += 1;
 
-      //m_Line -= 1;
+
+      // m_Line -= 1;
       return COMMENT;
     } else {
       assert("This is not possible");
@@ -774,6 +775,8 @@ class CStarLexer {
           return MINUSMINUS;
         } else if (lookAhead('=')) {
           return MINUSEQ;
+        } else if (lookAhead('>')) {
+          return ARROW;
         } else {
           return MINUS;
         }
@@ -785,8 +788,11 @@ class CStarLexer {
       case '=':
         if (lookAhead('=')) {
           return EQUALEQUAL;
+        } else if (lookAhead('>')) {
+          return DARROW;
+        } else {
+          return EQUAL;
         }
-        return EQUAL;
       case '~':
         if (lookAhead('=')) {
           return TILDEEQ;

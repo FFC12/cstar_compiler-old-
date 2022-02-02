@@ -1,7 +1,3 @@
-prototype String { 
-    //fancy methods for String ds
-}
-
 // How does it work?
 // -Well, that might make you thoughtful about what about the checking is it null or it would not be have a cost?
 // +No, actually it just needs a memory to register references and update (to a book -simple hashmap).
@@ -32,11 +28,28 @@ policy for String {
     }
 
     new(const char* data) :: void* {
-        ret malloc(ssizeof(data));
+        ret malloc(ssizeof(data)); // ssizeof string sizeof 
     }
-
 }
 
+policy for Allocator {
+    new(const char* data) :: void* {
+    
+    }
+}
+
+prototype Allocator {}
+
+prototype AnotherPrototype {}
+
+trait CustomAlloc {}
+
+trait AnotherTraits {}
+
+// String inherits from Allocator with using Custom alloc trait
+prototype String : Allocator, AnotherPrototype with CustomAlloc, AnotherTraits {
+    // methods and variables here..
+}
 
 #try() {
     $func::on_null_reference();

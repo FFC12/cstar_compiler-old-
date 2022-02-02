@@ -21,7 +21,13 @@ bool CStarParser::isCastOp() {
 }
 
 // parsing expressions
-ASTNode CStarParser::expression(bool isSubExpr) {
+// opFor means the subexpr will be
+// parsing of which kind of operator:
+// 0 - None
+// 1 - ( )
+// 2 - ? :
+// 3 - [ ]
+ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
   // advance EQUAL.
   this->advance();
 
@@ -30,8 +36,9 @@ ASTNode CStarParser::expression(bool isSubExpr) {
 
   OpPrecBucket opBucket;
 
-  size_t closedPar = isSubExpr ? 1 : 0;
-  size_t closedTernary = isSubExpr ? 1 : 0;
+  size_t closedPar = isSubExpr && opFor == 1 ? 1 : 0;
+  size_t closedTernary = isSubExpr && opFor == 2 ? 1 : 0;
+  size_t closedSPar = isSubExpr && opFor == 3 ? 1 : 0;
   size_t lastTypeAttribPos = -1;
   size_t lastCastOpPos = -1;
   size_t i = 0;
@@ -40,13 +47,14 @@ ASTNode CStarParser::expression(bool isSubExpr) {
   // this is for offset from beginning of parenthesis
   std::deque<size_t> parenthesesPos;
   std::deque<size_t> ternaryPos;
+  std::deque<size_t> sparenthesesPos;
 
   while (true) {
     // well RPAREN checking is a little bit confused since LPAREN is not
     // included to the expression itself example: if( [expr )]
     if (is(TokenKind::SEMICOLON) || is(TokenKind::RPAREN) ||
-        is(TokenKind::COLON) || is(TokenKind::GT) || is(TokenKind::_EOF) ||
-        is(TokenKind::LINEFEED)) {
+        is(TokenKind::RSQPAR) || is(TokenKind::COLON) || is(TokenKind::GT) ||
+        is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) {
       // well we're out of token and not consumed semicolon
       // or ) so probably missing semicolon or )
       if ((is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) &&
@@ -59,6 +67,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
 
       if (is(TokenKind::RPAREN)) closedPar += 1;
       if (is(TokenKind::COLON)) closedTernary += 1;
+      if (is(TokenKind::RSQPAR)) closedSPar += 1;
       break;
     }
 
@@ -78,7 +87,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       if (outOfSize) {
       }
 
-      auto args = this->expression(true);
+      auto args = this->expression(true, 1);
       // empty parenthesis block like ()
       if (args == nullptr && nextToken != RPAREN)
         ParserError("Unexpected token '" +
@@ -119,6 +128,51 @@ ASTNode CStarParser::expression(bool isSubExpr) {
                                          stride, i, isFirst, isLast,
                                          hasTypeAttrib));
       exprBucket.push_back(std::move(args));
+    } else if (is(TokenKind::LSQPAR) && this->isBinOp()) {
+      // if (prevTokenKind() == TokenKind::EQUAL) goto jump_unary_paranthesis;
+      sparenthesesPos.push_back(
+          currentTokenInfo().getTokenPositionInfo().begin);
+
+      closedSPar += 1;
+      auto prevCurrToken = this->currentTokenInfo();
+
+      bool outOfSize = false;
+      auto nextToken = this->nextTokenInfo(outOfSize).getTokenKind();
+      if (outOfSize) {
+      }
+
+      auto indexExpr = this->expression(true, 3);
+      // empty parenthesis block like []
+      if (indexExpr == nullptr && nextToken != RSQPAR)
+        ParserError("Unexpected token '" +
+                        std::string(tokenToStr(prevOfPrevTokenKind())) +
+                        "'. You missed closed by ']' subscript operator.",
+                    prevOfPrevTokenInfo());
+
+      closedSPar += 1;
+
+      auto opType = OpType::OP_BINARY;
+      auto precTableType = this->m_PrecTable[opType];
+      if (precTableType.count(prevCurrToken.getTokenKind()) == 0)
+        assert(false && "Operator Prec: critical unreacheable!");
+
+      auto precInfo = precTableType[prevCurrToken.getTokenKind()];
+
+      bool isOutOfSize = false;
+      nextToken = this->nextTokenInfo(isOutOfSize).getTokenKind();
+      if (isOutOfSize)
+        ParserError("']' mismatched subscript operator.", currentTokenInfo());
+
+      bool isFirst = i == 0;
+      bool isLast =
+          (nextToken == TokenKind::RPAREN || nextToken == TokenKind::SEMICOLON);
+      bool hasTypeAttrib = false;
+
+      stride += 1;
+      opBucket.push_back(PrecedenceEntry(prevCurrToken, opType, precInfo,
+                                         stride, i, isFirst, isLast,
+                                         hasTypeAttrib));
+      exprBucket.push_back(std::move(indexExpr));
     } else if (is(TokenKind::QMARK) && this->isBinOp()) {
       // if (prevTokenKind() == TokenKind::EQUAL) goto jump_unary_paranthesis;
       ternaryPos.push_back(currentTokenInfo().getTokenPositionInfo().begin);
@@ -131,7 +185,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       if (outOfSize) {
       }
 
-      auto cond0 = this->expression(true);
+      auto cond0 = this->expression(true, 2);
       // empty parenthesis block like ()
       if (cond0 == nullptr && nextToken != COLON)
         ParserError("Unexpected token '" +
@@ -158,15 +212,6 @@ ASTNode CStarParser::expression(bool isSubExpr) {
           (nextToken == TokenKind::RPAREN || nextToken == TokenKind::SEMICOLON);
       bool hasTypeAttrib = false;
 
-      // We're consuming function but we want to be sure it has a type attrib or
-      // not. This makes the code a little bit messy but no other choicce.
-      // [i - 1] since array indexes starts by 0
-      // stride is increased 'cause of <TYPE> attrib
-      // if (lastTypeAttribPos + 1 == i) {
-      //   hasTypeAttrib = true;
-      //   stride += 1;
-      // }
-
       stride += 2;
       opBucket.push_back(PrecedenceEntry(prevCurrToken, opType, precInfo,
                                          stride, i, isFirst, isLast,
@@ -179,7 +224,7 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       parenthesesPos.push_back(currentTokenInfo().getTokenPositionInfo().begin);
 
       closedPar += 1;
-      auto subExpr = this->expression(true);
+      auto subExpr = this->expression(true, 1);
       closedPar += 1;  // it's always returning back after handled that
                        // paranthesis '(' ')'.
 
@@ -319,6 +364,29 @@ ASTNode CStarParser::expression(bool isSubExpr) {
       } else if (this->currentTokenKind() == LINEFEED) {
         this->advance();
         continue;
+      } else if (this->currentTokenKind() == IDENT || is(SCALARI) ||
+                 is(SCALARD)) {
+        bool outOfSize = false;
+        auto nextTokenInfo = this->nextTokenInfo(outOfSize);
+        if (outOfSize) {
+          ParserError(
+              "Unexpected token '" +
+                  std::string(tokenToStr(nextTokenInfo.getTokenKind())) + "'",
+              nextTokenInfo);
+        }
+
+        auto nextToken = nextTokenInfo.getTokenKind();
+        if ((nextToken == IDENT && currentTokenKind() == IDENT) ||
+            (nextToken == SCALARI && currentTokenKind() == SCALARI) ||
+            (nextToken == SCALARD && currentTokenKind() == SCALARD)) {
+          auto val = currentTokenInfo().getTokenPositionInfo().begin;
+          ParserHint(
+              "You probably missed the binary operator between two operands",
+              nextTokenInfo, val);
+          ParserError(
+              "Unexpected token '" + nextTokenInfo.getTokenAsStr() + "'",
+              nextTokenInfo);
+        }
       }
 
       // and perform	parsing the expression by recursive-descent way.
@@ -404,6 +472,36 @@ ASTNode CStarParser::expression(bool isSubExpr) {
     exprBucket.pop_front();
 
     return std::move(atom);
+  } else if (is(TokenKind::RSQPAR)) {
+    this->advance();
+
+    // this is for statements
+    prevTokenInfo().getTokenPositionInfo().setBegin(sparenthesesPos[0]);
+    if (closedSPar % 2 != 0) {
+      // assert(false && ") mismatch");
+      if (!sparenthesesPos.empty()) {
+        auto val = sparenthesesPos.front();
+        ParserError("']' mismatched subscript operator.", prevTokenInfo(), val);
+      } else {
+        ParserError("']' mismatched subscript operator.", prevTokenInfo());
+      }
+    }
+
+    // if there's only one atom exist in the ExprBucket
+    // pop it for returning quickly.
+    if (opBucket.empty() && exprBucket.size() == 1) {
+      auto atom = std::move(exprBucket.front());
+      exprBucket.pop_front();
+      return std::move(atom);
+    } else {
+      if (!exprBucket.empty()) {
+        auto expr = this->reduceExpression(exprBucket, opBucket);
+        return std::move(expr);
+      } else {
+        return nullptr;
+      }
+      //{ return nullptr; }
+    }
   } else if (is(TokenKind::COLON)) {
     this->advance();
 
@@ -529,6 +627,7 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
 
       bool funcCall = false;
       bool ternaryOp = false;
+      bool subscriptOp = false;
 
       // select the op kind
       switch (op.entryTokenKind()) {
@@ -583,10 +682,23 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
         case EQUALEQUAL:
           binOpKind = BinOpKind::B_EQ;
           break;
+        case DOT:
+          binOpKind = BinOpKind::B_DOT;
+          break;
+        case ARROW:
+          binOpKind = BinOpKind::B_ARW;
+          break;
+        case COLONCOLON:
+          binOpKind = BinOpKind::B_CCOL;
+          break;
           // TODO: Add other binary ops if needed
         case QMARK:
           binOpKind = BinOpKind::B_TER;
           ternaryOp = true;
+          break;
+        case LSQPAR:
+          binOpKind = BinOpKind::B_SBS;
+          subscriptOp = true;
           break;
         default: {
           std::cout << "Iteration : " << i << std::endl;
@@ -610,9 +722,17 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
           if (walkOp.entryStride() > pos) walkOp.decreaseStride();
         }
 
-        auto node = std::make_unique<BinaryOpAST>(
-            std::move(lhs), std::move(rhs), binOpKind, opCharacter);
-        insertNode(pos - 1, std::move(node));
+        if (subscriptOp) {
+          auto node = std::make_unique<SubscriptOpAST>(
+              std::move(lhs), std::move(rhs), binOpKind, opCharacter);
+
+          insertNode(pos - 1, std::move(node));
+        } else {
+          auto node = std::make_unique<BinaryOpAST>(
+              std::move(lhs), std::move(rhs), binOpKind, opCharacter);
+
+          insertNode(pos - 1, std::move(node));
+        }
       } else if (!funcCall && ternaryOp) {
         auto cond = std::move(popAtom(op, pos - 2));
         auto b0 = std::move(popAtom(op, pos - 2));
@@ -713,13 +833,11 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
   }
 
   if (exprBucket.empty() || exprBucket.size() > 1) {
-    if (!opPrecBucket.empty()) {
+    if (!exprBucket.empty()) {
       auto tokenInfo = opPrecBucket[opPrecBucket.size() - 1].entryTokenInfo();
-
       ParserError("Unexpected token '" +
                       std::string(tokenToStr(tokenInfo.getTokenKind())) + "'",
                   tokenInfo);
-      //    assert(false && "PANIC");
     }
   }
 
