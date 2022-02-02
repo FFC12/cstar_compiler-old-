@@ -86,10 +86,10 @@ class CStarParser {
       this->m_ErrorFlag = false;
       auto currTokenStr = this->m_CurrToken.getTokenAsStr();
       std::string mesg =
-          "Unexpected token \"" + currTokenStr + "\" instead one of them \"";
+          "Unexpected token \"" + currTokenStr + "\" instead one of \"";
 
       for (auto& expected : expectedTokens)
-        mesg += tokenToStr(expected) + std::string("\"");
+        mesg += tokenToStr(expected) + std::string("\" ");
 
       ParserError(mesg, currentTokenInfo());
       //      assert(false && "Unexpected token");
@@ -167,6 +167,7 @@ class CStarParser {
   // parser.cpp
   void translationUnit();
   Type typeOf(const TokenInfo& token);
+  void ParserHint(std::string mesg, TokenInfo tokenInfo);
   void ParserError(std::string mesg, TokenInfo tokenInfo);
   void ParserError(std::string mesg, TokenInfo tokenInfo, size_t new_begin);
   std::string_view::iterator viewLine(size_t line, size_t& rlbegin,
@@ -279,8 +280,9 @@ class CStarParser {
     addToPrecTable(OpType::OP_BINARY, XOREQ, 1, false);
     addToPrecTable(OpType::OP_BINARY, OREQ, 1, false);
     addToPrecTable(OpType::OP_BINARY, COMMA, 1, false);
+
     // ternary op
-    addToPrecTable(OpType::OP_BINARY, QMARK, 1, false);
+    addToPrecTable(OpType::OP_BINARY, QMARK, 1, true);
 
     m_PrecTable[OpType::OP_UNARY] = std::move(m_PrecTableUnary);
     m_PrecTable[OpType::OP_BINARY] = std::move(m_PrecTableBinary);

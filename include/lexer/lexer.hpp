@@ -869,6 +869,12 @@ class CStarLexer {
         return "cast";
       case UNSAFE_CAST:
         return "unsafe_cast";
+      case CONST:
+        return "const";
+      case CONSTPTR:
+        return "constptr";
+      case CONSTREF:
+        return "constref";
       case REF:
         return "ref";
       case DEREF:

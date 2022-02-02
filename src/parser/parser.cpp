@@ -59,7 +59,10 @@ void CStarParser::translationUnit() {
         if (this->isType(this->m_CurrToken) || is(TokenKind::IDENT)) {
           varDecl(is(TokenKind::IDENT));
         } else {
-          ParserError("Unexpected token", currentTokenInfo());
+          ParserHint("Not implemented yet", currentTokenInfo());
+          ParserError("Unexpected token '" +
+                          std::string(tokenToStr(currentTokenKind())) + "'",
+                      currentTokenInfo());
         }
       }
     }
@@ -235,6 +238,69 @@ Type CStarParser::typeOf(const TokenInfo& token) {
     default:
       assert(false && "Unreacheable");
   }
+}
+
+void CStarParser::ParserHint(std::string mesg, TokenInfo tokenInfo) {
+  auto posInfo = tokenInfo.getTokenPositionInfo();
+
+  // copy one time for each translation unit
+  static std::string messageHeader(this->m_Lexer.getFilepath().get());
+  const size_t CHAR_LIMIT = 256;
+  const size_t MARGIN_LEFT = 5;
+
+  // token pos
+  size_t tok_begin = posInfo.begin;
+  size_t tok_end = posInfo.end;
+  size_t line = posInfo.line;
+
+  // line
+  size_t offset = 0;
+
+  // tok_begin will be relative begin according to the line.
+  auto buffer_it = this->viewLine(line, tok_begin, tok_end, offset);
+
+  // message header
+  messageHeader += ":" + std::to_string(line + 1) + ":" +
+                   std::to_string(tok_begin + 1) + YEL "\x20 warning: " RESET +
+                   mesg + "\n";
+
+  std::cout << BLU + messageHeader + RESET;
+
+  // line beginning
+  std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
+
+  // linw
+  for (int i = 0; i < offset; i++) {
+    if (i < CHAR_LIMIT) {
+      std::cout << buffer_it[i];
+    } else {
+      std::cout << "...";
+      break;
+    }
+  }
+
+  std::cout << std::endl;
+
+  auto lineNumberLen = std::to_string(line).size();
+
+  // for margin
+  for (int i = 0; i < MARGIN_LEFT + lineNumberLen - 1; i++)
+    if (i == 3 + lineNumberLen - 1)
+      putchar('|');
+    else
+      putchar('\x20');
+
+  // indicator
+  std::cout << BLU;
+  for (int i = 0; i < offset; i++) {
+    if (i >= tok_begin && i < tok_end) {
+      putchar('~');
+    } else {
+      putchar('\x20');
+    }
+  }
+  std::cout << RESET;
+  std::cout << std::endl << std::endl;
 }
 
 // Parsing errors doesn't let you accumulate error and warning messages.

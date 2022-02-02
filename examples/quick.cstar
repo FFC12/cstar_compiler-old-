@@ -1,4 +1,4 @@
-int p = Triangle<int>();
+int p = x ? y + 10 ? 10 * 3 : 3 : 3;
 int s = !x;
 int f = unsafe_cast<int>(10 + 20); int k = sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3 * sizeof(int) + cast<int64>(10) + 20 * 20);
 int r = func<int>(10,20) + sizeof(p) + cast(x + y) / 2 + unsafe_cast<int>(10 + 20) /* hell */ - sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3) * sizeof(int) + cast<int64>(10) + 20 * 20;

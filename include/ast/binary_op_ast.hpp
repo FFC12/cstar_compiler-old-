@@ -18,7 +18,9 @@ enum BinOpKind {
   B_LT,
   B_SHL,
   B_SHR,
-  B_EQ, // "=="
+  B_EQ,   // "=="
+  B_TER,  // Ternary cond op
+  B_ARS,  // Array subscript
   B_COMM  // ','
 };
 
@@ -46,10 +48,32 @@ class BinaryOpAST : public IAST {
   }
 };
 
-class CommaNode : public BinaryOpAST {
+class TernaryOpAST : public IAST {
+ protected:
+  ASTNode m_Cond, m_b0, m_b1;
+  BinOpKind m_BinOpKind;
+  char m_Op;
+
  public:
-  CommaNode(ASTNode lhs, ASTNode rhs, BinOpKind binOpKind, char op)
-      : BinaryOpAST(std::move(lhs), std::move(rhs), binOpKind, op) {}
+  TernaryOpAST() = default;
+  TernaryOpAST(ASTNode cond, ASTNode b0, ASTNode b1, BinOpKind binOpKind,
+               char op)
+      : m_Op(op),
+        m_Cond(std::move(cond)),
+        m_b0(std::move(b0)),
+        m_b1(std::move(b1)),
+        m_BinOpKind(binOpKind) {
+    this->m_ASTKind = ASTKind::Expr;
+    this->m_ExprKind = ExprKind::TernaryOp;
+  }
+
+  void debugNode() override {
+    this->m_Cond->debugNode();
+    std::cout << this->m_Op;
+    this->m_b0->debugNode();
+    std::cout << ":";
+    this->m_b1->debugNode();
+  }
 };
 
 class AdditionNode : public BinaryOpAST {

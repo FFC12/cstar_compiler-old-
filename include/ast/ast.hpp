@@ -10,6 +10,7 @@ enum ASTKind {
 
 enum ExprKind {
   BinOp,
+  TernaryOp,
   UnaryOp,
   CastOp,
   DeclaratorExpr,
@@ -42,12 +43,22 @@ enum StmtKind {
 
 };
 
+struct SemanticLoc {
+  size_t begin;
+  size_t end;
+  size_t line;
+
+  SemanticLoc(size_t begin, size_t end, size_t line)
+      : begin(begin), end(end), line(line) {}
+};
+
 class IAST {
  protected:
   ASTKind m_ASTKind;
   ExprKind m_ExprKind;
   StmtKind m_StmtKind;
   DeclKind m_DeclKind;
+  SemanticLoc m_SemLoc;
 
  public:
   virtual void debugNode() { std::cout << "Root\n"; };
