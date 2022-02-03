@@ -23,8 +23,8 @@ int main(int argc, char** argv) {
 
   std::cout << RED
       "[!] " RESET CYN
-      "This version of the compiler is for alpha testing. Not ready to use  \n"
-      "in production. Be aware of this may cause to bugs and if you encountered\n"
+      "This version of the compiler is for the alpha testing. Not ready to use \n"
+      "in production stage. Be aware of this may cause to bugs and if you encountered\n"
       "an unexpected error or behaviour please let me know by fatihsaika@gmail.com\n"
       "or feel free to open an issue on Github!\n\n" RESET;
 

@@ -40,9 +40,8 @@ not_needed_type:
   if (is(TokenKind::EQUAL)) {
     // advance the value or expression..
     rhs = std::move(this->initializer());
-
-    // rhs->debugNode();
-    // std::cout << std::endl;
+    rhs->debugNode();
+    std::cout << std::endl;
   }
 
   if (is(TokenKind::COMMA)) {

@@ -25,7 +25,8 @@ class FuncCallAST : public IAST {
       std::cout << ">";
     }
     std::cout << "(";
-    m_Args->debugNode();
+    if(m_Args != nullptr)
+      m_Args->debugNode();
     std::cout << ")";
   }
 };

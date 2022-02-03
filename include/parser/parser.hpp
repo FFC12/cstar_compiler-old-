@@ -188,10 +188,6 @@ class CStarParser {
                            OpPrecBucket& opPrecBucket);
   ASTNode expression(bool isSubExpr, int opFor = 0);
   ASTNode advanceConstantOrLiteral();
-  ASTNode advanceRef();
-  ASTNode advanceIndirect();
-  ASTNode advanceFunctionCall();
-  ASTNode advanceArraySubscript();
   ASTNode advanceType();
   ASTNode advanceSymbol();
 

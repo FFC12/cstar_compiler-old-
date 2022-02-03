@@ -281,7 +281,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
         if (this->isUnaryOp()) {
           if (is(TokenKind::PLUS) || is(TokenKind::MINUS)) {
             if (prevTokenKind() == TokenKind::PLUSPLUS ||
-                prevTokenKind() == TokenKind::MINUSMINUS) {
+                prevTokenKind() == TokenKind::MINUSMINUS ||
+                prevTokenInfo() == RSQPAR) {
               opType = OpType::OP_BINARY;
               stride += 1;
             } else {
@@ -391,6 +392,11 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
 
       // and perform	parsing the expression by recursive-descent way.
       auto node = this->advanceConstantOrLiteral();
+      if(node == nullptr) {
+        ParserError(
+            "Unexpected token '" + currentTokenInfo().getTokenAsStr() + "'",
+            currentTokenInfo());
+      }
       exprBucket.push_back(std::move(node));
     }
 
@@ -561,6 +567,7 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
   for (auto& op : opPrecBucket) {
     if (op.entryOpType() == OpType::OP_UNARY) {
       UnaryOpKind unaryOpKind = UnaryOpKind::U_SIZEOF;
+      UnaryNotationSign unaryNotationSign = UnaryNotationSign::S_POS;
 
       switch (op.entryTokenKind()) {
         case TokenKind::SIZEOF:
@@ -573,7 +580,11 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
           unaryOpKind = UnaryOpKind::U_MOVE;
           break;
         case TokenKind::PLUSPLUS:
+          unaryNotationSign = UnaryNotationSign::S_POS;
+          goto jump_fix;
         case TokenKind::MINUSMINUS:
+          unaryNotationSign = UnaryNotationSign::S_NEG;
+        jump_fix:
           if (op.entryPrecInfo().isLtr())
             unaryOpKind = UnaryOpKind::U_POSTFIX;
           else
@@ -615,19 +626,19 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
       }
       size_t pos = op.entryStride();
       auto expr = std::move(popAtom(op, pos));
-      auto node = std::make_unique<UnaryOpAST>(std::move(expr), unaryOpKind);
+      auto node = std::make_unique<UnaryOpAST>(std::move(expr), unaryOpKind,
+                                               unaryNotationSign);
 
       insertNode(pos, std::move(node));
     } else if (op.entryOpType() == OpType::OP_BINARY) {
       BinOpKind binOpKind = BinOpKind::B_ADD;
 
       // Debuggin purpose
-      char opCharacter = this->m_Lexer.tokenAsStr(op.entryTokenKind())[0];
+      std::string opCharacter = this->m_Lexer.tokenAsStr(op.entryTokenKind());
       // std::cout << opCharacter << std::endl;
 
       bool funcCall = false;
       bool ternaryOp = false;
-      bool subscriptOp = false;
 
       // select the op kind
       switch (op.entryTokenKind()) {
@@ -697,8 +708,7 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
           ternaryOp = true;
           break;
         case LSQPAR:
-          binOpKind = BinOpKind::B_SBS;
-          subscriptOp = true;
+          binOpKind = BinOpKind::B_ARS;
           break;
         default: {
           std::cout << "Iteration : " << i << std::endl;
@@ -722,17 +732,10 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
           if (walkOp.entryStride() > pos) walkOp.decreaseStride();
         }
 
-        if (subscriptOp) {
-          auto node = std::make_unique<SubscriptOpAST>(
-              std::move(lhs), std::move(rhs), binOpKind, opCharacter);
+        auto node = std::make_unique<BinaryOpAST>(
+            std::move(lhs), std::move(rhs), nullptr, binOpKind, opCharacter);
 
-          insertNode(pos - 1, std::move(node));
-        } else {
-          auto node = std::make_unique<BinaryOpAST>(
-              std::move(lhs), std::move(rhs), binOpKind, opCharacter);
-
-          insertNode(pos - 1, std::move(node));
-        }
+        insertNode(pos - 1, std::move(node));
       } else if (!funcCall && ternaryOp) {
         auto cond = std::move(popAtom(op, pos - 2));
         auto b0 = std::move(popAtom(op, pos - 2));
@@ -745,9 +748,9 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
           }
         }
 
-        auto node = std::make_unique<TernaryOpAST>(std::move(cond),
-                                                   std::move(b0), std::move(b1),
-                                                   binOpKind, opCharacter);
+        auto node = std::make_unique<BinaryOpAST>(std::move(cond),
+                                                  std::move(b0), std::move(b1),
+                                                  binOpKind, opCharacter);
         insertNode(pos - 2, std::move(node));
       } else {
         // Maybe it has type attrib
@@ -856,15 +859,7 @@ ASTNode CStarParser::advanceConstantOrLiteral() {
     return std::make_unique<ScalarAST>(value, isIntegral, isFloat);
   }
 
-  return std::move(this->advanceRef());
-}
-
-ASTNode CStarParser::advanceRef() {
-  //& ref
-  if (is(TokenKind::AND) || is(TokenKind::REF)) {
-  }
-
-  return std::move(this->advanceType());  // this->advanceSymbol();
+  return std::move(this->advanceType());
 }
 
 // Every IDENT will be evaulated here.
@@ -902,7 +897,7 @@ ASTNode CStarParser::advanceSymbol() {
     }
   }
 
-  return std::move(this->advanceIndirect());
+  return nullptr;
 }
 
 ASTNode CStarParser::advanceType() {
@@ -932,13 +927,3 @@ ASTNode CStarParser::advanceType() {
 
   return std::move(this->advanceSymbol());
 }
-
-ASTNode CStarParser::advanceIndirect() {
-  //* ^ deref
-  if (is(TokenKind::STAR) || is(TokenKind::XOR) || is(TokenKind::DEREF)) {
-  }
-}
-
-ASTNode CStarParser::advanceFunctionCall() {}
-
-ASTNode CStarParser::advanceArraySubscript() {}

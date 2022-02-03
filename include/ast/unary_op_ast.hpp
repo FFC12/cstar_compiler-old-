@@ -16,19 +16,30 @@ enum UnaryOpKind {
   U_REF
 };
 
+// This is for sign of prefix
+// or postfix (to understand that
+// is it ++ or --)
+enum UnaryNotationSign { S_POS, S_NEG };
+
 class UnaryOpAST : public IAST {
   ASTNode m_Node;
   UnaryOpKind m_UnaryOpKind;
+  UnaryNotationSign m_UnaryNotationSign;
 
  public:
   UnaryOpAST() = default;
-  UnaryOpAST(ASTNode node, UnaryOpKind unaryOpKind)
-      : m_Node(std::move(node)), m_UnaryOpKind(unaryOpKind) {
+  UnaryOpAST(ASTNode node, UnaryOpKind unaryOpKind,
+             UnaryNotationSign unaryNotationSign)
+      : m_Node(std::move(node)),
+        m_UnaryOpKind(unaryOpKind),
+        m_UnaryNotationSign(unaryNotationSign) {
     this->m_ASTKind = ASTKind::Expr;
     this->m_ExprKind = ExprKind::UnaryOp;
   }
 
   void debugNode() override {
+    bool needPar = true;
+
     switch (m_UnaryOpKind) {
       case U_SIZEOF:
         std::cout << "sizeof";
@@ -39,11 +50,41 @@ class UnaryOpAST : public IAST {
       case U_MOVE:
         std::cout << "move";
         break;
+      case U_PREFIX:
+      case U_POSTFIX:
+        if (this->m_UnaryNotationSign == S_POS) {
+          std::cout << "++";
+        } else if (this->m_UnaryNotationSign == S_NEG) {
+          std::cout << "--";
+        } else {
+          std::cerr << "Unreacheable!";
+        }
+        needPar = false;
+        break;
+      case U_POSITIVE:
+      case U_NEGATIVE:
+        std::cout << "-";
+        needPar = false;
+        break;
+      case U_NOT:
+        std::cout << "!";
+        needPar = false;
+        break;
+      case U_XOR:
+        std::cout << "~";
+        needPar = false;
+        break;
+      case U_DEREF:
+        std::cout << "deref";
+        break;
+      case U_REF:
+        std::cout << "ref";
+        break;
     }
 
-    std::cout << "(";
+    if (needPar) std::cout << "(";
     this->m_Node->debugNode();
-    std::cout << ")";
+    if (needPar) std::cout << ")";
   }
 };
 

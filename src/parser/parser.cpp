@@ -116,6 +116,10 @@ bool CStarParser::isOperator(const TokenInfo& token) {
   switch (token.getTokenKind()) {
     case LPAREN:
     case QMARK:
+      //those are because detecting is binary op
+    case COLON:
+    case RSQPAR:
+      //
     case COLONCOLON:
     case UNSAFE_CAST:
     case CAST:

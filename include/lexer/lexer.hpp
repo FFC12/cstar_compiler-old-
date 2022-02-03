@@ -347,6 +347,15 @@ class CStarLexer {
       _c = nextChar();
 
       if (_c == '.') {
+        //if there is not
+        if (lookAhead('0') || lookAhead('1') || lookAhead('2') ||
+            lookAhead('3') || lookAhead('4') || lookAhead('5') ||
+            lookAhead('6') || lookAhead('7') || lookAhead('8') ||
+            lookAhead('9')) {
+        } else {
+          m_Buffer.insert(m_Index, "0");
+        }
+
         if (_is_float) {
           _is_float = false;
           break;
@@ -416,7 +425,6 @@ class CStarLexer {
       }
       _c = nextChar();  // skip '*'
       if (_c == '\n' || _c == '\r') m_Line += 1;
-
 
       // m_Line -= 1;
       return COMMENT;

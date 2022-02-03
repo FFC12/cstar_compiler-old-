@@ -24,22 +24,24 @@ enum BinOpKind {
   B_COMM,  // ','
   B_DOT,   // a.b
   B_ARW,   // a->b
-  B_CCOL,   // ::
+  B_CCOL,  // ::
   B_SBS    // []
 };
 
 class BinaryOpAST : public IAST {
  protected:
-  ASTNode m_LHS, m_RHS;
+  ASTNode m_LHS, m_RHS, m_Extra;
   BinOpKind m_BinOpKind;
-  char m_Op;
+  std::string m_Op;
 
  public:
   BinaryOpAST() = default;
-  BinaryOpAST(ASTNode lhs, ASTNode rhs, BinOpKind binOpKind, char op)
+  BinaryOpAST(ASTNode lhs, ASTNode rhs, ASTNode extra, BinOpKind binOpKind,
+              std::string& op)
       : m_Op(op),
         m_LHS(std::move(lhs)),
         m_RHS(std::move(rhs)),
+        m_Extra(std::move(extra)),
         m_BinOpKind(binOpKind) {
     //    this->m_SemLoc = SemanticLoc(0,0,0);
     this->m_ASTKind = ASTKind::Expr;
@@ -47,12 +49,27 @@ class BinaryOpAST : public IAST {
   }
 
   void debugNode() override {
-    this->m_LHS->debugNode();
-    std::cout << this->m_Op;
-    this->m_RHS->debugNode();
+    if(m_LHS != nullptr) {
+      this->m_LHS->debugNode();
+      if(m_RHS != nullptr)
+        std::cout << this->m_Op;
+    }
+
+    if(m_RHS != nullptr)
+      this->m_RHS->debugNode();
+
+    if (m_Extra != nullptr && m_BinOpKind == B_TER) {
+      std::cout << ":";
+      this->m_Extra->debugNode();
+    }
+
+    if (m_BinOpKind == B_ARS) {
+      std::cout << "]";
+    }
   }
 };
 
+/*
 class TernaryOpAST : public IAST {
  protected:
   ASTNode m_Cond, m_b0, m_b1;
@@ -132,6 +149,6 @@ class ModuloNode : public BinaryOpAST {
   ModuloNode(ASTNode lhs, ASTNode rhs, BinOpKind binOpKind, char op)
       : BinaryOpAST(std::move(lhs), std::move(rhs), binOpKind, op) {}
 };
-
+*/
 // &, &&, |, ||, ~, >, <, >>, <<, ==, ','
 #endif
