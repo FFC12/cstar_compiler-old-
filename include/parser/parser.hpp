@@ -280,6 +280,7 @@ class CStarParser {
 
     // ternary op
     addToPrecTable(OpType::OP_BINARY, QMARK, 1, true);
+    addToPrecTable(OpType::OP_BINARY, COLON, 0, false);
 
     m_PrecTable[OpType::OP_UNARY] = std::move(m_PrecTableUnary);
     m_PrecTable[OpType::OP_BINARY] = std::move(m_PrecTableBinary);

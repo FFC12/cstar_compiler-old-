@@ -20,12 +20,12 @@ enum BinOpKind {
   B_SHR,
   B_EQ,    // "=="
   B_TER,   // Ternary cond op
-  B_ARS,   // Array subscript
+  B_ARRS,   // Array subscript
   B_COMM,  // ','
   B_DOT,   // a.b
   B_ARW,   // a->b
   B_CCOL,  // ::
-  B_SBS    // []
+  B_MARRS    // [:]
 };
 
 class BinaryOpAST : public IAST {
@@ -63,7 +63,9 @@ class BinaryOpAST : public IAST {
       this->m_Extra->debugNode();
     }
 
-    if (m_BinOpKind == B_ARS) {
+    if (m_BinOpKind == B_ARRS) {
+      if(m_RHS == nullptr)
+        std::cout << "[";
       std::cout << "]";
     }
   }

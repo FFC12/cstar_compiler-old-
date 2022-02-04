@@ -50,11 +50,33 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
   std::deque<size_t> sparenthesesPos;
 
   while (true) {
+    // For subscripts
+    if (is(COLON)) {
+      bool outOfSize = false;
+      auto nextToken = nextTokenInfo(outOfSize);
+
+      if (outOfSize) {
+        ParserError("Unexpected token end of file 'EOF'.", currentTokenInfo());
+      } else {
+        // That means we're indexing array
+        if (closedSPar % 2 == 1) {
+          // Check the condition if matched for the
+          // manual preceding of ? and : (as binop)
+          if ((isSubExpr && closedTernary % 2 == 0) ||
+              (!isSubExpr && closedTernary % 2 == 1)) {
+            goto jump_operator;
+          } else
+            goto jump_ternary;
+        }
+      }
+    }
+
     // well RPAREN checking is a little bit confused since LPAREN is not
     // included to the expression itself example: if( [expr )]
     if (is(TokenKind::SEMICOLON) || is(TokenKind::RPAREN) ||
         is(TokenKind::RSQPAR) || is(TokenKind::COLON) || is(TokenKind::GT) ||
         is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) {
+    jump_ternary:
       // well we're out of token and not consumed semicolon
       // or ) so probably missing semicolon or )
       if ((is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) &&
@@ -143,11 +165,27 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
 
       auto indexExpr = this->expression(true, 3);
       // empty parenthesis block like []
-      if (indexExpr == nullptr && nextToken != RSQPAR)
-        ParserError("Unexpected token '" +
-                        std::string(tokenToStr(prevOfPrevTokenKind())) +
-                        "'. You missed closed by ']' subscript operator.",
-                    prevOfPrevTokenInfo());
+
+      if (indexExpr == nullptr) {
+        if (nextToken == COLON && is(TokenKind::SEMICOLON)) {
+          ParserHint(
+              "This will be implemented as 'arr[:]' which'll equal to "
+              "'arr[0:0]'",
+              prevOfPrevTokenInfo());
+          ParserError("Unexpected token '" +
+                          std::string(tokenToStr(prevOfPrevTokenKind())) +
+                          "'. You missed index(es) for subscript.",
+                      prevOfPrevTokenInfo());
+        } else if (nextToken != TokenKind::RSQPAR) {
+          ParserError("Unexpected token '" +
+                          std::string(tokenToStr(prevOfPrevTokenKind())) +
+                          "'. You missed closed by ']' subscript operator.",
+                      prevOfPrevTokenInfo());
+        }
+
+        // This is arr[] interpretering as arr[0]
+        // TODO: Impelement arr[]
+      }
 
       closedSPar += 1;
 
@@ -392,7 +430,15 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
 
       // and perform	parsing the expression by recursive-descent way.
       auto node = this->advanceConstantOrLiteral();
-      if(node == nullptr) {
+      if (node == nullptr) {
+        if (is(TokenKind::LSQPAR)) {
+          ParserHint(
+              "Double or more subscripts should not be expressed like in the C "
+              "or C++. "
+              "Use the "
+              "':' for each index. (ex: arr[0:1:2] )",
+              prevOfPrevTokenInfo());
+        }
         ParserError(
             "Unexpected token '" + currentTokenInfo().getTokenAsStr() + "'",
             currentTokenInfo());
@@ -708,7 +754,10 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
           ternaryOp = true;
           break;
         case LSQPAR:
-          binOpKind = BinOpKind::B_ARS;
+          binOpKind = BinOpKind::B_ARRS;
+          break;
+        case COLON:
+          binOpKind = BinOpKind::B_MARRS;
           break;
         default: {
           std::cout << "Iteration : " << i << std::endl;
