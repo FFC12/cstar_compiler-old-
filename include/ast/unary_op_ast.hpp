@@ -29,8 +29,9 @@ class UnaryOpAST : public IAST {
  public:
   UnaryOpAST() = default;
   UnaryOpAST(ASTNode node, UnaryOpKind unaryOpKind,
-             UnaryNotationSign unaryNotationSign)
-      : m_Node(std::move(node)),
+             UnaryNotationSign unaryNotationSign, SemanticLoc& semanticLoc)
+      : IAST(semanticLoc),
+        m_Node(std::move(node)),
         m_UnaryOpKind(unaryOpKind),
         m_UnaryNotationSign(unaryNotationSign) {
     this->m_ASTKind = ASTKind::Expr;

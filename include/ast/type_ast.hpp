@@ -40,8 +40,9 @@ class TypeAST : public IAST {
 
  public:
   TypeAST(Type typeSpec, ASTNode symbol, bool isUniquePtr, bool isPrimitive,
-          size_t indirectLevel)
-      : m_TypeSpec(typeSpec),
+          size_t indirectLevel, SemanticLoc& semanticLoc)
+      : IAST(semanticLoc),
+        m_TypeSpec(typeSpec),
         m_Symbol(std::move(symbol)),
         m_IsUniquePtr(isUniquePtr),
         m_IsPrimitiveType(isPrimitive),

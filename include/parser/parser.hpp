@@ -86,10 +86,16 @@ class CStarParser {
       this->m_ErrorFlag = false;
       auto currTokenStr = this->m_CurrToken.getTokenAsStr();
       std::string mesg =
-          "Unexpected token \"" + currTokenStr + "\" instead one of \"";
+          "Unexpected token \"" + currTokenStr + "\" instead of ";
 
-      for (auto& expected : expectedTokens)
-        mesg += tokenToStr(expected) + std::string("\" ");
+
+      for (int i = 0; i < expectedTokens.size(); i++){
+        mesg += std::string("\"") + tokenToStr(*(expectedTokens.begin() + i)) + std::string("\"");
+
+        if(i != expectedTokens.size() - 1){
+          mesg += " or ";
+        }
+      }
 
       ParserError(mesg, currentTokenInfo());
       //      assert(false && "Unexpected token");
@@ -288,7 +294,6 @@ class CStarParser {
   }
 
   void parse();
-
 };
 
 #endif

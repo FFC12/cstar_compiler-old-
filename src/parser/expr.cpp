@@ -13,7 +13,13 @@ bool CStarParser::isUnaryOp() {
 }
 
 // if it's not a unary or cast operator then it is binary operator
-bool CStarParser::isBinOp() { return !this->isUnaryOp() && !this->isCastOp(); }
+bool CStarParser::isBinOp() {
+  bool a = this->isUnaryOp();
+  bool b = this->isCastOp();
+
+  bool z = !this->isUnaryOp() && !this->isCastOp();
+  return z;
+}
 
 // check if it's cast operator
 bool CStarParser::isCastOp() {
@@ -28,8 +34,16 @@ bool CStarParser::isCastOp() {
 // 2 - ? :
 // 3 - [ ]
 ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
-  // advance EQUAL.
+  // advance EQUAL or last expr before it came here if subexpr
   this->advance();
+
+  if (!isSubExpr) {
+    if (is(TokenKind::SEMICOLON)) {
+      ParserHint("You must initialize the variable before ended up with ';'",
+                 prevOfPrevTokenInfo());
+      ParserError("Expression expected before ", currentTokenInfo());
+    }
+  }
 
   // std::unordered_map<size_t, ASTNode> exprBucket;
   std::deque<ASTNode> exprBucket;
@@ -43,6 +57,9 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
   size_t lastCastOpPos = -1;
   size_t i = 0;
   size_t stride = 0;
+
+  bool castOpFlag = false;
+  bool typeOpFlag = false;
 
   // this is for offset from beginning of parenthesis
   std::deque<size_t> parenthesesPos;
@@ -74,8 +91,9 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
     // well RPAREN checking is a little bit confused since LPAREN is not
     // included to the expression itself example: if( [expr )]
     if (is(TokenKind::SEMICOLON) || is(TokenKind::RPAREN) ||
-        is(TokenKind::RSQPAR) || is(TokenKind::COLON) || is(TokenKind::GT) ||
-        is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) {
+        (is(TokenKind::COMMA) && !isSubExpr) || is(TokenKind::RSQPAR) ||
+        is(TokenKind::COLON) || is(TokenKind::GT) || is(TokenKind::_EOF) ||
+        is(TokenKind::LINEFEED)) {
     jump_ternary:
       // well we're out of token and not consumed semicolon
       // or ) so probably missing semicolon or )
@@ -87,6 +105,13 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
             prevTokenInfo());
       }
 
+      if (is(TokenKind::COMMA) && !isSubExpr &&
+          prevTokenKind() == TokenKind::EQUAL) {
+        ParserError(std::string("Unexpected token '") +
+                        tokenToStr(currentTokenKind()) + "'",
+                    currentTokenInfo());
+      }
+
       if (is(TokenKind::RPAREN)) closedPar += 1;
       if (is(TokenKind::COLON)) closedTernary += 1;
       if (is(TokenKind::RSQPAR)) closedSPar += 1;
@@ -96,8 +121,13 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
     // this is for function call
     if (is(TokenKind::LPAREN) &&
         (this->isBinOp() ||
-         (lastTypeAttribPos + 1 == i && lastCastOpPos + 2 != i))) {
+         (lastTypeAttribPos + 1 == i && lastCastOpPos + 2 != i) &&
+             !castOpFlag && typeOpFlag)) {
       // assert(false && "Function call");
+      if ((lastTypeAttribPos + 1 == i && lastCastOpPos + 2 != i &&
+           !castOpFlag && typeOpFlag))
+        typeOpFlag = false;
+
       if (prevTokenKind() == TokenKind::EQUAL) goto jump_unary_paranthesis;
       parenthesesPos.push_back(currentTokenInfo().getTokenPositionInfo().begin);
 
@@ -259,6 +289,10 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
                this->isUnaryOp()) {  // this is for functional casts and
                                      // expression reducing (recursively)
     jump_unary_paranthesis:
+      // if (prevTokenKind() == TokenKind::COMMA)
+      //   ParserError("Unexpected token '" +
+      //                   std::string(tokenToStr(prevTokenKind())) + "'",
+      //               prevTokenInfo());
       parenthesesPos.push_back(currentTokenInfo().getTokenPositionInfo().begin);
 
       closedPar += 1;
@@ -277,6 +311,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
       //  advance '<'
       // this->advance();
       lastTypeAttribPos = i;
+      typeOpFlag = true;
       if (this->prevTokenKind() == TokenKind::EQUAL &&
           (!isCastableOperator(prevTokenInfo()) ||
            this->prevTokenKind() != IDENT))
@@ -292,8 +327,11 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
     } else if (is(TokenKind::LT) && this->isBinOp()) {
       // This is for binary '<'. But we have to be sure it's
       // a function type attrib or not
-      if (exprBucket[i - 1].get()->getExprKind() == ExprKind::SymbolExpr) {
+      if (prevTokenKind() ==
+          TokenKind::IDENT) {  //(exprBucket[i - 1].get()->getExprKind() ==
+                               //ExprKind::SymbolExpr) {
         lastTypeAttribPos = i;
+        typeOpFlag = true;
         auto typeAst = this->expression(true);
         exprBucket.push_back(std::move(typeAst));
       } else {
@@ -333,6 +371,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
         } else if (this->isCastOp()) {
           opType = OpType::OP_CAST;
           lastCastOpPos = i;
+          castOpFlag = true;
         } else {
           assert(false && "Operator Prec: unreachable!");
         }
@@ -454,7 +493,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
 
   // decide: is it belongs to the initialization expression or statement
   // expression
-  if (is(TokenKind::SEMICOLON)) {  // initialization
+  if (is(TokenKind::SEMICOLON) ||
+      (is(TokenKind::COMMA) && !isSubExpr)) {  // initialization
     if (closedTernary % 2 != 0) {
       // assert(false && ") mismatch");
       if (!ternaryPos.empty()) {
@@ -512,7 +552,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
   } else if (is(TokenKind::GT)) {
     // must be only 1 ast node as TypeAST
     if ((exprBucket.size() > 1 || exprBucket.empty()))
-      ParserError("It must be only type. Invalid type attribute.\n",
+      ParserError("There must be only type. Invalid type attribute.\n",
                   currentTokenInfo());
 
     // advance >
@@ -611,6 +651,9 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
 
   int i = 0;
   for (auto& op : opPrecBucket) {
+    auto tokenPos = op.entryTokenInfo().getTokenPositionInfo();
+    auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
+
     if (op.entryOpType() == OpType::OP_UNARY) {
       UnaryOpKind unaryOpKind = UnaryOpKind::U_SIZEOF;
       UnaryNotationSign unaryNotationSign = UnaryNotationSign::S_POS;
@@ -671,9 +714,10 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
         }
       }
       size_t pos = op.entryStride();
+
       auto expr = std::move(popAtom(op, pos));
       auto node = std::make_unique<UnaryOpAST>(std::move(expr), unaryOpKind,
-                                               unaryNotationSign);
+                                               unaryNotationSign, semLoc);
 
       insertNode(pos, std::move(node));
     } else if (op.entryOpType() == OpType::OP_BINARY) {
@@ -782,7 +826,8 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
         }
 
         auto node = std::make_unique<BinaryOpAST>(
-            std::move(lhs), std::move(rhs), nullptr, binOpKind, opCharacter);
+            std::move(lhs), std::move(rhs), nullptr, binOpKind, opCharacter,
+            semLoc);
 
         insertNode(pos - 1, std::move(node));
       } else if (!funcCall && ternaryOp) {
@@ -797,9 +842,9 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
           }
         }
 
-        auto node = std::make_unique<BinaryOpAST>(std::move(cond),
-                                                  std::move(b0), std::move(b1),
-                                                  binOpKind, opCharacter);
+        auto node = std::make_unique<BinaryOpAST>(
+            std::move(cond), std::move(b0), std::move(b1), binOpKind,
+            opCharacter, semLoc);
         insertNode(pos - 2, std::move(node));
       } else {
         // Maybe it has type attrib
@@ -817,7 +862,7 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
           // lhs -> must be symbol name -> func name
           // if(!is(static_cast<>lhs.get()))
           auto node = std::make_unique<FuncCallAST>(
-              std::move(lhs), std::move(type), std::move(rhs));
+              std::move(lhs), std::move(type), std::move(rhs), semLoc);
           insertNode(pos - 2, std::move(node));
         } else {
           auto lhs = std::move(popAtom(op, pos - 1));
@@ -831,7 +876,7 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
           // lhs -> must be symbol name -> func name
           // if(!is(static_cast<>lhs.get()))
           auto node = std::make_unique<FuncCallAST>(std::move(lhs), nullptr,
-                                                    std::move(rhs));
+                                                    std::move(rhs), semLoc);
           insertNode(pos - 1, std::move(node));
         }
       }
@@ -862,14 +907,14 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
         auto expr = std::move(popAtom(op, pos));
 
         auto node = std::make_unique<CastNode>(std::move(expr), std::move(type),
-                                               castOpKind, true);
+                                               castOpKind, true, semLoc);
         insertNode(pos, std::move(node));
       } else {
         size_t pos = op.entryStride();
         auto expr = std::move(popAtom(op, pos));
 
         auto node = std::make_unique<CastNode>(std::move(expr), nullptr,
-                                               castOpKind, false);
+                                               castOpKind, false, semLoc);
         insertNode(pos, std::move(node));
       }
     } else {
@@ -905,7 +950,10 @@ ASTNode CStarParser::advanceConstantOrLiteral() {
 
     auto value = this->currentTokenStr();
     this->advance();
-    return std::make_unique<ScalarAST>(value, isIntegral, isFloat);
+
+    auto tokenPos = currentTokenInfo().getTokenPositionInfo();
+    auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
+    return std::make_unique<ScalarAST>(value, isIntegral, isFloat, semLoc);
   }
 
   return std::move(this->advanceType());
@@ -918,9 +966,12 @@ ASTNode CStarParser::advanceSymbol() {
   if (is(TokenKind::IDENT)) {
     auto symbolName = this->currentTokenStr();
 
+    auto tokenPos = currentTokenInfo().getTokenPositionInfo();
+    auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
+
     this->advance();
 
-    auto symbolNode = std::make_unique<SymbolAST>(symbolName);
+    auto symbolNode = std::make_unique<SymbolAST>(symbolName, semLoc);
     bool transitionFlag = false;
     bool isUniquePtr = false;
     size_t indirectionLevel = 0;
@@ -936,11 +987,13 @@ ASTNode CStarParser::advanceSymbol() {
       indirectionLevel = advancePointerType(isUniquePtr);
       // std::cout << "Symbol to Type Transition Indirection Level: "
       //           << indirectionLevel << "\n";
+      semLoc.end += indirectionLevel;
     }
 
     if (transitionFlag) {
       return std::make_unique<TypeAST>(Type::T_DEFINED, std::move(symbolNode),
-                                       isUniquePtr, true, indirectionLevel);
+                                       isUniquePtr, true, indirectionLevel,
+                                       semLoc);
     } else {
       return std::move(symbolNode);
     }
@@ -955,6 +1008,9 @@ ASTNode CStarParser::advanceType() {
     size_t indirectionLevel = 0;
     bool isUniquePtr = false;
 
+    auto tokenPos = currentTokenInfo().getTokenPositionInfo();
+    auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
+
     this->advance();
 
     //* | ^
@@ -962,11 +1018,13 @@ ASTNode CStarParser::advanceType() {
       isUniquePtr = this->currentTokenKind() == TokenKind::XOR;
 
       indirectionLevel = advancePointerType(isUniquePtr);
+      semLoc.end += indirectionLevel;
       // std::cout << "Type Indirection level: " << indirectionLevel << "\n";
     }
 
-    ASTNode typeAst = std::make_unique<TypeAST>(
-        typeOf(prevTokenInfo), nullptr, isUniquePtr, true, indirectionLevel);
+    ASTNode typeAst =
+        std::make_unique<TypeAST>(typeOf(prevTokenInfo), nullptr, isUniquePtr,
+                                  true, indirectionLevel, semLoc);
 
     // expected >
     // expected({TokenKind::GT, TokenKind::RPAREN});

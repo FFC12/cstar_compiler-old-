@@ -1,2 +1,0 @@
-int32 l = unsafe_cast<int32>(a); // it
-float32 f = 12.3453;

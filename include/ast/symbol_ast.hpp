@@ -11,7 +11,8 @@ class SymbolAST : public IAST {
 
  public:
   // Maybe we need to use that token infos so preventing to move it...
-  explicit SymbolAST(std::string symbolName) : m_SymbolName(symbolName) {
+  explicit SymbolAST(std::string symbolName, SemanticLoc& semanticLoc)
+      : IAST(semanticLoc), m_SymbolName(symbolName) {
     this->m_ASTKind = ASTKind::Expr;
     this->m_ExprKind = ExprKind::SymbolExpr;
   }

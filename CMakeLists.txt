@@ -5,10 +5,8 @@ set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_BUILD_TYPE Release)
 file(GLOB SOURCES "src/**/*.cpp")
 
-include_directories(include extern/Catch2/src)
+include_directories(include)
 
-#add_subdirectory(extern/Catch2)
 
 add_executable(${PROJECT_NAME} main.cpp ${SOURCES})
-#target_link_libraries(${PROJECT_NAME} Catch2)
 

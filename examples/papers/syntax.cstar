@@ -279,11 +279,16 @@ main() :: int32 {
 
     }
 
+    ifnot(x == 10) {
+
+    }
+
+
     loop(true) {
 
     }
 
-    int32 arr[] = {0,1,2,3}
+    int32 arr[4] = (0,1,2,3)
     loop(v in arr) {
         print(v)
     } 

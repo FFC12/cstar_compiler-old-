@@ -20,12 +20,12 @@ enum BinOpKind {
   B_SHR,
   B_EQ,    // "=="
   B_TER,   // Ternary cond op
-  B_ARRS,   // Array subscript
+  B_ARRS,  // Array subscript
   B_COMM,  // ','
   B_DOT,   // a.b
   B_ARW,   // a->b
   B_CCOL,  // ::
-  B_MARRS    // [:]
+  B_MARRS  // [:]
 };
 
 class BinaryOpAST : public IAST {
@@ -37,26 +37,24 @@ class BinaryOpAST : public IAST {
  public:
   BinaryOpAST() = default;
   BinaryOpAST(ASTNode lhs, ASTNode rhs, ASTNode extra, BinOpKind binOpKind,
-              std::string& op)
-      : m_Op(op),
+              std::string& op, SemanticLoc& semanticLoc)
+      : IAST(semanticLoc),
+        m_Op(op),
         m_LHS(std::move(lhs)),
         m_RHS(std::move(rhs)),
         m_Extra(std::move(extra)),
         m_BinOpKind(binOpKind) {
-    //    this->m_SemLoc = SemanticLoc(0,0,0);
     this->m_ASTKind = ASTKind::Expr;
     this->m_ExprKind = ExprKind::BinOp;
   }
 
   void debugNode() override {
-    if(m_LHS != nullptr) {
+    if (m_LHS != nullptr) {
       this->m_LHS->debugNode();
-      if(m_RHS != nullptr)
-        std::cout << this->m_Op;
+      if (m_RHS != nullptr) std::cout << this->m_Op;
     }
 
-    if(m_RHS != nullptr)
-      this->m_RHS->debugNode();
+    if (m_RHS != nullptr) this->m_RHS->debugNode();
 
     if (m_Extra != nullptr && m_BinOpKind == B_TER) {
       std::cout << ":";
@@ -64,8 +62,7 @@ class BinaryOpAST : public IAST {
     }
 
     if (m_BinOpKind == B_ARRS) {
-      if(m_RHS == nullptr)
-        std::cout << "[";
+      if (m_RHS == nullptr) std::cout << "[";
       std::cout << "]";
     }
   }

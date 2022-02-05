@@ -9,8 +9,10 @@ class FuncCallAST : public IAST {
   ASTNode m_Args;
 
  public:
-  FuncCallAST(ASTNode funcName, ASTNode typeAttrib, ASTNode args)
-      : m_FuncSymbol(std::move(funcName)),
+  FuncCallAST(ASTNode funcName, ASTNode typeAttrib, ASTNode args,
+              SemanticLoc& semanticLoc)
+      : IAST(semanticLoc),
+        m_FuncSymbol(std::move(funcName)),
         m_TypeAttrib(std::move(typeAttrib)),
         m_Args(std::move(args)) {
     this->m_ASTKind = ASTKind::Expr;
@@ -19,14 +21,13 @@ class FuncCallAST : public IAST {
 
   void debugNode() override {
     m_FuncSymbol->debugNode();
-    if(m_TypeAttrib) {
+    if (m_TypeAttrib) {
       std::cout << "<";
       m_TypeAttrib->debugNode();
       std::cout << ">";
     }
     std::cout << "(";
-    if(m_Args != nullptr)
-      m_Args->debugNode();
+    if (m_Args != nullptr) m_Args->debugNode();
     std::cout << ")";
   }
 };

@@ -116,7 +116,7 @@ bool CStarParser::isOperator(const TokenInfo& token) {
   switch (token.getTokenKind()) {
     case LPAREN:
     case QMARK:
-      //those are because detecting is binary op
+      // those are because detecting is binary op
     case COLON:
     case RSQPAR:
       //
@@ -265,7 +265,7 @@ void CStarParser::ParserHint(std::string mesg, TokenInfo tokenInfo) {
 
   // message header
   messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + YEL "\x20 warning: " RESET +
+                   std::to_string(tok_begin + 1) + BWHT "\x20 hint: " RESET +
                    mesg + "\n";
 
   std::cout << BLU + messageHeader + RESET;
@@ -329,7 +329,7 @@ void CStarParser::ParserHint(std::string mesg, TokenInfo tokenInfo,
 
   // message header
   messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + YEL "\x20 warning: " RESET +
+                   std::to_string(tok_begin + 1) + BWHT "\x20 hint: " RESET +
                    mesg + "\n";
 
   std::cout << BLU + messageHeader + RESET;
@@ -436,7 +436,7 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo) {
   std::cout << RESET;
   std::cout << std::endl << std::endl;
 
-  exit(0);
+  exit(1);
 }
 
 // This is for indicating to the long expressions/buffers.
@@ -503,7 +503,7 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo,
   std::cout << RESET;
   std::cout << std::endl << std::endl;
 
-  exit(0);
+  exit(1);
 }
 
 std::string_view::iterator CStarParser::viewLine(size_t line, size_t& rlbegin,

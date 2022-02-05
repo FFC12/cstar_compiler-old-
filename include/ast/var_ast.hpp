@@ -13,16 +13,16 @@ class VarAST : public IAST {
   size_t m_IndirectLevel;
   ASTNode m_RHS;
 
-public:
+ public:
   VarAST(std::string name, std::unique_ptr<IAST> RHS, TypeSpecifier type_spec,
-         VisibilitySpecifier visibility_spec)
-      : m_Name(std::move(name)), m_RHS(std::move(RHS)),
+         VisibilitySpecifier visibility_spec, SemanticLoc& semanticLoc)
+      : IAST(semanticLoc),
+        m_Name(std::move(name)),
+        m_RHS(std::move(RHS)),
         m_TypeSpec(std::move(type_spec)),
         m_VisibilitySpec(std::move(visibility_spec)) {}
 
-  void debugNode() override {
-
-  }
+  void debugNode() override {}
 };
 
 #endif

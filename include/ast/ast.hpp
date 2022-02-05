@@ -58,10 +58,10 @@ class IAST {
   ExprKind m_ExprKind;
   StmtKind m_StmtKind;
   DeclKind m_DeclKind;
- // SemanticLoc m_SemLoc;
+  SemanticLoc m_SemLoc;
 
  public:
-  //explicit IAST(SemanticLoc semLoc) : m_SemLoc(semLoc){};
+  explicit IAST(SemanticLoc semLoc) : m_SemLoc(semLoc){};
 
   virtual void debugNode() { std::cout << "Root\n"; };
 

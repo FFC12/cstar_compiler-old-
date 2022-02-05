@@ -4,12 +4,12 @@
 #include <memory>
 
 class AssignmentAST : public IAST {
-  ASTNode m_LHS; // VarAST or IdentAST
+  ASTNode m_LHS;  // VarAST or IdentAST
   ASTNode m_RHS;
 
-public:
-  AssignmentAST(ASTNode lhs, ASTNode rhs)
-      : m_LHS(std::move(lhs)), m_RHS(std::move(rhs)) {}
+ public:
+  AssignmentAST(ASTNode lhs, ASTNode rhs, SemanticLoc& semanticLoc)
+      : IAST(semanticLoc), m_LHS(std::move(lhs)), m_RHS(std::move(rhs)) {}
 };
 
 #endif

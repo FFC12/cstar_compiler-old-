@@ -42,11 +42,14 @@ int main(int argc, char** argv) {
     CStarLexer lexer(ss.str(), realPath);
     CStarParser parser(std::move(lexer));
     parser.parse();
+    std::cout << GRN "======= COMPILATION FINISHED =====" << RESET << "\n\n";
 
   } else {
     LogError("No argument specified!\n");
     LogError("--- Usage: ./CSTAR file.cstar\n");
   }
+
+
 
   return 0;
 }

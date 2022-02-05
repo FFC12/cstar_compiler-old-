@@ -9,10 +9,15 @@
 #define MAG "\x1B[35m"
 #define CYN "\x1B[36m"
 #define WHT "\x1B[37m"
+#define BWHT "\u001b[37;1m"
 #define RESET "\x1B[0m"
 
 static void LogError(const char *mesg) {
   std::cout << RED << mesg << RESET << std::endl;
 }
+
+enum LexerStatus { LEXER_OK, LEXER_ERR };
+
+enum ParserStatus { PARSER_OK, PARSER_ERR };
 
 #endif

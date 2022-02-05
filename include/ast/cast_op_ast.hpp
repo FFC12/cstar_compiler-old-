@@ -12,14 +12,12 @@ class CastOpAST : public IAST {
  public:
   CastOpAST() = default;
   CastOpAST(ASTNode node, ASTNode typeNode, CastOpKind castOpKind,
-            bool hasTypeAttrib)
-      : m_Node(std::move(node)),
+            bool hasTypeAttrib, SemanticLoc& semanticLoc)
+      : IAST(semanticLoc),
+        m_Node(std::move(node)),
         m_TypeNode(std::move(typeNode)),
         m_CastOpKind(castOpKind),
-        m_HasTypeAttrib(hasTypeAttrib) 
-        {
-          
-        }
+        m_HasTypeAttrib(hasTypeAttrib) {}
 
   void debugNode() override {
     switch (m_CastOpKind) {
@@ -34,7 +32,7 @@ class CastOpAST : public IAST {
         break;
     }
 
-    if(this->m_HasTypeAttrib) {
+    if (this->m_HasTypeAttrib) {
       std::cout << "<";
       this->m_TypeNode->debugNode();
       std::cout << ">";
@@ -50,18 +48,18 @@ class CastNode : public CastOpAST {
  public:
   CastNode() = default;
   CastNode(ASTNode node, ASTNode typeNode, CastOpKind castOpKind,
-           bool hasTypeAttrib)
+           bool hasTypeAttrib, SemanticLoc& semanticLoc)
       : CastOpAST(std::move(node), std::move(typeNode), castOpKind,
-                  hasTypeAttrib) {}
+                  hasTypeAttrib, semanticLoc) {}
 };
 
 class UnsafeCastNode : public CastOpAST {
  public:
   UnsafeCastNode() = default;
   UnsafeCastNode(ASTNode node, ASTNode typeNode, CastOpKind castOpKind,
-                 bool hasTypeAttrib)
+                 bool hasTypeAttrib, SemanticLoc& semanticLoc)
       : CastOpAST(std::move(node), std::move(typeNode), castOpKind,
-                  hasTypeAttrib) {}
+                  hasTypeAttrib, semanticLoc) {}
 };
 
 #endif
