@@ -31,6 +31,7 @@ class CStarParser {
   bool m_ErrorFlag;
   bool m_ParsingEndingFlag;
   time_t m_StartTime;
+  bool m_LocalScopeFlag;
 
   const char* tokenToStr(TokenKind kind) noexcept {
     return m_Lexer.tokenAsStr(kind);
@@ -88,11 +89,11 @@ class CStarParser {
       std::string mesg =
           "Unexpected token \"" + currTokenStr + "\" instead of ";
 
+      for (int i = 0; i < expectedTokens.size(); i++) {
+        mesg += std::string("\"") + tokenToStr(*(expectedTokens.begin() + i)) +
+                std::string("\"");
 
-      for (int i = 0; i < expectedTokens.size(); i++){
-        mesg += std::string("\"") + tokenToStr(*(expectedTokens.begin() + i)) + std::string("\"");
-
-        if(i != expectedTokens.size() - 1){
+        if (i != expectedTokens.size() - 1) {
           mesg += " or ";
         }
       }
@@ -181,10 +182,11 @@ class CStarParser {
                                       size_t& rlend, size_t& offset);
 
   // variable.cpp
-  void varDecl(bool definedType);
+  void varDecl(bool definedType, bool isLocal);
   ASTNode initializer();
   ASTNode initializerList();
   size_t advancePointerType(bool isUniquePtr);
+  TypeSpecifier typeSpecifierOf(const TokenInfo& tokenInfo);
 
   // expr.cpp
   bool isUnaryOp();
@@ -211,7 +213,8 @@ class CStarParser {
       : m_Lexer(pLexer),
         m_TokenIndex(0),
         m_ErrorFlag(false),
-        m_ParsingEndingFlag(false) {
+        m_ParsingEndingFlag(false),
+        m_LocalScopeFlag(false) {
     addToPrecTable(OpType::OP_BINARY, COLONCOLON, 16, true);
     addToPrecTable(OpType::OP_BINARY, LPAREN, 15, true);
     addToPrecTable(OpType::OP_BINARY, LSQPAR, 15, true);

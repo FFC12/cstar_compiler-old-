@@ -329,7 +329,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
       // a function type attrib or not
       if (prevTokenKind() ==
           TokenKind::IDENT) {  //(exprBucket[i - 1].get()->getExprKind() ==
-                               //ExprKind::SymbolExpr) {
+                               // ExprKind::SymbolExpr) {
         lastTypeAttribPos = i;
         typeOpFlag = true;
         auto typeAst = this->expression(true);
@@ -443,7 +443,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
         this->advance();
         continue;
       } else if (this->currentTokenKind() == IDENT || is(SCALARI) ||
-                 is(SCALARD)) {
+                 is(SCALARD) || is(LITERAL)) {
         bool outOfSize = false;
         auto nextTokenInfo = this->nextTokenInfo(outOfSize);
         if (outOfSize) {
@@ -454,9 +454,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
         }
 
         auto nextToken = nextTokenInfo.getTokenKind();
-        if ((nextToken == IDENT && currentTokenKind() == IDENT) ||
-            (nextToken == SCALARI && currentTokenKind() == SCALARI) ||
-            (nextToken == SCALARD && currentTokenKind() == SCALARD)) {
+        if (nextToken == IDENT || nextToken == SCALARI ||
+            nextToken == SCALARD || nextToken == LITERAL) {
           auto val = currentTokenInfo().getTokenPositionInfo().begin;
           ParserHint(
               "You probably missed the binary operator between two operands",

@@ -1,15 +1,16 @@
 #include <parser/parser.hpp>
 
-void CStarParser::varDecl(bool isDefinedType) {
-  TokenKind type = TokenKind::VOID;
+void CStarParser::varDecl(bool isDefinedType, bool isLocal) {
+  TypeSpecifier type = TypeSpecifier::SPEC_I8;
 
   if (isDefinedType) {
     // will be passed to the VarDeclAST;
     auto symbol = this->advanceSymbol();
-    type = TokenKind::IDENT;
+
+    type = TypeSpecifier::SPEC_DEFINED;
   } else {
     // FLOAT | INT | ...
-    type = this->currentTokenKind();
+    type = typeSpecifierOf(currentTokenInfo());
 
     // advance type
     this->advance();
@@ -17,10 +18,11 @@ void CStarParser::varDecl(bool isDefinedType) {
 
 not_needed_type:
   ASTNode rhs = nullptr, arrayRhs;
+  size_t indirectionLevel = 0;
 
   //* | ^
   while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
-    size_t indirection_level =
+    indirectionLevel =
         advancePointerType(this->currentTokenKind() == TokenKind::XOR);
     // std::cout << "Indirection level: " << indirection_level << "\n";
   }
@@ -85,9 +87,10 @@ not_needed_type:
 
     // ASTNode ast = std::unique_ptr<VarAST>(new VarAST(name, std::move(rhs),
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));
-    auto ast =
-        std::make_unique<VarAST>(name, std::move(rhs), TypeSpecifier::SPEC_I8,
-                                 VisibilitySpecifier::VIS_EXPORT, semLoc);
+    auto ast = std::make_unique<VarAST>(name, std::move(rhs), type,
+                                        VisibilitySpecifier::VIS_DEFAULT,
+                                        indirectionLevel, isLocal, arrayFlag,
+                                        std::move(arrayDimensions), semLoc);
 
     // Will be pushed into the AST that VarAST
     this->m_AST.push_back(std::move(ast));
@@ -103,9 +106,10 @@ not_needed_type:
 
     // ASTNode ast = std::unique_ptr<VarAST>(new VarAST(name, std::move(rhs),
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));
-    auto ast =
-        std::make_unique<VarAST>(name, std::move(rhs), TypeSpecifier::SPEC_I8,
-                                 VisibilitySpecifier::VIS_EXPORT, semLoc);
+    auto ast = std::make_unique<VarAST>(name, std::move(rhs), type,
+                                        VisibilitySpecifier::VIS_DEFAULT,
+                                        indirectionLevel, isLocal, arrayFlag,
+                                        std::move(arrayDimensions), semLoc);
 
     // Will be pushed into the AST that VarAST
     this->m_AST.push_back(std::move(ast));
@@ -178,4 +182,58 @@ size_t CStarParser::advancePointerType(bool isUniquePtr) {
   }
 
   return level;
+}
+
+TypeSpecifier CStarParser::typeSpecifierOf(const TokenInfo& token) {
+  switch (token.getTokenKind()) {
+    case I8:
+      return TypeSpecifier::SPEC_I8;
+    case I16:
+      return TypeSpecifier::SPEC_I16;
+    case I32:
+      return TypeSpecifier::SPEC_I32;
+    case I64:
+      return TypeSpecifier::SPEC_I64;
+    case INT:
+      return TypeSpecifier::SPEC_INT;
+    case U8:
+      return TypeSpecifier::SPEC_U8;
+    case U16:
+      return TypeSpecifier::SPEC_U16;
+    case U32:
+      return TypeSpecifier::SPEC_U32;
+    case U64:
+      return TypeSpecifier::SPEC_U64;
+    case U128:
+      return TypeSpecifier::SPEC_U128;
+    case UINT:
+      return TypeSpecifier::SPEC_UINT;
+    case ISIZE:
+      return TypeSpecifier::SPEC_ISIZE;
+    case USIZE:
+      return TypeSpecifier::SPEC_USIZE;
+    case F32:
+      return TypeSpecifier::SPEC_F32;
+    case F64:
+      return TypeSpecifier::SPEC_F64;
+    case FLOAT:
+      return TypeSpecifier::SPEC_FLOAT;
+    case UCHAR:
+      return TypeSpecifier::SPEC_UCHAR;
+    case CHAR:
+      return TypeSpecifier::SPEC_CHAR;
+    case BOOL:
+      return TypeSpecifier::SPEC_BOOL;
+    case VEC2:
+      return TypeSpecifier::SPEC_VEC2;
+    case VEC3:
+      return TypeSpecifier::SPEC_VEC3;
+    case VEC4:
+      return TypeSpecifier::SPEC_VEC4;
+      // every single IDENT is going to be interpreted as Symbol...
+    case IDENT:
+      return TypeSpecifier::SPEC_DEFINED;
+    default:
+      assert(false && "Unreacheable");
+  }
 }

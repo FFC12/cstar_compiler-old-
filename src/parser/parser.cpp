@@ -19,23 +19,15 @@ void CStarParser::parse() {
 void CStarParser::translationUnit() {
   while (!this->m_ParsingEndingFlag) {
     // std::cout << this->m_CurrToken.getTokenAsStr() << "\n";
-    // TODO(1): EOF cannot be processed
     if (this->m_CurrToken.getTokenKind() == TokenKind::_EOF) {
       std::cout << "EOF\n";
       break;
     }
 
-    // for (int n = 0; n < 3; n++) {
-    //   size_t offset;
-    //   auto it = this->viewLine(n, offset);
-    //   for (int i = 0; i < offset; i++) {
-    //     std::cout << it[i];
-    //   }
-    //   std::cout << std::endl;
-    // }
-
     if (is(TokenKind::UNHANDLED)) {
       auto t = this->currentTokenInfo();
+      // TODO: delete later on
+      assert(false && "Unhandled");
     }
 
     if (is(TokenKind::COMMENT) || is(TokenKind::LINEFEED)) {
@@ -46,24 +38,25 @@ void CStarParser::translationUnit() {
     if (isPackageMark(this->m_CurrToken)) {
       // package | package involved
     } else {
+      bool isLocal = true;
+
       // export | import
       if (isLinkageMark(this->m_CurrToken)) {
+        isLocal = false;
         this->advance();
-        if (this->isType(this->m_CurrToken)) {
-        }
+      }
+
+      // int* | float* | uint* ...
+      // we check that is an IDENT or not since because isType for operators
+      // which only contains primitives. IDENT means it's a symbol (which needed to
+      // resolved in next phase - Semantic Analysis- )
+      if (this->isType(this->m_CurrToken) || is(TokenKind::IDENT)) {
+        varDecl(is(TokenKind::IDENT), isLocal);
       } else {
-        // int* | float* | uint* ...
-        // we check that is an IDENT or not since because isType for operators
-        // only contains primitives. IDENT means it's a symbol (which needed to
-        // resolved in next phase - Semantic Analysis- )
-        if (this->isType(this->m_CurrToken) || is(TokenKind::IDENT)) {
-          varDecl(is(TokenKind::IDENT));
-        } else {
-          ParserHint("Not implemented yet", currentTokenInfo());
-          ParserError("Unexpected token '" +
-                          std::string(tokenToStr(currentTokenKind())) + "'",
-                      currentTokenInfo());
-        }
+        ParserHint("Not implemented yet", currentTokenInfo());
+        ParserError("Unexpected token '" +
+                        std::string(tokenToStr(currentTokenKind())) + "'",
+                    currentTokenInfo());
       }
     }
   }

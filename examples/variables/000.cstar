@@ -35,7 +35,6 @@ float p = 12.342342;
 //int k = p..0;
 
 int i = 20 + *k + ***p;
-// This may cause to unexceptional error...
 int ^^^^^^^^k, ***l = x + 20, ***s = 10 + 20 + 30;
 int***** l = &k;
 
