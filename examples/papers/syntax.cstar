@@ -294,7 +294,7 @@ main() :: int32 {
     } 
 
     //by index
-    loop(i,v in arr){
+    loop(i,v in arr){ 
         print(i,v)
     }
 

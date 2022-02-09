@@ -1,0 +1,5 @@
+
+// this is function
+main() :: void {
+    int i = 0;
+}

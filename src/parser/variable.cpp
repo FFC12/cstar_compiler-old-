@@ -1,6 +1,7 @@
 #include <parser/parser.hpp>
 
-void CStarParser::varDecl(bool isDefinedType, bool isLocal) {
+void CStarParser::varDecl(VisibilitySpecifier visibilitySpecifier,
+                          bool isDefinedType, bool isLocal) {
   TypeSpecifier type = TypeSpecifier::SPEC_I8;
 
   if (isDefinedType) {
@@ -87,10 +88,9 @@ not_needed_type:
 
     // ASTNode ast = std::unique_ptr<VarAST>(new VarAST(name, std::move(rhs),
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));
-    auto ast = std::make_unique<VarAST>(name, std::move(rhs), type,
-                                        VisibilitySpecifier::VIS_DEFAULT,
-                                        indirectionLevel, isLocal, arrayFlag,
-                                        std::move(arrayDimensions), semLoc);
+    auto ast = std::make_unique<VarAST>(
+        name, std::move(rhs), type, visibilitySpecifier, indirectionLevel,
+        isLocal, arrayFlag, std::move(arrayDimensions), semLoc);
 
     // Will be pushed into the AST that VarAST
     this->m_AST.push_back(std::move(ast));
@@ -106,10 +106,9 @@ not_needed_type:
 
     // ASTNode ast = std::unique_ptr<VarAST>(new VarAST(name, std::move(rhs),
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));
-    auto ast = std::make_unique<VarAST>(name, std::move(rhs), type,
-                                        VisibilitySpecifier::VIS_DEFAULT,
-                                        indirectionLevel, isLocal, arrayFlag,
-                                        std::move(arrayDimensions), semLoc);
+    auto ast = std::make_unique<VarAST>(
+        name, std::move(rhs), type, visibilitySpecifier, indirectionLevel,
+        isLocal, arrayFlag, std::move(arrayDimensions), semLoc);
 
     // Will be pushed into the AST that VarAST
     this->m_AST.push_back(std::move(ast));

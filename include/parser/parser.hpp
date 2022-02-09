@@ -14,6 +14,7 @@
 #include <deque>
 #include <lexer/lexer.hpp>
 #include <memory>
+#include <parser/hint_specifier.hpp>
 #include <parser/op_prec.hpp>
 #include <parser/type_specifiers.hpp>
 #include <parser/visibility_specifiers.hpp>
@@ -182,11 +183,15 @@ class CStarParser {
                                       size_t& rlend, size_t& offset);
 
   // variable.cpp
-  void varDecl(bool definedType, bool isLocal);
+  void varDecl(VisibilitySpecifier visibilitySpecifier, bool definedType,
+               bool isLocal);
   ASTNode initializer();
   ASTNode initializerList();
   size_t advancePointerType(bool isUniquePtr);
   TypeSpecifier typeSpecifierOf(const TokenInfo& tokenInfo);
+
+  // function.cpp
+  void funcDecl();
 
   // expr.cpp
   bool isUnaryOp();

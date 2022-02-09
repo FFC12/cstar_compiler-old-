@@ -39,21 +39,52 @@ void CStarParser::translationUnit() {
       // package | package involved
     } else {
       bool isLocal = true;
+      VisibilitySpecifier visibilitySpecifier =
+          VisibilitySpecifier::VIS_DEFAULT;
 
-      // export | import
+      // export(extern) | import (extern) | static | or by default they are
+      // external linkage
       if (isLinkageMark(this->m_CurrToken)) {
         isLocal = false;
+        switch (this->m_CurrToken.getTokenKind()) {
+          case IMPORT:
+            visibilitySpecifier = VisibilitySpecifier::VIS_IMPORT;
+            break;
+          case EXPORT:
+            visibilitySpecifier = VisibilitySpecifier::VIS_EXPORT;
+            break;
+          case STATIC:
+            visibilitySpecifier = VisibilitySpecifier::VIS_STATIC;
+            break;
+          default:
+            assert(false && "Unreacheable");
+        }
         this->advance();
+      }
+
+      bool outOfSize = false;
+      auto nextToken = nextTokenInfo(outOfSize).getTokenKind();
+      if (outOfSize) {
+        ParserError("Unexpected token", currentTokenInfo());
       }
 
       // int* | float* | uint* ...
       // we check that is an IDENT or not since because isType for operators
-      // which only contains primitives. IDENT means it's a symbol (which needed to
-      // resolved in next phase - Semantic Analysis- )
+      // which only contains primitives. IDENT means it's a symbol (which needed
+      // to resolved in next phase - Semantic Analysis- )
       if (this->isType(this->m_CurrToken) || is(TokenKind::IDENT)) {
-        varDecl(is(TokenKind::IDENT), isLocal);
+        if (is(TokenKind::IDENT) && nextToken != TokenKind::LPAREN) {
+          varDecl(visibilitySpecifier, is(TokenKind::IDENT), isLocal);
+        } else if (is(TokenKind::IDENT) && nextToken == TokenKind::LPAREN) {
+          funcDecl();
+        } else {
+          varDecl(visibilitySpecifier, is(TokenKind::IDENT), isLocal);
+        }
       } else {
-        ParserHint("Not implemented yet", currentTokenInfo());
+        // protototype, directive, traits, macro
+        ParserHint(
+            "Not implemented yet (protototype, directive, traits, macro)",
+            currentTokenInfo());
         ParserError("Unexpected token '" +
                         std::string(tokenToStr(currentTokenKind())) + "'",
                     currentTokenInfo());
@@ -166,8 +197,9 @@ bool CStarParser::isOperator(const TokenInfo& token) {
 
 bool CStarParser::isLinkageMark(const TokenInfo& token) {
   switch (token.getTokenKind()) {
-    case EXPORT:
-    case IMPORT:
+    case EXPORT:  // extern
+    case IMPORT:  // extern
+    case STATIC:  // static
       return true;
     default:
       return false;
