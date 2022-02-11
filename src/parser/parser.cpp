@@ -38,14 +38,12 @@ void CStarParser::translationUnit() {
     if (isPackageMark(this->m_CurrToken)) {
       // package | package involved
     } else {
-      bool isLocal = true;
       VisibilitySpecifier visibilitySpecifier =
           VisibilitySpecifier::VIS_DEFAULT;
 
       // export(extern) | import (extern) | static | or by default they are
       // external linkage
       if (isLinkageMark(this->m_CurrToken)) {
-        isLocal = false;
         switch (this->m_CurrToken.getTokenKind()) {
           case IMPORT:
             visibilitySpecifier = VisibilitySpecifier::VIS_IMPORT;
@@ -74,11 +72,11 @@ void CStarParser::translationUnit() {
       // to resolved in next phase - Semantic Analysis- )
       if (this->isType(this->m_CurrToken) || is(TokenKind::IDENT)) {
         if (is(TokenKind::IDENT) && nextToken != TokenKind::LPAREN) {
-          varDecl(visibilitySpecifier, is(TokenKind::IDENT), isLocal);
+          varDecl(visibilitySpecifier, is(TokenKind::IDENT), false);
         } else if (is(TokenKind::IDENT) && nextToken == TokenKind::LPAREN) {
-          funcDecl();
+          funcDecl(visibilitySpecifier);
         } else {
-          varDecl(visibilitySpecifier, is(TokenKind::IDENT), isLocal);
+          varDecl(visibilitySpecifier, is(TokenKind::IDENT), false);
         }
       } else {
         // protototype, directive, traits, macro
@@ -95,6 +93,7 @@ void CStarParser::translationUnit() {
 
 bool CStarParser::isType(const TokenInfo& token) {
   switch (token.getTokenKind()) {
+    case VOID:
     case I8:
     case I16:
     case I32:
@@ -215,8 +214,22 @@ bool CStarParser::isPackageMark(const TokenInfo& token) {
   }
 }
 
+bool CStarParser::isTypeQualifier(const TokenInfo& token) {
+  switch (token.getTokenKind()) {
+    case CONST:
+    case CONSTREF:
+    case CONSTPTR:
+    case READONLY:
+      return true;
+    default:
+      return false;
+  }
+}
+
 Type CStarParser::typeOf(const TokenInfo& token) {
   switch (token.getTokenKind()) {
+    case VOID:
+      return Type::T_VOID;
     case I8:
       return Type::T_I8;
     case I16:
@@ -266,6 +279,21 @@ Type CStarParser::typeOf(const TokenInfo& token) {
       //   return Type::T_DEFINED;
     default:
       assert(false && "Unreacheable");
+  }
+}
+
+TypeQualifier CStarParser::typeQualifierOf(const TokenInfo& tokenInfo) {
+  switch (tokenInfo.getTokenKind()) {
+    case CONST:
+      return TypeQualifier::Q_CONST;
+    case CONSTREF:
+      return TypeQualifier::Q_CONSTREF;
+    case CONSTPTR:
+      return TypeQualifier::Q_CONSTPTR;
+    case READONLY:
+      return TypeQualifier::Q_READONLY;
+    default:
+      assert(false && "Unreacheable!");
   }
 }
 

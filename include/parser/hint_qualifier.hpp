@@ -1,7 +1,7 @@
 #ifndef HINT_SPECIFIER_HPP
 #define HINT_SPECIFIER_HPP
 
-enum HintSpecifier {
+enum HintQualifier {
   HINT_VOLATILE // don't optimize it
 };
 

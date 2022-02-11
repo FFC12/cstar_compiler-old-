@@ -3,6 +3,7 @@
 #include <ast/ast.hpp>
 
 enum Type {
+  T_VOID,
   T_I8,
   T_I16,
   T_I32,

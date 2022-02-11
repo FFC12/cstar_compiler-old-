@@ -19,6 +19,8 @@ enum ExprKind {
   IndirectExpr,
   RefExpr,
   AssignmentExpr,
+  ParamExpr,
+  RetExpr,
   FuncCallExpr,
   SymbolExpr,
 };

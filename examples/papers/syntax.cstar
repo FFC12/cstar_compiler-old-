@@ -1,20 +1,20 @@
 //Auto importing with involved. this means all standard libraries which needed by this unit to be imported, will be imported by automatically
-package involved {
+include involved {
     'ML',
     'X', //sin -> X.sin
     'Y', //sin -> Y.sin
 }
 
 // also particularly we can import a package or even only a function from it as well
-package {
+include {
     "std:math"
     "std:math:cos"
 }
 
 // PI is acting like a constant but just a symbol
-package "std:math:PI" as PI 
+include "std:math:PI" as PI 
 //is equal to
-package "std:math" as math
+include "std:math" as math
 const int32 PI = math.PI;
 
 // Linkage and storage syntax in C*

@@ -4,6 +4,7 @@
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
 #include <ast/func_call_ast.hpp>
+#include <ast/param_ast.hpp>
 #include <ast/scalar_ast.hpp>
 #include <ast/symbol_ast.hpp>
 #include <ast/type_ast.hpp>
@@ -14,8 +15,9 @@
 #include <deque>
 #include <lexer/lexer.hpp>
 #include <memory>
-#include <parser/hint_specifier.hpp>
+#include <parser/hint_qualifier.hpp>
 #include <parser/op_prec.hpp>
+
 #include <parser/type_specifiers.hpp>
 #include <parser/visibility_specifiers.hpp>
 #include <queue>
@@ -46,6 +48,9 @@ class CStarParser {
 
   // PACKAGE, PACKAGE INVOLVED
   bool isPackageMark(const TokenInfo& token);
+
+  // CONST, CONSTREF ,...
+  bool isTypeQualifier(const TokenInfo& token);
 
   // Is it what we look for?
   bool is(TokenKind token) noexcept {
@@ -175,6 +180,7 @@ class CStarParser {
   // parser.cpp
   void translationUnit();
   Type typeOf(const TokenInfo& token);
+  TypeQualifier typeQualifierOf(const TokenInfo& tokenInfo);
   void ParserHint(std::string mesg, TokenInfo tokenInfo);
   void ParserHint(std::string mesg, TokenInfo tokenInfo, size_t new_begin);
   void ParserError(std::string mesg, TokenInfo tokenInfo);
@@ -183,15 +189,18 @@ class CStarParser {
                                       size_t& rlend, size_t& offset);
 
   // variable.cpp
-  void varDecl(VisibilitySpecifier visibilitySpecifier, bool definedType,
-               bool isLocal);
+  ASTNode varDecl(VisibilitySpecifier visibilitySpecifier, bool definedType,
+                  bool isLocal);
+  DeclKind getDeclKind(VisibilitySpecifier visibilitySpecifier);
   ASTNode initializer();
   ASTNode initializerList();
   size_t advancePointerType(bool isUniquePtr);
   TypeSpecifier typeSpecifierOf(const TokenInfo& tokenInfo);
 
   // function.cpp
-  void funcDecl();
+  void funcDecl(VisibilitySpecifier visibilitySpecifier);
+  void advanceParams(std::vector<ASTNode>& params);
+  void advanceFuncBody(std::vector<ASTNode>& localVars);
 
   // expr.cpp
   bool isUnaryOp();

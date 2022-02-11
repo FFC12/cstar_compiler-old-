@@ -1,7 +1,7 @@
 #include <parser/parser.hpp>
 
-void CStarParser::varDecl(VisibilitySpecifier visibilitySpecifier,
-                          bool isDefinedType, bool isLocal) {
+ASTNode CStarParser::varDecl(VisibilitySpecifier visibilitySpecifier,
+                             bool isDefinedType, bool isLocal) {
   TypeSpecifier type = TypeSpecifier::SPEC_I8;
 
   if (isDefinedType) {
@@ -22,6 +22,7 @@ not_needed_type:
   size_t indirectionLevel = 0;
 
   //* | ^
+  // TODO: while -> if
   while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
     indirectionLevel =
         advancePointerType(this->currentTokenKind() == TokenKind::XOR);
@@ -92,8 +93,14 @@ not_needed_type:
         name, std::move(rhs), type, visibilitySpecifier, indirectionLevel,
         isLocal, arrayFlag, std::move(arrayDimensions), semLoc);
 
+    ast->setDeclKind(getDeclKind(visibilitySpecifier));
+
+    this->advance();
     // Will be pushed into the AST that VarAST
-    this->m_AST.push_back(std::move(ast));
+    if (isLocal)
+      return std::move(ast);
+    else
+      this->m_AST.push_back(std::move(ast));
 
     // advance to next symbol
     goto not_needed_type;
@@ -110,11 +117,15 @@ not_needed_type:
         name, std::move(rhs), type, visibilitySpecifier, indirectionLevel,
         isLocal, arrayFlag, std::move(arrayDimensions), semLoc);
 
-    // Will be pushed into the AST that VarAST
-    this->m_AST.push_back(std::move(ast));
-  }
+    ast->setDeclKind(getDeclKind(visibilitySpecifier));
 
-  this->advance();
+    this->advance();
+    // Will be pushed into the AST that VarAST
+    if (isLocal)
+      return std::move(ast);
+    else
+      this->m_AST.push_back(std::move(ast));
+  }
 }
 
 ASTNode CStarParser::initializer() {
@@ -166,13 +177,13 @@ size_t CStarParser::advancePointerType(bool isUniquePtr) {
     if (pointerType == TokenKind::STAR &&
         this->currentTokenKind() == TokenKind::XOR) {
       ParserError(
-          "Next pointer type [^] is not matching with type of before "
+          "Next pointer type [^] is not same as type of before "
           "level's [*]. This is not supported yet!",
           currentTokenInfo());
     } else if (pointerType == TokenKind::XOR &&
                this->currentTokenKind() == TokenKind::STAR) {
       ParserError(
-          "Next pointer type [*] is not matching with type of before "
+          "Next pointer type [*] is not same as type of before "
           "level's [^]. This is not supported yet!",
           currentTokenInfo());
     }
@@ -180,7 +191,35 @@ size_t CStarParser::advancePointerType(bool isUniquePtr) {
     level += 1;
   }
 
+  if (pointerType == TokenKind::STAR &&
+      this->currentTokenKind() == TokenKind::XOR) {
+    ParserError(
+        "Next pointer type [^] is not same as type of before "
+        "level's [*]. This is not supported!",
+        currentTokenInfo());
+  } else if (pointerType == TokenKind::XOR &&
+             this->currentTokenKind() == TokenKind::STAR) {
+    ParserError(
+        "Next pointer type [*] is not same as type of before "
+        "level's [^]. This is not supported!",
+        currentTokenInfo());
+  }
+
   return level;
+}
+
+DeclKind CStarParser::getDeclKind(VisibilitySpecifier visibilitySpecifier) {
+  switch (visibilitySpecifier) {
+    case VIS_EXPORT:
+      return DeclKind::ExportVarDecl;
+    case VIS_IMPORT:
+      return DeclKind::ImportVarDecl;
+    case VIS_STATIC:
+      return DeclKind::GlobVarDecl;
+    case VIS_DEFAULT:
+    default:
+      return DeclKind::ExportVarDecl;
+  }
 }
 
 TypeSpecifier CStarParser::typeSpecifierOf(const TokenInfo& token) {

@@ -1,5 +1,25 @@
+func(const int x, int* p, float^ s, p int*, k int) :: int32* {
 
-// this is function
+}
+
+func0(X* x, p int) :: void {
+
+}
+
+// not allowed to the casting none of 
+// params of this function...
+func1(x int, p X*) { // :: void
+
+}
+
+func2() {}
+
+func3() :: int32 {
+
+}
+
+
 main() :: void {
-    int i = 0;
+    int i = unsafe_cast<int>(10 + 20); 
+    int k = sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3 * sizeof(int) + cast<int64>(10) + 20 * 20);
 }
