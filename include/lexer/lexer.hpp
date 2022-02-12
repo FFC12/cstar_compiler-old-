@@ -500,6 +500,8 @@ class CStarLexer {
       return EXTERN;
     else if (ident == "from")
       return FROM;
+    else if(ident == "import")
+      return IMPORT;
     else if (ident == "export")
       return EXPORT;
     else if (ident == "static")

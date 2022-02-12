@@ -5,6 +5,7 @@
 #include <ast/cast_op_ast.hpp>
 #include <ast/func_call_ast.hpp>
 #include <ast/param_ast.hpp>
+#include <ast/ret_ast.hpp>
 #include <ast/scalar_ast.hpp>
 #include <ast/symbol_ast.hpp>
 #include <ast/type_ast.hpp>
@@ -17,7 +18,6 @@
 #include <memory>
 #include <parser/hint_qualifier.hpp>
 #include <parser/op_prec.hpp>
-
 #include <parser/type_specifiers.hpp>
 #include <parser/visibility_specifiers.hpp>
 #include <queue>
@@ -199,7 +199,7 @@ class CStarParser {
 
   // function.cpp
   void funcDecl(VisibilitySpecifier visibilitySpecifier);
-  void advanceParams(std::vector<ASTNode>& params);
+  void advanceParams(std::vector<ASTNode>& params, bool isForwardDecl);
   void advanceFuncBody(std::vector<ASTNode>& localVars);
 
   // expr.cpp
@@ -208,7 +208,7 @@ class CStarParser {
   bool isCastOp();
   ASTNode reduceExpression(std::deque<ASTNode>& exprBucket,
                            OpPrecBucket& opPrecBucket);
-  ASTNode expression(bool isSubExpr, int opFor = 0);
+  ASTNode expression(bool isSubExpr, int opFor = 0, bool isRet = false);
   ASTNode advanceConstantOrLiteral();
   ASTNode advanceType();
   ASTNode advanceSymbol();
@@ -288,7 +288,7 @@ class CStarParser {
     addToPrecTable(OpType::OP_BINARY, LAND, 3, true);
     addToPrecTable(OpType::OP_BINARY, LOR, 2, true);
 
-    addToPrecTable(OpType::OP_BINARY, EQUAL, 1, false);
+//    addToPrecTable(OpType::OP_BINARY, EQUAL, 1, false);
     addToPrecTable(OpType::OP_BINARY, PLUSEQ, 1, false);
     addToPrecTable(OpType::OP_BINARY, MINUSEQ, 1, false);
     addToPrecTable(OpType::OP_BINARY, STAREQ, 1, false);

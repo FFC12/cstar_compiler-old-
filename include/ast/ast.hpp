@@ -10,14 +10,10 @@ enum ASTKind {
 
 enum ExprKind {
   BinOp,
-  TernaryOp,
   UnaryOp,
-  CastOp,
   DeclaratorExpr,
   ScalarExpr,
   TypeExpr,
-  IndirectExpr,
-  RefExpr,
   AssignmentExpr,
   ParamExpr,
   RetExpr,

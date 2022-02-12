@@ -11,7 +11,7 @@ class ParamAST : public IAST {
   bool m_IsNotClear;
 
  public:
-  explicit ParamAST(ASTNode symbol0, ASTNode symbol1, ASTNode typeNode,
+  ParamAST(ASTNode symbol0, ASTNode symbol1, ASTNode typeNode,
                     bool isCastable, bool isNotClear,
                     TypeQualifier typeQualifier, SemanticLoc& semanticLoc)
       : IAST(semanticLoc),

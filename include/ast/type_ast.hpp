@@ -38,14 +38,16 @@ class TypeAST : public IAST {
   size_t m_IndirectLevel;
   bool m_IsUniquePtr;
   bool m_IsPrimitiveType;
+  bool m_IsRef;
 
  public:
   TypeAST(Type typeSpec, ASTNode symbol, bool isUniquePtr, bool isPrimitive,
-          size_t indirectLevel, SemanticLoc& semanticLoc)
+          bool isRef, size_t indirectLevel, SemanticLoc& semanticLoc)
       : IAST(semanticLoc),
         m_TypeSpec(typeSpec),
         m_Symbol(std::move(symbol)),
         m_IsUniquePtr(isUniquePtr),
+        m_IsRef(isRef),
         m_IsPrimitiveType(isPrimitive),
         m_IndirectLevel(indirectLevel) {
     this->m_ASTKind = ASTKind::Expr;

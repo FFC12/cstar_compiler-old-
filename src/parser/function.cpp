@@ -2,6 +2,7 @@
 
 void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
   auto funcName = currentTokenStr();
+  bool isForwardDecl = visibilitySpecifier == VisibilitySpecifier::VIS_IMPORT;
 
   // advance the name
   this->advance();
@@ -12,7 +13,7 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
   this->advance();
 
   std::vector<ASTNode> params;
-  advanceParams(params);
+  advanceParams(params, isForwardDecl);
 
   expected(TokenKind::RPAREN);
 
@@ -29,16 +30,28 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
     } else {
       ParserError("Unexpected token", currentTokenInfo());
     }
+  } else {  // void by default
+    auto posInfo = this->currentTokenInfo().getTokenPositionInfo();
+    SemanticLoc semLoc = SemanticLoc(posInfo.begin, posInfo.end, posInfo.line);
+    returnType = std::make_unique<TypeAST>(Type::T_VOID, nullptr, false, true,
+                                           false, 0, semLoc);
   }
 
-  // func body
-  expected(TokenKind::LBRACK);
-
   std::vector<ASTNode> localVars;
-  this->advanceFuncBody(localVars);
+
+  if (!isForwardDecl) {
+    // func body
+    expected(TokenKind::LBRACK);
+
+    this->advanceFuncBody(localVars);
+  } else {
+    expected(TokenKind::SEMICOLON);
+    this->advance();
+  }
 }
 
-void CStarParser::advanceParams(std::vector<ASTNode>& params) {
+void CStarParser::advanceParams(std::vector<ASTNode>& params,
+                                bool isForwardDecl) {
 param_again:
   ASTNode typeNode;
   TypeQualifier typeQualifier = TypeQualifier::Q_NONE;
@@ -59,11 +72,13 @@ param_again:
     // TODO: for forward declaration, must not be needed to
     //  specify param name.
 
-    // expected param name
-    expected(TokenKind::IDENT);
+    if (!isForwardDecl) {
+      // expected param name
+      expected(TokenKind::IDENT);
 
-    // get the param name
-    symbol0 = this->advanceSymbol();
+      // get the param name
+      symbol0 = this->advanceSymbol();
+    }
 
     size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
     auto semLoc = SemanticLoc(beginLoc, endLoc, line);
@@ -84,9 +99,11 @@ param_again:
       auto type = this->advanceSymbol();
       castAllowed = false;
 
-      expected(TokenKind::IDENT);
-      // get the param name
-      symbol0 = this->advanceSymbol();
+      if (!isForwardDecl) {
+        expected(TokenKind::IDENT);
+        // get the param name
+        symbol0 = this->advanceSymbol();
+      }
 
       size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
       auto semLoc = SemanticLoc(beginLoc, endLoc, line);
@@ -112,18 +129,20 @@ param_again:
                                                 std::move(type), castAllowed,
                                                 false, typeQualifier, semLoc);
       } else {
-        // get the param name
-        symbol0 = this->advanceSymbol();
-        symbol1 = this->advanceSymbol();
+        if (!isForwardDecl) {
+          // get the param name
+          symbol0 = this->advanceSymbol();
+          symbol1 = this->advanceSymbol();
 
-        castAllowed = false;
+          castAllowed = false;
 
-        size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
-        auto semLoc = SemanticLoc(beginLoc, endLoc, line);
+          size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
+          auto semLoc = SemanticLoc(beginLoc, endLoc, line);
 
-        auto param = std::make_unique<ParamAST>(
-            std::move(symbol0), std::move(symbol1), nullptr, castAllowed, true,
-            typeQualifier, semLoc);
+          auto param = std::make_unique<ParamAST>(
+              std::move(symbol0), std::move(symbol1), nullptr, castAllowed,
+              true, typeQualifier, semLoc);
+        }
       }
     }
 
@@ -151,6 +170,14 @@ void CStarParser::advanceFuncBody(std::vector<ASTNode>& localVars) {
       while (is(TokenKind::LINEFEED) || is(TokenKind::COMMENT)) {
         advance();
       }
+
+      if (is(TokenKind::RET)) {
+        auto expr = std::move(this->expression(false, 0, true));
+        expected(TokenKind::SEMICOLON);
+        this->advance();
+      }
+      //TODO: true and false will be added.
+      // ret 10 == 10 ? true : false; ... not parsing yet
 
       // if - else
       // loop

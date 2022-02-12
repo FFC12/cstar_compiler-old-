@@ -177,6 +177,7 @@ bool CStarParser::isOperator(const TokenInfo& token) {
     case LAND:
     case LOR:
     case EQUAL:
+    case RET:
     case PLUSEQ:
     case MINUSEQ:
     case STAREQ:

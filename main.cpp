@@ -23,10 +23,12 @@ int main(int argc, char** argv) {
 
   std::cout << RED
       "[!] " RESET CYN
-      "This version of the compiler is for the alpha testing. Not ready to use \n"
-      "in production stage. Be aware of this may cause to bugs and if you encountered\n"
-      "an unexpected error or behaviour please let me know by fatihsaika@gmail.com\n"
-      "or feel free to open an issue on Github!\n\n" RESET;
+      "This version of the compiler is not ready to use in production stage. \n"
+      "Be aware of this may cause to bugs. And if you encountered an "
+      "unexpected \n"
+      "error or behaviour please let me know by fatihsaika@gmail.com or feel "
+      "free \n"
+      "to open an issue on Github!\n\n" RESET;
 
   if (argc > 1) {
     char* relativePath = argv[1];
@@ -48,8 +50,6 @@ int main(int argc, char** argv) {
     LogError("No argument specified!\n");
     LogError("--- Usage: ./CSTAR file.cstar\n");
   }
-
-
 
   return 0;
 }

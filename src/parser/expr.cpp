@@ -33,7 +33,7 @@ bool CStarParser::isCastOp() {
 // 1 - ( )
 // 2 - ? :
 // 3 - [ ]
-ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
+ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet) {
   // advance EQUAL or last expr before it came here if subexpr
   this->advance();
 
@@ -106,7 +106,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
       }
 
       if (is(TokenKind::COMMA) && !isSubExpr &&
-          prevTokenKind() == TokenKind::EQUAL) {
+          (this->prevTokenKind() == TokenKind::EQUAL ||
+           (this->prevTokenKind() == TokenKind::RET && isRet))) {
         ParserError(std::string("Unexpected token '") +
                         tokenToStr(currentTokenKind()) + "'",
                     currentTokenInfo());
@@ -128,7 +129,9 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
            !castOpFlag && typeOpFlag))
         typeOpFlag = false;
 
-      if (prevTokenKind() == TokenKind::EQUAL) goto jump_unary_paranthesis;
+      if ((this->prevTokenKind() == TokenKind::EQUAL ||
+           (this->prevTokenKind() == TokenKind::RET && isRet)))
+        goto jump_unary_paranthesis;
       parenthesesPos.push_back(currentTokenInfo().getTokenPositionInfo().begin);
 
       closedPar += 1;
@@ -307,12 +310,10 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor) {
 
       exprBucket.push_back(std::move(subExpr));
     } else if (is(TokenKind::LT) && this->isUnaryOp()) {  // <TYPE>
-      // TODO: Don't let accept the any nodes, it's okay with only TypeAST
-      //  advance '<'
-      // this->advance();
       lastTypeAttribPos = i;
       typeOpFlag = true;
-      if (this->prevTokenKind() == TokenKind::EQUAL &&
+      if ((this->prevTokenKind() == TokenKind::EQUAL ||
+           (this->prevTokenKind() == TokenKind::RET && isRet)) &&
           (!isCastableOperator(prevTokenInfo()) ||
            this->prevTokenKind() != IDENT))
         ParserError("Unexpected token '" +
@@ -974,25 +975,32 @@ ASTNode CStarParser::advanceSymbol() {
     bool transitionFlag = false;
     bool isUniquePtr = false;
     size_t indirectionLevel = 0;
+    bool isRef = false;
 
-    // This is symbol to type transition (Actually this can be done when
-    // performed semantic analysis for this node but we make things easier
-    // or maybe we not... Not sure)
-    // * | ^
-    while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
-      isUniquePtr = this->currentTokenKind() == TokenKind::XOR;
-      transitionFlag = true;
-
-      indirectionLevel = advancePointerType(isUniquePtr);
-      // std::cout << "Symbol to Type Transition Indirection Level: "
-      //           << indirectionLevel << "\n";
+    if (is(TokenKind::AND)) {
+      isRef = true;
+      this->advance();
       semLoc.end += indirectionLevel;
+    } else {
+      // This is symbol to type transition (Actually this can be done when
+      // performed semantic analysis for this node but we make things easier
+      // or maybe we not... Not sure)
+      // * | ^
+      while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
+        isUniquePtr = this->currentTokenKind() == TokenKind::XOR;
+        transitionFlag = true;
+
+        indirectionLevel = advancePointerType(isUniquePtr);
+        // std::cout << "Symbol to Type Transition Indirection Level: "
+        //           << indirectionLevel << "\n";
+        semLoc.end += indirectionLevel;
+      }
     }
 
     if (transitionFlag) {
       return std::make_unique<TypeAST>(Type::T_DEFINED, std::move(symbolNode),
-                                       isUniquePtr, true, indirectionLevel,
-                                       semLoc);
+                                       isUniquePtr, true, isRef,
+                                       indirectionLevel, semLoc);
     } else {
       return std::move(symbolNode);
     }
@@ -1012,18 +1020,25 @@ ASTNode CStarParser::advanceType() {
 
     this->advance();
 
-    //* | ^
-    while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
-      isUniquePtr = this->currentTokenKind() == TokenKind::XOR;
-
-      indirectionLevel = advancePointerType(isUniquePtr);
+    bool isRef = false;
+    if (is(TokenKind::AND)) {
+      isRef = true;
+      this->advance();
       semLoc.end += indirectionLevel;
-      // std::cout << "Type Indirection level: " << indirectionLevel << "\n";
+    } else {
+      //* | ^
+      while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
+        isUniquePtr = this->currentTokenKind() == TokenKind::XOR;
+
+        indirectionLevel = advancePointerType(isUniquePtr);
+        semLoc.end += indirectionLevel;
+        // std::cout << "Type Indirection level: " << indirectionLevel << "\n";
+      }
     }
 
     ASTNode typeAst =
         std::make_unique<TypeAST>(typeOf(prevTokenInfo), nullptr, isUniquePtr,
-                                  true, indirectionLevel, semLoc);
+                                  true, isRef, indirectionLevel, semLoc);
 
     // expected >
     // expected({TokenKind::GT, TokenKind::RPAREN});

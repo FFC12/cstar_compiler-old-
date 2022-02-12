@@ -1,4 +1,7 @@
-func(const int x, int* p, float^ s, p int*, k int) :: int32* {
+import forwardDecl(const int*, constptr float*) :: void;
+import forwardDecl0(constref int&, constptr float*) :: void;
+
+func(constref x int&, int* p, float^ s, p int*, k int) :: int32& {
 
 }
 
@@ -19,7 +22,6 @@ func3() :: int32 {
 }
 
 
-main() :: void {
-    int i = unsafe_cast<int>(10 + 20); 
-    int k = sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3 * sizeof(int) + cast<int64>(10) + 20 * 20);
+main() :: int32 {
+    ret 10 == 10 ? true : false;
 }
