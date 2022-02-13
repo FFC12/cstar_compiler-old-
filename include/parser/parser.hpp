@@ -145,14 +145,30 @@ class CStarParser {
   // It has not a token kind version since has an argument
   // and it need to a lot of work to handle it in another function
   /// which it'll be a param as well.
-  TokenInfo nextTokenInfo(bool& outOfSize) const noexcept {
+  TokenInfo nextTokenInfo(bool& outOfSize) const {
     if (m_TokenIndex + 1 <= m_TokenStream.size()) {
       outOfSize = false;
       return m_TokenStream[m_TokenIndex + 1];
     } else {
       outOfSize = true;
-      return TokenInfo();
+      return {};
     }
+  }
+
+  TokenInfo nextTokenInfo(bool& outOfSize, size_t n) const {
+    if (m_TokenIndex + 1 <= m_TokenStream.size()) {
+      outOfSize = false;
+      return m_TokenStream[m_TokenIndex + n];
+    } else {
+      outOfSize = true;
+      return {};
+    }
+  }
+
+  void restoreToken(size_t n) {
+    this->m_TokenIndex -= n;
+    m_CurrToken = this->m_TokenStream[this->m_TokenIndex];
+    m_PrevToken = this->m_TokenStream[this->m_TokenIndex - 1];
   }
 
   std::string currentTokenStr() const noexcept {
@@ -201,7 +217,10 @@ class CStarParser {
   // function.cpp
   void funcDecl(VisibilitySpecifier visibilitySpecifier);
   void advanceParams(std::vector<ASTNode>& params, bool isForwardDecl);
-  void advanceFuncBody(std::vector<ASTNode>& scope);
+  void advanceScope(std::vector<ASTNode>& scope);
+
+  // branch.cpp
+  void advanceIfStmt(std::vector<ASTNode>& scope);
 
   // expr.cpp
   bool isUnaryOp();

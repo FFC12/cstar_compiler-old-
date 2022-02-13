@@ -33,7 +33,8 @@ bool CStarParser::isCastOp() {
 // 1 - ( )
 // 2 - ? :
 // 3 - [ ]
-ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet, bool typeFlag) {
+ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
+                                bool typeFlag) {
   // advance EQUAL or last expr before it came here if subexpr
   this->advance();
 
@@ -92,8 +93,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet, bool type
     // included to the expression itself example: if( [expr )]
     if (is(TokenKind::SEMICOLON) || is(TokenKind::RPAREN) ||
         (is(TokenKind::COMMA) && !isSubExpr) || is(TokenKind::RSQPAR) ||
-        is(TokenKind::COLON) || (is(TokenKind::GT) && typeOpFlag) || is(TokenKind::_EOF) ||
-        is(TokenKind::LINEFEED)) {
+        is(TokenKind::COLON) || (is(TokenKind::GT) && typeOpFlag) ||
+        is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) {
     jump_ternary:
       // well we're out of token and not consumed semicolon
       // or ) so probably missing semicolon or )
@@ -323,21 +324,40 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet, bool type
                     currentTokenInfo());
 
       auto typeAst = this->expression(
-          true,0,false,typeOpFlag);  // this->advanceType();  // this->expression(true);
+          true, 0, false,
+          typeOpFlag);  // this->advanceType();  // this->expression(true);
       exprBucket.push_back(std::move(typeAst));
     } else if (is(TokenKind::LT) && this->isBinOp()) {
       // This is for binary '<'. But we have to be sure it's
       // a function type attrib or not
-      if (prevTokenKind() ==
-          TokenKind::IDENT) {  //(exprBucket[i - 1].get()->getExprKind() ==
-                               // ExprKind::SymbolExpr) {
+      auto op = currentTokenInfo();
+      this->advance();
+
+      bool clearType = false;
+      bool isIdent = false;
+      if (isType(currentTokenInfo())) clearType = true;
+      if (is(TokenKind::IDENT)) isIdent = true;
+
+      auto typeOrSymbol =
+          clearType ? this->advanceType() : (isIdent ? this->advanceSymbol() : nullptr);
+
+      bool outOfSize = false;
+      auto nextToken = nextTokenInfo(outOfSize).getTokenKind();
+      if (outOfSize) ParserError("Unexpected token", currentTokenInfo());
+
+      if ((currentTokenKind() == TokenKind::GT) &&
+          (nextToken ==
+           TokenKind::LPAREN)) {  //(exprBucket[i - 1].get()->getExprKind() ==
+                                  // ExprKind::SymbolExpr) {
         lastTypeAttribPos = i;
         typeOpFlag = true;
-        auto typeAst = this->expression(true, 0,false,typeOpFlag);
-        exprBucket.push_back(std::move(typeAst));
+        this->advance();
+        //auto typeAst = this->expression(true, 0, false, typeOpFlag);
+        exprBucket.push_back(std::move(typeOrSymbol));
       } else {
         // well we're sure this is not binary op for the type attrib
         // so go to jump_operator and keep going from there
+        restoreToken(clearType ? 1 : (isIdent ? 2 : 1));
         if (isOperator(this->currentTokenInfo())) goto jump_operator;
       }
     } else if (isOperator(this->currentTokenInfo())) {
@@ -771,8 +791,14 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
         case GT:
           binOpKind = BinOpKind::B_GT;
           break;
+        case GTEQ:
+          binOpKind = BinOpKind::B_GTEQ;
+          break;
         case LT:
           binOpKind = BinOpKind::B_LT;
+          break;
+        case LTEQ:
+          binOpKind = BinOpKind::B_LTEQ;
           break;
         case LSHIFT:
           binOpKind = BinOpKind::B_SHL;

@@ -45,10 +45,10 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
   std::vector<ASTNode> scope{};
 
   if (!isForwardDecl) {
-    // func body
     expected(TokenKind::LBRACK);
 
-    this->advanceFuncBody(scope);
+    // func body as scope
+    this->advanceScope(scope);
   } else {
     expected(TokenKind::SEMICOLON);
     this->advance();
@@ -171,7 +171,7 @@ param_again:
   }
 }
 
-void CStarParser::advanceFuncBody(std::vector<ASTNode>& scope) {
+void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
   this->advance();
 
   while (!is(TokenKind::RBRACK)) {
@@ -205,6 +205,9 @@ void CStarParser::advanceFuncBody(std::vector<ASTNode>& scope) {
         expected(TokenKind::SEMICOLON);
         this->advance();
         scope.emplace_back(std::move(retExpr));
+      } else if(is(TokenKind::IF)) {
+        std::vector<ASTNode> ifBody{};
+        this->advanceIfStmt(ifBody);
       }
 
       // if - else
