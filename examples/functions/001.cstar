@@ -1,11 +1,25 @@
+
 main() :: void {
     if (sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3 * sizeof(int) + cast<int64>(10) + 20 * 20)) {
-        if(x > 10){
-            if(r < 3) {
-                
-            }
-        }
-    } 
+        if (a > b) {
 
-    ret 0;
+        } elif (b < c) {
+
+        }
+        int z = 30;
+    } elif (x < 10) {
+        if (s < 3 + 3){
+            int r = 12 + 3;
+        } else {
+            int k = 30;
+        }
+
+    } else {
+        int z = 30;
+        if(t > 3) {
+            int k = p + 20;
+        }
+    }
+
+    ret;
 }

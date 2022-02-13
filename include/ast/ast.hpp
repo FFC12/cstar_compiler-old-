@@ -40,7 +40,8 @@ enum DeclKind {
 };
 
 enum StmtKind {
-
+  IfStmt,
+  LoopStmt,
 };
 
 struct SemanticLoc {

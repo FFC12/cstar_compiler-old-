@@ -1,6 +1,8 @@
 #ifndef PARSER_HPP
 #define PARSER_HPP
 #include <ast/ast.hpp>
+#include <ast/if_stmt.hpp>
+#include <ast/loop_stmt.hpp>
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
 #include <ast/func_ast.hpp>
@@ -22,6 +24,7 @@
 #include <parser/type_specifiers.hpp>
 #include <parser/visibility_specifiers.hpp>
 #include <queue>
+
 
 class CStarParser {
   PrecedenceInfoTable m_PrecTableUnary, m_PrecTableBinary, m_PrecTableCast;
@@ -221,6 +224,9 @@ class CStarParser {
 
   // branch.cpp
   void advanceIfStmt(std::vector<ASTNode>& scope);
+
+  // loop.cpp
+  void advanceLoopStmt(std::vector<ASTNode>& scope);
 
   // expr.cpp
   bool isUnaryOp();

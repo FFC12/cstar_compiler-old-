@@ -36,7 +36,7 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
       ParserError("Unexpected token", currentTokenInfo());
     }
   } else {  // void by default
-    auto posInfo = this->currentTokenInfo().getTokenPositionInfo();
+    posInfo = this->currentTokenInfo().getTokenPositionInfo();
     SemanticLoc semLoc = SemanticLoc(posInfo.begin, posInfo.end, posInfo.line);
     returnType = std::make_unique<TypeAST>(Type::T_VOID, nullptr, false, true,
                                            false, 0, semLoc);
@@ -54,6 +54,7 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
     this->advance();
   }
 
+  posInfo = currentTokenInfo().getTokenPositionInfo();
   size_t end = posInfo.end;
   SemanticLoc semLoc = SemanticLoc(begin, end, line);
 
@@ -193,6 +194,10 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
           ParserError("Unexpected token", currentTokenInfo());
         }
 
+        PositionInfo posInfo = currentTokenInfo().getTokenPositionInfo();
+        size_t begin = posInfo.begin;
+        size_t line = posInfo.line;
+
         if (nextToken == TokenKind::SEMICOLON) {
           // empty ret
           retExpr = nullptr;
@@ -202,12 +207,21 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
           retExpr = std::move(this->expression(false, 0, true));
         }
 
+        posInfo = currentTokenInfo().getTokenPositionInfo();
+        size_t end = posInfo.end;
+        SemanticLoc semLoc = SemanticLoc(begin, end, line);
+
+        auto retAst =
+            std::make_unique<RetAST>(std::move(retExpr), noReturn, semLoc);
+
         expected(TokenKind::SEMICOLON);
         this->advance();
-        scope.emplace_back(std::move(retExpr));
-      } else if(is(TokenKind::IF)) {
-        std::vector<ASTNode> ifBody{};
-        this->advanceIfStmt(ifBody);
+        scope.emplace_back(std::move(retAst));
+      } else if (is(TokenKind::IF)) {
+//        std::vector<ASTNode> ifBody{};
+        this->advanceIfStmt(scope);
+      } else if(is(TokenKind::LOOP)) {
+        this->advanceLoopStmt(scope);
       }
 
       // if - else
@@ -217,5 +231,6 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
     }
   }
 
+  // advance '}'
   this->advance();
 }

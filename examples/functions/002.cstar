@@ -1,0 +1,25 @@
+main() :: void {
+    int32 arr[2] = (0,1);
+
+    loop(data in arr){ // this could be an array or Iterable
+
+    }
+    
+    loop(index,data in arr) {
+
+    }
+
+    loop(i in [0,100]) {
+        
+    }
+
+    loop(x > 10) {
+        
+    }
+
+    loop(true) {
+
+    }
+    
+    ret;
+}

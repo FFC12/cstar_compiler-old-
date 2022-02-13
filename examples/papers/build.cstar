@@ -1,0 +1,17 @@
+
+#build(argc,argv) {
+    $build::program_name = "app";
+    $build::set_target(
+        "a.cstar",
+        "b.cstar",
+        "c.cstar"
+    );
+    $build::entry = "main";
+    $build::test = true; // will be called all functions which is marked as '@test'
+}
+
+
+@build
+build (int argc, char** argv) :: void {
+    ret 0;
+}
