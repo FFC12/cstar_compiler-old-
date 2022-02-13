@@ -1,27 +1,30 @@
+export func(constref x int&, int* p, float^ s, p int*, k int) :: int32& {
+    bool y = false;
+}
+
 import forwardDecl(const int*, constptr float*) :: void;
 import forwardDecl0(constref int&, constptr float*) :: void;
 
-func(constref x int&, int* p, float^ s, p int*, k int) :: int32& {
-
-}
-
 func0(X* x, p int) :: void {
-
+    bool x = true;
 }
 
 // not allowed to the casting none of 
 // params of this function...
 func1(x int, p X*) { // :: void
-
+    float b = 212.324234;
 }
 
-func2() {}
+func2() {
+    int a = 10;
+}
 
 func3() :: int32 {
-
+    int32 p = unsafe_cast<int32&>(argc);
 }
 
 
-main() :: int32 {
-    ret 10 == 10 ? true : false;
+main(int argc) :: int32 {
+    int32 p = unsafe_cast<int32&>(argc);
+    ret;
 }

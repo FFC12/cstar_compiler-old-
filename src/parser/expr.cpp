@@ -33,7 +33,7 @@ bool CStarParser::isCastOp() {
 // 1 - ( )
 // 2 - ? :
 // 3 - [ ]
-ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet) {
+ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet, bool typeFlag) {
   // advance EQUAL or last expr before it came here if subexpr
   this->advance();
 
@@ -59,7 +59,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet) {
   size_t stride = 0;
 
   bool castOpFlag = false;
-  bool typeOpFlag = false;
+  bool typeOpFlag = isSubExpr ? typeFlag : false;
 
   // this is for offset from beginning of parenthesis
   std::deque<size_t> parenthesesPos;
@@ -92,7 +92,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet) {
     // included to the expression itself example: if( [expr )]
     if (is(TokenKind::SEMICOLON) || is(TokenKind::RPAREN) ||
         (is(TokenKind::COMMA) && !isSubExpr) || is(TokenKind::RSQPAR) ||
-        is(TokenKind::COLON) || is(TokenKind::GT) || is(TokenKind::_EOF) ||
+        is(TokenKind::COLON) || (is(TokenKind::GT) && typeOpFlag) || is(TokenKind::_EOF) ||
         is(TokenKind::LINEFEED)) {
     jump_ternary:
       // well we're out of token and not consumed semicolon
@@ -323,7 +323,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet) {
                     currentTokenInfo());
 
       auto typeAst = this->expression(
-          true);  // this->advanceType();  // this->expression(true);
+          true,0,false,typeOpFlag);  // this->advanceType();  // this->expression(true);
       exprBucket.push_back(std::move(typeAst));
     } else if (is(TokenKind::LT) && this->isBinOp()) {
       // This is for binary '<'. But we have to be sure it's
@@ -333,7 +333,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet) {
                                // ExprKind::SymbolExpr) {
         lastTypeAttribPos = i;
         typeOpFlag = true;
-        auto typeAst = this->expression(true);
+        auto typeAst = this->expression(true, 0,false,typeOpFlag);
         exprBucket.push_back(std::move(typeAst));
       } else {
         // well we're sure this is not binary op for the type attrib
@@ -944,16 +944,18 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
 ASTNode CStarParser::advanceConstantOrLiteral() {
   // this is obviously a scalar or literal or others(matrix and vec?)
   if (is(TokenKind::SCALARD) || is(TokenKind::SCALARI) ||
-      is(TokenKind::LITERAL)) {
+      is(TokenKind::LITERAL) || is(TokenKind::TRUE) || is(TokenKind::FALSE)) {
     bool isIntegral = !is(TokenKind::LITERAL);
     bool isFloat = is(TokenKind::SCALARD);
+    bool isBoolean = is(TokenKind::TRUE) || is(TokenKind::FALSE);
 
     auto value = this->currentTokenStr();
     this->advance();
 
     auto tokenPos = currentTokenInfo().getTokenPositionInfo();
     auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
-    return std::make_unique<ScalarAST>(value, isIntegral, isFloat, semLoc);
+    return std::make_unique<ScalarAST>(value, isIntegral, isFloat, isBoolean,
+                                       semLoc);
   }
 
   return std::move(this->advanceType());

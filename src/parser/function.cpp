@@ -3,6 +3,11 @@
 void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
   auto funcName = currentTokenStr();
   bool isForwardDecl = visibilitySpecifier == VisibilitySpecifier::VIS_IMPORT;
+  bool isExported = visibilitySpecifier == VisibilitySpecifier::VIS_EXPORT;
+
+  auto posInfo = currentTokenInfo().getTokenPositionInfo();
+  size_t begin = posInfo.begin;
+  size_t line = posInfo.line;
 
   // advance the name
   this->advance();
@@ -12,7 +17,7 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
   // '('
   this->advance();
 
-  std::vector<ASTNode> params;
+  std::vector<ASTNode> params{};
   advanceParams(params, isForwardDecl);
 
   expected(TokenKind::RPAREN);
@@ -37,17 +42,26 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
                                            false, 0, semLoc);
   }
 
-  std::vector<ASTNode> localVars;
+  std::vector<ASTNode> scope{};
 
   if (!isForwardDecl) {
     // func body
     expected(TokenKind::LBRACK);
 
-    this->advanceFuncBody(localVars);
+    this->advanceFuncBody(scope);
   } else {
     expected(TokenKind::SEMICOLON);
     this->advance();
   }
+
+  size_t end = posInfo.end;
+  SemanticLoc semLoc = SemanticLoc(begin, end, line);
+
+  auto func = std::make_unique<FuncAST>(funcName, std::move(returnType),
+                                        std::move(params), std::move(scope),
+                                        isForwardDecl, isExported, semLoc);
+
+  this->m_AST.emplace_back(std::move(func));
 }
 
 void CStarParser::advanceParams(std::vector<ASTNode>& params,
@@ -68,9 +82,6 @@ param_again:
 
   if (isType(currentTokenInfo())) {
     auto type = this->advanceType();
-
-    // TODO: for forward declaration, must not be needed to
-    //  specify param name.
 
     if (!isForwardDecl) {
       // expected param name
@@ -128,6 +139,7 @@ param_again:
         auto param = std::make_unique<ParamAST>(std::move(symbol0), nullptr,
                                                 std::move(type), castAllowed,
                                                 false, typeQualifier, semLoc);
+        params.emplace_back(std::move(param));
       } else {
         if (!isForwardDecl) {
           // get the param name
@@ -142,6 +154,7 @@ param_again:
           auto param = std::make_unique<ParamAST>(
               std::move(symbol0), std::move(symbol1), nullptr, castAllowed,
               true, typeQualifier, semLoc);
+          params.emplace_back(std::move(param));
         }
       }
     }
@@ -158,26 +171,41 @@ param_again:
   }
 }
 
-void CStarParser::advanceFuncBody(std::vector<ASTNode>& localVars) {
+void CStarParser::advanceFuncBody(std::vector<ASTNode>& scope) {
   this->advance();
 
   while (!is(TokenKind::RBRACK)) {
     if (isType(currentTokenInfo()) || is(TokenKind::IDENT)) {
       auto localVar =
           varDecl(VisibilitySpecifier::VIS_LOCAL, is(TokenKind::IDENT), true);
-      localVars.emplace_back(std::move(localVar));
+      scope.emplace_back(std::move(localVar));
     } else {
       while (is(TokenKind::LINEFEED) || is(TokenKind::COMMENT)) {
         advance();
       }
 
       if (is(TokenKind::RET)) {
-        auto expr = std::move(this->expression(false, 0, true));
+        ASTNode retExpr;
+        bool noReturn = false;
+        bool outOfSize = false;
+        auto nextToken = nextTokenInfo(outOfSize).getTokenKind();
+        if (outOfSize) {
+          ParserError("Unexpected token", currentTokenInfo());
+        }
+
+        if (nextToken == TokenKind::SEMICOLON) {
+          // empty ret
+          retExpr = nullptr;
+          noReturn = true;
+          this->advance();
+        } else {
+          retExpr = std::move(this->expression(false, 0, true));
+        }
+
         expected(TokenKind::SEMICOLON);
         this->advance();
+        scope.emplace_back(std::move(retExpr));
       }
-      //TODO: true and false will be added.
-      // ret 10 == 10 ? true : false; ... not parsing yet
 
       // if - else
       // loop

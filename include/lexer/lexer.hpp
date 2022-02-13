@@ -347,7 +347,7 @@ class CStarLexer {
       _c = nextChar();
 
       if (_c == '.') {
-        //if there is not
+        // if there is not
         if (lookAhead('0') || lookAhead('1') || lookAhead('2') ||
             lookAhead('3') || lookAhead('4') || lookAhead('5') ||
             lookAhead('6') || lookAhead('7') || lookAhead('8') ||
@@ -500,7 +500,7 @@ class CStarLexer {
       return EXTERN;
     else if (ident == "from")
       return FROM;
-    else if(ident == "import")
+    else if (ident == "import")
       return IMPORT;
     else if (ident == "export")
       return EXPORT;
@@ -820,7 +820,11 @@ class CStarLexer {
         }
       case '<':
         if (lookAhead('<')) {
-          return LSHIFT;
+          if (lookAhead('=')) {
+            return LSHIFTEQ;
+          } else {
+            return LSHIFT;
+          }
         } else if (lookAhead('=')) {
           return LTEQ;
         } else {
@@ -828,7 +832,11 @@ class CStarLexer {
         }
       case '>':
         if (lookAhead('>')) {
-          return RSHIFT;
+          if (lookAhead('=')) {
+            return RSHIFTEQ;
+          } else {
+            return RSHIFT;
+          }
         } else if (lookAhead('=')) {
           return GTEQ;
         } else {

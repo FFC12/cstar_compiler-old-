@@ -15,7 +15,9 @@ enum BinOpKind {
   B_LOR,
   B_XOR,
   B_GT,
+  B_GTEQ,
   B_LT,
+  B_LTEQ,
   B_SHL,
   B_SHR,
   B_EQ,    // "=="

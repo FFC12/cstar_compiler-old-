@@ -1,6 +1,8 @@
+int s = unsafe_cast<int>(10);
+
 int s[2:2] = ((10,20),(10,20));
 int r = func<int>(10,20) + sizeof(p) + cast(x + y) / 2 + unsafe_cast<int>(10 + 20) - sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3) * sizeof(int) + cast<int64>(10) + 20 * 20;
-int z = (const 10 + ((20)));
+int z = (10 + ((20)));
 int z = s[1:0];
 int s = a ? b : c;
 int k = p[3:3:a?b:c:3:3:3];

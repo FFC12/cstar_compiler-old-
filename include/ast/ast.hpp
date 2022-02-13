@@ -29,6 +29,8 @@ enum DeclKind {
   ImportVarDecl,
 
   FuncDecl,
+  ImportFuncDecl,
+  ExportFuncDecl,
   ProtoDecl,
   AttribDecl,
   MacroDecl,
