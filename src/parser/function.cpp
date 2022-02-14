@@ -108,13 +108,13 @@ param_again:
     auto nextToken = nextTokenInfo.getTokenKind();
     if (nextToken == TokenKind::STAR || nextToken == TokenKind::XOR) {
       // %100 defined type
-      auto type = this->advanceSymbol();
+      auto type = std::move(this->advanceSymbol());
       castAllowed = false;
 
       if (!isForwardDecl) {
         expected(TokenKind::IDENT);
         // get the param name
-        symbol0 = this->advanceSymbol();
+        symbol0 = std::move(this->advanceSymbol());
       }
 
       size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
@@ -177,7 +177,86 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
 
   while (!is(TokenKind::RBRACK)) {
     if (isType(currentTokenInfo()) || is(TokenKind::IDENT)) {
-      varDecl(VisibilitySpecifier::VIS_LOCAL, is(TokenKind::IDENT), true, &scope);
+      bool outOfSize = false;
+      auto nextTokenInfo = this->nextTokenInfo(outOfSize);
+      auto nextToken = nextTokenInfo.getTokenKind();
+      if (outOfSize) {
+        ParserError("Incomplete declaration or expression", currentTokenInfo());
+      }
+
+      size_t begin = currentTokenInfo().getTokenPositionInfo().begin;
+      size_t line = currentTokenInfo().getTokenPositionInfo().line;
+
+      if (nextToken == TokenKind::IDENT) {
+        varDecl(VisibilitySpecifier::VIS_LOCAL, is(TokenKind::IDENT), true,
+                &scope);
+      } else if (isShortcutOp(nextTokenInfo)) {
+        auto symbol = std::move(advanceSymbol());
+        auto shortcutOp = typeOfShortcutOp(currentTokenInfo());
+        auto shortcutOpStr = currentTokenStr();
+        auto expr = std::move(this->expression(false, 0, false, false, true));
+
+        expected(TokenKind::SEMICOLON);
+        this->advance();
+
+        size_t end = currentTokenInfo().getTokenPositionInfo().end;
+        SemanticLoc semanticLoc = SemanticLoc(begin, end, line);
+
+        auto assignmentExpr = std::make_unique<AssignmentAST>(
+            std::move(symbol), std::move(expr), shortcutOp, shortcutOpStr,
+            semanticLoc);
+
+        scope.emplace_back(std::move(assignmentExpr));
+      } else if (nextToken == LSQPAR) {
+        auto symbol = std::move(advanceSymbol());
+
+        expected(TokenKind::LSQPAR);
+
+        // advance '['
+        this->advance();
+
+        expected({TokenKind::SCALARI, TokenKind::IDENT});
+
+        std::vector<ASTNode> indexes{};
+        auto index = is(TokenKind::SCALARI) ? this->advanceConstantOrLiteral()
+                                            : this->advanceSymbol();
+        indexes.emplace_back(std::move(index));
+
+        while (is(TokenKind::COLON)) {
+          // advance ':'
+          this->advance();
+
+          expected({TokenKind::SCALARI, TokenKind::IDENT});
+
+          index = is(TokenKind::SCALARI) ? this->advanceConstantOrLiteral()
+                                         : this->advanceSymbol();
+
+          indexes.emplace_back(std::move(index));
+        }
+
+        expected(TokenKind::RSQPAR);
+        this->advance();
+
+        if (!isShortcutOp(currentTokenInfo())) {
+          ParserError("Unexpected token for assignment expression.",
+                      currentTokenInfo());
+        }
+
+        auto shortcutOp = typeOfShortcutOp(currentTokenInfo());
+        auto shortcutOpStr = currentTokenStr();
+        auto expr = std::move(this->expression(false, 0, false, false, true));
+
+        expected(TokenKind::SEMICOLON);
+        this->advance();
+
+        size_t end = currentTokenInfo().getTokenPositionInfo().end;
+        SemanticLoc semanticLoc = SemanticLoc(begin, end, line);
+
+        auto assignmentExpr = std::make_unique<AssignmentAST>(
+            std::move(symbol), std::move(expr), std::move(indexes), shortcutOp,
+            shortcutOpStr, semanticLoc);
+        scope.emplace_back(std::move(assignmentExpr));
+      }
     } else {
       while (is(TokenKind::LINEFEED) || is(TokenKind::COMMENT)) {
         advance();
@@ -216,16 +295,12 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         this->advance();
         scope.emplace_back(std::move(retAst));
       } else if (is(TokenKind::IF)) {
-//        std::vector<ASTNode> ifBody{};
         this->advanceIfStmt(scope);
-      } else if(is(TokenKind::LOOP)) {
+      } else if (is(TokenKind::LOOP)) {
         this->advanceLoopStmt(scope);
       }
 
-      // if - else
-      // loop
       // option
-      // ret
     }
   }
 

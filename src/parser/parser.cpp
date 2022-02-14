@@ -13,6 +13,10 @@ void CStarParser::parse() {
     assert(false && "Parser token stream is not enough to parse!\n");
   }
 
+  for(auto &node: this->m_AST) {
+    node->debugNode();
+  }
+
   this->parserStats();
 }
 
@@ -224,6 +228,58 @@ bool CStarParser::isTypeQualifier(const TokenInfo& token) {
       return true;
     default:
       return false;
+  }
+}
+
+bool CStarParser::isShortcutOp(const TokenInfo& token) {
+  switch (token.getTokenKind()) {
+    case PLUSEQ:
+    case MINUSEQ:
+    case STAREQ:
+    case DIVEQ:
+    case MODEQ:
+    case RSHIFTEQ:
+    case LSHIFTEQ:
+    case ANDEQ:
+    case OREQ:
+    case XOREQ:
+    case EQUAL:
+    case MOVEQ:
+      return true;
+    default:
+      return false;
+  }
+}
+
+ShortcutOp CStarParser::typeOfShortcutOp(const TokenInfo& token) {
+  switch (token.getTokenKind()) {
+    case PLUSEQ:
+      return S_PLUS;
+    case MINUSEQ:
+      return S_MIN;
+    case STAREQ:
+      return S_STA;
+    case DIVEQ:
+      return S_DIV;
+    case MODEQ:
+      return S_MOD;
+    case RSHIFTEQ:
+      return S_SHR;
+    case LSHIFTEQ:
+      return S_SHL;
+    case ANDEQ:
+      return S_AND;
+    case OREQ:
+      return S_OR;
+    case XOREQ:
+      return S_XOR;
+    case MOVEQ:
+      return S_MOV;
+    case EQUAL:
+      return S_NONE;
+    default:
+      assert(false && "Unreacheable!");
+      return S_NONE;
   }
 }
 

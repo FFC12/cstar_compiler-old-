@@ -1,31 +1,37 @@
-main() :: void {
-    int arr[2:2] = ((0,1),(2,3));  
-    int r = 20;
+main()::void {
+  int a = 10 + 30, b = 20;
+  int arr [2:2] = ((0, 1), (2, 3)), b = 30;
+  int r = 20;
 
-    r += 1;
-    r -= 1;
-    r >>= 1;
-    r <<= 1;
-    r /= 20;
-    r *= 3;
-    r = 20;
-    
-    arr[0:1] = 3;
-    arr[1] = 2;
-    arr[2] += 3;
-    
-    loop(data in arr){ // this could be an array or Iterable
-        float p = 12.324;
-        if(x > 10) {
-            int i = 20;
-            i += 3;
-            r = 30;
-        } else {
-            int k = 35;
-            k -= 2;
-            k = 40;
-        }
+  r += 1;
+  r -= 1;
+  r >>= 1;
+  r <<= 1;
+  r /= 20 + unsafe_cast<int32>(a + b) + (cast<int>(5) + cast<int32>(3));
+  r &= 1;
+  r |= 2;
+  r ^= 2;
+  r %= 4;
+  r *= 3;
+  r.= a;
+  r = 20;
+
+  arr [a:b] = 3;
+  arr[1] = 2;
+  arr[2] += 3;
+
+  loop(index,data in arr) {  // this could be an array or Iterable
+    float p = 12.324;
+    if (x > 10) {
+      int i = 20;
+      i += 3;
+      r = 30;
+    } else {
+      int k = 35;
+      k -= 2;
+      k = 40;
     }
-    
-    ret;
+  }
+
+  ret;
 }

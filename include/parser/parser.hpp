@@ -2,6 +2,7 @@
 #define PARSER_HPP
 #include <ast/ast.hpp>
 #include <ast/if_stmt.hpp>
+#include <ast/assignment_ast.hpp>
 #include <ast/loop_stmt.hpp>
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
@@ -55,6 +56,9 @@ class CStarParser {
 
   // CONST, CONSTREF ,...
   bool isTypeQualifier(const TokenInfo& token);
+
+  // '+=', '-=', ...
+  bool isShortcutOp(const TokenInfo& token);
 
   // Is it what we look for?
   bool is(TokenKind token) noexcept {
@@ -199,6 +203,7 @@ class CStarParser {
 
   // parser.cpp
   void translationUnit();
+  ShortcutOp typeOfShortcutOp(const TokenInfo& token);
   Type typeOf(const TokenInfo& token);
   TypeQualifier typeQualifierOf(const TokenInfo& tokenInfo);
   void ParserHint(std::string mesg, TokenInfo tokenInfo);
@@ -234,7 +239,7 @@ class CStarParser {
   bool isCastOp();
   ASTNode reduceExpression(std::deque<ASTNode>& exprBucket,
                            OpPrecBucket& opPrecBucket);
-  ASTNode expression(bool isSubExpr, int opFor = 0, bool isRet = false, bool typeFlag = false);
+  ASTNode expression(bool isSubExpr, int opFor = 0, bool isRet = false, bool typeFlag = false, bool isAssignment = false);
   ASTNode advanceConstantOrLiteral();
   ASTNode advanceType();
   ASTNode advanceSymbol();
@@ -338,6 +343,7 @@ class CStarParser {
   }
 
   void parse();
+
 };
 
 #endif

@@ -12,6 +12,15 @@ class RetAST : public IAST {
     this->m_ASTKind = ASTKind::Expr;
     this->m_ExprKind = ExprKind::RetExpr;
   }
+
+  void debugNode() override {
+    std::cout << "ret";
+
+    if (!m_NoReturn) {
+      std::cout << " ";
+      this->m_RetExpr->debugNode();
+    }
+  }
 };
 
 #endif

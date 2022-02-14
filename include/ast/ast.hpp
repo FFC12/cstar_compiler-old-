@@ -67,6 +67,7 @@ class IAST {
   virtual void debugNode() { std::cout << "Root\n"; };
 
   ExprKind getExprKind() const { return this->m_ExprKind; }
+  ASTKind getASTKind() const { return this->m_ASTKind; }
   // we'll change the return-type by LLVM types
   // or our self codegenerator type
 };

@@ -34,7 +34,7 @@ bool CStarParser::isCastOp() {
 // 2 - ? :
 // 3 - [ ]
 ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
-                                bool typeFlag) {
+                                bool typeFlag, bool isAssignment) {
   // advance EQUAL or last expr before it came here if subexpr
   this->advance();
 
@@ -107,8 +107,9 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       }
 
       if (is(TokenKind::COMMA) && !isSubExpr &&
-          (this->prevTokenKind() == TokenKind::EQUAL ||
-           (this->prevTokenKind() == TokenKind::RET && isRet))) {
+              (this->prevTokenKind() == TokenKind::EQUAL ||
+               (this->prevTokenKind() == TokenKind::RET && isRet)) ||
+          (isShortcutOp(this->prevTokenInfo()) && isAssignment)) {
         ParserError(std::string("Unexpected token '") +
                         tokenToStr(currentTokenKind()) + "'",
                     currentTokenInfo());
@@ -131,7 +132,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
         typeOpFlag = false;
 
       if ((this->prevTokenKind() == TokenKind::EQUAL ||
-           (this->prevTokenKind() == TokenKind::RET && isRet)))
+           (this->prevTokenKind() == TokenKind::RET && isRet) ||
+           (isShortcutOp(this->prevTokenInfo()) && isAssignment)))
         goto jump_unary_paranthesis;
       parenthesesPos.push_back(currentTokenInfo().getTokenPositionInfo().begin);
 
@@ -314,7 +316,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       lastTypeAttribPos = i;
       typeOpFlag = true;
       if ((this->prevTokenKind() == TokenKind::EQUAL ||
-           (this->prevTokenKind() == TokenKind::RET && isRet)) &&
+           (this->prevTokenKind() == TokenKind::RET && isRet) ||
+           (isShortcutOp(this->prevTokenInfo()) && isAssignment)) &&
           (!isCastableOperator(prevTokenInfo()) ||
            this->prevTokenKind() != IDENT))
         ParserError("Unexpected token '" +
@@ -338,8 +341,9 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       if (isType(currentTokenInfo())) clearType = true;
       if (is(TokenKind::IDENT)) isIdent = true;
 
-      auto typeOrSymbol =
-          clearType ? this->advanceType() : (isIdent ? this->advanceSymbol() : nullptr);
+      auto typeOrSymbol = clearType
+                              ? this->advanceType()
+                              : (isIdent ? this->advanceSymbol() : nullptr);
 
       bool outOfSize = false;
       auto nextToken = nextTokenInfo(outOfSize).getTokenKind();
@@ -352,7 +356,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
         lastTypeAttribPos = i;
         typeOpFlag = true;
         this->advance();
-        //auto typeAst = this->expression(true, 0, false, typeOpFlag);
+        // auto typeAst = this->expression(true, 0, false, typeOpFlag);
         exprBucket.push_back(std::move(typeOrSymbol));
       } else {
         // well we're sure this is not binary op for the type attrib
@@ -679,6 +683,9 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
       UnaryNotationSign unaryNotationSign = UnaryNotationSign::S_POS;
 
       switch (op.entryTokenKind()) {
+        case TokenKind::TILDE:
+          unaryOpKind = UnaryOpKind::U_BINNEG;
+          break;
         case TokenKind::SIZEOF:
           unaryOpKind = UnaryOpKind::U_SIZEOF;
           break;
@@ -711,9 +718,6 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
           break;
         case TokenKind::NOT:
           unaryOpKind = UnaryOpKind::U_NOT;
-          break;
-        case TokenKind::XOR:
-          unaryOpKind = UnaryOpKind::U_XOR;
           break;
         case TokenKind::DEREF:
         case TokenKind::STAR:

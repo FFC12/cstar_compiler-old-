@@ -14,13 +14,13 @@ class IfStmtAST : public IAST {
   bool m_HasElse = false;
 
  public:
-  IfStmtAST(ConditionBlock cond, SemanticLoc& semLoc)
+  IfStmtAST(ConditionBlock&& cond, SemanticLoc& semLoc)
       : IAST(semLoc), m_Cond(std::move(cond)) {
     this->m_ASTKind = ASTKind::Stmt;
     this->m_StmtKind = StmtKind::IfStmt;
   }
 
-  IfStmtAST(ConditionBlock cond, Scope&& elsePart, SemanticLoc& semLoc)
+  IfStmtAST(ConditionBlock&& cond, Scope&& elsePart, SemanticLoc& semLoc)
       : IAST(semLoc), m_Cond(std::move(cond)), m_Else(std::move(elsePart)) {
     this->m_HasElse = true;
 
@@ -47,6 +47,44 @@ class IfStmtAST : public IAST {
 
     this->m_ASTKind = ASTKind::Stmt;
     this->m_StmtKind = StmtKind::IfStmt;
+  }
+
+  void debugNode() override {
+    std::cout << "if(";
+    if(!this->m_Cond.empty()) {
+      for (auto& c : this->m_Cond) {
+        c.first->debugNode();
+        std::cout << "){\n";
+        for (auto& s : c.second) {
+          s->debugNode();
+          if(s->getASTKind() != ASTKind::Stmt)
+            std::cout << ";\n";
+        }
+        std::cout << "\n}\n";
+      }
+    }
+
+    if(m_HasElif) {
+      for (auto& c : this->m_Cond) {
+        std::cout << "elif(";
+        c.first->debugNode();
+        std::cout << "){\n";
+        for (auto& s : c.second) {
+          s->debugNode();
+        }
+        std::cout << "\n}\n";
+      }
+    }
+
+    if(m_HasElse) {
+      std::cout << "else{\n";
+      for(auto& s: this->m_Else){
+        s->debugNode();
+        if(s->getASTKind() != ASTKind::Stmt)
+          std::cout << ";\n";
+      }
+      std::cout << "\n}\n";
+    }
   }
 };
 #endif

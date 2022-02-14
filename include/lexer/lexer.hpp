@@ -103,6 +103,7 @@ enum TokenKind {
   SIZEOF,
   TYPEOF,
   MOVE,
+  MOVEQ,
   I8,
   I16,
   I32,
@@ -748,6 +749,8 @@ class CStarLexer {
             return TRIPLET;
           }
           return RANGE;
+        } else if (lookAhead('=')) {
+          return MOVEQ;
         }
         return DOT;
       case ',':
@@ -1001,8 +1004,8 @@ class CStarLexer {
         return "!=";
       case TILDE:
         return "~";
-      case TILDEEQ:
-        return "~=";
+      case MOVEQ:
+        return ".=";
       case LAND:
         return "&&";
       case AND:

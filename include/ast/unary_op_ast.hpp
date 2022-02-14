@@ -11,9 +11,9 @@ enum UnaryOpKind {
   U_POSITIVE,
   U_NEGATIVE,
   U_NOT,
-  U_XOR,
   U_DEREF,
-  U_REF
+  U_REF,
+  U_BINNEG,
 };
 
 // This is for sign of prefix
@@ -71,9 +71,8 @@ class UnaryOpAST : public IAST {
         std::cout << "!";
         needPar = false;
         break;
-      case U_XOR:
+      case U_BINNEG:
         std::cout << "~";
-        needPar = false;
         break;
       case U_DEREF:
         std::cout << "deref";

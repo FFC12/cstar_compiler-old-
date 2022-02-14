@@ -9,7 +9,7 @@ void CStarParser::advanceLoopStmt(std::vector<ASTNode> &scope) {
 
   expected(TokenKind::LPAREN);
 
-  ASTNode min, max;
+  ASTNode min, max, indexSymbol, dataSymbol;
   ASTNode iterSymbol, cond;
   bool rangeLoop = false;
   bool hasNumericRange = false;
@@ -32,9 +32,10 @@ void CStarParser::advanceLoopStmt(std::vector<ASTNode> &scope) {
   if (nextToken == TokenKind::IDENT && nextToken2 == TokenKind::IN) {
     // advance '('
     this->advance();
-    expected(TokenKind::IDENT);
 
-    this->advance();
+    expected(TokenKind::IDENT);
+    dataSymbol = std::move(this->advanceSymbol());
+
     expected(TokenKind::IN);
 
   sequence:
@@ -93,9 +94,7 @@ void CStarParser::advanceLoopStmt(std::vector<ASTNode> &scope) {
       this->advance();
 
       expected(TokenKind::IDENT);
-
-      // advance ident
-      this->advance();
+      indexSymbol = std::move(this->advanceSymbol());
 
       expected(TokenKind::COMMA);
 
@@ -103,9 +102,7 @@ void CStarParser::advanceLoopStmt(std::vector<ASTNode> &scope) {
       this->advance();
 
       expected(TokenKind::IDENT);
-
-      // advance ident
-      this->advance();
+      dataSymbol = std::move(this->advanceSymbol());
 
       indexable = true;
       goto sequence;
@@ -125,7 +122,8 @@ not_conditional:
   this->advanceScope(loopBody);
 
   auto loopAst = std::make_unique<LoopStmtAST>(
-      std::move(cond), std::move(iterSymbol), std::move(min), std::move(max),
+      std::move(cond), std::move(indexSymbol), std::move(dataSymbol),
+      std::move(iterSymbol), std::move(min), std::move(max),
       std::move(loopBody), rangeLoop, hasNumericRange, indexable, semanticLoc);
 
   scope.emplace_back(std::move(loopAst));

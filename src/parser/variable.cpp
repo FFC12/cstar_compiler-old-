@@ -21,12 +21,15 @@ void CStarParser::varDecl(VisibilitySpecifier visibilitySpecifier,
 not_needed_type:
   ASTNode rhs = nullptr, arrayRhs;
   size_t indirectionLevel = 0;
+  bool isUnique = false;
 
   //* | ^
   // TODO: while -> if
   while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
     indirectionLevel =
         advancePointerType(this->currentTokenKind() == TokenKind::XOR);
+
+    if (this->currentTokenKind() == TokenKind::XOR) isUnique = true;
     // std::cout << "Indirection level: " << indirection_level << "\n";
   }
 
@@ -92,7 +95,7 @@ not_needed_type:
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));
     auto ast = std::make_unique<VarAST>(
         name, std::move(rhs), type, visibilitySpecifier, indirectionLevel,
-        isLocal, arrayFlag, std::move(arrayDimensions), semLoc);
+        isUnique, isLocal, arrayFlag, std::move(arrayDimensions), semLoc);
 
     ast->setDeclKind(getDeclKind(visibilitySpecifier));
 
@@ -115,7 +118,7 @@ not_needed_type:
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));
     auto ast = std::make_unique<VarAST>(
         name, std::move(rhs), type, visibilitySpecifier, indirectionLevel,
-        isLocal, arrayFlag, std::move(arrayDimensions), semLoc);
+        isUnique, isLocal, arrayFlag, std::move(arrayDimensions), semLoc);
 
     ast->setDeclKind(getDeclKind(visibilitySpecifier));
 
