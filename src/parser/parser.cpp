@@ -280,6 +280,7 @@ Type CStarParser::typeOf(const TokenInfo& token) {
       //   return Type::T_DEFINED;
     default:
       assert(false && "Unreacheable");
+      return Type::T_VOID;
   }
 }
 
@@ -295,6 +296,7 @@ TypeQualifier CStarParser::typeQualifierOf(const TokenInfo& tokenInfo) {
       return TypeQualifier::Q_READONLY;
     default:
       assert(false && "Unreacheable!");
+      return TypeQualifier::Q_NONE;
   }
 }
 

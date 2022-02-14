@@ -177,9 +177,7 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
 
   while (!is(TokenKind::RBRACK)) {
     if (isType(currentTokenInfo()) || is(TokenKind::IDENT)) {
-      auto localVar =
-          varDecl(VisibilitySpecifier::VIS_LOCAL, is(TokenKind::IDENT), true);
-      scope.emplace_back(std::move(localVar));
+      varDecl(VisibilitySpecifier::VIS_LOCAL, is(TokenKind::IDENT), true, &scope);
     } else {
       while (is(TokenKind::LINEFEED) || is(TokenKind::COMMENT)) {
         advance();

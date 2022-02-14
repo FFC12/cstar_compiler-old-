@@ -209,8 +209,8 @@ class CStarParser {
                                       size_t& rlend, size_t& offset);
 
   // variable.cpp
-  ASTNode varDecl(VisibilitySpecifier visibilitySpecifier, bool definedType,
-                  bool isLocal);
+  void varDecl(VisibilitySpecifier visibilitySpecifier, bool definedType,
+                  bool isLocal, std::vector<ASTNode>* scope = nullptr);
   DeclKind getDeclKind(VisibilitySpecifier visibilitySpecifier);
   ASTNode initializer();
   ASTNode initializerList();

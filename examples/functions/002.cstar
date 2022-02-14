@@ -1,8 +1,13 @@
 main() :: void {
-    int32 arr[2] = (0,1);
+    int32 arr[2:2] = ((0,1),(2,3));
 
     loop(data in arr){ // this could be an array or Iterable
-
+        float p = 12.324;
+        if(x > 10) {
+            int i = 20;
+        } else {
+            int k = 35;
+        }
     }
     
     loop(index,data in arr) {

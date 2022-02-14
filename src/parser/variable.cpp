@@ -1,7 +1,8 @@
 #include <parser/parser.hpp>
 
-ASTNode CStarParser::varDecl(VisibilitySpecifier visibilitySpecifier,
-                             bool isDefinedType, bool isLocal) {
+void CStarParser::varDecl(VisibilitySpecifier visibilitySpecifier,
+                          bool isDefinedType, bool isLocal,
+                          std::vector<ASTNode>* scope) {
   TypeSpecifier type = TypeSpecifier::SPEC_I8;
 
   if (isDefinedType) {
@@ -95,12 +96,11 @@ not_needed_type:
 
     ast->setDeclKind(getDeclKind(visibilitySpecifier));
 
-    this->advance();
-    // Will be pushed into the AST that VarAST
-    if (isLocal)
-      return std::move(ast);
-    else
-      this->m_AST.push_back(std::move(ast));
+    if (isLocal) {
+      scope->emplace_back(std::move(ast));
+    } else {
+      this->m_AST.emplace_back(std::move(ast));
+    }
 
     // advance to next symbol
     goto not_needed_type;
@@ -120,11 +120,11 @@ not_needed_type:
     ast->setDeclKind(getDeclKind(visibilitySpecifier));
 
     this->advance();
-    // Will be pushed into the AST that VarAST
-    if (isLocal)
-      return std::move(ast);
-    else
-      this->m_AST.push_back(std::move(ast));
+    if (isLocal) {
+      scope->emplace_back(std::move(ast));
+    } else {
+      this->m_AST.emplace_back(std::move(ast));
+    }
   }
 }
 
