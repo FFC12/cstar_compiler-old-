@@ -1,3 +1,4 @@
+
 export func(constref x int&, int* p, float^ s, p int*, k int) :: int32& {
     bool y = false;
 }

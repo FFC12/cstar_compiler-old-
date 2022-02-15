@@ -13,9 +13,9 @@ void CStarParser::parse() {
     assert(false && "Parser token stream is not enough to parse!\n");
   }
 
-  for(auto &node: this->m_AST) {
+  /*for(auto &node: this->m_AST) {
     node->debugNode();
-  }
+  }*/
 
   this->parserStats();
 }
@@ -212,7 +212,7 @@ bool CStarParser::isLinkageMark(const TokenInfo& token) {
 
 bool CStarParser::isPackageMark(const TokenInfo& token) {
   switch (token.getTokenKind()) {
-    case PACKAGE:
+    case INCLUDE:
       return true;
     default:
       return false;
@@ -377,10 +377,10 @@ void CStarParser::ParserHint(std::string mesg, TokenInfo tokenInfo) {
 
   // message header
   messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + BWHT "\x20 hint: " RESET +
+                   std::to_string(tok_begin + 1) + BWHT "\x20 hint: " RES +
                    mesg + "\n";
 
-  std::cout << BLU + messageHeader + RESET;
+  std::cout << BLU + messageHeader + RES;
 
   // line beginning
   std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
@@ -415,7 +415,7 @@ void CStarParser::ParserHint(std::string mesg, TokenInfo tokenInfo) {
       putchar('\x20');
     }
   }
-  std::cout << RESET;
+  std::cout << RES;
   std::cout << std::endl << std::endl;
 }
 
@@ -441,10 +441,10 @@ void CStarParser::ParserHint(std::string mesg, TokenInfo tokenInfo,
 
   // message header
   messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + BWHT "\x20 hint: " RESET +
+                   std::to_string(tok_begin + 1) + BWHT "\x20 hint: " RES +
                    mesg + "\n";
 
-  std::cout << BLU + messageHeader + RESET;
+  std::cout << BLU + messageHeader + RES;
 
   // line beginning
   std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
@@ -479,7 +479,7 @@ void CStarParser::ParserHint(std::string mesg, TokenInfo tokenInfo,
       putchar('\x20');
     }
   }
-  std::cout << RESET;
+  std::cout << RES;
   std::cout << std::endl << std::endl;
 }
 
@@ -507,10 +507,10 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo) {
 
   // message header
   messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + RED "\x20 error: " RESET +
+                   std::to_string(tok_begin + 1) + REDISH "\x20 error: " RES +
                    mesg + "\n";
 
-  std::cout << BLU + messageHeader + RESET;
+  std::cout << BLU + messageHeader + RES;
 
   // line beginning
   std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
@@ -545,7 +545,7 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo) {
       putchar('\x20');
     }
   }
-  std::cout << RESET;
+  std::cout << RES;
   std::cout << std::endl << std::endl;
 
   exit(1);
@@ -574,10 +574,10 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo,
 
   // message header
   messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + RED "\x20 error: " RESET +
+                   std::to_string(tok_begin + 1) + REDISH "\x20 error: " RES +
                    mesg + "\n";
 
-  std::cout << BLU + messageHeader + RESET;
+  std::cout << BLU + messageHeader + RES;
 
   // line beginning
   std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
@@ -612,7 +612,7 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo,
       putchar('\x20');
     }
   }
-  std::cout << RESET;
+  std::cout << RES;
   std::cout << std::endl << std::endl;
 
   exit(1);

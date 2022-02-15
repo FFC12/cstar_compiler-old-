@@ -1,5 +1,6 @@
 #include <stdlib.h>  // for realpath
 
+#include <codegen/codegen.hpp>
 #include <fstream>
 #include <iostream>
 #include <lexer/lexer.hpp>
@@ -19,16 +20,16 @@ int main(int argc, char** argv) {
       "      __\\///\\\\\\__________\\///__\\/\\\\\\_\\///__  \n"
       "       ____\\////\\\\\\\\\\\\\\\\\\_______\\///________ \n"
       "        _______\\/////////___Author: FFC12____\n"
-      "" RESET "\n\n";
+      "" RES "\n\n";
 
-  std::cout << RED
-      "[!] " RESET CYN
+  std::cout << REDISH
+      "[!] " RES CYN
       "This version of the compiler is not ready to use in production stage. \n"
       "Be aware of this may cause to bugs. And if you encountered an "
       "unexpected \n"
       "error or behaviour please let me know by fatihsaika@gmail.com or feel "
       "free \n"
-      "to open an issue on Github!\n\n" RESET;
+      "to open an issue on Github!\n\n" RES;
 
   if (argc > 1) {
     char* relativePath = argv[1];
@@ -38,13 +39,19 @@ int main(int argc, char** argv) {
     std::stringstream ss;
     ss << file.rdbuf();
 
-    // Initialize unique_ptr
-    const std::shared_ptr<char> realPath(realpath(relativePath, NULL));
+    auto realPath = realpath(relativePath, nullptr);
+    auto realPathStr = std::string(realPath);
 
-    CStarLexer lexer(ss.str(), realPath);
+    // Initialize unique_ptr
+    const std::shared_ptr<char> realPathPtr(realPath);
+
+    CStarLexer lexer(ss.str(), realPathPtr);
     CStarParser parser(std::move(lexer));
-    parser.parse();
-    std::cout << GRN "======= COMPILATION FINISHED =====" << RESET << "\n\n";
+    CStarCodegen codegen(std::move(parser), realPathStr);
+    codegen.build();
+    // codegen.printAST();
+
+    std::cout << GRN "======= COMPILATION FINISHED =====" << RES << "\n\n";
 
   } else {
     LogError("No argument specified!\n");

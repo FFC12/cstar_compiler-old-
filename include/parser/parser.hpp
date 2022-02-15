@@ -1,13 +1,13 @@
 #ifndef PARSER_HPP
 #define PARSER_HPP
-#include <ast/ast.hpp>
-#include <ast/if_stmt.hpp>
 #include <ast/assignment_ast.hpp>
-#include <ast/loop_stmt.hpp>
+#include <ast/ast.hpp>
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
 #include <ast/func_ast.hpp>
 #include <ast/func_call_ast.hpp>
+#include <ast/if_stmt.hpp>
+#include <ast/loop_stmt.hpp>
 #include <ast/param_ast.hpp>
 #include <ast/ret_ast.hpp>
 #include <ast/scalar_ast.hpp>
@@ -25,7 +25,6 @@
 #include <parser/type_specifiers.hpp>
 #include <parser/visibility_specifiers.hpp>
 #include <queue>
-
 
 class CStarParser {
   PrecedenceInfoTable m_PrecTableUnary, m_PrecTableBinary, m_PrecTableCast;
@@ -51,7 +50,7 @@ class CStarParser {
   // IMPORT, EXPORT, STATIC
   bool isLinkageMark(const TokenInfo& token);
 
-  // PACKAGE, PACKAGE INVOLVED
+  // INCLUDE, INCLUDE INVOLVED
   bool isPackageMark(const TokenInfo& token);
 
   // CONST, CONSTREF ,...
@@ -215,7 +214,7 @@ class CStarParser {
 
   // variable.cpp
   void varDecl(VisibilitySpecifier visibilitySpecifier, bool definedType,
-                  bool isLocal, std::vector<ASTNode>* scope = nullptr);
+               bool isLocal, std::vector<ASTNode>* scope = nullptr);
   DeclKind getDeclKind(VisibilitySpecifier visibilitySpecifier);
   ASTNode initializer();
   ASTNode initializerList();
@@ -239,7 +238,8 @@ class CStarParser {
   bool isCastOp();
   ASTNode reduceExpression(std::deque<ASTNode>& exprBucket,
                            OpPrecBucket& opPrecBucket);
-  ASTNode expression(bool isSubExpr, int opFor = 0, bool isRet = false, bool typeFlag = false, bool isAssignment = false);
+  ASTNode expression(bool isSubExpr, int opFor = 0, bool isRet = false,
+                     bool typeFlag = false, bool isAssignment = false);
   ASTNode advanceConstantOrLiteral();
   ASTNode advanceType();
   ASTNode advanceSymbol();
@@ -248,7 +248,7 @@ class CStarParser {
 
   void parserStats() const {
     time_t endTime = time(nullptr);
-    std::cout << GRN "======= Syntantic Analysis =======" RESET << std::endl;
+    std::cout << GRN "======= Syntantic Analysis =======" RES << std::endl;
     double dif = difftime(endTime, this->m_StartTime);
     printf("-  Elapsed time : %.2lf seconds\n", dif);
   }
@@ -320,17 +320,17 @@ class CStarParser {
     addToPrecTable(OpType::OP_BINARY, LOR, 2, true);
 
     //    addToPrecTable(OpType::OP_BINARY, EQUAL, 1, false);
-   /* addToPrecTable(OpType::OP_BINARY, PLUSEQ, 1, false);
-    addToPrecTable(OpType::OP_BINARY, MINUSEQ, 1, false);
-    addToPrecTable(OpType::OP_BINARY, STAREQ, 1, false);
-    addToPrecTable(OpType::OP_BINARY, DIVEQ, 1, false);
-    addToPrecTable(OpType::OP_BINARY, MODEQ, 1, false);
-    addToPrecTable(OpType::OP_BINARY, LSHIFTEQ, 1, false);
-    addToPrecTable(OpType::OP_BINARY, RSHIFTEQ, 1, false);
-    addToPrecTable(OpType::OP_BINARY, ANDEQ, 1, false);
-    addToPrecTable(OpType::OP_BINARY, XOREQ, 1, false);
-    addToPrecTable(OpType::OP_BINARY, OREQ, 1, false);
-    */
+    /* addToPrecTable(OpType::OP_BINARY, PLUSEQ, 1, false);
+     addToPrecTable(OpType::OP_BINARY, MINUSEQ, 1, false);
+     addToPrecTable(OpType::OP_BINARY, STAREQ, 1, false);
+     addToPrecTable(OpType::OP_BINARY, DIVEQ, 1, false);
+     addToPrecTable(OpType::OP_BINARY, MODEQ, 1, false);
+     addToPrecTable(OpType::OP_BINARY, LSHIFTEQ, 1, false);
+     addToPrecTable(OpType::OP_BINARY, RSHIFTEQ, 1, false);
+     addToPrecTable(OpType::OP_BINARY, ANDEQ, 1, false);
+     addToPrecTable(OpType::OP_BINARY, XOREQ, 1, false);
+     addToPrecTable(OpType::OP_BINARY, OREQ, 1, false);
+     */
     addToPrecTable(OpType::OP_BINARY, COMMA, 1, false);
 
     // ternary op
@@ -343,7 +343,9 @@ class CStarParser {
   }
 
   void parse();
-
+  void ownedAST(std::vector<ASTNode>& newOwner) {
+    newOwner = std::move(this->m_AST);
+  }
 };
 
 #endif

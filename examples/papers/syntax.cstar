@@ -191,7 +191,7 @@ example5(int32* ptr) :: any {
 }
 
 
-example6(readonly char* str) async ::  any {
+example6(readonly char* str) async :: any {
     bool success = await a_function_must_be_awaited();
     ret success ? str : "not succeded!";
 }

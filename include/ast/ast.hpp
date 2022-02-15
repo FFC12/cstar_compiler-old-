@@ -2,6 +2,8 @@
 #define AST_HPP
 #include <iostream>
 
+class Visitor;
+
 enum ASTKind {
   Expr,
   Stmt,
@@ -54,6 +56,8 @@ struct SemanticLoc {
 };
 
 class IAST {
+  friend Visitor;
+
  protected:
   ASTKind m_ASTKind;
   ExprKind m_ExprKind;
@@ -66,10 +70,8 @@ class IAST {
 
   virtual void debugNode() { std::cout << "Root\n"; };
 
-  ExprKind getExprKind() const { return this->m_ExprKind; }
-  ASTKind getASTKind() const { return this->m_ASTKind; }
-  // we'll change the return-type by LLVM types
-  // or our self codegenerator type
+  [[nodiscard]] ExprKind getExprKind() const { return this->m_ExprKind; }
+  [[nodiscard]] ASTKind getASTKind() const { return this->m_ASTKind; }
 };
 
 #include <memory>

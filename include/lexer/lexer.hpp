@@ -89,7 +89,7 @@ enum TokenKind {
   ELSE,
   REF,
   DEREF,
-  PACKAGE,
+  INCLUDE,
   INVOLVED,
   OPTION,
   LOOP,
@@ -289,7 +289,7 @@ class CStarLexer {
  public:
   // Potentially big buffers will be passed here so let it moved by move
   // semantics...
-  CStarLexer(const std::string &&pBuffer, const std::shared_ptr<char> realpath)
+  CStarLexer(const std::string &&pBuffer, const std::shared_ptr<char>& realpath)
       : m_IsKeyword(false),
         m_Index(0),
         m_LastBegin(0),
@@ -487,8 +487,8 @@ class CStarLexer {
       return REF;
     else if (ident == "deref")
       return DEREF;
-    else if (ident == "package")
-      return PACKAGE;
+    else if (ident == "include")
+      return INCLUDE;
     else if (ident == "involved")
       return INVOLVED;
     else if (ident == "option")
@@ -497,8 +497,6 @@ class CStarLexer {
       return LOOP;
     else if (ident == "default")
       return DEFAULT;
-    else if (ident == "extern")
-      return EXTERN;
     else if (ident == "from")
       return FROM;
     else if (ident == "import")
@@ -579,8 +577,6 @@ class CStarLexer {
       return PROTO;
     else if (ident == "enum")
       return ENUM;
-    else if (ident == "for")
-      return FOR;
     else if (ident == "break")
       return BREAK;
     else if (ident == "continue")
@@ -1043,7 +1039,7 @@ class CStarLexer {
 
   void lexerStats() const {
     time_t endTime = time(nullptr);
-    std::cout << GRN "======= Lexical Analysis =======" RESET << std::endl;
+    std::cout << GRN "======= Lexical Analysis =======" RES << std::endl;
     double dif = difftime(endTime, this->m_StartTime);
     printf("-  Elapsed time : %.2lf seconds\n", dif);
     std::cout << "-  Total LoC    : " << this->m_Line + 1 << std::endl

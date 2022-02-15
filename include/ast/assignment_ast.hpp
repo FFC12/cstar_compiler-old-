@@ -2,6 +2,7 @@
 #define ASSIGNMENT_AST_HPP
 #include <ast/ast.hpp>
 #include <memory>
+#include <vector>
 
 enum ShortcutOp {
   S_PLUS,
