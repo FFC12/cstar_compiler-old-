@@ -22,6 +22,7 @@ enum UnaryOpKind {
 enum UnaryNotationSign { S_POS, S_NEG };
 
 class UnaryOpAST : public IAST {
+  friend Visitor;
   ASTNode m_Node;
   UnaryOpKind m_UnaryOpKind;
   UnaryNotationSign m_UnaryNotationSign;

@@ -20,6 +20,7 @@ enum ShortcutOp {
 };
 
 class AssignmentAST : public IAST {
+  friend Visitor;
   ASTNode m_LHS;  // SymbolAST
   ASTNode m_RHS;
   bool m_Subscriptable;

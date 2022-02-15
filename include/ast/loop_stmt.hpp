@@ -4,6 +4,7 @@
 #include <vector>
 
 class LoopStmtAST : public IAST {
+  friend Visitor;
   std::vector<ASTNode> m_Scope;
   ASTNode m_Min, m_Max, m_IndexSymbol, m_DataSymbol;
   ASTNode m_IterSymbol;

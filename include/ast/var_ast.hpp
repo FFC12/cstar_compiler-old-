@@ -8,6 +8,7 @@
 #include <string>
 
 class VarAST : public IAST {
+  friend Visitor;
   TypeSpecifier m_TypeSpec;
   VisibilitySpecifier m_VisibilitySpec;
   std::string m_Name;

@@ -4,6 +4,7 @@
 #include <string>
 
 class FuncCallAST : public IAST {
+  friend Visitor;
   ASTNode m_FuncSymbol;
   ASTNode m_TypeAttrib;
   ASTNode m_Args;

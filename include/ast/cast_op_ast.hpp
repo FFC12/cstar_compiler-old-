@@ -5,6 +5,7 @@
 enum CastOpKind { C_UNSAFE_CAST, C_CAST, C_AS };
 
 class CastOpAST : public IAST {
+  friend Visitor;
   ASTNode m_Node, m_TypeNode;
   CastOpKind m_CastOpKind;
   bool m_HasTypeAttrib;

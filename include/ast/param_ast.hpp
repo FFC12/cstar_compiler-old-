@@ -4,6 +4,7 @@
 #include <parser/type_qualifier.hpp>
 
 class ParamAST : public IAST {
+  friend Visitor;
   ASTNode m_Symbol0, m_Symbol1;
   ASTNode m_TypeNode;
   TypeQualifier m_TypeQualifier;

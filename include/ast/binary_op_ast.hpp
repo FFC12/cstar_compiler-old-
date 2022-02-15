@@ -31,7 +31,7 @@ enum BinOpKind {
 };
 
 class BinaryOpAST : public IAST {
- protected:
+  friend Visitor;
   ASTNode m_LHS, m_RHS, m_Extra;
   BinOpKind m_BinOpKind;
   std::string m_Op;

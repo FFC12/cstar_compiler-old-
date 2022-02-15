@@ -4,6 +4,7 @@
 #include <vector>
 
 class FuncAST : public IAST {
+  friend Visitor;
   std::string m_FuncName;
   ASTNode m_RetType;
   std::vector<ASTNode> m_Params;

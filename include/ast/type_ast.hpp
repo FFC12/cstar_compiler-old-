@@ -33,6 +33,7 @@ enum Type {
 };
 
 class TypeAST : public IAST {
+  friend Visitor;
   Type m_TypeSpec;
   ASTNode m_Symbol;
   size_t m_IndirectLevel;

@@ -3,6 +3,7 @@
 #include <ast/ast.hpp>
 
 class RetAST : public IAST {
+  friend Visitor;
   ASTNode m_RetExpr;
   bool m_NoReturn;
 

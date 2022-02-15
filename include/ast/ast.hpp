@@ -56,9 +56,8 @@ struct SemanticLoc {
 };
 
 class IAST {
-  friend Visitor;
-
  protected:
+  friend Visitor;
   ASTKind m_ASTKind;
   ExprKind m_ExprKind;
   StmtKind m_StmtKind;

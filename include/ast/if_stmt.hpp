@@ -8,6 +8,7 @@ using Scope = std::vector<ASTNode>;
 using ConditionBlock = std::map<ASTNode, Scope>;
 
 class IfStmtAST : public IAST {
+  friend Visitor;
   ConditionBlock m_Cond, m_ElseIfs;
   Scope m_Else;
   bool m_HasElif = false;

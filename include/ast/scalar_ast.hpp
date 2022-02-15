@@ -7,6 +7,7 @@
 
 // It's just a scalar or constant primitive value like 10, 1.04f, true
 class ScalarAST : public IAST {
+  friend Visitor;
   std::string m_Value;
   bool m_IsFloat;
   bool m_IsIntegral;

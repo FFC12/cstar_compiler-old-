@@ -37,6 +37,20 @@ class Visitor {
   void visit(ScalarAST& scalarAst);
   void visit(SymbolAST& symbolAst);
 
+  void previsit(VarAST& varAst);
+  void previsit(AssignmentAST& assignmentAst);
+  void previsit(BinaryOpAST& binaryOpAst);
+  void previsit(CastOpAST& castOpAst);
+  void previsit(FuncAST& funcAst);
+  void previsit(FuncCallAST& funcCallAst);
+  void previsit(IfStmtAST& ifStmtAst);
+  void previsit(LoopStmtAST& loopStmtAst);
+  void previsit(ParamAST& paramAst);
+  void previsit(RetAST& retAst);
+  void previsit(UnaryOpAST& unaryOpAst);
+  void previsit(TypeAST& typeAst);
+  void previsit(ScalarAST& scalarAst);
+  void previsit(SymbolAST& symbolAst);
 };
 
 #endif
