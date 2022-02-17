@@ -1,10 +1,12 @@
 #include <parser/parser.hpp>
 
-void CStarParser::varDecl(VisibilitySpecifier visibilitySpecifier,
+void CStarParser::varDecl(TypeQualifier typeQualifier,
+                          VisibilitySpecifier visibilitySpecifier,
                           bool isDefinedType, bool isLocal,
                           std::vector<ASTNode>* scope) {
   TypeSpecifier type = TypeSpecifier::SPEC_I8;
 
+  auto begin = currentTokenInfo().getTokenPositionInfo().begin;
   if (isDefinedType) {
     // will be passed to the VarDeclAST;
     auto symbol = this->advanceSymbol();
@@ -18,10 +20,12 @@ void CStarParser::varDecl(VisibilitySpecifier visibilitySpecifier,
     this->advance();
   }
 
-not_needed_type:
+
+  not_needed_type:
   ASTNode rhs = nullptr, arrayRhs;
   size_t indirectionLevel = 0;
   bool isUnique = false;
+  bool isRef = false;
 
   //* | ^
   // TODO: while -> if
@@ -31,6 +35,12 @@ not_needed_type:
 
     if (this->currentTokenKind() == TokenKind::XOR) isUnique = true;
     // std::cout << "Indirection level: " << indirection_level << "\n";
+  }
+
+  if (is(TokenKind::AND)) {
+    indirectionLevel = 1;
+    this->advance();
+    isRef = true;
   }
 
   // expect ident (name of the variable)
@@ -89,13 +99,14 @@ not_needed_type:
     // advance comma
     this->advance();
     auto tokenPos = currentTokenInfo().getTokenPositionInfo();
-    auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
+    auto semLoc = SemanticLoc(begin, tokenPos.end, tokenPos.line);
 
     // ASTNode ast = std::unique_ptr<VarAST>(new VarAST(name, std::move(rhs),
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));
     auto ast = std::make_unique<VarAST>(
-        name, std::move(rhs), type, visibilitySpecifier, indirectionLevel,
-        isUnique, isLocal, arrayFlag, std::move(arrayDimensions), semLoc);
+        name, std::move(rhs), type, typeQualifier, visibilitySpecifier,
+        indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
+        std::move(arrayDimensions), semLoc);
 
     ast->setDeclKind(getDeclKind(visibilitySpecifier));
 
@@ -112,13 +123,14 @@ not_needed_type:
     expected(TokenKind::SEMICOLON);
 
     auto tokenPos = currentTokenInfo().getTokenPositionInfo();
-    auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
+    auto semLoc = SemanticLoc(begin, tokenPos.end, tokenPos.line);
 
     // ASTNode ast = std::unique_ptr<VarAST>(new VarAST(name, std::move(rhs),
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));
     auto ast = std::make_unique<VarAST>(
-        name, std::move(rhs), type, visibilitySpecifier, indirectionLevel,
-        isUnique, isLocal, arrayFlag, std::move(arrayDimensions), semLoc);
+        name, std::move(rhs), type, typeQualifier, visibilitySpecifier,
+        indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
+        std::move(arrayDimensions), semLoc);
 
     ast->setDeclKind(getDeclKind(visibilitySpecifier));
 
@@ -221,7 +233,7 @@ DeclKind CStarParser::getDeclKind(VisibilitySpecifier visibilitySpecifier) {
       return DeclKind::GlobVarDecl;
     case VIS_DEFAULT:
     default:
-      return DeclKind::ExportVarDecl;
+      return DeclKind::VarDecl;
   }
 }
 

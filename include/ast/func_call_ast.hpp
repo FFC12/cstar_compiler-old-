@@ -31,6 +31,12 @@ class FuncCallAST : public IAST {
     if (m_Args != nullptr) m_Args->debugNode();
     std::cout << ")";
   }
+
+  SymbolInfo acceptBefore(Visitor& visitor) override {
+    return visitor.previsit(*this);
+  }
+
+  ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
 };
 
 #endif

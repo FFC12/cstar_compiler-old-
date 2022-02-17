@@ -87,6 +87,12 @@ class UnaryOpAST : public IAST {
     this->m_Node->debugNode();
     if (needPar) std::cout << ")";
   }
+
+  SymbolInfo acceptBefore(Visitor& visitor) override {
+    return visitor.previsit(*this);
+  }
+
+  ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
 };
 
 #endif

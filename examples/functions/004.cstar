@@ -1,0 +1,33 @@
+// symbol scope-level example
+
+main()::void {
+  int a = 20;
+
+  loop(x > 10) { 
+    int p = 2; 
+    int s = 3; 
+
+    loop(x < 3) {
+      int l = 3;
+      int r = 4;
+    }
+
+    loop(x < 4){
+      int l = 123;
+      int r = 5; 
+    }
+  }
+
+  loop(x < 3) {
+    int p = 5;
+    int s = 10;
+    int l = 5;
+
+    loop(x < 3){
+      int r = 3;
+      int l = 5;
+    }
+  }
+
+  ret;
+}

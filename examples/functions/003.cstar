@@ -1,7 +1,15 @@
+int a = 30;
+
+anotherFunc()::int32 {
+  int b = 20;
+  const char* anotherStr = "Hello my friend\n";
+}
+
 main()::void {
-  int a = 10 + 30, b = 20;
-  int arr [2:2] = ((0, 1), (2, 3)), b = 30;
-  int r = 20;
+  readonly char* str = "Hello world\n";
+  const int a = 10 + 30, b = 20;
+  constptr int arr [2:2] = ((0, 1), (2, 3));
+  const int r = 20;
 
   r += 1;
   r -= 1;
@@ -13,19 +21,26 @@ main()::void {
   r ^= 2;
   r %= 4;
   r *= 3;
-  r.= a;
+  r .= a;
   r = 20;
 
-  arr [a:b] = 3;
+  arr[a:b] = 3;
   arr[1] = 2;
   arr[2] += 3;
 
-  loop(index,data in arr) {  // this could be an array or Iterable
+  loop(index, data in arr) {  // this could be an array or Iterable
     float p = 12.324;
     if (x > 10) {
       int i = 20;
+			int k = 25;
       i += 3;
       r = 30;
+			if ( a > b ){
+				int v = 5;
+				loop(data in arr) {
+					int z = 3;
+				}
+			}
     } else {
       int k = 35;
       k -= 2;

@@ -18,6 +18,12 @@ class SymbolAST : public IAST {
     this->m_ExprKind = ExprKind::SymbolExpr;
   }
   void debugNode() override { std::cout << m_SymbolName; }
+
+  SymbolInfo acceptBefore(Visitor& visitor) override {
+    return visitor.previsit(*this);
+  }
+
+  ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
 };
 
 #endif

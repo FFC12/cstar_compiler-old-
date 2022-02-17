@@ -176,6 +176,30 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
   this->advance();
 
   while (!is(TokenKind::RBRACK)) {
+    TypeQualifier typeQualifier = TypeQualifier::Q_NONE;
+    bool hasConstness = false;
+
+    if (isTypeQualifier(currentTokenInfo())) {
+      hasConstness = true;
+      switch (currentTokenKind()) {
+        case CONST:
+          typeQualifier = TypeQualifier::Q_CONST;
+          break;
+        case CONSTPTR:
+          typeQualifier = TypeQualifier::Q_CONSTPTR;
+          break;
+        case CONSTREF:
+          typeQualifier = TypeQualifier::Q_CONSTREF;
+          break;
+        case READONLY:
+          typeQualifier = TypeQualifier::Q_READONLY;
+          break;
+        default:
+          assert(false && "Unreacheable");
+      }
+      this->advance();
+    }
+
     if (isType(currentTokenInfo()) || is(TokenKind::IDENT)) {
       bool outOfSize = false;
       auto nextTokenInfo = this->nextTokenInfo(outOfSize);
@@ -187,9 +211,10 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
       size_t begin = currentTokenInfo().getTokenPositionInfo().begin;
       size_t line = currentTokenInfo().getTokenPositionInfo().line;
 
-      if (nextToken == TokenKind::IDENT) {
-        varDecl(VisibilitySpecifier::VIS_LOCAL, is(TokenKind::IDENT), true,
-                &scope);
+      if (isType(currentTokenInfo()) || nextToken == TokenKind::IDENT ||
+          (isTypeQualifier(prevTokenInfo()) && hasConstness)) {
+        varDecl(typeQualifier, VisibilitySpecifier::VIS_LOCAL,
+                is(TokenKind::IDENT), true, &scope);
       } else if (isShortcutOp(nextTokenInfo)) {
         auto symbol = std::move(advanceSymbol());
         auto shortcutOp = typeOfShortcutOp(currentTokenInfo());

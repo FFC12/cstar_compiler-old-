@@ -984,7 +984,7 @@ ASTNode CStarParser::advanceConstantOrLiteral() {
 
     auto tokenPos = currentTokenInfo().getTokenPositionInfo();
     auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
-    return std::make_unique<ScalarAST>(value, isIntegral, isFloat, isBoolean,
+    return std::make_unique<ScalarOrLiteralAST>(value, isIntegral, isFloat, isBoolean,
                                        semLoc);
   }
 

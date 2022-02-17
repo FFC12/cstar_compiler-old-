@@ -24,7 +24,7 @@ void CStarParser::translationUnit() {
   while (!this->m_ParsingEndingFlag) {
     // std::cout << this->m_CurrToken.getTokenAsStr() << "\n";
     if (this->m_CurrToken.getTokenKind() == TokenKind::_EOF) {
-      std::cout << "EOF\n";
+//      std::cout << "EOF\n";
       break;
     }
 
@@ -47,8 +47,8 @@ void CStarParser::translationUnit() {
 
       // export(extern) | import (extern) | static | or by default they are
       // external linkage
-      if (isLinkageMark(this->m_CurrToken)) {
-        switch (this->m_CurrToken.getTokenKind()) {
+      if (isLinkageMark(currentTokenInfo())) {
+        switch (currentTokenKind()) {
           case IMPORT:
             visibilitySpecifier = VisibilitySpecifier::VIS_IMPORT;
             break;
@@ -70,17 +70,41 @@ void CStarParser::translationUnit() {
         ParserError("Unexpected token", currentTokenInfo());
       }
 
+      TypeQualifier typeQualifier = TypeQualifier::Q_NONE;
+
+      if (isTypeQualifier(currentTokenInfo())) {
+        switch (currentTokenKind()) {
+          case CONST:
+            typeQualifier = TypeQualifier::Q_CONST;
+            break;
+          case CONSTPTR:
+            typeQualifier = TypeQualifier::Q_CONSTPTR;
+            break;
+          case CONSTREF:
+            typeQualifier = TypeQualifier::Q_CONSTREF;
+            break;
+          case READONLY:
+            typeQualifier = TypeQualifier::Q_READONLY;
+            break;
+          default:
+            assert(false && "Unreacheable");
+        }
+        this->advance();
+      }
       // int* | float* | uint* ...
       // we check that is an IDENT or not since because isType for operators
       // which only contains primitives. IDENT means it's a symbol (which needed
       // to resolved in next phase - Semantic Analysis- )
-      if (this->isType(this->m_CurrToken) || is(TokenKind::IDENT)) {
+      else if (this->isType(this->m_CurrToken) || is(TokenKind::IDENT)) {
         if (is(TokenKind::IDENT) && nextToken != TokenKind::LPAREN) {
-          varDecl(visibilitySpecifier, is(TokenKind::IDENT), false);
+          varDecl(typeQualifier, visibilitySpecifier, is(TokenKind::IDENT),
+                  false);
         } else if (is(TokenKind::IDENT) && nextToken == TokenKind::LPAREN) {
           funcDecl(visibilitySpecifier);
         } else {
-          varDecl(visibilitySpecifier, is(TokenKind::IDENT), false);
+          // if it's pointer type or something...
+          varDecl(typeQualifier, visibilitySpecifier, is(TokenKind::IDENT),
+                  false);
         }
       } else {
         // protototype, directive, traits, macro
@@ -549,6 +573,67 @@ void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo) {
   std::cout << std::endl << std::endl;
 
   exit(1);
+}
+
+void CStarParser::ParserError(std::string mesg, size_t begin, size_t end, size_t line_){
+  // copy one time for each translation unit
+  std::string messageHeader(this->m_Lexer.getFilepath().get());
+  const size_t CHAR_LIMIT = 256;
+  const size_t MARGIN_LEFT = 5;
+
+  // token pos
+  size_t tok_begin = begin;
+  size_t tok_end = end;
+  size_t line = line_;
+
+  // line
+  size_t offset = 0;
+
+  // tok_begin will be relative begin according to the line.
+  auto buffer_it = this->viewLine(line, tok_begin, tok_end, offset);
+
+  // message header
+  messageHeader += ":" + std::to_string(line + 1) + ":" +
+                   std::to_string(tok_begin + 1) + REDISH "\x20 error: " RES +
+                   mesg + "\n";
+
+  std::cout << BLU + messageHeader + RES;
+
+  // line beginning
+  std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
+
+  // linw
+  for (int i = 0; i < offset; i++) {
+    if (i < CHAR_LIMIT) {
+      std::cout << buffer_it[i];
+    } else {
+      std::cout << "...";
+      break;
+    }
+  }
+
+  std::cout << std::endl;
+
+  auto lineNumberLen = std::to_string(line).size();
+
+  // for margin
+  for (int i = 0; i < MARGIN_LEFT + lineNumberLen - 1; i++)
+    if (i == 3 + lineNumberLen - 1)
+      putchar('|');
+    else
+      putchar('\x20');
+
+  // indicator
+  std::cout << BLU;
+  for (int i = 0; i < offset; i++) {
+    if (i >= tok_begin && i < tok_end) {
+      putchar('~');
+    } else {
+      putchar('\x20');
+    }
+  }
+  std::cout << RES;
+  std::cout << std::endl << std::endl;
 }
 
 // This is for indicating to the long expressions/buffers.

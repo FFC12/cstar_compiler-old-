@@ -1,8 +1,7 @@
 #ifndef AST_HPP
 #define AST_HPP
 #include <iostream>
-
-class Visitor;
+#include <visitor/visitor.hpp>
 
 enum ASTKind {
   Expr,
@@ -69,8 +68,13 @@ class IAST {
 
   virtual void debugNode() { std::cout << "Root\n"; };
 
+  virtual SymbolInfo acceptBefore(Visitor& visitor) = 0;
+
+  virtual ValuePtr accept(Visitor& visitor) = 0;
+
   [[nodiscard]] ExprKind getExprKind() const { return this->m_ExprKind; }
   [[nodiscard]] ASTKind getASTKind() const { return this->m_ASTKind; }
+  [[nodiscard]] DeclKind getDeclKind() const { return this->m_DeclKind; }
 };
 
 #include <memory>

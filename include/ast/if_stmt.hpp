@@ -87,5 +87,11 @@ class IfStmtAST : public IAST {
       std::cout << "\n}\n";
     }
   }
+
+  SymbolInfo acceptBefore(Visitor& visitor) override {
+    return visitor.previsit(*this);
+  }
+
+  ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
 };
 #endif

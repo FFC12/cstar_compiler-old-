@@ -53,11 +53,11 @@ class AssignmentAST : public IAST {
 
   void debugNode() override {
     this->m_LHS->debugNode();
-    if(this->m_Subscriptable) {
+    if (this->m_Subscriptable) {
       std::cout << "[";
-      for(int i = 0; i < this->m_SubscriptIndexes.size(); i++) {
+      for (int i = 0; i < this->m_SubscriptIndexes.size(); i++) {
         this->m_SubscriptIndexes[i]->debugNode();
-        if(i != this->m_SubscriptIndexes.size() - 1) {
+        if (i != this->m_SubscriptIndexes.size() - 1) {
           std::cout << ":";
         }
       }
@@ -66,6 +66,12 @@ class AssignmentAST : public IAST {
     std::cout << m_Op;
     this->m_RHS->debugNode();
   }
+
+  SymbolInfo acceptBefore(Visitor& visitor) override {
+    return visitor.previsit(*this);
+  }
+
+  ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
 };
 
 #endif

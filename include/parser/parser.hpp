@@ -208,12 +208,13 @@ class CStarParser {
   void ParserHint(std::string mesg, TokenInfo tokenInfo);
   void ParserHint(std::string mesg, TokenInfo tokenInfo, size_t new_begin);
   void ParserError(std::string mesg, TokenInfo tokenInfo);
+
   void ParserError(std::string mesg, TokenInfo tokenInfo, size_t new_begin);
   std::string_view::iterator viewLine(size_t line, size_t& rlbegin,
                                       size_t& rlend, size_t& offset);
 
   // variable.cpp
-  void varDecl(VisibilitySpecifier visibilitySpecifier, bool definedType,
+  void varDecl(TypeQualifier typeQualifier, VisibilitySpecifier visibilitySpecifier, bool definedType,
                bool isLocal, std::vector<ASTNode>* scope = nullptr);
   DeclKind getDeclKind(VisibilitySpecifier visibilitySpecifier);
   ASTNode initializer();
@@ -250,7 +251,7 @@ class CStarParser {
     time_t endTime = time(nullptr);
     std::cout << GRN "======= Syntantic Analysis =======" RES << std::endl;
     double dif = difftime(endTime, this->m_StartTime);
-    printf("-  Elapsed time : %.2lf seconds\n", dif);
+    printf("-  Elapsed time : %.2lf seconds\n\n", dif);
   }
 
  public:
@@ -341,6 +342,9 @@ class CStarParser {
     m_PrecTable[OpType::OP_BINARY] = std::move(m_PrecTableBinary);
     m_PrecTable[OpType::OP_CAST] = std::move(m_PrecTableCast);
   }
+
+  //for semantics analysis
+  void ParserError(std::string mesg, size_t begin, size_t end, size_t line);
 
   void parse();
   void ownedAST(std::vector<ASTNode>& newOwner) {

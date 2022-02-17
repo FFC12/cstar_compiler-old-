@@ -1,56 +1,83 @@
 #ifndef VISITOR_HPP
 #define VISITOR_HPP
-#include <ast/assignment_ast.hpp>
-#include <ast/ast.hpp>
-#include <ast/binary_op_ast.hpp>
-#include <ast/cast_op_ast.hpp>
-#include <ast/func_ast.hpp>
-#include <ast/func_call_ast.hpp>
-#include <ast/if_stmt.hpp>
-#include <ast/loop_stmt.hpp>
-#include <ast/param_ast.hpp>
-#include <ast/ret_ast.hpp>
-#include <ast/scalar_ast.hpp>
-#include <ast/symbol_ast.hpp>
-#include <ast/type_ast.hpp>
-#include <ast/unary_op_ast.hpp>
-#include <ast/var_ast.hpp>
+#include <llvm/IR/Value.h>
+
+#include <variant>
+#include <visitor/symbols.hpp>
+
+class IAST;
+class CastOpAST;
+class BinaryOpAST;
+class AssignmentAST;
+class FuncCallAST;
+class FuncAST;
+class IfStmtAST;
+class LoopStmtAST;
+class ParamAST;
+class RetAST;
+class ScalarOrLiteralAST;
+class SymbolAST;
+class TypeAST;
+class UnaryOpAST;
+class VarAST;
+
+using ValuePtr = llvm::Value*;
 
 class Visitor {
   friend VarAST;
 
+  std::vector<SymbolInfo> m_SymbolInfos;
+  size_t m_ScopeLevel = 0;
+  size_t m_ScopeId = 0;
+  bool m_InsideScope = false;
+
+  void enterScope(bool globScope) {
+    if(!globScope) m_ScopeId += 1;
+    m_ScopeLevel += (globScope ? 0 : 1);
+    m_InsideScope = true;
+  }
+
+  void exitScope(bool globScope) {
+    assert(m_InsideScope && "Missed the call enterScope");
+    m_ScopeLevel -= (globScope ? 0 : 1);
+  }
+
  public:
   Visitor() = default;
 
-  void visit(VarAST& varAst);
-  void visit(AssignmentAST& assignmentAst);
-  void visit(BinaryOpAST& binaryOpAst);
-  void visit(CastOpAST& castOpAst);
-  void visit(FuncAST& funcAst);
-  void visit(FuncCallAST& funcCallAst);
-  void visit(IfStmtAST& ifStmtAst);
-  void visit(LoopStmtAST& loopStmtAst);
-  void visit(ParamAST& paramAst);
-  void visit(RetAST& retAst);
-  void visit(UnaryOpAST& unaryOpAst);
-  void visit(TypeAST& typeAst);
-  void visit(ScalarAST& scalarAst);
-  void visit(SymbolAST& symbolAst);
+  ValuePtr visit(VarAST& varAst);
+  ValuePtr visit(AssignmentAST& assignmentAst);
+  ValuePtr visit(BinaryOpAST& binaryOpAst);
+  ValuePtr visit(CastOpAST& castOpAst);
+  ValuePtr visit(FuncAST& funcAst);
+  ValuePtr visit(FuncCallAST& funcCallAst);
+  ValuePtr visit(IfStmtAST& ifStmtAst);
+  ValuePtr visit(LoopStmtAST& loopStmtAst);
+  ValuePtr visit(ParamAST& paramAst);
+  ValuePtr visit(RetAST& retAst);
+  ValuePtr visit(UnaryOpAST& unaryOpAst);
+  ValuePtr visit(TypeAST& typeAst);
+  ValuePtr visit(ScalarOrLiteralAST& scalarAst);
+  ValuePtr visit(SymbolAST& symbolAst);
 
-  void previsit(VarAST& varAst);
-  void previsit(AssignmentAST& assignmentAst);
-  void previsit(BinaryOpAST& binaryOpAst);
-  void previsit(CastOpAST& castOpAst);
-  void previsit(FuncAST& funcAst);
-  void previsit(FuncCallAST& funcCallAst);
-  void previsit(IfStmtAST& ifStmtAst);
-  void previsit(LoopStmtAST& loopStmtAst);
-  void previsit(ParamAST& paramAst);
-  void previsit(RetAST& retAst);
-  void previsit(UnaryOpAST& unaryOpAst);
-  void previsit(TypeAST& typeAst);
-  void previsit(ScalarAST& scalarAst);
-  void previsit(SymbolAST& symbolAst);
+  SymbolInfo previsit(VarAST& varAst);
+  SymbolInfo previsit(AssignmentAST& assignmentAst);
+  SymbolInfo previsit(BinaryOpAST& binaryOpAst);
+  SymbolInfo previsit(CastOpAST& castOpAst);
+  SymbolInfo previsit(FuncAST& funcAst);
+  SymbolInfo previsit(FuncCallAST& funcCallAst);
+  SymbolInfo previsit(IfStmtAST& ifStmtAst);
+  SymbolInfo previsit(LoopStmtAST& loopStmtAst);
+  SymbolInfo previsit(ParamAST& paramAst);
+  SymbolInfo previsit(RetAST& retAst);
+  SymbolInfo previsit(UnaryOpAST& unaryOpAst);
+  SymbolInfo previsit(TypeAST& typeAst);
+  SymbolInfo previsit(ScalarOrLiteralAST& scalarAst);
+  SymbolInfo previsit(SymbolAST& symbolAst);
+
+  std::vector<SymbolInfo> getSymbolInfoList() {
+    return this->m_SymbolInfos;
+  }
 };
 
 #endif

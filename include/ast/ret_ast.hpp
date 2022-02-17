@@ -22,6 +22,12 @@ class RetAST : public IAST {
       this->m_RetExpr->debugNode();
     }
   }
+
+  SymbolInfo acceptBefore(Visitor& visitor) override {
+    return visitor.previsit(*this);
+  }
+
+  ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
 };
 
 #endif

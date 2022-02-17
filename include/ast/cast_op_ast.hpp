@@ -43,6 +43,12 @@ class CastOpAST : public IAST {
     this->m_Node->debugNode();
     std::cout << ")";
   }
+
+  SymbolInfo acceptBefore(Visitor& visitor) override {
+    return visitor.previsit(*this);
+  }
+
+  ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
 };
 
 class CastNode : public CastOpAST {
