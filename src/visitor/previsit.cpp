@@ -91,8 +91,10 @@ SymbolInfo Visitor::previsit(FuncAST &funcAst) {
   return symbolInfo;
 }
 
-SymbolInfo Visitor::previsit(FuncCallAST &funcCallAst) {}
-SymbolInfo Visitor::previsit(IfStmtAST &ifStmtAst) {}
+
+SymbolInfo Visitor::previsit(IfStmtAST &ifStmtAst) {
+  ifStmtAst.
+}
 
 SymbolInfo Visitor::previsit(LoopStmtAST &loopStmtAst) {
   SymbolInfo symbolInfo;
@@ -126,6 +128,7 @@ SymbolInfo Visitor::previsit(LoopStmtAST &loopStmtAst) {
   return symbolInfo;
 }
 
+SymbolInfo Visitor::previsit(FuncCallAST &funcCallAst) {}
 SymbolInfo Visitor::previsit(ParamAST &paramAst) {}
 SymbolInfo Visitor::previsit(RetAST &retAst) {}
 SymbolInfo Visitor::previsit(UnaryOpAST &unaryOpAst) {}

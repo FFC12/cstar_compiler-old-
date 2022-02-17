@@ -69,9 +69,9 @@ class CStarCodegen {
   // pass0 is for detecting and booking all symbols (gathering preinfo)
   // pass0.cpp
   void pass0();
-  bool redefinationCheck(SymbolInfoList & funcName, SymbolInfo& symbol);
-  bool redefinationCheck(SymbolInfo& symbol);
-  void RedefinationError(std::string message,SymbolInfo& symbolInfo);
+  bool redefinitionCheck(SymbolInfoList & funcName, SymbolInfo& symbol);
+  bool redefinitionCheck(SymbolInfo& symbol);
+  void RedefinitionError(std::string message,SymbolInfo& symbolInfo);
 
   ~CStarCodegen() {
     // Need to release and delete it manually

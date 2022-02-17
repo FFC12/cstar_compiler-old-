@@ -13,10 +13,10 @@ void CStarCodegen::pass0() {
 
         SymbolInfoList symbolInfoList;
         for (auto& symbolInfo : preVisitor.getSymbolInfoList()) {
-          if (!redefinationCheck(symbolInfoList, symbolInfo)) {
+          if (!redefinitionCheck(symbolInfoList, symbolInfo)) {
             symbolInfoList.insert({symbolInfo.symbolName, symbolInfo});
           } else {
-            RedefinationError(
+            RedefinitionError(
                 "Redefination of local symbol '" + symbolInfo.symbolName + "'",
                 symbolInfo);
           }
@@ -30,8 +30,8 @@ void CStarCodegen::pass0() {
         Visitor preVisitor{};
         auto symbolInfo = ast->acceptBefore(preVisitor);
 
-        if (redefinationCheck(symbolInfo)) {
-          RedefinationError(
+        if (redefinitionCheck(symbolInfo)) {
+          RedefinitionError(
               "Redefination of global symbol '" + symbolInfo.symbolName + "'",
               symbolInfo);
         }
@@ -44,21 +44,21 @@ void CStarCodegen::pass0() {
   return;
 }
 
-bool CStarCodegen::redefinationCheck(SymbolInfo& symbolInfo) {
-  return redefinationCheck(m_GlobalSymbols, symbolInfo);
+bool CStarCodegen::redefinitionCheck(SymbolInfo& symbol) {
+  return redefinitionCheck(m_GlobalSymbols, symbol);
 }
 
-bool CStarCodegen::redefinationCheck(SymbolInfoList& symbolInfoList,
-                                     SymbolInfo& symbolInfo) {
+bool CStarCodegen::redefinitionCheck(SymbolInfoList& funcName,
+                                     SymbolInfo& symbol) {
   bool redefinationFlag = false;
 
-  auto entries = symbolInfoList.equal_range(symbolInfo.symbolName);
+  auto entries = funcName.equal_range(symbol.symbolName);
 
   for (auto it = entries.first; it != entries.second; ++it) {
-    if (it->first == symbolInfo.symbolName) {
-      if (it->second.scopeLevel <= symbolInfo.scopeLevel) {
-        if (it->second.scopeLevel == symbolInfo.scopeLevel &&
-            it->second.scopeId != symbolInfo.scopeId) {
+    if (it->first == symbol.symbolName) {
+      if (it->second.scopeLevel <= symbol.scopeLevel) {
+        if (it->second.scopeLevel == symbol.scopeLevel &&
+            it->second.scopeId != symbol.scopeId) {
           break;
         }
         redefinationFlag = true;
@@ -70,7 +70,7 @@ bool CStarCodegen::redefinationCheck(SymbolInfoList& symbolInfoList,
   return redefinationFlag;
 }
 
-void CStarCodegen::RedefinationError(std::string message,
+void CStarCodegen::RedefinitionError(std::string message,
                                      SymbolInfo& symbolInfo) {
   m_Parser.ParserError(std::move(message), symbolInfo.begin, symbolInfo.end,
                        symbolInfo.line);
