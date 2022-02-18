@@ -1,5 +1,7 @@
-func(int a, b Type*, c int, b Type) :: void {
-    float a = 3,b = 4;
+// should give an error for redefination of 's'
+func(int a, int& c, k int&, s Type) :: void {
+    float x = 3,y = 4;
+    int s = 233;
 
     ret;
 }

@@ -23,6 +23,7 @@ main(b Allocator*, int a, int c) :: void {
 
     loop(x < 3){
       int r = 3;
+      int b = 5; // should give an error for redefination of 'b'
       int l = 5;
     }
   }

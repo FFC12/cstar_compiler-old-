@@ -4,12 +4,7 @@
 #include <parser/type_specifiers.hpp>
 #include <string>
 
-enum SymbolScope {
-  Func,
-  LoopSt,
-  IfSt
-};
-
+enum SymbolScope { Func, LoopSt, IfSt };
 
 // This is using for pipelining informations
 // also it contains type informations as well.
@@ -27,6 +22,9 @@ struct SymbolInfo {
   bool isNeededEval;
   bool isNeededTypeCheck;
   std::string value;
+  std::pair<std::string, std::string>
+      definedTypenamePair;  // left one is for symbol0 and right one is for
+                            // symbol1
   std::string symbolName;
   std::string assocFuncName;  // if it's global, then no assoc. func.
   TypeSpecifier type;

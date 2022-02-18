@@ -26,13 +26,13 @@ using ValuePtr = llvm::Value*;
 class Visitor {
   friend VarAST;
 
-  //(0,1,2,3,..)
-  std::map<std::string,size_t> m_AmbiguousSymbols;
-
+  std::vector<std::pair<std::string, SymbolInfo>> m_UnknownTypeErrorMessages;
   std::vector<SymbolInfo> m_SymbolInfos;
   size_t m_ScopeLevel = 0;
   size_t m_ScopeId = 0;
   bool m_InsideScope = false;
+
+  const std::map<std::string, size_t>& m_TypeTable;
 
   void enterScope(bool globScope) {
     if (!globScope) m_ScopeId += 1;
@@ -49,7 +49,8 @@ class Visitor {
                     size_t scopeLevel, size_t scopeId);
 
  public:
-  Visitor() = default;
+  explicit Visitor(const std::map<std::string, size_t>& typeTable)
+      : m_TypeTable(typeTable) {}
 
   ValuePtr visit(VarAST& varAst);
   ValuePtr visit(AssignmentAST& assignmentAst);
@@ -82,6 +83,9 @@ class Visitor {
   SymbolInfo previsit(SymbolAST& symbolAst);
 
   std::vector<SymbolInfo> getSymbolInfoList() { return this->m_SymbolInfos; }
+  std::vector<std::pair<std::string, SymbolInfo>> getUnknownTypeErrorMessages() {
+    return this->m_UnknownTypeErrorMessages;
+  }
 };
 
 #endif

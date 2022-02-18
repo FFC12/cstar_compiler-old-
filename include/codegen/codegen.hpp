@@ -16,8 +16,14 @@ class CStarCodegen {
   GlobalSymbolInfoList m_GlobalSymbols;
   LocalSymbolInfoList m_LocalSymbols;
 
+  // instead of size_t more appropriate type
+  // can be used for TypeInfo or something like that...
+  // TODO: Will be done after soft-object oriented has impelemented.
+  using DefinedTypeTable = std::map<std::string, size_t>;
+  DefinedTypeTable m_DefinedTypes;
+
   // Need to be resolved during type checking phase.
-  std::vector<std::map<std::string,size_t>> m_UnresolvedParamsAsLocal;
+  std::vector<std::map<std::string, size_t>> m_UnresolvedParamsAsLocal;
 
   CStarParser m_Parser;
   std::vector<ASTNode> m_AST;
@@ -51,12 +57,14 @@ class CStarCodegen {
     time_t startTime = time(nullptr);
     pass0();
     time_t endTime = time(nullptr);
-    std::cout << GRN "======= Pass 0 (Symbol Analysis) =======" RES << std::endl;
+    std::cout << GRN "======= Pass 0 (Symbol Analysis) =======" RES
+              << std::endl;
     double dif = difftime(endTime, startTime);
     printf("-  Elapsed time : %.2lf seconds\n\n", dif);
 
-    if(m_SemAnalysisFailure) {
-      std::cout << REDISH "Compilation failed. "<< m_ErrorCount << " error(s) generated.\n" RES;
+    if (m_SemAnalysisFailure) {
+      std::cout << REDISH "Compilation failed. " << m_ErrorCount
+                << " error(s) generated.\n" RES;
       exit(1);
     }
 
@@ -72,10 +80,11 @@ class CStarCodegen {
   // pass0 is for detecting and booking all symbols (gathering preinfo)
   // pass0.cpp
   void pass0();
-  bool redefinitionCheck(SymbolInfoList & symbols, SymbolInfo& symbol);
-  bool redefinitionCheck(SymbolInfoList & symbols, SymbolInfo& symbol, size_t arr[3]);
+  bool redefinitionCheck(SymbolInfoList& symbols, SymbolInfo& symbol);
+  bool redefinitionCheck(SymbolInfoList& symbols, SymbolInfo& symbol,
+                         size_t arr[3]);
   bool redefinitionCheck(SymbolInfo& symbol);
-  void RedefinitionError(std::string message,SymbolInfo& symbolInfo);
+  void SemanticError(std::string message, SymbolInfo& symbolInfo);
 
   ~CStarCodegen() {
     // Need to release and delete it manually

@@ -69,15 +69,44 @@ SymbolInfo Visitor::previsit(FuncAST &funcAst) {
   auto scopeLevel = this->m_ScopeLevel;
   auto scopeId = this->m_ScopeId;
 
-  size_t i = 0;
   for (auto &param : funcAst.m_Params) {
     auto symbol = param->acceptBefore(*this);
     if (symbol.isNeededTypeCheck) {
-      m_AmbiguousSymbols[funcAst.m_FuncName] = i;
+      //      if(m_TypeTable.count(symbol.ty))
+      bool isLeftOne = false, isRightOne = false;
+      for (auto &type : this->m_TypeTable) {
+        if (type.first == symbol.definedTypenamePair.first) {
+          isLeftOne = true;
+        }
+
+        if (type.first == symbol.definedTypenamePair.second) {
+          isRightOne = true;
+        }
+      }
+
+      if (!isLeftOne && !isRightOne) {
+        this->m_UnknownTypeErrorMessages.emplace_back(
+            "Unknown type '" + symbol.definedTypenamePair.first + "'", symbol);
+      } else {
+        symbol.scopeLevel = scopeLevel;
+        symbol.scopeId = scopeId;
+
+        if(isRightOne && isLeftOne) {
+          auto firstSymbol = symbol.definedTypenamePair.first;
+          this->m_UnknownTypeErrorMessages.emplace_back(
+              "Unexpected token '" + firstSymbol + "' after '" + firstSymbol + "'",
+              symbol);
+        } else if (isLeftOne) {
+          symbol.symbolName = symbol.definedTypenamePair.second;
+          this->m_SymbolInfos.push_back(symbol);
+        } else {
+          symbol.symbolName = symbol.definedTypenamePair.first;
+          this->m_SymbolInfos.push_back(symbol);
+        }
+      }
     } else {
       scopeHandler(param, SymbolScope::Func, scopeLevel, scopeId);
     }
-    i++;
   }
 
   for (auto &node : funcAst.m_Scope) {
@@ -144,6 +173,16 @@ SymbolInfo Visitor::previsit(ParamAST &paramAst) {
 
   if (paramAst.m_IsNotClear) {
     symbolInfo.isNeededTypeCheck = true;
+    auto temp0 = paramAst.m_Symbol0->acceptBefore(*this);
+    symbolInfo.begin = temp0.begin;
+    auto leftOne = temp0.symbolName;
+
+    auto temp1 = paramAst.m_Symbol1->acceptBefore(*this);
+    symbolInfo.end = temp1.end;
+    symbolInfo.line = temp1.line;
+    auto rightOne = temp1.symbolName;
+
+    symbolInfo.definedTypenamePair = std::make_pair(leftOne, rightOne);
   } else {
     symbolInfo = paramAst.m_Symbol0->acceptBefore(*this);
   }
@@ -158,8 +197,6 @@ void Visitor::scopeHandler(std::unique_ptr<IAST> &node, SymbolScope symbolScope,
                            size_t scopeLevel, size_t scopeId) {
   if (node->m_ASTKind == ASTKind::Decl) {
     if (node->m_DeclKind == DeclKind::VarDecl) {
-      Visitor visitor{};
-
       auto temp = node->acceptBefore(*this);
 
       temp.symbolScope = symbolScope;

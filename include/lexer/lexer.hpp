@@ -231,11 +231,11 @@ class CStarLexer {
 
   void preprocess() {
     size_t charCounter = 0;
-    for (int i = 0, j = 0; i < m_BufferView.size(); i++) {
-      if (m_BufferView[i] == '\n' || m_BufferView[i] == '\r') {
-        m_CharCountOfLine[j++] = charCounter;
-      } else
-        charCounter++;
+    for (int i = 0, j = 0; i < m_Buffer.size(); i++) {
+      if (m_Buffer[i] == '\t') {
+        m_Buffer[i] = ' ';
+        m_Buffer.insert(i, " ");
+      }
     }
   }
 
@@ -289,7 +289,7 @@ class CStarLexer {
  public:
   // Potentially big buffers will be passed here so let it moved by move
   // semantics...
-  CStarLexer(const std::string &&pBuffer, const std::shared_ptr<char>& realpath)
+  CStarLexer(const std::string &&pBuffer, const std::shared_ptr<char> &realpath)
       : m_IsKeyword(false),
         m_Index(0),
         m_LastBegin(0),
@@ -298,6 +298,7 @@ class CStarLexer {
     m_StartTime = time(nullptr);
     m_Buffer = pBuffer;
 
+
     // Add new line at the end of file
     // since our ParserError function can
     // be worked correctly
@@ -305,9 +306,10 @@ class CStarLexer {
       if (m_Buffer[-1] != '\n') m_Buffer.push_back('\n');
     }
 
+    preprocess();
     m_BufferView = m_Buffer;
-    m_CurrChar = m_BufferView[0];
     m_Line = m_Col = 0;
+    m_CurrChar = m_BufferView[0];
     /*preprocess();
     for(auto &el: this->m_CharCountOfLine) {
       std::cout << el.first << " - " << el.second << std::endl;
@@ -607,9 +609,6 @@ class CStarLexer {
       posInfo.end = this->m_Index;
       posInfo.line = this->m_Line;
 
-      // TODO: Need to debuggin' here...
-      // quick.cstar line 3 insted of 2.. Weird problem
-      // Also last begin is awkward as well. debug them
       if (token == LINEFEED) {
         this->m_Line += 1;
       }

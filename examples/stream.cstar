@@ -1,0 +1,8 @@
+ int k;
+ int b;
+		int b;
+  int b; 
+main(int a) :: void {    
+	int a = 0;
+	ret;
+}
