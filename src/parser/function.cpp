@@ -70,7 +70,6 @@ void CStarParser::advanceParams(std::vector<ASTNode>& params,
 param_again:
   ASTNode typeNode;
   TypeQualifier typeQualifier = TypeQualifier::Q_NONE;
-  bool castAllowed = true;
   ASTNode symbol0, symbol1;
 
   if (isTypeQualifier(currentTokenInfo())) {
@@ -81,7 +80,7 @@ param_again:
   size_t beginLoc = currentTokenInfo().getTokenPositionInfo().begin;
   size_t line = currentTokenInfo().getTokenPositionInfo().line;
 
-  if (isType(currentTokenInfo())) {
+  if (isType(currentTokenInfo())) {  // cast allowed
     auto type = this->advanceType();
 
     if (!isForwardDecl) {
@@ -96,7 +95,7 @@ param_again:
     auto semLoc = SemanticLoc(beginLoc, endLoc, line);
     auto param =
         std::make_unique<ParamAST>(std::move(symbol0), nullptr, std::move(type),
-                                   castAllowed, false, typeQualifier, semLoc);
+                                   true, false, false, typeQualifier, semLoc);
     params.emplace_back(std::move(param));
   } else if (is(TokenKind::IDENT)) {
     bool outOfSize = false;
@@ -106,10 +105,10 @@ param_again:
     }
 
     auto nextToken = nextTokenInfo.getTokenKind();
-    if (nextToken == TokenKind::STAR || nextToken == TokenKind::XOR) {
+    if (nextToken == TokenKind::STAR ||
+        nextToken == TokenKind::XOR) {  // cast allowed
       // %100 defined type
       auto type = std::move(this->advanceSymbol());
-      castAllowed = false;
 
       if (!isForwardDecl) {
         expected(TokenKind::IDENT);
@@ -121,41 +120,68 @@ param_again:
       auto semLoc = SemanticLoc(beginLoc, endLoc, line);
 
       auto param = std::make_unique<ParamAST>(std::move(symbol0), nullptr,
-                                              std::move(type), castAllowed,
+                                              std::move(type), true, false,
                                               false, typeQualifier, semLoc);
       params.emplace_back(std::move(param));
     } else {
       // if the next token is primitive type...
-      if (isType(nextTokenInfo)) {
+      if (isType(nextTokenInfo)) {  // cast not allowed
         // get the param name
-        symbol0 = this->advanceSymbol();
+        if (!isForwardDecl) {
+          expected(TokenKind::IDENT);
+          symbol0 = this->advanceSymbol();
+        }
 
         auto type = this->advanceType();
-
-        castAllowed = false;
 
         size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
         auto semLoc = SemanticLoc(beginLoc, endLoc, line);
 
         auto param = std::make_unique<ParamAST>(std::move(symbol0), nullptr,
-                                                std::move(type), castAllowed,
+                                                std::move(type), false, false,
                                                 false, typeQualifier, semLoc);
         params.emplace_back(std::move(param));
       } else {
-        if (!isForwardDecl) {
-          // get the param name
-          symbol0 = this->advanceSymbol();
-          symbol1 = this->advanceSymbol();
+        auto prevNextTokenInfo = nextTokenInfo;
+        outOfSize = false;
+        nextTokenInfo = this->nextTokenInfo(outOfSize, 2);
+        if (outOfSize) {
+          ParserError("Unexpected token", currentTokenInfo());
+        }
 
-          castAllowed = false;
+        nextToken = nextTokenInfo.getTokenKind();
+        if (nextToken == TokenKind::STAR ||
+            nextToken == TokenKind::XOR) {  // cast allowed
+          // expect param name
+          if (!isForwardDecl) {
+            symbol0 = std::move(this->advanceSymbol());
+          }
+
+          expected(TokenKind::IDENT);
+          // get the defined type
+          auto type = std::move(this->advanceSymbol());
 
           size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
           auto semLoc = SemanticLoc(beginLoc, endLoc, line);
 
-          auto param = std::make_unique<ParamAST>(
-              std::move(symbol0), std::move(symbol1), nullptr, castAllowed,
-              true, typeQualifier, semLoc);
+          auto param = std::make_unique<ParamAST>(std::move(symbol0), nullptr,
+                                                  std::move(type), false, false,
+                                                  true, typeQualifier, semLoc);
           params.emplace_back(std::move(param));
+        } else {
+          if (!isForwardDecl) {  // not clear that is cast allowed or not
+            // get the param name
+            symbol0 = this->advanceSymbol();
+            symbol1 = this->advanceSymbol();
+
+            size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
+            auto semLoc = SemanticLoc(beginLoc, endLoc, line);
+
+            auto param = std::make_unique<ParamAST>(
+                std::move(symbol0), std::move(symbol1), nullptr, false, true,
+                true, typeQualifier, semLoc);
+            params.emplace_back(std::move(param));
+          }
         }
       }
     }

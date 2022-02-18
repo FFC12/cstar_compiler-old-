@@ -107,6 +107,12 @@ void CStarParser::translationUnit() {
                   false);
         }
       } else {
+        /*if(is(TokenKind::PROTO)) {
+          // advance 'proto'
+          this->advance();
+
+
+        }*/
         // protototype, directive, traits, macro
         ParserHint(
             "Not implemented yet (protototype, directive, traits, macro)",

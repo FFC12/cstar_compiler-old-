@@ -1,8 +1,6 @@
 // symbol scope-level example
 
-main()::void {
-  int a = 20;
-
+main(b Allocator*, int a, int c) :: void {
   loop(x > 10) { 
     int p = 2; 
     int s = 3; 
@@ -26,6 +24,17 @@ main()::void {
     loop(x < 3){
       int r = 3;
       int l = 5;
+    }
+  }
+  
+  if(x > 3) {
+    int p = 25;
+    //int a = 2;
+  } elif(x < 3) {
+    int p = 30;
+    if(x < 3) {
+      int r = 24;
+      int a2 = 2444;
     }
   }
 

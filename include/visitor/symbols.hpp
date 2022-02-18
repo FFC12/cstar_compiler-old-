@@ -10,7 +10,9 @@ enum SymbolScope {
   IfSt
 };
 
+
 // This is using for pipelining informations
+// also it contains type informations as well.
 struct SymbolInfo {
   size_t begin, end, line;
   size_t indirectionLevel;
@@ -23,6 +25,7 @@ struct SymbolInfo {
   bool isConstPtr;
   bool isConstRef;
   bool isNeededEval;
+  bool isNeededTypeCheck;
   std::string value;
   std::string symbolName;
   std::string assocFuncName;  // if it's global, then no assoc. func.

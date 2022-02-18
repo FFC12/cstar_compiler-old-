@@ -1,0 +1,5 @@
+func(int a, b Type*, c int, b Type) :: void {
+    float a = 3,b = 4;
+
+    ret;
+}

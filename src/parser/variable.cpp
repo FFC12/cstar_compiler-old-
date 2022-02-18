@@ -96,10 +96,11 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
   }
 
   if (is(TokenKind::COMMA)) {
+    auto tokenPos = currentTokenInfo().getTokenPositionInfo();
+    auto semLoc = SemanticLoc(begin, tokenPos.end - 1, tokenPos.line);
+
     // advance comma
     this->advance();
-    auto tokenPos = currentTokenInfo().getTokenPositionInfo();
-    auto semLoc = SemanticLoc(begin, tokenPos.end, tokenPos.line);
 
     // ASTNode ast = std::unique_ptr<VarAST>(new VarAST(name, std::move(rhs),
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));

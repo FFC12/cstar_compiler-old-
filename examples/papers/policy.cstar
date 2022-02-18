@@ -7,6 +7,7 @@
 policy for String {
     on_null_reference() :: void {
         rterror("It's breaking our policy of the String!");
+        //signal handler (compiler will be handled that logic)
     }
 
     on_null_reference_from_function() :: void {

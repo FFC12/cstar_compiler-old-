@@ -22,7 +22,8 @@ void CStarParser::advanceIfStmt(std::vector<ASTNode> &scope) {
   ConditionBlock conditionBlock{}, elseIfsBlock{};
   Scope elseScope{};
 
-  conditionBlock[std::move(cond)] = std::move(condBody);
+  conditionBlock.insert(
+      {"if", std::pair<ASTNode, Scope>(std::move(cond), std::move(condBody))});
 
   bool hasElif = false;
   while (is(TokenKind::ELIF)) {
@@ -36,7 +37,8 @@ void CStarParser::advanceIfStmt(std::vector<ASTNode> &scope) {
 
     std::vector<ASTNode> elseIfBody{};
     this->advanceScope(elseIfBody);
-    elseIfsBlock[std::move(cond)] = std::move(elseIfBody);
+    elseIfsBlock.insert({"elif", std::pair<ASTNode, Scope>(
+                                     std::move(cond), std::move(elseIfBody))});
   }
 
   bool hasElse = false;

@@ -44,15 +44,41 @@ void CStarCodegen::pass0() {
   return;
 }
 
+bool CStarCodegen::redefinitionCheck(SymbolInfoList &symbols, SymbolInfo& symbol, size_t arr[3]) {
+  bool redefinationFlag = false;
+
+  auto entries = symbols.equal_range(symbol.symbolName);
+
+  for (auto it = entries.first; it != entries.second; ++it) {
+    if (it->first == symbol.symbolName) {
+      if (it->second.scopeLevel <= symbol.scopeLevel) {
+        if (it->second.scopeLevel == symbol.scopeLevel &&
+            it->second.scopeId != symbol.scopeId) {
+          break;
+        }
+
+        arr[0] = it->second.begin;
+        arr[1] = it->second.end;
+        arr[2] = it->second.line;
+
+        redefinationFlag = true;
+        break;
+      }
+    }
+  }
+
+  return redefinationFlag;
+}
+
 bool CStarCodegen::redefinitionCheck(SymbolInfo& symbol) {
   return redefinitionCheck(m_GlobalSymbols, symbol);
 }
 
-bool CStarCodegen::redefinitionCheck(SymbolInfoList& funcName,
+bool CStarCodegen::redefinitionCheck(SymbolInfoList& symbols,
                                      SymbolInfo& symbol) {
   bool redefinationFlag = false;
 
-  auto entries = funcName.equal_range(symbol.symbolName);
+  auto entries = symbols.equal_range(symbol.symbolName);
 
   for (auto it = entries.first; it != entries.second; ++it) {
     if (it->first == symbol.symbolName) {

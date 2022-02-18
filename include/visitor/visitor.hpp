@@ -26,13 +26,16 @@ using ValuePtr = llvm::Value*;
 class Visitor {
   friend VarAST;
 
+  //(0,1,2,3,..)
+  std::map<std::string,size_t> m_AmbiguousSymbols;
+
   std::vector<SymbolInfo> m_SymbolInfos;
   size_t m_ScopeLevel = 0;
   size_t m_ScopeId = 0;
   bool m_InsideScope = false;
 
   void enterScope(bool globScope) {
-    if(!globScope) m_ScopeId += 1;
+    if (!globScope) m_ScopeId += 1;
     m_ScopeLevel += (globScope ? 0 : 1);
     m_InsideScope = true;
   }
@@ -41,6 +44,9 @@ class Visitor {
     assert(m_InsideScope && "Missed the call enterScope");
     m_ScopeLevel -= (globScope ? 0 : 1);
   }
+
+  void scopeHandler(std::unique_ptr<IAST>& node, SymbolScope symbolScope,
+                    size_t scopeLevel, size_t scopeId);
 
  public:
   Visitor() = default;
@@ -75,9 +81,7 @@ class Visitor {
   SymbolInfo previsit(ScalarOrLiteralAST& scalarAst);
   SymbolInfo previsit(SymbolAST& symbolAst);
 
-  std::vector<SymbolInfo> getSymbolInfoList() {
-    return this->m_SymbolInfos;
-  }
+  std::vector<SymbolInfo> getSymbolInfoList() { return this->m_SymbolInfos; }
 };
 
 #endif

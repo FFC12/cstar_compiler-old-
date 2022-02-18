@@ -16,6 +16,9 @@ class CStarCodegen {
   GlobalSymbolInfoList m_GlobalSymbols;
   LocalSymbolInfoList m_LocalSymbols;
 
+  // Need to be resolved during type checking phase.
+  std::vector<std::map<std::string,size_t>> m_UnresolvedParamsAsLocal;
+
   CStarParser m_Parser;
   std::vector<ASTNode> m_AST;
   //  std::vector<llvm::Module> m_Modules;
@@ -69,7 +72,8 @@ class CStarCodegen {
   // pass0 is for detecting and booking all symbols (gathering preinfo)
   // pass0.cpp
   void pass0();
-  bool redefinitionCheck(SymbolInfoList & funcName, SymbolInfo& symbol);
+  bool redefinitionCheck(SymbolInfoList & symbols, SymbolInfo& symbol);
+  bool redefinitionCheck(SymbolInfoList & symbols, SymbolInfo& symbol, size_t arr[3]);
   bool redefinitionCheck(SymbolInfo& symbol);
   void RedefinitionError(std::string message,SymbolInfo& symbolInfo);
 
