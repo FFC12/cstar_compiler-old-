@@ -1,12 +1,12 @@
-
+int a = 20;
 main() :: void {
+    int z = 233;
     if (sizeof(int) + 10 * 5 + unsafe_cast<int32*>(10 + 20 * 25 / 3 * sizeof(int) + cast<int64>(10) + 20 * 20)) {
         if (a > b) {
 
         } elif (b < c) {
 
         }
-        int z = 30;
     } elif (x < 10) {
         if (s < 3 + 3){
             int r = 12 + 3;
@@ -16,10 +16,9 @@ main() :: void {
 
     } else {
         int z = 30;
-        if(t > 3) {
-            int k = p + 20;
-        }
     }
 
     ret;
 }
+
+int a = 30;

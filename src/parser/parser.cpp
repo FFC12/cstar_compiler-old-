@@ -516,7 +516,7 @@ void CStarParser::ParserHint(std::string mesg, TokenInfo tokenInfo,
 // Parsing errors doesn't let you accumulate error and warning messages.
 // This means when a parser error occured it will be exited (1) unlike
 // semantic analyzer does
-void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo) {
+void CStarParser::ParserError(const std::string& mesg, TokenInfo tokenInfo) {
   auto posInfo = tokenInfo.getTokenPositionInfo();
 
   // copy one time for each translation unit

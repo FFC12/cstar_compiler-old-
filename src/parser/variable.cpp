@@ -53,37 +53,7 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
   this->advance();
 
   std::vector<ASTNode> arrayDimensions;
-  bool arrayFlag = false;
-
-  if (is(TokenKind::LSQPAR)) {
-    // [
-    this->advance();
-
-    auto cond = is(SCALARI) || is(IDENT);
-    if (!cond) {
-      expected({SCALARI, IDENT});
-    }
-
-    while (cond) {
-      if (is(SCALARI)) {
-        arrayDimensions.emplace_back(
-            std::move(this->advanceConstantOrLiteral()));
-      } else {
-        arrayDimensions.emplace_back(std::move(this->advanceSymbol()));
-      }
-
-      if (!is(TokenKind::RSQPAR)) {
-        expected(TokenKind::COLON);
-        this->advance();
-      } else {
-        expected(TokenKind::RSQPAR);
-        this->advance();
-        break;
-      }
-    }
-
-    arrayFlag = true;
-  }
+  bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
 
   // This is an AssignmentExpr and then will take potentially a BinopExpr and
   // then will take any other expressions like ConstExpr or *Expr .
@@ -142,6 +112,42 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
       this->m_AST.emplace_back(std::move(ast));
     }
   }
+}
+
+bool CStarParser::advanceTypeSubscript(std::vector<ASTNode>& arrayDimensions) {
+  bool arrayFlag = false;
+
+  if (is(TokenKind::LSQPAR)) {
+    // [
+    this->advance();
+
+    auto cond = is(SCALARI) || is(IDENT);
+    if (!cond) {
+      expected({SCALARI, IDENT});
+    }
+
+    while (cond) {
+      if (is(SCALARI)) {
+        arrayDimensions.emplace_back(
+            std::move(this->advanceConstantOrLiteral()));
+      } else {
+        arrayDimensions.emplace_back(std::move(this->advanceSymbol()));
+      }
+
+      if (!is(TokenKind::RSQPAR)) {
+        expected(TokenKind::COLON);
+        this->advance();
+      } else {
+        expected(TokenKind::RSQPAR);
+        this->advance();
+        break;
+      }
+    }
+
+    arrayFlag = true;
+  }
+
+  return arrayFlag;
 }
 
 ASTNode CStarParser::initializer() {
@@ -240,6 +246,8 @@ DeclKind CStarParser::getDeclKind(VisibilitySpecifier visibilitySpecifier) {
 
 TypeSpecifier CStarParser::typeSpecifierOf(const TokenInfo& token) {
   switch (token.getTokenKind()) {
+    case VOID:
+      return TypeSpecifier::SPEC_VOID;
     case I8:
       return TypeSpecifier::SPEC_I8;
     case I16:

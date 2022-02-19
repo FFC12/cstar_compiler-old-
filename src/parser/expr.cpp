@@ -1030,7 +1030,7 @@ ASTNode CStarParser::advanceSymbol() {
     }
 
     if (transitionFlag) {
-      return std::make_unique<TypeAST>(Type::T_DEFINED, std::move(symbolNode),
+      return std::make_unique<TypeAST>(TypeSpecifier::SPEC_DEFINED, std::move(symbolNode),
                                        isUniquePtr, true, isRef,
                                        indirectionLevel, semLoc);
     } else {
@@ -1069,7 +1069,7 @@ ASTNode CStarParser::advanceType() {
     }
 
     ASTNode typeAst =
-        std::make_unique<TypeAST>(typeOf(prevTokenInfo), nullptr, isUniquePtr,
+        std::make_unique<TypeAST>(typeSpecifierOf(prevTokenInfo), nullptr, isUniquePtr,
                                   true, isRef, indirectionLevel, semLoc);
 
     // expected >

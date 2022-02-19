@@ -1,7 +1,7 @@
-// should give an error for redefination of 's'
+int x = 23;
+
 func(int a, int& c, k int&, s Type) :: void {
     float x = 3,y = 4;
-    int s = 233;
 
     ret;
 }

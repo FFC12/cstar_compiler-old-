@@ -1,8 +1,8 @@
 #ifndef SYMBOLS_HPP
 #define SYMBOLS_HPP
 #include <map>
-#include <parser/type_specifiers.hpp>
 #include <string>
+#include <parser/type_specifiers.hpp>
 
 enum SymbolScope { Func, LoopSt, IfSt };
 
@@ -14,12 +14,12 @@ struct SymbolInfo {
   size_t scopeLevel;
   size_t scopeId;
   bool isGlob;
-  bool isIntegral;
-  bool isFloat;
+  bool isPrimitive;
   bool isConstVal;
   bool isConstPtr;
   bool isConstRef;
   bool isNeededEval;
+  bool isSubscriptable;
   bool isNeededTypeCheck;
   std::string value;
   std::pair<std::string, std::string>

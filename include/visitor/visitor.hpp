@@ -2,8 +2,18 @@
 #define VISITOR_HPP
 #include <llvm/IR/Value.h>
 
-#include <variant>
 #include <visitor/symbols.hpp>
+#include <utility>
+
+struct SemanticErrorMessage {
+  std::string message;
+  SymbolInfo symbolInfo;
+
+  SemanticErrorMessage(std::string mesg, SymbolInfo symInf)
+    : message(std::move(mesg)), symbolInfo(std::move(symInf))
+  {
+  }
+};
 
 class IAST;
 class CastOpAST;
@@ -26,7 +36,7 @@ using ValuePtr = llvm::Value*;
 class Visitor {
   friend VarAST;
 
-  std::vector<std::pair<std::string, SymbolInfo>> m_UnknownTypeErrorMessages;
+  std::vector<SemanticErrorMessage> m_UnknownTypeErrorMessages;
   std::vector<SymbolInfo> m_SymbolInfos;
   size_t m_ScopeLevel = 0;
   size_t m_ScopeId = 0;
@@ -83,7 +93,7 @@ class Visitor {
   SymbolInfo previsit(SymbolAST& symbolAst);
 
   std::vector<SymbolInfo> getSymbolInfoList() { return this->m_SymbolInfos; }
-  std::vector<std::pair<std::string, SymbolInfo>> getUnknownTypeErrorMessages() {
+  std::vector<SemanticErrorMessage> getUnknownTypeErrorMessages() {
     return this->m_UnknownTypeErrorMessages;
   }
 };

@@ -2,6 +2,7 @@
 #define TYPE_SPECIFIERS_HPP
 
 enum TypeSpecifier {
+  SPEC_VOID,
   SPEC_I8,
   SPEC_I16,
   SPEC_I32,

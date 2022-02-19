@@ -207,7 +207,7 @@ class CStarParser {
   TypeQualifier typeQualifierOf(const TokenInfo& tokenInfo);
   void ParserHint(std::string mesg, TokenInfo tokenInfo);
   void ParserHint(std::string mesg, TokenInfo tokenInfo, size_t new_begin);
-  void ParserError(std::string mesg, TokenInfo tokenInfo);
+  void ParserError(const std::string& mesg, TokenInfo tokenInfo);
 
   void ParserError(std::string mesg, TokenInfo tokenInfo, size_t new_begin);
   std::string_view::iterator viewLine(size_t line, size_t& rlbegin,
@@ -218,6 +218,7 @@ class CStarParser {
                bool isLocal, std::vector<ASTNode>* scope = nullptr);
   DeclKind getDeclKind(VisibilitySpecifier visibilitySpecifier);
   ASTNode initializer();
+  bool advanceTypeSubscript(std::vector<ASTNode>&);
   ASTNode initializerList();
   size_t advancePointerType(bool isUniquePtr);
   TypeSpecifier typeSpecifierOf(const TokenInfo& tokenInfo);

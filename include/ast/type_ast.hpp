@@ -2,10 +2,11 @@
 #define TYPE_AST_HPP
 #include <ast/ast.hpp>
 #include <parser/types.hpp>
+#include <parser/type_specifiers.hpp>
 
 class TypeAST : public IAST {
   friend Visitor;
-  Type m_TypeSpec;
+  TypeSpecifier m_TypeSpec;
   ASTNode m_Symbol;
   size_t m_IndirectLevel;
   bool m_IsUniquePtr;
@@ -13,7 +14,7 @@ class TypeAST : public IAST {
   bool m_IsRef;
 
  public:
-  TypeAST(Type typeSpec, ASTNode symbol, bool isUniquePtr, bool isPrimitive,
+  TypeAST(TypeSpecifier typeSpec, ASTNode symbol, bool isUniquePtr, bool isPrimitive,
           bool isRef, size_t indirectLevel, SemanticLoc& semanticLoc)
       : IAST(semanticLoc),
         m_TypeSpec(typeSpec),

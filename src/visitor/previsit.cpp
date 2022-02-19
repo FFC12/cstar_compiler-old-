@@ -34,6 +34,7 @@ SymbolInfo Visitor::previsit(VarAST &varAst) {
   }
 
   symbolInfo.type = varAst.m_TypeSpec;
+  symbolInfo.isSubscriptable = varAst.m_IsInitializerList;
   symbolInfo.indirectionLevel = varAst.m_IndirectLevel;
   symbolInfo.isConstRef = varAst.m_IsRef;
   symbolInfo.isConstPtr = varAst.m_TypeQualifier == Q_CONSTPTR;
@@ -86,15 +87,18 @@ SymbolInfo Visitor::previsit(FuncAST &funcAst) {
 
       if (!isLeftOne && !isRightOne) {
         this->m_UnknownTypeErrorMessages.emplace_back(
-            "Unknown type '" + symbol.definedTypenamePair.first + "'", symbol);
+            "Unknown type '" + symbol.definedTypenamePair.first + "' or '" +
+                symbol.definedTypenamePair.second + "'",
+            symbol);
       } else {
         symbol.scopeLevel = scopeLevel;
         symbol.scopeId = scopeId;
 
-        if(isRightOne && isLeftOne) {
+        if (isRightOne && isLeftOne) {
           auto firstSymbol = symbol.definedTypenamePair.first;
           this->m_UnknownTypeErrorMessages.emplace_back(
-              "Unexpected token '" + firstSymbol + "' after '" + firstSymbol + "'",
+              "Unexpected token '" + firstSymbol + "' after '" + firstSymbol +
+                  "'",
               symbol);
         } else if (isLeftOne) {
           symbol.symbolName = symbol.definedTypenamePair.second;
@@ -133,7 +137,7 @@ SymbolInfo Visitor::previsit(IfStmtAST &ifStmtAst) {
     for (auto &entry : ifStmtAst.m_ElseIfs) {
       auto &elseIfBlock = entry.second;
       // manually increasing
-      this->m_ScopeId++;
+      scopeId++;
       for (auto &node : elseIfBlock.second) {
         scopeHandler(node, SymbolScope::IfSt, scopeLevel, scopeId);
       }
@@ -142,7 +146,7 @@ SymbolInfo Visitor::previsit(IfStmtAST &ifStmtAst) {
 
   if (ifStmtAst.m_HasElse) {
     // manually increasing
-    this->m_ScopeId++;
+    scopeId++;
     for (auto &node : ifStmtAst.m_Else) {
       scopeHandler(node, SymbolScope::IfSt, scopeLevel, scopeId);
     }
@@ -185,13 +189,28 @@ SymbolInfo Visitor::previsit(ParamAST &paramAst) {
     symbolInfo.definedTypenamePair = std::make_pair(leftOne, rightOne);
   } else {
     symbolInfo = paramAst.m_Symbol0->acceptBefore(*this);
+    if (paramAst.m_IsPrimitive) {
+      auto typeInfo = paramAst.m_TypeNode->acceptBefore(*this);
+      symbolInfo.type = typeInfo.type;
+    } else {
+      symbolInfo.type = TypeSpecifier::SPEC_DEFINED;
+    }
   }
+
+  symbolInfo.isSubscriptable = paramAst.m_IsSubscriptable;
 
   return symbolInfo;
 }
 SymbolInfo Visitor::previsit(RetAST &retAst) {}
 SymbolInfo Visitor::previsit(UnaryOpAST &unaryOpAst) {}
-SymbolInfo Visitor::previsit(TypeAST &typeAst) {}
+SymbolInfo Visitor::previsit(TypeAST &typeAst) {
+  SymbolInfo symbolInfo;
+
+  symbolInfo.type = typeAst.m_TypeSpec;
+  symbolInfo.isPrimitive = typeAst.m_IsPrimitiveType;
+
+  return symbolInfo;
+}
 
 void Visitor::scopeHandler(std::unique_ptr<IAST> &node, SymbolScope symbolScope,
                            size_t scopeLevel, size_t scopeId) {

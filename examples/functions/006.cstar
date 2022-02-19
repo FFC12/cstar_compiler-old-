@@ -1,0 +1,6 @@
+
+main(int[2:2] arr, b int, c int[2:2], Type[2:2] a, p Type) :: void {
+  int arr[2:1];
+
+  ret;
+}

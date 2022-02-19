@@ -303,7 +303,7 @@ class CStarLexer {
     // since our ParserError function can
     // be worked correctly
     if (!m_Buffer.empty()) {
-      if (m_Buffer[-1] != '\n') m_Buffer.push_back('\n');
+      if (m_Buffer[m_Buffer.size()] != '\n') m_Buffer.push_back('\n');
     }
 
     preprocess();
@@ -316,11 +316,11 @@ class CStarLexer {
       }*/
   }
 
-  std::shared_ptr<char> getFilepath() const {
+  [[nodiscard]] std::shared_ptr<char> getFilepath() const {
     return this->m_FileInfo.filepath;
   }
 
-  std::string_view getBufferView() const {
+  [[nodiscard]] std::string_view getBufferView() const {
     return this->m_BufferView;  // std::string(this->m_BufferView.begin(),
                                 // this->m_BufferView.end());
   }
@@ -342,7 +342,7 @@ class CStarLexer {
   TokenKind advanceConstant() {
     char _c = this->m_CurrChar;
     bool _is_float = false;
-    std::string _keyword = "";
+    std::string _keyword;
     TokenKind _scalarType = TokenKind::SCALARI;
 
     while (isdigit(_c) || _c == '.') {

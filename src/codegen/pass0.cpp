@@ -1,11 +1,14 @@
+#include <algorithm>
 #include <codegen/codegen.hpp>
 #include <utility>
 
 void CStarCodegen::pass0() {
   std::string funcName;
 
-  //TODO: Will be revised
-  this->m_DefinedTypes["Type"] = 1;
+  // TODO: Will be revised
+  // this->m_DefinedTypes["Type"] = 1;
+
+  std::vector<SemanticErrorMessage> localSymbolMessages;
 
   for (auto& ast : m_AST) {
     if (ast->getASTKind() == ASTKind::Decl) {
@@ -19,14 +22,19 @@ void CStarCodegen::pass0() {
           if (!redefinitionCheck(symbolInfoList, symbolInfo)) {
             symbolInfoList.insert({symbolInfo.symbolName, symbolInfo});
           } else {
-            SemanticError(
-                "Redefination of local symbol '" + symbolInfo.symbolName + "'",
+            localSymbolMessages.emplace_back(
+                "Redefinition of local symbol '" + symbolInfo.symbolName + "'",
                 symbolInfo);
           }
         }
 
-        for(auto &message: preVisitor.getUnknownTypeErrorMessages()) {
-          SemanticError(message.first,message.second);
+        auto messages = preVisitor.getUnknownTypeErrorMessages();
+        for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
+          SemanticError(it->message, it->symbolInfo);
+        }
+
+        for(auto it = localSymbolMessages.rbegin(); it != localSymbolMessages.rend(); ++it) {
+          SemanticError(it->message, it->symbolInfo);
         }
 
         this->m_LocalSymbols.insert({funcName, std::move(symbolInfoList)});
@@ -39,7 +47,7 @@ void CStarCodegen::pass0() {
 
         if (redefinitionCheck(symbolInfo)) {
           SemanticError(
-              "Redefination of global symbol '" + symbolInfo.symbolName + "'",
+              "Redefinition of global symbol '" + symbolInfo.symbolName + "'",
               symbolInfo);
         }
 
@@ -51,7 +59,8 @@ void CStarCodegen::pass0() {
   return;
 }
 
-bool CStarCodegen::redefinitionCheck(SymbolInfoList &symbols, SymbolInfo& symbol, size_t arr[3]) {
+bool CStarCodegen::redefinitionCheck(SymbolInfoList& symbols,
+                                     SymbolInfo& symbol, size_t arr[3]) {
   bool redefinationFlag = false;
 
   auto entries = symbols.equal_range(symbol.symbolName);
@@ -103,8 +112,7 @@ bool CStarCodegen::redefinitionCheck(SymbolInfoList& symbols,
   return redefinationFlag;
 }
 
-void CStarCodegen::SemanticError(std::string message,
-                                     SymbolInfo& symbolInfo) {
+void CStarCodegen::SemanticError(std::string message, SymbolInfo& symbolInfo) {
   m_Parser.ParserError(std::move(message), symbolInfo.begin, symbolInfo.end,
                        symbolInfo.line);
   m_SemAnalysisFailure = true;
