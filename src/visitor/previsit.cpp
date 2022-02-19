@@ -18,27 +18,40 @@
 SymbolInfo Visitor::previsit(VarAST &varAst) {
   SymbolInfo symbolInfo;
 
-  symbolInfo.symbolName = varAst.m_Name;
-  symbolInfo.begin = varAst.m_SemLoc.begin;
-  symbolInfo.end = varAst.m_SemLoc.end;
-  symbolInfo.line = varAst.m_SemLoc.line;
+  if (m_TypeChecking || true) {
+    symbolInfo.symbolName = varAst.m_Name;
+    symbolInfo.begin = varAst.m_SemLoc.begin;
+    symbolInfo.end = varAst.m_SemLoc.end;
+    symbolInfo.line = varAst.m_SemLoc.line;
 
-  if (varAst.m_IsLocal) {
-    // will be evualated later
-    // symbolInfo = varAst.m_RHS->acceptBefore(*this);
-    symbolInfo.isGlob = false;
-  } else {
-    symbolInfo.isGlob = true;
-    symbolInfo.scopeLevel = 0;
-    symbolInfo.scopeId = 0;
+    if (varAst.m_IsLocal) {
+      // will be evualated later
+      // symbolInfo = varAst.m_RHS->acceptBefore(*this);
+      symbolInfo.isGlob = false;
+    } else {
+      symbolInfo.isGlob = true;
+      symbolInfo.scopeLevel = 0;
+      symbolInfo.scopeId = 0;
+    }
+
+    symbolInfo.type = varAst.m_TypeSpec;
+    symbolInfo.isSubscriptable = varAst.m_IsInitializerList;
+    symbolInfo.indirectionLevel = varAst.m_IndirectLevel;
+    symbolInfo.isConstRef = varAst.m_TypeQualifier == Q_CONSTREF;
+    symbolInfo.isConstPtr = varAst.m_TypeQualifier == Q_CONSTPTR;
+    symbolInfo.isConstVal = varAst.m_TypeQualifier == Q_CONST;
+    symbolInfo.isRef = varAst.m_IsRef;
+    symbolInfo.isNeededEval = true;
+
+    if(varAst.m_RHS) {
+      if (varAst.m_RHS->m_ASTKind == ASTKind::Expr) {
+        if (varAst.m_RHS->m_ExprKind == ExprKind::ScalarExpr ||
+            varAst.m_RHS->m_ExprKind == ExprKind::SymbolExpr) {
+          symbolInfo.isNeededEval = false;
+        }
+      }
+    }
   }
-
-  symbolInfo.type = varAst.m_TypeSpec;
-  symbolInfo.isSubscriptable = varAst.m_IsInitializerList;
-  symbolInfo.indirectionLevel = varAst.m_IndirectLevel;
-  symbolInfo.isConstRef = varAst.m_IsRef;
-  symbolInfo.isConstPtr = varAst.m_TypeQualifier == Q_CONSTPTR;
-  symbolInfo.isConstVal = varAst.m_TypeQualifier == Q_CONST;
 
   return symbolInfo;
 }
@@ -58,7 +71,17 @@ SymbolInfo Visitor::previsit(SymbolAST &symbolAst) {
 }
 
 SymbolInfo Visitor::previsit(ScalarOrLiteralAST &scalarAst) {}
-SymbolInfo Visitor::previsit(BinaryOpAST &binaryOpAst) {}
+SymbolInfo Visitor::previsit(BinaryOpAST &binaryOpAst) {
+  if (this->m_TypeChecking) {
+    SymbolInfo symbolInfo;
+
+    ASTNode &lhs = binaryOpAst.m_LHS, &rhs = binaryOpAst.m_RHS;
+    //   while()
+
+    return symbolInfo;
+  } else {
+  }
+}
 SymbolInfo Visitor::previsit(CastOpAST &castOpAst) {}
 
 SymbolInfo Visitor::previsit(FuncAST &funcAst) {

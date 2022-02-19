@@ -1,6 +1,10 @@
 
 main(int[2:2] arr, b int, c int[2:2], Type[2:2] a, p Type) :: void {
-  int arr[2:1];
+  int arr2[2:1];
+
+  int &s = a, &r = b;
+  int w = a + b + 20;
+
 
   ret;
 }

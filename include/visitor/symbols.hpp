@@ -9,18 +9,19 @@ enum SymbolScope { Func, LoopSt, IfSt };
 // This is using for pipelining informations
 // also it contains type informations as well.
 struct SymbolInfo {
-  size_t begin, end, line;
-  size_t indirectionLevel;
-  size_t scopeLevel;
-  size_t scopeId;
-  bool isGlob;
-  bool isPrimitive;
-  bool isConstVal;
-  bool isConstPtr;
-  bool isConstRef;
-  bool isNeededEval;
-  bool isSubscriptable;
-  bool isNeededTypeCheck;
+  size_t begin = 0, end = 0, line = 0;
+  size_t indirectionLevel = 0;
+  size_t scopeLevel = 0;
+  size_t scopeId = 0;
+  bool isGlob = false;
+  bool isPrimitive = false;
+  bool isRef = false;
+  bool isConstVal = false;
+  bool isConstPtr = false;
+  bool isConstRef = false;
+  bool isNeededEval = false;
+  bool isSubscriptable = false;
+  bool isNeededTypeCheck = false;
   std::string value;
   std::pair<std::string, std::string>
       definedTypenamePair;  // left one is for symbol0 and right one is for

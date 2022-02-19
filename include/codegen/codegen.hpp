@@ -22,9 +22,6 @@ class CStarCodegen {
   using DefinedTypeTable = std::map<std::string, size_t>;
   DefinedTypeTable m_DefinedTypes;
 
-  // Need to be resolved during type checking phase.
-  std::vector<std::map<std::string, size_t>> m_UnresolvedParamsAsLocal;
-
   CStarParser m_Parser;
   std::vector<ASTNode> m_AST;
   //  std::vector<llvm::Module> m_Modules;
@@ -85,6 +82,9 @@ class CStarCodegen {
                          size_t arr[3]);
   bool redefinitionCheck(SymbolInfo& symbol);
   void SemanticError(std::string message, SymbolInfo& symbolInfo);
+
+  // pass1 is for type checking
+  void pass1();
 
   ~CStarCodegen() {
     // Need to release and delete it manually

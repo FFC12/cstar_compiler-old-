@@ -2,17 +2,15 @@
 #define VISITOR_HPP
 #include <llvm/IR/Value.h>
 
-#include <visitor/symbols.hpp>
 #include <utility>
+#include <visitor/symbols.hpp>
 
 struct SemanticErrorMessage {
   std::string message;
   SymbolInfo symbolInfo;
 
   SemanticErrorMessage(std::string mesg, SymbolInfo symInf)
-    : message(std::move(mesg)), symbolInfo(std::move(symInf))
-  {
-  }
+      : message(std::move(mesg)), symbolInfo(std::move(symInf)) {}
 };
 
 class IAST;
@@ -41,6 +39,7 @@ class Visitor {
   size_t m_ScopeLevel = 0;
   size_t m_ScopeId = 0;
   bool m_InsideScope = false;
+  bool m_TypeChecking = false;
 
   const std::map<std::string, size_t>& m_TypeTable;
 
@@ -61,6 +60,9 @@ class Visitor {
  public:
   explicit Visitor(const std::map<std::string, size_t>& typeTable)
       : m_TypeTable(typeTable) {}
+
+  Visitor(const std::map<std::string, size_t>& typeTable, bool typeCheck)
+      : m_TypeTable(typeTable), m_TypeChecking(typeCheck) {}
 
   ValuePtr visit(VarAST& varAst);
   ValuePtr visit(AssignmentAST& assignmentAst);
