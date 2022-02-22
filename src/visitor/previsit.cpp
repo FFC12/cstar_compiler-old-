@@ -15,7 +15,136 @@
 #include <ast/var_ast.hpp>
 #include <visitor/visitor.hpp>
 
-SymbolInfo Visitor::previsit(VarAST &varAst) {
+static size_t GetBitSize(TypeSpecifier typeSpecifier) {
+  switch (typeSpecifier) {
+    case SPEC_VOID:
+      return 1;
+    case SPEC_I8:
+      return 8;
+    case SPEC_I16:
+      return 16;
+    case SPEC_I32:
+      return 32;
+    case SPEC_I64:
+      return 64;
+    case SPEC_INT:
+#if defined(_M_X64) || defined(__amd64__)
+      return 64;
+#else
+      return 32;
+#endif
+    case SPEC_U8:
+      return 8;
+    case SPEC_U16:
+      return 16;
+    case SPEC_U32:
+      return 32;
+    case SPEC_U64:
+      return 64;
+    case SPEC_U128:
+      return 128;
+    case SPEC_UINT:
+#if defined(_M_X64) || defined(__amd64__)
+      return 128;
+#else
+      return 64;
+#endif
+    case SPEC_ISIZE:
+#if defined(_M_X64) || defined(__amd64__)
+      return 64;
+#else
+      return 32;
+#endif
+    case SPEC_USIZE:
+#if defined(_M_X64) || defined(__amd64__)
+      return 128;
+#else
+      return 64;
+#endif
+    case SPEC_F32:
+      return 32;
+    case SPEC_F64:
+      return 64;
+    case SPEC_FLOAT:
+#if defined(_M_X64) || defined(__amd64__)
+      return 128;
+#else
+      return 64;
+#endif
+    case SPEC_CHAR:
+      return 8;
+    case SPEC_UCHAR:
+      return 8;
+    case SPEC_BOOL:
+      return 8;
+    case SPEC_VEC2:
+    case SPEC_VEC3:
+    case SPEC_VEC4:
+      assert(false && "Not implemented yet!");
+    case SPEC_NIL:
+      return 8;
+    case SPEC_DEFINED:
+      assert(false && "Not implemented yet!");
+    default:
+      assert(false && "Unreacheable");
+  }
+}
+static std::string GetTypeStr(TypeSpecifier typeSpecifier) {
+  switch (typeSpecifier) {
+    case SPEC_VOID:
+      return "void";
+    case SPEC_I8:
+      return "int8";
+    case SPEC_I16:
+      return "int16";
+    case SPEC_I32:
+      return "int32";
+    case SPEC_I64:
+      return "int64";
+    case SPEC_INT:
+      return "int";
+    case SPEC_U8:
+      return "uint8";
+    case SPEC_U16:
+      return "uint16";
+    case SPEC_U32:
+      return "uint32";
+    case SPEC_U64:
+      return "uint64";
+    case SPEC_U128:
+      return "uint128";
+    case SPEC_UINT:
+      return "uint";
+    case SPEC_ISIZE:
+      return "isize";
+    case SPEC_USIZE:
+      return "usize";
+    case SPEC_F32:
+      return "float32";
+    case SPEC_F64:
+      return "float64";
+    case SPEC_FLOAT:
+      return "float";
+    case SPEC_CHAR:
+      return "char";
+    case SPEC_UCHAR:
+      return "uchar";
+    case SPEC_BOOL:
+      return "bool";
+    case SPEC_VEC2:
+    case SPEC_VEC4:
+    case SPEC_VEC3:
+      assert(false && "Not implemented yet!");
+
+    case SPEC_NIL:
+      assert(false && "!");
+    case SPEC_DEFINED:
+    default:
+      assert(false && "Unreacheable");
+  }
+}
+
+SymbolInfo Visitor::preVisit(VarAST &varAst) {
   SymbolInfo symbolInfo;
 
   if (m_TypeChecking || true) {
@@ -39,26 +168,62 @@ SymbolInfo Visitor::previsit(VarAST &varAst) {
     symbolInfo.indirectionLevel = varAst.m_IndirectLevel;
     symbolInfo.isConstRef = varAst.m_TypeQualifier == Q_CONSTREF;
     symbolInfo.isConstPtr = varAst.m_TypeQualifier == Q_CONSTPTR;
+    symbolInfo.isReadOnly = varAst.m_TypeQualifier == Q_READONLY;
     symbolInfo.isConstVal = varAst.m_TypeQualifier == Q_CONST;
     symbolInfo.isRef = varAst.m_IsRef;
     symbolInfo.isNeededEval = true;
 
-    if(varAst.m_RHS) {
-      if (varAst.m_RHS->m_ASTKind == ASTKind::Expr) {
-        if (varAst.m_RHS->m_ExprKind == ExprKind::ScalarExpr ||
-            varAst.m_RHS->m_ExprKind == ExprKind::SymbolExpr) {
-          symbolInfo.isNeededEval = false;
-        }
+    if (!varAst.m_RHS) {
+      // Well,the symbol it's not initialized.
+      symbolInfo.isNeededEval = false;
+    }
+  }
+
+  // Do not need to look up the symbol table
+  // for the declared name. since we can directly
+  // take the information from decl.
+  if (this->m_TypeChecking && symbolInfo.isNeededEval) {
+    this->m_ExpectedType = varAst.m_TypeSpec;
+
+    // reset states
+    this->m_DefinedTypeName.clear();
+    this->m_DefinedTypeFlag = false;
+    this->m_LastSymbolName.clear();
+    this->m_LastSymbolIndirectionLevel = 0;
+    this->m_LastSymbolIsRef = false;
+    this->m_LastSymbolIsUniqPtr = false;
+    this->m_LastSymbolConstPtr = false;
+    this->m_LastSymbolConstRef = false;
+    this->m_LastSymbolRO = false;
+    this->m_LastSymbolConst = false;
+
+    if (varAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED) {
+      if (varAst.m_Typename->m_ExprKind == ExprKind::SymbolExpr) {
+        auto typeName =
+            dynamic_cast<SymbolAST *>(varAst.m_Typename.get())->m_SymbolName;
+        this->m_DefinedTypeName = typeName;
+        this->m_DefinedTypeFlag = true;
       }
     }
+
+    this->m_LastSymbolName = varAst.m_Name;
+    this->m_LastSymbolIndirectionLevel = varAst.m_IndirectLevel;
+    this->m_LastSymbolIsRef = varAst.m_IsRef;
+    this->m_LastSymbolIsUniqPtr = varAst.m_IsUniquePtr;
+    this->m_LastSymbolConstPtr = symbolInfo.isConstPtr;
+    this->m_LastSymbolConstRef = symbolInfo.isConstRef;
+    this->m_LastSymbolRO = symbolInfo.isReadOnly;
+    this->m_LastSymbolConst = symbolInfo.isConstVal;
+
+    auto tempSymbolInfo = varAst.m_RHS->acceptBefore(*this);
   }
 
   return symbolInfo;
 }
 
-SymbolInfo Visitor::previsit(AssignmentAST &assignmentAst) {}
+SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {}
 
-SymbolInfo Visitor::previsit(SymbolAST &symbolAst) {
+SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
   auto symbolName = symbolAst.m_SymbolName;
 
   SymbolInfo symbolInfo;
@@ -70,8 +235,90 @@ SymbolInfo Visitor::previsit(SymbolAST &symbolAst) {
   return symbolInfo;
 }
 
-SymbolInfo Visitor::previsit(ScalarOrLiteralAST &scalarAst) {}
-SymbolInfo Visitor::previsit(BinaryOpAST &binaryOpAst) {
+SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
+  SymbolInfo symbolInfo;
+
+  if (this->m_TypeChecking) {
+    if (!this->m_DefinedTypeFlag) {
+      if (this->m_ExpectedType == TypeSpecifier::SPEC_BOOL &&
+          scalarAst.m_IsBoolean) {
+      } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_FLOAT ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_F32 ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_F64) &&
+                 scalarAst.m_IsIntegral && scalarAst.m_IsFloat) {
+      } else if (this->m_ExpectedType == TypeSpecifier::SPEC_VOID &&
+                 this->m_LastSymbolIndirectionLevel) {
+        symbolInfo.begin = scalarAst.m_SemLoc.begin;
+        symbolInfo.end = scalarAst.m_SemLoc.end;
+        symbolInfo.line = scalarAst.m_SemLoc.line;
+
+        this->m_TypeErrorMessages.emplace_back(
+            "'void' is an incomplete type and cannot be used as a "
+            "declaration type",
+            symbolInfo);
+      } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_CHAR ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_UCHAR) &&
+                 scalarAst.m_IsLetter &&
+                 this->m_LastSymbolIndirectionLevel == 0) {
+      } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_CHAR ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_UCHAR) &&
+                 scalarAst.m_IsLiteral &&
+                 this->m_LastSymbolIndirectionLevel > 0 &&
+                 (this->m_LastSymbolConstPtr || this->m_LastSymbolRO)) {
+      } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_U8 ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_U16 ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_U32 ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_U64 ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_U128 ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_UINT ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_USIZE) &&
+                 scalarAst.m_IsIntegral &&
+                 this->m_LastSymbolIndirectionLevel == 0) {
+      } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_I8 ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_I16 ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_I32 ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_I64 ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_INT ||
+                  this->m_ExpectedType == TypeSpecifier::SPEC_ISIZE) &&
+                 scalarAst.m_IsIntegral &&
+                 this->m_LastSymbolIndirectionLevel == 0) {
+      } else {
+        symbolInfo.begin = scalarAst.m_SemLoc.begin;
+        symbolInfo.end = scalarAst.m_SemLoc.end;
+        symbolInfo.line = scalarAst.m_SemLoc.line;
+
+        std::string typeQualifier;
+        if (this->m_LastSymbolRO) typeQualifier = "readonly";
+        if (this->m_LastSymbolConstRef) typeQualifier = "constref";
+        if (this->m_LastSymbolConstPtr) typeQualifier = "constptr";
+        if(this->m_LastSymbolConst) typeQualifier = "const";
+
+        std::string indirection;
+        if (this->m_LastSymbolIsRef) indirection += "&";
+
+        if (!this->m_LastSymbolIsRef) {
+          for (int i = 0; i < this->m_LastSymbolIndirectionLevel; i++) {
+            if (this->m_LastSymbolIsUniqPtr) {
+              indirection += "^";
+            } else {
+              indirection += "*";
+            }
+          }
+        }
+
+        this->m_TypeErrorMessages.emplace_back(
+            "Incompatible type. Expected a suitable value with '" +
+                (typeQualifier.empty() ? "" : (typeQualifier + " ")) +
+                GetTypeStr(this->m_ExpectedType) + indirection + "'",
+            symbolInfo);
+      }
+    }
+  }
+
+  return symbolInfo;
+}
+
+SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
   if (this->m_TypeChecking) {
     SymbolInfo symbolInfo;
 
@@ -82,11 +329,15 @@ SymbolInfo Visitor::previsit(BinaryOpAST &binaryOpAst) {
   } else {
   }
 }
-SymbolInfo Visitor::previsit(CastOpAST &castOpAst) {}
+SymbolInfo Visitor::preVisit(CastOpAST &castOpAst) {}
 
-SymbolInfo Visitor::previsit(FuncAST &funcAst) {
+SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
   SymbolInfo symbolInfo;
+
   symbolInfo.assocFuncName = funcAst.m_FuncName;
+  symbolInfo.begin = funcAst.m_SemLoc.begin;
+  symbolInfo.end = funcAst.m_SemLoc.end;
+  symbolInfo.line = funcAst.m_SemLoc.line;
 
   enterScope(false);
 
@@ -109,7 +360,7 @@ SymbolInfo Visitor::previsit(FuncAST &funcAst) {
       }
 
       if (!isLeftOne && !isRightOne) {
-        this->m_UnknownTypeErrorMessages.emplace_back(
+        this->m_TypeErrorMessages.emplace_back(
             "Unknown type '" + symbol.definedTypenamePair.first + "' or '" +
                 symbol.definedTypenamePair.second + "'",
             symbol);
@@ -119,10 +370,10 @@ SymbolInfo Visitor::previsit(FuncAST &funcAst) {
 
         if (isRightOne && isLeftOne) {
           auto firstSymbol = symbol.definedTypenamePair.first;
-          this->m_UnknownTypeErrorMessages.emplace_back(
-              "Unexpected token '" + firstSymbol + "' after '" + firstSymbol +
-                  "'",
-              symbol);
+          this->m_TypeErrorMessages.emplace_back("Unexpected token '" +
+                                                     firstSymbol + "' after '" +
+                                                     firstSymbol + "'",
+                                                 symbol);
         } else if (isLeftOne) {
           symbol.symbolName = symbol.definedTypenamePair.second;
           this->m_SymbolInfos.push_back(symbol);
@@ -144,7 +395,7 @@ SymbolInfo Visitor::previsit(FuncAST &funcAst) {
   return symbolInfo;
 }
 
-SymbolInfo Visitor::previsit(IfStmtAST &ifStmtAst) {
+SymbolInfo Visitor::preVisit(IfStmtAST &ifStmtAst) {
   SymbolInfo symbolInfo;
   enterScope(false);
 
@@ -179,7 +430,7 @@ SymbolInfo Visitor::previsit(IfStmtAST &ifStmtAst) {
   return symbolInfo;
 }
 
-SymbolInfo Visitor::previsit(LoopStmtAST &loopStmtAst) {
+SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
   SymbolInfo symbolInfo;
   enterScope(false);
 
@@ -194,8 +445,8 @@ SymbolInfo Visitor::previsit(LoopStmtAST &loopStmtAst) {
   return symbolInfo;
 }
 
-SymbolInfo Visitor::previsit(FuncCallAST &funcCallAst) {}
-SymbolInfo Visitor::previsit(ParamAST &paramAst) {
+SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {}
+SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
   SymbolInfo symbolInfo;
 
   if (paramAst.m_IsNotClear) {
@@ -224,9 +475,9 @@ SymbolInfo Visitor::previsit(ParamAST &paramAst) {
 
   return symbolInfo;
 }
-SymbolInfo Visitor::previsit(RetAST &retAst) {}
-SymbolInfo Visitor::previsit(UnaryOpAST &unaryOpAst) {}
-SymbolInfo Visitor::previsit(TypeAST &typeAst) {
+SymbolInfo Visitor::preVisit(RetAST &retAst) {}
+SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {}
+SymbolInfo Visitor::preVisit(TypeAST &typeAst) {
   SymbolInfo symbolInfo;
 
   symbolInfo.type = typeAst.m_TypeSpec;

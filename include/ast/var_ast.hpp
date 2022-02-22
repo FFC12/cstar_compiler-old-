@@ -10,6 +10,7 @@
 class VarAST : public IAST {
   friend Visitor;
   TypeSpecifier m_TypeSpec;
+  ASTNode m_Typename;
   TypeQualifier m_TypeQualifier;
   VisibilitySpecifier m_VisibilitySpec;
   std::string m_Name;
@@ -22,13 +23,14 @@ class VarAST : public IAST {
   bool m_IsInitializerList;
 
  public:
-  VarAST(std::string name, std::unique_ptr<IAST> RHS, TypeSpecifier type_spec,
+  VarAST(std::string name, ASTNode typeName, std::unique_ptr<IAST> RHS, TypeSpecifier type_spec,
          TypeQualifier typeQualifier, VisibilitySpecifier visibility_spec,
          size_t indirectLevel, bool isRef, bool isUnique, bool isLocal,
          bool isInitializerList, std::vector<ASTNode> arrayDim,
          SemanticLoc& semanticLoc)
       : IAST(semanticLoc),
         m_Name(std::move(name)),
+        m_Typename(std::move(typeName)),
         m_RHS(std::move(RHS)),
         m_IndirectLevel(indirectLevel),
         m_TypeSpec(type_spec),
@@ -76,7 +78,7 @@ class VarAST : public IAST {
   void setVisibility(VisibilitySpecifier& vis) { this->m_VisibilitySpec = vis; }
 
   SymbolInfo acceptBefore(Visitor& visitor) override {
-    return visitor.previsit(*this);
+    return visitor.preVisit(*this);
   }
 
   ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }

@@ -30,11 +30,18 @@ class UnaryOpAST;
 class VarAST;
 
 using ValuePtr = llvm::Value*;
+using SymbolInfoList = std::multimap<std::string, SymbolInfo>;
+using LocalSymbolInfoList = std::map<std::string, SymbolInfoList>;
+using GlobalSymbolInfoList = SymbolInfoList;
 
 class Visitor {
   friend VarAST;
 
-  std::vector<SemanticErrorMessage> m_UnknownTypeErrorMessages;
+  // These are from pass0;
+  GlobalSymbolInfoList m_GlobalSymbolTable;
+  LocalSymbolInfoList m_LocalSymbolTable;
+
+  std::vector<SemanticErrorMessage> m_TypeErrorMessages;
   std::vector<SymbolInfo> m_SymbolInfos;
   size_t m_ScopeLevel = 0;
   size_t m_ScopeId = 0;
@@ -42,6 +49,21 @@ class Visitor {
   bool m_TypeChecking = false;
 
   const std::map<std::string, size_t>& m_TypeTable;
+
+  // This is a state for expressions.
+  TypeSpecifier m_ExpectedType = TypeSpecifier::SPEC_VOID;
+  bool m_DefinedTypeFlag = false;
+  std::string m_DefinedTypeName;
+  std::string m_LastSymbolName;
+  size_t m_LastSymbolIndirectionLevel = 0;
+  bool m_LastSymbolIsRef;
+  bool m_LastSymbolIsUniqPtr;
+  bool m_LastSymbolRO;
+  bool m_LastSymbolConstPtr;
+  bool m_LastSymbolConstRef;
+  bool m_LastSymbolConst;
+  std::map<std::string, std::vector<SymbolInfo>>
+      m_IncompleteSymbolsOrConstantsOfRHS;
 
   void enterScope(bool globScope) {
     if (!globScope) m_ScopeId += 1;
@@ -61,8 +83,13 @@ class Visitor {
   explicit Visitor(const std::map<std::string, size_t>& typeTable)
       : m_TypeTable(typeTable) {}
 
-  Visitor(const std::map<std::string, size_t>& typeTable, bool typeCheck)
-      : m_TypeTable(typeTable), m_TypeChecking(typeCheck) {}
+  Visitor(const std::map<std::string, size_t>& typeTable,
+          GlobalSymbolInfoList globalSymbolInfoList,
+          LocalSymbolInfoList localSymbolInfoList, bool typeCheck)
+      : m_TypeTable(typeTable),
+        m_TypeChecking(typeCheck),
+        m_GlobalSymbolTable(std::move(globalSymbolInfoList)),
+        m_LocalSymbolTable(std::move(localSymbolInfoList)) {}
 
   ValuePtr visit(VarAST& varAst);
   ValuePtr visit(AssignmentAST& assignmentAst);
@@ -79,24 +106,24 @@ class Visitor {
   ValuePtr visit(ScalarOrLiteralAST& scalarAst);
   ValuePtr visit(SymbolAST& symbolAst);
 
-  SymbolInfo previsit(VarAST& varAst);
-  SymbolInfo previsit(AssignmentAST& assignmentAst);
-  SymbolInfo previsit(BinaryOpAST& binaryOpAst);
-  SymbolInfo previsit(CastOpAST& castOpAst);
-  SymbolInfo previsit(FuncAST& funcAst);
-  SymbolInfo previsit(FuncCallAST& funcCallAst);
-  SymbolInfo previsit(IfStmtAST& ifStmtAst);
-  SymbolInfo previsit(LoopStmtAST& loopStmtAst);
-  SymbolInfo previsit(ParamAST& paramAst);
-  SymbolInfo previsit(RetAST& retAst);
-  SymbolInfo previsit(UnaryOpAST& unaryOpAst);
-  SymbolInfo previsit(TypeAST& typeAst);
-  SymbolInfo previsit(ScalarOrLiteralAST& scalarAst);
-  SymbolInfo previsit(SymbolAST& symbolAst);
+  SymbolInfo preVisit(VarAST& varAst);
+  SymbolInfo preVisit(AssignmentAST& assignmentAst);
+  SymbolInfo preVisit(BinaryOpAST& binaryOpAst);
+  SymbolInfo preVisit(CastOpAST& castOpAst);
+  SymbolInfo preVisit(FuncAST& funcAst);
+  SymbolInfo preVisit(FuncCallAST& funcCallAst);
+  SymbolInfo preVisit(IfStmtAST& ifStmtAst);
+  SymbolInfo preVisit(LoopStmtAST& loopStmtAst);
+  SymbolInfo preVisit(ParamAST& paramAst);
+  SymbolInfo preVisit(RetAST& retAst);
+  SymbolInfo preVisit(UnaryOpAST& unaryOpAst);
+  SymbolInfo preVisit(TypeAST& typeAst);
+  SymbolInfo preVisit(ScalarOrLiteralAST& scalarAst);
+  SymbolInfo preVisit(SymbolAST& symbolAst);
 
   std::vector<SymbolInfo> getSymbolInfoList() { return this->m_SymbolInfos; }
   std::vector<SemanticErrorMessage> getUnknownTypeErrorMessages() {
-    return this->m_UnknownTypeErrorMessages;
+    return this->m_TypeErrorMessages;
   }
 };
 

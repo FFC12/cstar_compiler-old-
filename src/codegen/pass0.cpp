@@ -23,7 +23,7 @@ void CStarCodegen::pass0() {
             symbolInfoList.insert({symbolInfo.symbolName, symbolInfo});
           } else {
             localSymbolMessages.emplace_back(
-                "Redefinition of local symbol '" + symbolInfo.symbolName + "'",
+                "Redefinition of the local symbol '" + symbolInfo.symbolName + "'",
                 symbolInfo);
           }
         }
@@ -37,7 +37,10 @@ void CStarCodegen::pass0() {
           SemanticError(it->message, it->symbolInfo);
         }
 
-        this->m_LocalSymbols.insert({funcName, std::move(symbolInfoList)});
+        if(this->m_LocalSymbols.count(funcName) != 0) {
+          SemanticError("Redefinition of the function '" + funcName +'"',tempSymbolInfo);
+        }
+        this->m_LocalSymbols[funcName] = std::move(symbolInfoList);
       } else if (ast->getDeclKind() == DeclKind::VarDecl ||
                  ast->getDeclKind() == DeclKind::ImportVarDecl ||
                  ast->getDeclKind() == DeclKind::GlobVarDecl ||
@@ -47,7 +50,7 @@ void CStarCodegen::pass0() {
 
         if (redefinitionCheck(symbolInfo)) {
           SemanticError(
-              "Redefinition of global symbol '" + symbolInfo.symbolName + "'",
+              "Redefinition of the global symbol '" + symbolInfo.symbolName + "'",
               symbolInfo);
         }
 
@@ -113,8 +116,8 @@ bool CStarCodegen::redefinitionCheck(SymbolInfoList& symbols,
 }
 
 void CStarCodegen::SemanticError(std::string message, SymbolInfo& symbolInfo) {
-  m_Parser.ParserError(std::move(message), symbolInfo.begin, symbolInfo.end,
+  this->m_Parser.ParserError(std::move(message), symbolInfo.begin, symbolInfo.end,
                        symbolInfo.line);
-  m_SemAnalysisFailure = true;
-  m_ErrorCount += 1;
+  this->m_SemAnalysisFailure = true;
+  this->m_ErrorCount += 1;
 }

@@ -89,7 +89,7 @@ class UnaryOpAST : public IAST {
   }
 
   SymbolInfo acceptBefore(Visitor& visitor) override {
-    return visitor.previsit(*this);
+    return visitor.preVisit(*this);
   }
 
   ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }

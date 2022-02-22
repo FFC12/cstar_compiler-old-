@@ -5,11 +5,12 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
                           bool isDefinedType, bool isLocal,
                           std::vector<ASTNode>* scope) {
   TypeSpecifier type = TypeSpecifier::SPEC_I8;
+  ASTNode definedTypeSymbol;
 
   auto begin = currentTokenInfo().getTokenPositionInfo().begin;
   if (isDefinedType) {
     // will be passed to the VarDeclAST;
-    auto symbol = this->advanceSymbol();
+    definedTypeSymbol = this->advanceSymbol();
 
     type = TypeSpecifier::SPEC_DEFINED;
   } else {
@@ -75,7 +76,7 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
     // ASTNode ast = std::unique_ptr<VarAST>(new VarAST(name, std::move(rhs),
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));
     auto ast = std::make_unique<VarAST>(
-        name, std::move(rhs), type, typeQualifier, visibilitySpecifier,
+        name, std::move(definedTypeSymbol), std::move(rhs), type, typeQualifier, visibilitySpecifier,
         indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
         std::move(arrayDimensions), semLoc);
 
@@ -99,7 +100,7 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
     // ASTNode ast = std::unique_ptr<VarAST>(new VarAST(name, std::move(rhs),
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));
     auto ast = std::make_unique<VarAST>(
-        name, std::move(rhs), type, typeQualifier, visibilitySpecifier,
+        name, std::move(definedTypeSymbol),std::move(rhs), type, typeQualifier, visibilitySpecifier,
         indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
         std::move(arrayDimensions), semLoc);
 

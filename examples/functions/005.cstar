@@ -3,5 +3,6 @@ int x = 23;
 func(int a, int& c, k int&, s Type) :: void {
     float x = 3,y = 4;
 
+    char b = 'a';
     ret;
 }

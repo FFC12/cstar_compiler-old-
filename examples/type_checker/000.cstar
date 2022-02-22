@@ -1,0 +1,22 @@
+constptr int* p = 23;
+const int* b = 20;
+
+main() :: void {
+/*
+  // should be passed
+  int r = a + b + 10;
+
+  // error
+  float x = a + b;
+
+  // error
+  bool z = x + a; 
+
+  a = z;
+  b = r;
+*/
+  ret;
+}
+
+// float* < usize < uint* <? isize < int* < bool
+// float128 < float64 < float32 < size < uint128 < uint64 < uint32 < uint8 < isize < int64 < int32 < int16 < int8 < char < bool

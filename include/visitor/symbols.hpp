@@ -16,9 +16,10 @@ struct SymbolInfo {
   bool isGlob = false;
   bool isPrimitive = false;
   bool isRef = false;
-  bool isConstVal = false;
+  bool isReadOnly = false;
   bool isConstPtr = false;
   bool isConstRef = false;
+  bool isConstVal = false;
   bool isNeededEval = false;
   bool isSubscriptable = false;
   bool isNeededTypeCheck = false;

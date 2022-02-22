@@ -974,18 +974,23 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
 ASTNode CStarParser::advanceConstantOrLiteral() {
   // this is obviously a scalar or literal or others(matrix and vec?)
   if (is(TokenKind::SCALARD) || is(TokenKind::SCALARI) ||
-      is(TokenKind::LITERAL) || is(TokenKind::TRUE) || is(TokenKind::FALSE)) {
-    bool isIntegral = !is(TokenKind::LITERAL);
+      is(TokenKind::LETTER) || is(TokenKind::LITERAL) || is(TokenKind::TRUE) ||
+      is(TokenKind::FALSE)) {
+    bool isIntegral = !is(TokenKind::LITERAL) && !is(TokenKind::LETTER);
     bool isFloat = is(TokenKind::SCALARD);
     bool isBoolean = is(TokenKind::TRUE) || is(TokenKind::FALSE);
+    bool isLetter = is(TokenKind::LETTER);
+    bool isLiteral = is(TokenKind::LITERAL);
 
     auto value = this->currentTokenStr();
-    this->advance();
 
     auto tokenPos = currentTokenInfo().getTokenPositionInfo();
-    auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
-    return std::make_unique<ScalarOrLiteralAST>(value, isIntegral, isFloat, isBoolean,
-                                       semLoc);
+    auto begin = tokenPos.begin;
+    this->advance();
+    auto semLoc = SemanticLoc(begin, tokenPos.end, tokenPos.line);
+
+    return std::make_unique<ScalarOrLiteralAST>(
+        value, isIntegral, isFloat, isBoolean, isLetter, isLiteral, semLoc);
   }
 
   return std::move(this->advanceType());
@@ -1030,9 +1035,9 @@ ASTNode CStarParser::advanceSymbol() {
     }
 
     if (transitionFlag) {
-      return std::make_unique<TypeAST>(TypeSpecifier::SPEC_DEFINED, std::move(symbolNode),
-                                       isUniquePtr, true, isRef,
-                                       indirectionLevel, semLoc);
+      return std::make_unique<TypeAST>(TypeSpecifier::SPEC_DEFINED,
+                                       std::move(symbolNode), isUniquePtr, true,
+                                       isRef, indirectionLevel, semLoc);
     } else {
       return std::move(symbolNode);
     }
@@ -1068,9 +1073,9 @@ ASTNode CStarParser::advanceType() {
       }
     }
 
-    ASTNode typeAst =
-        std::make_unique<TypeAST>(typeSpecifierOf(prevTokenInfo), nullptr, isUniquePtr,
-                                  true, isRef, indirectionLevel, semLoc);
+    ASTNode typeAst = std::make_unique<TypeAST>(
+        typeSpecifierOf(prevTokenInfo), nullptr, isUniquePtr, true, isRef,
+        indirectionLevel, semLoc);
 
     // expected >
     // expected({TokenKind::GT, TokenKind::RPAREN});

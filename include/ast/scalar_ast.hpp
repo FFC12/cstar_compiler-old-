@@ -12,14 +12,18 @@ class ScalarOrLiteralAST : public IAST {
   bool m_IsFloat;
   bool m_IsIntegral;
   bool m_IsBoolean;
+  bool m_IsLetter;
+  bool m_IsLiteral;
 
  public:
   ScalarOrLiteralAST() = delete;
 
-  ScalarOrLiteralAST(std::string value, bool isIntegral, bool isFloat, bool isBoolean,
+  ScalarOrLiteralAST(std::string value, bool isIntegral, bool isFloat, bool isBoolean, bool isLetter, bool isLiteral,
             SemanticLoc& semanticLoc)
       : IAST(semanticLoc) {
     this->m_Value = value;
+    this->m_IsLetter = isLetter;
+    this->m_IsLiteral = isLiteral;
     this->m_IsFloat = isFloat;
     this->m_IsIntegral = isIntegral;
     this->m_IsBoolean = isBoolean;
@@ -34,7 +38,7 @@ class ScalarOrLiteralAST : public IAST {
   bool isFloat() const { return m_IsFloat; }
 
   SymbolInfo acceptBefore(Visitor& visitor) override {
-    return visitor.previsit(*this);
+    return visitor.preVisit(*this);
   }
 
   ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
