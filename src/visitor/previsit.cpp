@@ -288,19 +288,26 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
   SymbolInfo matchedSymbol;
   if (this->m_TypeChecking) {
     if (symbolValidation(symbolName, symbolInfo, matchedSymbol)) {
-      if (matchedSymbol.indirectionLevel !=
-              this->m_LastSymbolInfo.indirectionLevel &&
-          this->m_LastBinOp) {
-        symbolInfo.typeCheckerInfo.isCompatiblePtr = false;
-      } else if (matchedSymbol.indirectionLevel !=
-                     this->m_LastSymbolInfo.indirectionLevel &&
-                 !this->m_LastBinOp) {
-        accumulateIncompatiblePtrErrMesg(symbolInfo);
-      }
+      if(matchedSymbol.type == this->m_LastSymbolInfo.type) {
+        if (matchedSymbol.indirectionLevel + (this->m_LastReferenced ? 1 : 0) !=
+                this->m_LastSymbolInfo.indirectionLevel &&
+            this->m_LastBinOp) {
+          symbolInfo.typeCheckerInfo.isCompatiblePtr = false;
+        } else if (matchedSymbol.indirectionLevel +
+                           (this->m_LastReferenced ? 1 : 0) !=
+                       this->m_LastSymbolInfo.indirectionLevel &&
+                   this->m_LastSymbolInfo.indirectionLevel &&
+                   !this->m_LastBinOp) {
+          accumulateIncompatiblePtrErrMesg(symbolInfo);
+        }
 
-      if (this->m_LastBinOp && matchedSymbol.indirectionLevel ==
-                                   this->m_LastSymbolInfo.indirectionLevel) {
-        this->m_LastBinOpHasAtLeastOnePtr = true;
+        if ((this->m_LastBinOp &&
+             matchedSymbol.indirectionLevel ==
+                 this->m_LastSymbolInfo.indirectionLevel)) {
+          this->m_LastBinOpHasAtLeastOnePtr = true;
+        }
+      } else {
+        accumulateIncompatiblePtrErrMesg(symbolInfo);
       }
 
     } else {
@@ -320,69 +327,74 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
   symbolInfo.line = scalarAst.m_SemLoc.line;
 
   if (this->m_TypeChecking) {
-    if (!this->m_DefinedTypeFlag) {
-      if (this->m_ExpectedType == TypeSpecifier::SPEC_BOOL &&
-          scalarAst.m_IsBoolean) {
-      } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_FLOAT ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_F32 ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_F64) &&
-                 scalarAst.m_IsIntegral && scalarAst.m_IsFloat) {
-      } else if (this->m_ExpectedType == TypeSpecifier::SPEC_VOID &&
-                 this->m_LastSymbolInfo.indirectionLevel == 0) {
-        this->m_TypeErrorMessages.emplace_back(
-            "'void' is an incomplete type and cannot be used as a "
-            "declaration type",
-            m_LastSymbolInfo);
-      } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_CHAR ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_UCHAR) &&
-                 scalarAst.m_IsLetter &&
-                 this->m_LastSymbolInfo.indirectionLevel == 0) {
-      } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_CHAR ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_UCHAR) &&
-                 scalarAst.m_IsLiteral &&
-                 this->m_LastSymbolInfo.indirectionLevel > 0 &&
-                 (this->m_LastSymbolInfo.isConstPtr ||
-                  this->m_LastSymbolInfo.isReadOnly)) {
-      } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_U8 ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_U16 ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_U32 ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_U64 ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_U128 ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_UINT ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_USIZE) &&
-                 scalarAst.m_IsIntegral &&
-                 this->m_LastSymbolInfo.indirectionLevel == 0) {
-        if (scalarAst.m_IsFloat) {
-          this->m_TypeWarningMessages.emplace_back(
-              "A 'float' type is casting to '" +
-                  GetTypeStr(this->m_ExpectedType) +
-                  "'. Potential data loss might be occured!",
-              symbolInfo);
-        }
-      } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_I8 ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_I16 ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_I32 ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_I64 ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_INT ||
-                  this->m_ExpectedType == TypeSpecifier::SPEC_ISIZE) &&
-                 scalarAst.m_IsIntegral &&
-                 this->m_LastSymbolInfo.indirectionLevel == 0) {
-        if (scalarAst.m_IsFloat) {
-          this->m_TypeWarningMessages.emplace_back(
-              "A 'float' type is casting to '" +
-                  GetTypeStr(this->m_ExpectedType) +
-                  "'. Potential data loss might be occured!",
-              symbolInfo);
-        }
-      } else {
-        symbolInfo.begin = scalarAst.m_SemLoc.begin;
-        symbolInfo.end = scalarAst.m_SemLoc.end;
-        symbolInfo.line = scalarAst.m_SemLoc.line;
-
-        if (this->m_LastSymbolInfo.indirectionLevel > 0 && this->m_LastBinOp) {
-          // it's okay
+    if (this->m_LastReferenced) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Constant value cannot be referenced", symbolInfo);
+    } else {
+      if (!this->m_DefinedTypeFlag) {
+        if (this->m_ExpectedType == TypeSpecifier::SPEC_BOOL &&
+            scalarAst.m_IsBoolean) {
+        } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_FLOAT ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_F32 ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_F64) &&
+                   scalarAst.m_IsIntegral && scalarAst.m_IsFloat) {
+        } else if (this->m_ExpectedType == TypeSpecifier::SPEC_VOID &&
+                   this->m_LastSymbolInfo.indirectionLevel == 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "'void' is an incomplete type and cannot be used as a "
+              "declaration type",
+              m_LastSymbolInfo);
+        } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_CHAR ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_UCHAR) &&
+                   scalarAst.m_IsLetter &&
+                   this->m_LastSymbolInfo.indirectionLevel == 0) {
+        } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_CHAR ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_UCHAR) &&
+                   scalarAst.m_IsLiteral &&
+                   this->m_LastSymbolInfo.indirectionLevel > 0 &&
+                   (this->m_LastSymbolInfo.isConstPtr ||
+                    this->m_LastSymbolInfo.isReadOnly)) {
+        } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_U8 ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_U16 ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_U32 ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_U64 ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_U128 ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_UINT ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_USIZE) &&
+                   scalarAst.m_IsIntegral &&
+                   this->m_LastSymbolInfo.indirectionLevel == 0) {
+          if (scalarAst.m_IsFloat) {
+            this->m_TypeWarningMessages.emplace_back(
+                "A 'float' type is casting to '" +
+                    GetTypeStr(this->m_ExpectedType) +
+                    "'. Potential data loss might be occured!",
+                symbolInfo);
+          }
+        } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_I8 ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_I16 ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_I32 ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_I64 ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_INT ||
+                    this->m_ExpectedType == TypeSpecifier::SPEC_ISIZE) &&
+                   scalarAst.m_IsIntegral &&
+                   this->m_LastSymbolInfo.indirectionLevel == 0) {
+          if (scalarAst.m_IsFloat) {
+            this->m_TypeWarningMessages.emplace_back(
+                "A 'float' type is casting to '" +
+                    GetTypeStr(this->m_ExpectedType) +
+                    "'. Potential data loss might be occured!",
+                symbolInfo);
+          }
         } else {
-          this->accumulateIncompatiblePtrErrMesg(symbolInfo);
+          symbolInfo.begin = scalarAst.m_SemLoc.begin;
+          symbolInfo.end = scalarAst.m_SemLoc.end;
+          symbolInfo.line = scalarAst.m_SemLoc.line;
+
+          if (this->m_LastBinOp) {
+            // it's okay
+          } else {
+            this->accumulateIncompatiblePtrErrMesg(symbolInfo);
+          }
         }
       }
     }
@@ -397,28 +409,38 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
     ASTNode &lhs = binaryOpAst.m_LHS, &rhs = binaryOpAst.m_RHS;
 
     bool isPtrType = false;
+    bool errorFlag = false;
 
     if (this->m_LastSymbolInfo.indirectionLevel != 0) {
       isPtrType = true;
     }
 
     m_LastBinOp = true;
+
+    this->m_BinOpTermCount += 1;
     auto rhsSymbol = rhs->acceptBefore(*this);
+    this->m_BinOpTermCount -= 1;
+
     if (isPtrType) {
       if (!rhsSymbol.typeCheckerInfo.isCompatiblePtr &&
-          (this->m_LastBinOp && !this->m_LastBinOpHasAtLeastOnePtr)) {
+          (this->m_LastBinOp && !this->m_LastBinOpHasAtLeastOnePtr) &&
+          this->m_BinOpTermCount == 0) {
         this->m_TypeErrorMessages.emplace_back("Invalid operand '" +
                                                    rhsSymbol.symbolName + "'" +
                                                    " of binary operation",
                                                rhsSymbol);
         rhsSymbol.typeCheckerInfo.isCompatiblePtr = true;
+        errorFlag = true;
       }
     }
 
+    this->m_BinOpTermCount += 1;
     auto lhsSymbol = lhs->acceptBefore(*this);
-    if (isPtrType) {
+    this->m_BinOpTermCount -= 1;
+    if (isPtrType && !errorFlag) {
       if (!lhsSymbol.typeCheckerInfo.isCompatiblePtr &&
-          (this->m_LastBinOp && !this->m_LastBinOpHasAtLeastOnePtr)) {
+          (this->m_LastBinOp && !this->m_LastBinOpHasAtLeastOnePtr) &&
+          this->m_BinOpTermCount == 0) {
         this->m_TypeErrorMessages.emplace_back("Invalid operand '" +
                                                    lhsSymbol.symbolName + "'" +
                                                    " of binary operation",
@@ -591,14 +613,23 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {}
 SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
   SymbolInfo symbolInfo;
 
+  if (!unaryOpAst.m_Node) {
+    assert(false && "Need to handle!");
+  }
+
   if (m_TypeChecking) {
     if (m_LastBinOp) {
       switch (unaryOpAst.m_UnaryOpKind) {
         case U_SIZEOF:
           // ok
-        case U_REF:
-          // ok
           break;
+        case U_REF: {
+          // ok
+          this->m_LastReferenced = true;
+          symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
+          this->m_LastReferenced = false;
+          break;
+        }
         case U_PREFIX:
           // ok
           break;
@@ -629,7 +660,9 @@ SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
         case U_SIZEOF:
           // ok
         case U_REF:
-          // ok
+          this->m_LastReferenced = true;
+          symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
+          this->m_LastReferenced = false;
           break;
         case U_PREFIX:
           // ok

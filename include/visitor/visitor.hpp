@@ -94,6 +94,8 @@ class Visitor {
   // and if it's a part of binary operation
   bool m_LastBinOp = false;
   bool m_LastBinOpHasAtLeastOnePtr = false;
+  bool m_LastReferenced = false;
+  size_t m_BinOpTermCount = 0;
 
   void enterScope(bool globScope) {
     if (!globScope) m_ScopeId += 1;
