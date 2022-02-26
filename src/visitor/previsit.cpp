@@ -143,6 +143,66 @@ static std::string GetTypeStr(TypeSpecifier typeSpecifier) {
       assert(false && "Unreacheable");
   }
 }
+static bool IsPrimitiveType(TypeSpecifier typeSpecifier) {
+  switch (typeSpecifier) {
+    case SPEC_I8:
+    case SPEC_I16:
+    case SPEC_I32:
+    case SPEC_I64:
+    case SPEC_INT:
+    case SPEC_U8:
+    case SPEC_U16:
+    case SPEC_U32:
+    case SPEC_U64:
+    case SPEC_U128:
+    case SPEC_UINT:
+    case SPEC_ISIZE:
+    case SPEC_USIZE:
+    case SPEC_F32:
+    case SPEC_F64:
+    case SPEC_FLOAT:
+    case SPEC_CHAR:
+    case SPEC_UCHAR:
+    case SPEC_BOOL:
+      return true;
+    default:
+      return false;
+  }
+}
+void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
+                                               const std::string &s = "") {
+  std::string typeQualifier;
+  if (this->m_LastSymbolInfo.isReadOnly) typeQualifier = "readonly";
+  if (this->m_LastSymbolInfo.isConstRef) typeQualifier = "constref";
+  if (this->m_LastSymbolInfo.isConstPtr) typeQualifier = "constptr";
+  if (this->m_LastSymbolInfo.isConstVal) typeQualifier = "const";
+
+  std::string indirection;
+  if (this->m_LastSymbolInfo.isConstRef) indirection += "&";
+
+  if (!this->m_LastSymbolInfo.isConstRef) {
+    for (int i = 0; i < this->m_LastSymbolInfo.indirectionLevel; i++) {
+      if (this->m_LastSymbolInfo.isUnique) {
+        indirection += "^";
+      } else {
+        indirection += "*";
+      }
+    }
+  }
+
+  if (s.empty()) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Incompatible type. Expected a suitable value with '" +
+            (typeQualifier.empty() ? "" : (typeQualifier + " ")) +
+            GetTypeStr(this->m_ExpectedType) + indirection + "'",
+        symbolInfo);
+  } else {
+    this->m_TypeErrorMessages.emplace_back(
+        s + " '" + (typeQualifier.empty() ? "" : (typeQualifier + " ")) +
+            GetTypeStr(this->m_ExpectedType) + indirection + "'",
+        symbolInfo);
+  }
+}
 
 SymbolInfo Visitor::preVisit(VarAST &varAst) {
   SymbolInfo symbolInfo;
@@ -153,14 +213,21 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
     symbolInfo.end = varAst.m_SemLoc.end;
     symbolInfo.line = varAst.m_SemLoc.line;
 
+    // symbolInfo.symbolId = Visitor::SymbolId;
+    // Visitor::SymbolIdList[symbolInfo.symbolName] = symbolInfo.symbolId;
+
     if (varAst.m_IsLocal) {
       // will be evualated later
       // symbolInfo = varAst.m_RHS->acceptBefore(*this);
       symbolInfo.isGlob = false;
+
+      symbolInfo.symbolId = Visitor::SymbolId++ + 1;
     } else {
       symbolInfo.isGlob = true;
       symbolInfo.scopeLevel = 0;
       symbolInfo.scopeId = 0;
+
+      symbolInfo.symbolId = Visitor::SymbolId;
     }
 
     symbolInfo.type = varAst.m_TypeSpec;
@@ -171,6 +238,8 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
     symbolInfo.isReadOnly = varAst.m_TypeQualifier == Q_READONLY;
     symbolInfo.isConstVal = varAst.m_TypeQualifier == Q_CONST;
     symbolInfo.isRef = varAst.m_IsRef;
+    symbolInfo.isUnique = varAst.m_IsUniquePtr;
+
     symbolInfo.isNeededEval = true;
 
     if (!varAst.m_RHS) {
@@ -185,18 +254,6 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   if (this->m_TypeChecking && symbolInfo.isNeededEval) {
     this->m_ExpectedType = varAst.m_TypeSpec;
 
-    // reset states
-    this->m_DefinedTypeName.clear();
-    this->m_DefinedTypeFlag = false;
-    this->m_LastSymbolName.clear();
-    this->m_LastSymbolIndirectionLevel = 0;
-    this->m_LastSymbolIsRef = false;
-    this->m_LastSymbolIsUniqPtr = false;
-    this->m_LastSymbolConstPtr = false;
-    this->m_LastSymbolConstRef = false;
-    this->m_LastSymbolRO = false;
-    this->m_LastSymbolConst = false;
-
     if (varAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED) {
       if (varAst.m_Typename->m_ExprKind == ExprKind::SymbolExpr) {
         auto typeName =
@@ -206,15 +263,10 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
       }
     }
 
-    this->m_LastSymbolName = varAst.m_Name;
-    this->m_LastSymbolIndirectionLevel = varAst.m_IndirectLevel;
-    this->m_LastSymbolIsRef = varAst.m_IsRef;
-    this->m_LastSymbolIsUniqPtr = varAst.m_IsUniquePtr;
-    this->m_LastSymbolConstPtr = symbolInfo.isConstPtr;
-    this->m_LastSymbolConstRef = symbolInfo.isConstRef;
-    this->m_LastSymbolRO = symbolInfo.isReadOnly;
-    this->m_LastSymbolConst = symbolInfo.isConstVal;
+    this->m_LastBinOp = false;
+    this->m_LastBinOpHasAtLeastOnePtr = false;
 
+    this->m_LastSymbolInfo = symbolInfo;
     auto tempSymbolInfo = varAst.m_RHS->acceptBefore(*this);
   }
 
@@ -227,16 +279,45 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
   auto symbolName = symbolAst.m_SymbolName;
 
   SymbolInfo symbolInfo;
+
   symbolInfo.symbolName = symbolName;
   symbolInfo.begin = symbolAst.m_SemLoc.begin;
   symbolInfo.end = symbolAst.m_SemLoc.end;
   symbolInfo.line = symbolAst.m_SemLoc.line;
+
+  SymbolInfo matchedSymbol;
+  if (this->m_TypeChecking) {
+    if (symbolValidation(symbolName, symbolInfo, matchedSymbol)) {
+      if (matchedSymbol.indirectionLevel !=
+              this->m_LastSymbolInfo.indirectionLevel &&
+          this->m_LastBinOp) {
+        symbolInfo.typeCheckerInfo.isCompatiblePtr = false;
+      } else if (matchedSymbol.indirectionLevel !=
+                     this->m_LastSymbolInfo.indirectionLevel &&
+                 !this->m_LastBinOp) {
+        accumulateIncompatiblePtrErrMesg(symbolInfo);
+      }
+
+      if (this->m_LastBinOp && matchedSymbol.indirectionLevel ==
+                                   this->m_LastSymbolInfo.indirectionLevel) {
+        this->m_LastBinOpHasAtLeastOnePtr = true;
+      }
+
+    } else {
+      // Symbol could not validate obviously.
+      // but it will be processed inside of the symbolValidation func.
+    }
+  }
 
   return symbolInfo;
 }
 
 SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
   SymbolInfo symbolInfo;
+
+  symbolInfo.begin = scalarAst.m_SemLoc.begin;
+  symbolInfo.end = scalarAst.m_SemLoc.end;
+  symbolInfo.line = scalarAst.m_SemLoc.line;
 
   if (this->m_TypeChecking) {
     if (!this->m_DefinedTypeFlag) {
@@ -247,24 +328,21 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
                   this->m_ExpectedType == TypeSpecifier::SPEC_F64) &&
                  scalarAst.m_IsIntegral && scalarAst.m_IsFloat) {
       } else if (this->m_ExpectedType == TypeSpecifier::SPEC_VOID &&
-                 this->m_LastSymbolIndirectionLevel) {
-        symbolInfo.begin = scalarAst.m_SemLoc.begin;
-        symbolInfo.end = scalarAst.m_SemLoc.end;
-        symbolInfo.line = scalarAst.m_SemLoc.line;
-
+                 this->m_LastSymbolInfo.indirectionLevel == 0) {
         this->m_TypeErrorMessages.emplace_back(
             "'void' is an incomplete type and cannot be used as a "
             "declaration type",
-            symbolInfo);
+            m_LastSymbolInfo);
       } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_CHAR ||
                   this->m_ExpectedType == TypeSpecifier::SPEC_UCHAR) &&
                  scalarAst.m_IsLetter &&
-                 this->m_LastSymbolIndirectionLevel == 0) {
+                 this->m_LastSymbolInfo.indirectionLevel == 0) {
       } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_CHAR ||
                   this->m_ExpectedType == TypeSpecifier::SPEC_UCHAR) &&
                  scalarAst.m_IsLiteral &&
-                 this->m_LastSymbolIndirectionLevel > 0 &&
-                 (this->m_LastSymbolConstPtr || this->m_LastSymbolRO)) {
+                 this->m_LastSymbolInfo.indirectionLevel > 0 &&
+                 (this->m_LastSymbolInfo.isConstPtr ||
+                  this->m_LastSymbolInfo.isReadOnly)) {
       } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_U8 ||
                   this->m_ExpectedType == TypeSpecifier::SPEC_U16 ||
                   this->m_ExpectedType == TypeSpecifier::SPEC_U32 ||
@@ -273,7 +351,14 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
                   this->m_ExpectedType == TypeSpecifier::SPEC_UINT ||
                   this->m_ExpectedType == TypeSpecifier::SPEC_USIZE) &&
                  scalarAst.m_IsIntegral &&
-                 this->m_LastSymbolIndirectionLevel == 0) {
+                 this->m_LastSymbolInfo.indirectionLevel == 0) {
+        if (scalarAst.m_IsFloat) {
+          this->m_TypeWarningMessages.emplace_back(
+              "A 'float' type is casting to '" +
+                  GetTypeStr(this->m_ExpectedType) +
+                  "'. Potential data loss might be occured!",
+              symbolInfo);
+        }
       } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_I8 ||
                   this->m_ExpectedType == TypeSpecifier::SPEC_I16 ||
                   this->m_ExpectedType == TypeSpecifier::SPEC_I32 ||
@@ -281,36 +366,24 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
                   this->m_ExpectedType == TypeSpecifier::SPEC_INT ||
                   this->m_ExpectedType == TypeSpecifier::SPEC_ISIZE) &&
                  scalarAst.m_IsIntegral &&
-                 this->m_LastSymbolIndirectionLevel == 0) {
+                 this->m_LastSymbolInfo.indirectionLevel == 0) {
+        if (scalarAst.m_IsFloat) {
+          this->m_TypeWarningMessages.emplace_back(
+              "A 'float' type is casting to '" +
+                  GetTypeStr(this->m_ExpectedType) +
+                  "'. Potential data loss might be occured!",
+              symbolInfo);
+        }
       } else {
         symbolInfo.begin = scalarAst.m_SemLoc.begin;
         symbolInfo.end = scalarAst.m_SemLoc.end;
         symbolInfo.line = scalarAst.m_SemLoc.line;
 
-        std::string typeQualifier;
-        if (this->m_LastSymbolRO) typeQualifier = "readonly";
-        if (this->m_LastSymbolConstRef) typeQualifier = "constref";
-        if (this->m_LastSymbolConstPtr) typeQualifier = "constptr";
-        if(this->m_LastSymbolConst) typeQualifier = "const";
-
-        std::string indirection;
-        if (this->m_LastSymbolIsRef) indirection += "&";
-
-        if (!this->m_LastSymbolIsRef) {
-          for (int i = 0; i < this->m_LastSymbolIndirectionLevel; i++) {
-            if (this->m_LastSymbolIsUniqPtr) {
-              indirection += "^";
-            } else {
-              indirection += "*";
-            }
-          }
+        if (this->m_LastSymbolInfo.indirectionLevel > 0 && this->m_LastBinOp) {
+          // it's okay
+        } else {
+          this->accumulateIncompatiblePtrErrMesg(symbolInfo);
         }
-
-        this->m_TypeErrorMessages.emplace_back(
-            "Incompatible type. Expected a suitable value with '" +
-                (typeQualifier.empty() ? "" : (typeQualifier + " ")) +
-                GetTypeStr(this->m_ExpectedType) + indirection + "'",
-            symbolInfo);
       }
     }
   }
@@ -319,15 +392,47 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
 }
 
 SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
+  SymbolInfo symbolInfo;
   if (this->m_TypeChecking) {
-    SymbolInfo symbolInfo;
-
     ASTNode &lhs = binaryOpAst.m_LHS, &rhs = binaryOpAst.m_RHS;
-    //   while()
 
-    return symbolInfo;
+    bool isPtrType = false;
+
+    if (this->m_LastSymbolInfo.indirectionLevel != 0) {
+      isPtrType = true;
+    }
+
+    m_LastBinOp = true;
+    auto rhsSymbol = rhs->acceptBefore(*this);
+    if (isPtrType) {
+      if (!rhsSymbol.typeCheckerInfo.isCompatiblePtr &&
+          (this->m_LastBinOp && !this->m_LastBinOpHasAtLeastOnePtr)) {
+        this->m_TypeErrorMessages.emplace_back("Invalid operand '" +
+                                                   rhsSymbol.symbolName + "'" +
+                                                   " of binary operation",
+                                               rhsSymbol);
+        rhsSymbol.typeCheckerInfo.isCompatiblePtr = true;
+      }
+    }
+
+    auto lhsSymbol = lhs->acceptBefore(*this);
+    if (isPtrType) {
+      if (!lhsSymbol.typeCheckerInfo.isCompatiblePtr &&
+          (this->m_LastBinOp && !this->m_LastBinOpHasAtLeastOnePtr)) {
+        this->m_TypeErrorMessages.emplace_back("Invalid operand '" +
+                                                   lhsSymbol.symbolName + "'" +
+                                                   " of binary operation",
+                                               lhsSymbol);
+        lhsSymbol.typeCheckerInfo.isCompatiblePtr = true;
+      }
+    }
+
+    this->m_LastBinOp = false;
   } else {
+    // nothing to do
   }
+
+  return symbolInfo;
 }
 SymbolInfo Visitor::preVisit(CastOpAST &castOpAst) {}
 
@@ -339,59 +444,66 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
   symbolInfo.end = funcAst.m_SemLoc.end;
   symbolInfo.line = funcAst.m_SemLoc.line;
 
-  enterScope(false);
-
-  auto scopeLevel = this->m_ScopeLevel;
-  auto scopeId = this->m_ScopeId;
-
-  for (auto &param : funcAst.m_Params) {
-    auto symbol = param->acceptBefore(*this);
-    if (symbol.isNeededTypeCheck) {
-      //      if(m_TypeTable.count(symbol.ty))
-      bool isLeftOne = false, isRightOne = false;
-      for (auto &type : this->m_TypeTable) {
-        if (type.first == symbol.definedTypenamePair.first) {
-          isLeftOne = true;
-        }
-
-        if (type.first == symbol.definedTypenamePair.second) {
-          isRightOne = true;
-        }
-      }
-
-      if (!isLeftOne && !isRightOne) {
-        this->m_TypeErrorMessages.emplace_back(
-            "Unknown type '" + symbol.definedTypenamePair.first + "' or '" +
-                symbol.definedTypenamePair.second + "'",
-            symbol);
-      } else {
-        symbol.scopeLevel = scopeLevel;
-        symbol.scopeId = scopeId;
-
-        if (isRightOne && isLeftOne) {
-          auto firstSymbol = symbol.definedTypenamePair.first;
-          this->m_TypeErrorMessages.emplace_back("Unexpected token '" +
-                                                     firstSymbol + "' after '" +
-                                                     firstSymbol + "'",
-                                                 symbol);
-        } else if (isLeftOne) {
-          symbol.symbolName = symbol.definedTypenamePair.second;
-          this->m_SymbolInfos.push_back(symbol);
-        } else {
-          symbol.symbolName = symbol.definedTypenamePair.first;
-          this->m_SymbolInfos.push_back(symbol);
-        }
-      }
-    } else {
-      scopeHandler(param, SymbolScope::Func, scopeLevel, scopeId);
+  if (m_TypeChecking) {
+    this->m_LastScopeSymbols = this->m_LocalSymbolTable[funcAst.m_FuncName];
+    for (auto &node : funcAst.m_Scope) {
+      typeCheckerScopeHandler(node);
     }
-  }
+  } else {
+    enterScope(false);
 
-  for (auto &node : funcAst.m_Scope) {
-    scopeHandler(node, SymbolScope::Func, scopeLevel, scopeId);
-  }
+    auto scopeLevel = this->m_ScopeLevel;
+    auto scopeId = this->m_ScopeId;
 
-  exitScope(false);
+    for (auto &param : funcAst.m_Params) {
+      auto symbol = param->acceptBefore(*this);
+      if (symbol.isNeededTypeCheck) {
+        //      if(m_TypeTable.count(symbol.ty))
+        bool isLeftOne = false, isRightOne = false;
+        for (auto &type : this->m_TypeTable) {
+          if (type.first == symbol.definedTypenamePair.first) {
+            isLeftOne = true;
+          }
+
+          if (type.first == symbol.definedTypenamePair.second) {
+            isRightOne = true;
+          }
+        }
+
+        if (!isLeftOne && !isRightOne) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Unknown type '" + symbol.definedTypenamePair.first + "' or '" +
+                  symbol.definedTypenamePair.second + "'",
+              symbol);
+        } else {
+          symbol.scopeLevel = scopeLevel;
+          symbol.scopeId = scopeId;
+
+          if (isRightOne && isLeftOne) {
+            auto firstSymbol = symbol.definedTypenamePair.first;
+            this->m_TypeErrorMessages.emplace_back(
+                "Unexpected token '" + firstSymbol + "' after '" + firstSymbol +
+                    "'",
+                symbol);
+          } else if (isLeftOne) {
+            symbol.symbolName = symbol.definedTypenamePair.second;
+            this->m_SymbolInfos.push_back(symbol);
+          } else {
+            symbol.symbolName = symbol.definedTypenamePair.first;
+            this->m_SymbolInfos.push_back(symbol);
+          }
+        }
+      } else {
+        scopeHandler(param, SymbolScope::Func, scopeLevel, scopeId);
+      }
+    }
+
+    for (auto &node : funcAst.m_Scope) {
+      scopeHandler(node, SymbolScope::Func, scopeLevel, scopeId);
+    }
+
+    exitScope(false);
+  }
   return symbolInfo;
 }
 
@@ -476,7 +588,79 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
   return symbolInfo;
 }
 SymbolInfo Visitor::preVisit(RetAST &retAst) {}
-SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {}
+SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
+  SymbolInfo symbolInfo;
+
+  if (m_TypeChecking) {
+    if (m_LastBinOp) {
+      switch (unaryOpAst.m_UnaryOpKind) {
+        case U_SIZEOF:
+          // ok
+        case U_REF:
+          // ok
+          break;
+        case U_PREFIX:
+          // ok
+          break;
+        case U_POSTFIX:
+          // ok
+          break;
+        case U_POSITIVE:
+          // ok
+          break;
+        case U_TYPEOF:
+        case U_MOVE:
+          // wrong
+        case U_NEGATIVE:
+          // wrong
+          break;
+        case U_NOT:
+          // wrong
+          break;
+        case U_DEREF:
+          // wrong
+          break;
+        case U_BINNEG:
+          // wrong
+          break;
+      }
+    } else {
+      switch (unaryOpAst.m_UnaryOpKind) {
+        case U_SIZEOF:
+          // ok
+        case U_REF:
+          // ok
+          break;
+        case U_PREFIX:
+          // ok
+          break;
+        case U_POSTFIX:
+          // ok
+          break;
+        case U_POSITIVE:
+          // ok
+          break;
+        case U_TYPEOF:
+        case U_MOVE:
+          // wrong
+        case U_NEGATIVE:
+          // wrong
+          break;
+        case U_NOT:
+          // wrong
+          break;
+        case U_DEREF:
+          // wrong
+          break;
+        case U_BINNEG:
+          // wrong
+          break;
+      }
+    }
+  }
+
+  return symbolInfo;
+}
 SymbolInfo Visitor::preVisit(TypeAST &typeAst) {
   SymbolInfo symbolInfo;
 
@@ -513,4 +697,84 @@ void Visitor::scopeHandler(std::unique_ptr<IAST> &node, SymbolScope symbolScope,
 
     this->m_SymbolInfos.push_back(temp);
   }
+}
+
+void Visitor::typeCheckerScopeHandler(std::unique_ptr<IAST> &node) {
+  if (node->m_ASTKind == ASTKind::Decl) {
+    if (node->m_DeclKind == DeclKind::VarDecl) {
+      auto temp = node->acceptBefore(*this);
+    }
+  } else if (node->m_ASTKind == ASTKind::Stmt) {
+    if (node->m_StmtKind == StmtKind::LoopStmt) {
+      node->acceptBefore(*this);
+    } else if (node->m_StmtKind == StmtKind::IfStmt) {
+      node->acceptBefore(*this);
+    }
+  } else if (node->m_ASTKind == ASTKind::Expr &&
+             node->m_ExprKind == ExprKind::ParamExpr) {
+    auto temp = node->acceptBefore(*this);
+  }
+}
+
+bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
+                               SymbolInfo &matchedSymbol) {
+  bool isLocalSymbol = false;
+  bool isGlobSymbol = false;
+
+  size_t index = this->m_LastSymbolInfo.symbolId;
+  for (auto &it : m_GlobalSymbolTable) {
+    if (it.symbolName == symbolName) {
+      if (it.symbolInfo.symbolId > index) {
+        this->m_TypeWarningMessages.emplace_back(
+            "'" + symbolName + "' was not in a valid place", it.symbolInfo);
+        this->m_TypeErrorMessages.emplace_back(
+            "'" + symbolName +
+                "' was declared in the wrong place. Probably it used "
+                "before "
+                "declaration",
+            symbolInfo);
+        break;
+      }
+      matchedSymbol = it.symbolInfo;
+      isGlobSymbol = true;
+      break;
+    }
+  }
+
+  for (auto &it : this->m_LastScopeSymbols) {
+    if (it.symbolName == symbolName) {
+      if (it.symbolInfo.symbolId > index) {
+        this->m_TypeWarningMessages.emplace_back(
+            "'" + symbolName + "' was not in a valid place", it.symbolInfo);
+        this->m_TypeErrorMessages.emplace_back(
+            "'" + symbolName +
+                "' was declared in the wrong place. Probably it used "
+                "before "
+                "declaration",
+            symbolInfo);
+        break;
+      }
+      matchedSymbol = it.symbolInfo;
+      isLocalSymbol = true;
+      break;
+    }
+  }
+
+  if (!isLocalSymbol && !isGlobSymbol) {
+    this->m_TypeErrorMessages.emplace_back(
+        "'" + symbolName + "' was not declared in this scope or global scope",
+        symbolInfo);
+    return false;
+  }
+
+  if (isLocalSymbol) {
+    if (isGlobSymbol) {
+      // variable shadowing
+      this->m_TypeWarningMessages.emplace_back(
+          "'" + symbolName + "' shadowing global variable", matchedSymbol);
+    } else {
+    }
+  }
+
+  return true;
 }

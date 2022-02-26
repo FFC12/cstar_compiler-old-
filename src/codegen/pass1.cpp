@@ -6,6 +6,7 @@
 void CStarCodegen::pass1() {
   std::string funcName;
   std::vector<SemanticErrorMessage> localSymbolMessages;
+  Visitor::SymbolId = 0;
 
   for (auto& ast : m_AST) {
     if (ast->getASTKind() == ASTKind::Decl) {
@@ -17,7 +18,11 @@ void CStarCodegen::pass1() {
         funcName = tempSymbolInfo.assocFuncName;
 
         for (auto& symbolInfo : preVisitor.getSymbolInfoList()) {
+        }
 
+        auto warnMessages = preVisitor.getTypeWarningMessages();
+        for (auto it = warnMessages.rbegin(); it != warnMessages.rend(); ++it) {
+          SemanticHint(it->message, it->symbolInfo);
         }
 
         auto messages = preVisitor.getUnknownTypeErrorMessages();
@@ -35,7 +40,14 @@ void CStarCodegen::pass1() {
                  ast->getDeclKind() == DeclKind::ExportVarDecl) {
         Visitor preVisitor(this->m_DefinedTypes, this->m_GlobalSymbols,
                            this->m_LocalSymbols, true);
+        Visitor::SymbolId++;
+
         auto symbolInfo = ast->acceptBefore(preVisitor);
+
+        auto warnMessages = preVisitor.getTypeWarningMessages();
+        for (auto it = warnMessages.rbegin(); it != warnMessages.rend(); ++it) {
+          SemanticHint(it->message, it->symbolInfo);
+        }
 
         auto messages = preVisitor.getUnknownTypeErrorMessages();
         for (auto it = messages.rbegin(); it != messages.rend(); ++it) {

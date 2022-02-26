@@ -13,6 +13,37 @@ struct SemanticErrorMessage {
       : message(std::move(mesg)), symbolInfo(std::move(symInf)) {}
 };
 
+struct SemanticWarningMessage {
+  std::string message;
+  SymbolInfo symbolInfo;
+  SemanticWarningMessage(std::string mesg, SymbolInfo symInf)
+      : message(std::move(mesg)), symbolInfo(std::move(symInf)) {}
+};
+
+struct SymbolInfoEntry {
+  std::string symbolName;
+  SymbolInfo symbolInfo;
+
+  explicit SymbolInfoEntry(std::string symName, SymbolInfo symInfo)
+      : symbolName(std::move(symName)), symbolInfo(std::move(symInfo)) {}
+
+  bool operator==(const SymbolInfo& symbol) const {
+    bool flag = false;
+    if (symbolInfo.symbolName == symbol.symbolName) {
+      if (symbolInfo.scopeLevel <= symbol.scopeLevel) {
+        if (symbolInfo.scopeLevel == symbol.scopeLevel &&
+            symbolInfo.scopeId != symbol.scopeId) {
+          goto not_equal;
+        }
+        flag = true;
+        goto not_equal;
+      }
+    }
+  not_equal:
+    return flag;
+  }
+};
+
 class IAST;
 class CastOpAST;
 class BinaryOpAST;
@@ -30,7 +61,7 @@ class UnaryOpAST;
 class VarAST;
 
 using ValuePtr = llvm::Value*;
-using SymbolInfoList = std::multimap<std::string, SymbolInfo>;
+using SymbolInfoList = std::vector<SymbolInfoEntry>;
 using LocalSymbolInfoList = std::map<std::string, SymbolInfoList>;
 using GlobalSymbolInfoList = SymbolInfoList;
 
@@ -51,19 +82,18 @@ class Visitor {
   const std::map<std::string, size_t>& m_TypeTable;
 
   // This is a state for expressions.
+  std::vector<SemanticWarningMessage> m_TypeWarningMessages;
   TypeSpecifier m_ExpectedType = TypeSpecifier::SPEC_VOID;
   bool m_DefinedTypeFlag = false;
   std::string m_DefinedTypeName;
-  std::string m_LastSymbolName;
-  size_t m_LastSymbolIndirectionLevel = 0;
-  bool m_LastSymbolIsRef;
-  bool m_LastSymbolIsUniqPtr;
-  bool m_LastSymbolRO;
-  bool m_LastSymbolConstPtr;
-  bool m_LastSymbolConstRef;
-  bool m_LastSymbolConst;
-  std::map<std::string, std::vector<SymbolInfo>>
-      m_IncompleteSymbolsOrConstantsOfRHS;
+  SymbolInfoList m_LastScopeSymbols;
+  SymbolInfo m_LastSymbolInfo;
+
+  // Those are for if we're checking
+  // some types which's pointing a address (ptr-type)
+  // and if it's a part of binary operation
+  bool m_LastBinOp = false;
+  bool m_LastBinOpHasAtLeastOnePtr = false;
 
   void enterScope(bool globScope) {
     if (!globScope) m_ScopeId += 1;
@@ -79,7 +109,12 @@ class Visitor {
   void scopeHandler(std::unique_ptr<IAST>& node, SymbolScope symbolScope,
                     size_t scopeLevel, size_t scopeId);
 
+  void typeCheckerScopeHandler(std::unique_ptr<IAST>& node);
+  bool symbolValidation(std::string& symbolName, SymbolInfo& symbolInfo,
+                        SymbolInfo& matchedSymbolInfo);
+
  public:
+  static size_t SymbolId;
   explicit Visitor(const std::map<std::string, size_t>& typeTable)
       : m_TypeTable(typeTable) {}
 
@@ -125,6 +160,11 @@ class Visitor {
   std::vector<SemanticErrorMessage> getUnknownTypeErrorMessages() {
     return this->m_TypeErrorMessages;
   }
+  std::vector<SemanticWarningMessage> getTypeWarningMessages() {
+    return this->m_TypeWarningMessages;
+  }
+  void accumulateIncompatiblePtrErrMesg(const SymbolInfo& symbolInfo,
+                                        const std::string& s);
 };
 
 #endif

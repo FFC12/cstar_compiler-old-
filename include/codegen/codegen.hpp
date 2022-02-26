@@ -26,6 +26,7 @@ class CStarCodegen {
   std::unique_ptr<llvm::IRBuilder<>> m_IRBuilder;
   bool m_SemAnalysisFailure = false;
   size_t m_ErrorCount = 0;
+  size_t m_WarningCount = 0;
 
   // pass0 is for detecting and booking all symbols (gathering preinfo)
   // pass0.cpp
@@ -35,6 +36,7 @@ class CStarCodegen {
                          size_t arr[3]);
   bool redefinitionCheck(SymbolInfo& symbol);
   void SemanticError(std::string message, SymbolInfo& symbolInfo);
+  void SemanticHint(std::string message, SymbolInfo& symbolInfo);
 
   // pass1 is for type checking
   void pass1();
@@ -60,17 +62,20 @@ class CStarCodegen {
     pass0();
     showStats(startTime, "Pass 0 (Symbol Analysis)");
 
-   /* if (m_SemAnalysisFailure) {
-      std::cout << REDISH "Compilation failed. " << m_ErrorCount
-                << " error(s) generated.\n" RES;
-      exit(1);
-    }
-    */
+    /* if (m_SemAnalysisFailure) {
+       std::cout << REDISH "Compilation failed. " << m_ErrorCount
+                 << " error(s) generated.\n" RES;
+       exit(1);
+     }
+     */
 
     startTime = time(nullptr);
     pass1();
     showStats(startTime, "Pass 1 (Type Checking)");
     if (m_SemAnalysisFailure) {
+      std::cout << YEL
+                << std::to_string(this->m_WarningCount) +
+                       " warning(s) generated\n" RES;
       std::cout << REDISH "Compilation failed. " << m_ErrorCount
                 << " error(s) generated.\n" RES;
       exit(1);

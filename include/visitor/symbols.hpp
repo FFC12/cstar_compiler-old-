@@ -6,6 +6,13 @@
 
 enum SymbolScope { Func, LoopSt, IfSt };
 
+struct TypeCheckerInfo {
+  bool isCompatiblePtr = true;
+  bool isCompatibleType = true;
+  bool isCompatibleCast = true;
+  bool isCompatibleVal =  true;
+};
+
 // This is using for pipelining informations
 // also it contains type informations as well.
 struct SymbolInfo {
@@ -13,6 +20,7 @@ struct SymbolInfo {
   size_t indirectionLevel = 0;
   size_t scopeLevel = 0;
   size_t scopeId = 0;
+  size_t symbolId = 0;
   bool isGlob = false;
   bool isPrimitive = false;
   bool isRef = false;
@@ -23,14 +31,19 @@ struct SymbolInfo {
   bool isNeededEval = false;
   bool isSubscriptable = false;
   bool isNeededTypeCheck = false;
+  bool isUnique = false;
+
   std::string value;
   std::pair<std::string, std::string>
       definedTypenamePair;  // left one is for symbol0 and right one is for
                             // symbol1
   std::string symbolName;
   std::string assocFuncName;  // if it's global, then no assoc. func.
-  TypeSpecifier type;
-  SymbolScope symbolScope;
+  TypeSpecifier type = TypeSpecifier::SPEC_VOID;
+  SymbolScope symbolScope = SymbolScope::IfSt;
+  TypeCheckerInfo typeCheckerInfo;
+
+//  SymbolInfo() : typeCheckerInfo() {}
 };
 
 #endif  // SYMBOLS_HPP
