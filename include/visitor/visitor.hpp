@@ -84,6 +84,7 @@ class Visitor {
   // This is a state for expressions.
   std::vector<SemanticWarningMessage> m_TypeWarningMessages;
   TypeSpecifier m_ExpectedType = TypeSpecifier::SPEC_VOID;
+  TypeSpecifier m_MatchedSymbolType = TypeSpecifier::SPEC_VOID;
   bool m_DefinedTypeFlag = false;
   std::string m_DefinedTypeName;
   SymbolInfoList m_LastScopeSymbols;

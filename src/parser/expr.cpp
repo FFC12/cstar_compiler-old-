@@ -448,7 +448,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
 
       if (!isOperator(nextTokenInfo) && nextToken != IDENT &&
           nextToken != SCALARD && nextToken != SCALARI &&
-          nextToken != LITERAL && !isType(nextTokenInfo)) {
+          nextToken != LITERAL && nextToken != TRUE && nextToken != FALSE &&
+          !isType(nextTokenInfo)) {
         ParserError("Unexpected token '" + std::string(tokenToStr(nextToken)) +
                         "' after binary operator '" + opCharacter + "'",
                     nextTokenInfo);

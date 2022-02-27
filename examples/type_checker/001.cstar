@@ -1,8 +1,8 @@
 
 main() :: void {
   float t = 20.0;
-  int s = t;
-  int z = &t;
+  int s = t; // error
+  int z = &t; // error
   int a = 20;
   int* b = &a;
   int* x = a + b; // cannot initialize ptr type with non-ptr type

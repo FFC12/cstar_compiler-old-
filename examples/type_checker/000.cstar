@@ -1,9 +1,3 @@
-int x = 20;
-int p = x;
-int w = 20.23;
-void s = 30;
-
-
 main() :: void {
   int a = 10;
   float b = 12.24;
@@ -15,7 +9,7 @@ main() :: void {
 
   int x = 50;
   // error
-  bool z = x + k; 
+  bool z = x + k + true; 
 
   a = z;
   b = r;

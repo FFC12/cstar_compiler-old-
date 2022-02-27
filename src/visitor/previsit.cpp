@@ -169,6 +169,11 @@ static bool IsPrimitiveType(TypeSpecifier typeSpecifier) {
       return false;
   }
 }
+
+static bool LosslessCasting(TypeSpecifier target, TypeSpecifier source) {
+  return GetBitSize(target) <= GetBitSize(source);
+}
+
 void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
                                                const std::string &s = "") {
   std::string typeQualifier;
@@ -288,7 +293,9 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
   SymbolInfo matchedSymbol;
   if (this->m_TypeChecking) {
     if (symbolValidation(symbolName, symbolInfo, matchedSymbol)) {
-      if(matchedSymbol.type == this->m_LastSymbolInfo.type) {
+      this->m_MatchedSymbolType = matchedSymbol.type;
+
+      if (matchedSymbol.type == this->m_LastSymbolInfo.type) {
         if (matchedSymbol.indirectionLevel + (this->m_LastReferenced ? 1 : 0) !=
                 this->m_LastSymbolInfo.indirectionLevel &&
             this->m_LastBinOp) {
@@ -307,7 +314,22 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
           this->m_LastBinOpHasAtLeastOnePtr = true;
         }
       } else {
-        accumulateIncompatiblePtrErrMesg(symbolInfo);
+        if (IsPrimitiveType(this->m_ExpectedType) &&
+            IsPrimitiveType(this->m_MatchedSymbolType)) {
+          // Plain type without ptr-level
+          if (LosslessCasting(this->m_ExpectedType,
+                              this->m_MatchedSymbolType) &&
+              this->m_LastSymbolInfo.indirectionLevel == 0) {
+            this->m_TypeWarningMessages.emplace_back(
+                "A '" + GetTypeStr(this->m_MatchedSymbolType) +
+                    "' type is casting to '" +
+                    GetTypeStr(this->m_ExpectedType) +
+                    "'. Potential data loss might be occured!",
+                symbolInfo);
+          }
+        } else {
+          accumulateIncompatiblePtrErrMesg(symbolInfo);
+        }
       }
 
     } else {
@@ -399,7 +421,6 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
       }
     }
   }
-
   return symbolInfo;
 }
 
