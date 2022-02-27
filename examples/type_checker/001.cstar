@@ -1,14 +1,27 @@
-
 main() :: void {
   float t = 20.0;
   int s = t; // error
   int z = &t; // error
-  int a = 20;
+  uint32 a = 20;
   int* b = &a;
   int* x = a + b; // cannot initialize ptr type with non-ptr type
   int^ a0 = &a;
   int *b0 = a0 + (a + a0);
   int *x0 = a0 + b0; // it's okay
+
+  if(p > 10) {
+    if(d < 25 && k > 24) {
+
+    } elif (u < 2) {
+
+    } else {
+     loop (x < 20) {
+       if(p > 20) {
+
+       }
+     } 
+    }
+  }
 
   ret;
 }

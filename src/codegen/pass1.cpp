@@ -26,7 +26,7 @@ void CStarCodegen::pass1() {
         }
 
         auto messages = preVisitor.getUnknownTypeErrorMessages();
-        for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
+        for (auto it = messages.begin(); it != messages.end(); ++it) {
           SemanticError(it->message, it->symbolInfo);
         }
 

@@ -96,6 +96,9 @@ class Visitor {
   bool m_LastBinOp = false;
   bool m_LastBinOpHasAtLeastOnePtr = false;
   bool m_LastReferenced = false;
+  bool m_LastLoopDataSymbol = false;
+  bool m_LastLoopIndexSymbol = false;
+  bool m_LastCondExpr = false;
   size_t m_BinOpTermCount = 0;
 
   void enterScope(bool globScope) {

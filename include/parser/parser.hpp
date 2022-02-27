@@ -346,7 +346,7 @@ class CStarParser {
 
   //for semantics analysis
   void ParserError(std::string mesg, size_t begin, size_t end, size_t line);
-  void ParserHint(std::string mesg, size_t begin, size_t end, size_t line);
+  void ParserWarning(std::string mesg, size_t newBegin, size_t newEnd, size_t newLine);
 
   void parse();
   void ownedAST(std::vector<ASTNode>& newOwner) {

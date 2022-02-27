@@ -14,15 +14,26 @@ main() :: void {
   a = z;
   b = r;
 
-  if(x > 10) {
+  if(t > 10) {
     int e = 21;
     bool t = e;
   }
+  
+  loop(index,data in arr) {
+
+  }
+
+  loop(i in [0,100]) {
+      
+  }
+
+  loop(x > 10) {
+      
+  }
+
+  loop(true) {
+
+  }
+
   ret;
 }
-
-// float* < usize < uint* <? isize < int* < bool
-// float128 < float64 < float32 < size < uint128 < uint64 < uint32 < uint8 < isize < int64 < int32 < int16 < int8 < char < bool
-/*
-  int p for all primitive types are okay.
-*/

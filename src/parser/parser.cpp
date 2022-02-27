@@ -449,7 +449,7 @@ void CStarParser::ParserHint(std::string mesg, TokenInfo tokenInfo) {
   std::cout << RES;
   std::cout << std::endl << std::endl;
 }
-void CStarParser::ParserHint(std::string mesg, size_t newBegin, size_t newEnd,
+void CStarParser::ParserWarning(std::string mesg, size_t newBegin, size_t newEnd,
                              size_t newLine) {
   // copy one time for each translation unit
   std::string messageHeader(this->m_Lexer.getFilepath().get());
@@ -469,7 +469,7 @@ void CStarParser::ParserHint(std::string mesg, size_t newBegin, size_t newEnd,
 
   // message header
   messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + BWHT "\x20 hint: " RES +
+                   std::to_string(tok_begin + 1) + YEL "\x20 warning: " RES +
                    mesg + "\n";
 
   std::cout << BLU + messageHeader + RES;

@@ -268,7 +268,7 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
       }
     }
 
-    this->m_LastBinOp = false;
+    // reset all state flags.
     this->m_LastBinOpHasAtLeastOnePtr = false;
 
     this->m_LastSymbolInfo = symbolInfo;
@@ -292,50 +292,58 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
 
   SymbolInfo matchedSymbol;
   if (this->m_TypeChecking) {
-    if (symbolValidation(symbolName, symbolInfo, matchedSymbol)) {
-      this->m_MatchedSymbolType = matchedSymbol.type;
+    if (!this->m_LastLoopDataSymbol && !this->m_LastLoopIndexSymbol) {
+      if (symbolValidation(symbolName, symbolInfo, matchedSymbol)) {
+        this->m_MatchedSymbolType = matchedSymbol.type;
 
-      if (matchedSymbol.type == this->m_LastSymbolInfo.type) {
-        if (matchedSymbol.indirectionLevel + (this->m_LastReferenced ? 1 : 0) !=
-                this->m_LastSymbolInfo.indirectionLevel &&
-            this->m_LastBinOp) {
-          symbolInfo.typeCheckerInfo.isCompatiblePtr = false;
-        } else if (matchedSymbol.indirectionLevel +
-                           (this->m_LastReferenced ? 1 : 0) !=
-                       this->m_LastSymbolInfo.indirectionLevel &&
-                   this->m_LastSymbolInfo.indirectionLevel &&
-                   !this->m_LastBinOp) {
-          accumulateIncompatiblePtrErrMesg(symbolInfo);
-        }
+        if (matchedSymbol.type == this->m_LastSymbolInfo.type) {
+          if (matchedSymbol.indirectionLevel +
+                      (this->m_LastReferenced ? 1 : 0) !=
+                  this->m_LastSymbolInfo.indirectionLevel &&
+              this->m_LastBinOp) {
+            symbolInfo.typeCheckerInfo.isCompatiblePtr = false;
+          } else if (matchedSymbol.indirectionLevel +
+                             (this->m_LastReferenced ? 1 : 0) !=
+                         this->m_LastSymbolInfo.indirectionLevel &&
+                     this->m_LastSymbolInfo.indirectionLevel &&
+                     !this->m_LastBinOp) {
+            accumulateIncompatiblePtrErrMesg(symbolInfo);
+          }
 
-        if ((this->m_LastBinOp &&
-             matchedSymbol.indirectionLevel ==
-                 this->m_LastSymbolInfo.indirectionLevel)) {
-          this->m_LastBinOpHasAtLeastOnePtr = true;
-        }
-      } else {
-        if (IsPrimitiveType(this->m_ExpectedType) &&
-            IsPrimitiveType(this->m_MatchedSymbolType)) {
-          // Plain type without ptr-level
-          if (LosslessCasting(this->m_ExpectedType,
-                              this->m_MatchedSymbolType) &&
-              this->m_LastSymbolInfo.indirectionLevel == 0) {
-            this->m_TypeWarningMessages.emplace_back(
-                "A '" + GetTypeStr(this->m_MatchedSymbolType) +
-                    "' type is casting to '" +
-                    GetTypeStr(this->m_ExpectedType) +
-                    "'. Potential data loss might be occured!",
-                symbolInfo);
+          if ((this->m_LastBinOp &&
+               matchedSymbol.indirectionLevel ==
+                   this->m_LastSymbolInfo.indirectionLevel)) {
+            this->m_LastBinOpHasAtLeastOnePtr = true;
           }
         } else {
-          accumulateIncompatiblePtrErrMesg(symbolInfo);
+          if (IsPrimitiveType(this->m_ExpectedType) &&
+              IsPrimitiveType(this->m_MatchedSymbolType) &&
+              !this->m_LastReferenced) {
+            // Plain type without ptr-level
+            if (LosslessCasting(this->m_ExpectedType,
+                                this->m_MatchedSymbolType) &&
+                this->m_LastSymbolInfo.indirectionLevel == 0) {
+              this->m_TypeWarningMessages.emplace_back(
+                  "A '" + GetTypeStr(this->m_MatchedSymbolType) +
+                      "' type is casting to '" +
+                      GetTypeStr(this->m_ExpectedType) +
+                      "'. Potential data loss might be occured!",
+                  symbolInfo);
+            }
+          } else {
+            accumulateIncompatiblePtrErrMesg(symbolInfo);
+          }
         }
-      }
 
-    } else {
-      // Symbol could not validate obviously.
-      // but it will be processed inside of the symbolValidation func.
+      } else {
+        if (this->m_LastLoopDataSymbol || this->m_LastLoopDataSymbol) {
+          // okay
+        }
+        // Symbol could not validate obviously.
+        // but it will be processed inside of the symbolValidation func.
+      }
     }
+  } else {
   }
 
   return symbolInfo;
@@ -353,7 +361,7 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
       this->m_TypeErrorMessages.emplace_back(
           "Constant value cannot be referenced", symbolInfo);
     } else {
-      if (!this->m_DefinedTypeFlag) {
+      if (!this->m_DefinedTypeFlag && !this->m_LastCondExpr) {
         if (this->m_ExpectedType == TypeSpecifier::SPEC_BOOL &&
             scalarAst.m_IsBoolean) {
         } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_FLOAT ||
@@ -558,12 +566,26 @@ SymbolInfo Visitor::preVisit(IfStmtAST &ifStmtAst) {
   auto scopeId = this->m_ScopeId;
 
   for (auto &block : ifStmtAst.m_Cond) {
-    for (auto &node : block.second.second)
+    // type checking for condition
+    if (m_TypeChecking) {
+      this->m_LastCondExpr = true;
+      block.second.first->acceptBefore(*this);
+      this->m_LastCondExpr = false;
+    }
+    // there is only one node actually..
+    for (auto &node : block.second.second) {
       scopeHandler(node, SymbolScope::IfSt, scopeLevel, scopeId);
+    }
   }
 
   if (ifStmtAst.m_HasElif) {
     for (auto &entry : ifStmtAst.m_ElseIfs) {
+      // type checking for condition
+      if (m_TypeChecking) {
+        this->m_LastCondExpr = true;
+        entry.second.first->acceptBefore(*this);
+        this->m_LastCondExpr = false;
+      }
       auto &elseIfBlock = entry.second;
       // manually increasing
       scopeId++;
@@ -589,6 +611,29 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
   SymbolInfo symbolInfo;
   enterScope(false);
 
+  if (m_TypeChecking) {
+    if (loopStmtAst.m_RangeLoop) {
+      if (loopStmtAst.m_Indexable) {
+        if (loopStmtAst.m_HasNumericRange) {
+          loopStmtAst.m_Min->acceptBefore(*this);
+          loopStmtAst.m_Max->acceptBefore(*this);
+        } else {
+          // TODO: Need to extra check for iterable data.
+          loopStmtAst.m_IterSymbol->acceptBefore(*this);
+        }
+        this->m_LastLoopIndexSymbol = true;
+        loopStmtAst.m_IndexSymbol->acceptBefore(*this);
+        this->m_LastLoopIndexSymbol = false;
+      }
+      this->m_LastLoopDataSymbol = true;
+      loopStmtAst.m_DataSymbol->acceptBefore(*this);
+      this->m_LastLoopDataSymbol = false;
+    } else {
+      this->m_LastCondExpr = true;
+      loopStmtAst.m_Cond->acceptBefore(*this);
+      this->m_LastCondExpr = false;
+    }
+  }
   auto scopeLevel = this->m_ScopeLevel;
   auto scopeId = this->m_ScopeId;
 

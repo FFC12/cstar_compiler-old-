@@ -98,7 +98,7 @@ void CStarCodegen::SemanticError(std::string message, SymbolInfo& symbolInfo) {
 }
 
 void CStarCodegen::SemanticHint(std::string message, SymbolInfo& symbolInfo) {
-  this->m_Parser.ParserHint(std::move(message), symbolInfo.begin,
-                            symbolInfo.end, symbolInfo.line);
+  this->m_Parser.ParserWarning(std::move(message), symbolInfo.begin,
+                               symbolInfo.end, symbolInfo.line);
   this->m_WarningCount += 1;
 }
