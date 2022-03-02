@@ -242,7 +242,8 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
       this->advance();
     }
 
-    if (isType(currentTokenInfo()) || is(TokenKind::IDENT)) {
+    if (isType(currentTokenInfo()) || is(TokenKind::IDENT) ||
+        is(TokenKind::STAR) || is(TokenKind::DEREF)) {
       bool outOfSize = false;
       auto nextTokenInfo = this->nextTokenInfo(outOfSize);
       auto nextToken = nextTokenInfo.getTokenKind();
@@ -252,6 +253,35 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
 
       size_t begin = currentTokenInfo().getTokenPositionInfo().begin;
       size_t line = currentTokenInfo().getTokenPositionInfo().line;
+
+      bool deref = false;
+      size_t dereferencedLevel = 0;
+      if (is(TokenKind::DEREF) || is(TokenKind::STAR)) {
+        dereferencedLevel = 1;
+
+        bool derefKeywordUsed = false;
+        if (is(TokenKind::DEREF)) derefKeywordUsed = true;
+
+        while (is(TokenKind::DEREF) || is(TokenKind::STAR)) {
+          this->advance();
+
+          if (is(TokenKind::DEREF) && !derefKeywordUsed) {
+            derefKeywordUsed = true;
+          } else if (is(TokenKind::DEREF) && derefKeywordUsed) {
+            ParserError("'deref' keyword cannot be used more than one",
+                        currentTokenInfo());
+          }
+
+          nextTokenInfo = this->nextTokenInfo(outOfSize);
+          nextToken = nextTokenInfo.getTokenKind();
+          if (outOfSize) {
+            ParserError("Incomplete declaration or expression",
+                        currentTokenInfo());
+          }
+          dereferencedLevel += 1;
+          deref = true;
+        }
+      }
 
       if (isType(currentTokenInfo()) || nextToken == TokenKind::IDENT ||
           (isTypeQualifier(prevTokenInfo()) && hasConstness)) {
@@ -270,8 +300,8 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         SemanticLoc semanticLoc = SemanticLoc(begin, end, line);
 
         auto assignmentExpr = std::make_unique<AssignmentAST>(
-            std::move(symbol), std::move(expr), shortcutOp, shortcutOpStr,
-            semanticLoc);
+            std::move(symbol), std::move(expr), deref, dereferencedLevel,
+            shortcutOp, shortcutOpStr, semanticLoc);
 
         scope.emplace_back(std::move(assignmentExpr));
       } else if (nextToken == LSQPAR) {
@@ -320,8 +350,8 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         SemanticLoc semanticLoc = SemanticLoc(begin, end, line);
 
         auto assignmentExpr = std::make_unique<AssignmentAST>(
-            std::move(symbol), std::move(expr), std::move(indexes), shortcutOp,
-            shortcutOpStr, semanticLoc);
+            std::move(symbol), std::move(expr), deref, dereferencedLevel,
+            std::move(indexes), shortcutOp, shortcutOpStr, semanticLoc);
         scope.emplace_back(std::move(assignmentExpr));
       }
     } else {

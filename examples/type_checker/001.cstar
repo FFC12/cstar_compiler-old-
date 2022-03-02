@@ -1,5 +1,4 @@
 main() :: void {
-  float t = 20.0;
   int s = t; // error
   int z = &t; // error
   uint32 a = 20;

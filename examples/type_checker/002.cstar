@@ -1,0 +1,11 @@
+
+main() :: void {
+    int x = 10;
+    x = 20;
+    float y = 20.25;
+    int z = move y + x;
+    x = y;
+    x = move y + x;
+
+    ret;
+}

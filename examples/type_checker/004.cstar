@@ -1,0 +1,8 @@
+
+main(constptr int* p, readonly int l) {
+    int a = 20;
+    p = a;
+    *p = a;
+
+    ret;
+} 

@@ -24,30 +24,43 @@ class AssignmentAST : public IAST {
   ASTNode m_LHS;  // SymbolAST
   ASTNode m_RHS;
   bool m_Subscriptable;
+  bool m_IsDereferenced;
+  size_t m_DerefLevel;
   ShortcutOp m_ShortcutOp;
   std::string m_Op;
   std::vector<ASTNode> m_SubscriptIndexes;
 
  public:
-  AssignmentAST(ASTNode lhs, ASTNode rhs, std::vector<ASTNode> subscriptIndexes,
-                ShortcutOp shortcutOp, std::string& op,
-                SemanticLoc& semanticLoc)
-      : IAST(semanticLoc),
-        m_Op(op),
-        m_LHS(std::move(lhs)),
-        m_RHS(std::move(rhs)),
-        m_SubscriptIndexes(std::move(subscriptIndexes)),
-        m_ShortcutOp(shortcutOp) {
-    this->m_Subscriptable = true;
-  }
-
-  AssignmentAST(ASTNode lhs, ASTNode rhs, ShortcutOp shortcutOp,
+  AssignmentAST(ASTNode lhs, ASTNode rhs, bool isDereferenced, bool derefLevel,
+                std::vector<ASTNode> subscriptIndexes, ShortcutOp shortcutOp,
                 std::string& op, SemanticLoc& semanticLoc)
       : IAST(semanticLoc),
         m_Op(op),
         m_LHS(std::move(lhs)),
         m_RHS(std::move(rhs)),
+        m_IsDereferenced(isDereferenced),
+        m_DerefLevel(derefLevel),
+        m_SubscriptIndexes(std::move(subscriptIndexes)),
         m_ShortcutOp(shortcutOp) {
+    this->m_ASTKind = ASTKind::Expr;
+    this->m_ExprKind = ExprKind::AssignmentExpr;
+    this->m_Subscriptable = true;
+    this->m_ASTKind = ASTKind::Expr;
+    this->m_ExprKind = ExprKind::AssignmentExpr;
+  }
+
+  AssignmentAST(ASTNode lhs, ASTNode rhs, bool isDereferenced,
+                size_t derefLevel, ShortcutOp shortcutOp, std::string& op,
+                SemanticLoc& semanticLoc)
+      : IAST(semanticLoc),
+        m_Op(op),
+        m_LHS(std::move(lhs)),
+        m_RHS(std::move(rhs)),
+        m_IsDereferenced(isDereferenced),
+        m_DerefLevel(derefLevel),
+        m_ShortcutOp(shortcutOp) {
+    this->m_ASTKind = ASTKind::Expr;
+    this->m_ExprKind = ExprKind::AssignmentExpr;
     this->m_Subscriptable = false;
   }
 

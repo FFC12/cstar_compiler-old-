@@ -171,7 +171,7 @@ static bool IsPrimitiveType(TypeSpecifier typeSpecifier) {
 }
 
 static bool LosslessCasting(TypeSpecifier target, TypeSpecifier source) {
-  return GetBitSize(target) <= GetBitSize(source);
+  return GetBitSize(target) < GetBitSize(source);
 }
 
 void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
@@ -278,7 +278,42 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   return symbolInfo;
 }
 
-SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {}
+SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
+  SymbolInfo symbolInfo;
+
+  if (m_TypeChecking) {
+    if (assignmentAst.m_LHS->m_ASTKind != ASTKind::Expr &&
+        assignmentAst.m_ExprKind != ExprKind::SymbolExpr) {
+      // problem..
+      assert(false && "Will be implemented!");
+    } else {
+      SymbolInfo matchedSymbol;
+      auto lhs = (SymbolAST *)assignmentAst.m_LHS.get();
+
+      symbolInfo.symbolName = lhs->m_SymbolName;
+      symbolInfo.begin = lhs->m_SemLoc.begin;
+      symbolInfo.end = lhs->m_SemLoc.end;
+      symbolInfo.line = lhs->m_SemLoc.line;
+
+      if (symbolValidation(lhs->m_SymbolName, symbolInfo, matchedSymbol)) {
+        this->m_ExpectedType = matchedSymbol.type;
+
+        if (matchedSymbol.type == TypeSpecifier::SPEC_DEFINED) {
+          // definedTypeName...
+          this->m_DefinedTypeFlag = true;
+        }
+
+        this->m_LastBinOpHasAtLeastOnePtr = false;
+        //        this->m_LastSymbolInfo = matchedSymbol;
+
+        //      this->m_LastIde
+        auto rhs = assignmentAst.m_RHS->acceptBefore(*this);
+      }
+    }
+  }
+
+  return symbolInfo;
+}
 
 SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
   auto symbolName = symbolAst.m_SymbolName;
@@ -336,7 +371,7 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
         }
 
       } else {
-        if (this->m_LastLoopDataSymbol || this->m_LastLoopDataSymbol) {
+        if (this->m_LastLoopDataSymbol || this->m_LastLoopIndexSymbol) {
           // okay
         }
         // Symbol could not validate obviously.
@@ -425,6 +460,10 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
           } else {
             this->accumulateIncompatiblePtrErrMesg(symbolInfo);
           }
+        }
+      } else {
+        if (!m_LastCondExpr) {
+          this->accumulateIncompatiblePtrErrMesg(symbolInfo);
         }
       }
     }
@@ -645,7 +684,11 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
   return symbolInfo;
 }
 
-SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {}
+SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
+  //TODO: return type checking...
+}
+
+
 SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
   SymbolInfo symbolInfo;
 
@@ -679,82 +722,53 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {}
 SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
   SymbolInfo symbolInfo;
 
+  symbolInfo.begin = unaryOpAst.m_SemLoc.begin;
+  symbolInfo.end = unaryOpAst.m_SemLoc.end;
+  symbolInfo.line = unaryOpAst.m_SemLoc.line;
+
   if (!unaryOpAst.m_Node) {
     assert(false && "Need to handle!");
   }
 
   if (m_TypeChecking) {
-    if (m_LastBinOp) {
-      switch (unaryOpAst.m_UnaryOpKind) {
-        case U_SIZEOF:
-          // ok
-          break;
-        case U_REF: {
-          // ok
-          this->m_LastReferenced = true;
-          symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
-          this->m_LastReferenced = false;
-          break;
+    switch (unaryOpAst.m_UnaryOpKind) {
+      case U_REF: {
+        // ok
+        this->m_LastReferenced = true;
+        symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
+        this->m_LastReferenced = false;
+        break;
+      }
+      case U_DEREF:
+        break;
+      case U_SIZEOF:
+      case U_PREFIX:
+      case U_POSTFIX:
+      case U_POSITIVE:
+      case U_NEGATIVE:
+      case U_NOT:
+      case U_BINNEG:
+        unaryOpAst.m_Node->acceptBefore(*this);
+        break;
+      case U_TYPEOF:
+        if (m_LastBinOp) {
+          this->m_TypeErrorMessages.emplace_back(
+              "'typeof' operator cannot be used as an operand of the binary "
+              "operation for now. It",
+              symbolInfo);
         }
-        case U_PREFIX:
-          // ok
-          break;
-        case U_POSTFIX:
-          // ok
-          break;
-        case U_POSITIVE:
-          // ok
-          break;
-        case U_TYPEOF:
-        case U_MOVE:
-          // wrong
-        case U_NEGATIVE:
-          // wrong
-          break;
-        case U_NOT:
-          // wrong
-          break;
-        case U_DEREF:
-          // wrong
-          break;
-        case U_BINNEG:
-          // wrong
-          break;
-      }
-    } else {
-      switch (unaryOpAst.m_UnaryOpKind) {
-        case U_SIZEOF:
-          // ok
-        case U_REF:
-          this->m_LastReferenced = true;
-          symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
-          this->m_LastReferenced = false;
-          break;
-        case U_PREFIX:
-          // ok
-          break;
-        case U_POSTFIX:
-          // ok
-          break;
-        case U_POSITIVE:
-          // ok
-          break;
-        case U_TYPEOF:
-        case U_MOVE:
-          // wrong
-        case U_NEGATIVE:
-          // wrong
-          break;
-        case U_NOT:
-          // wrong
-          break;
-        case U_DEREF:
-          // wrong
-          break;
-        case U_BINNEG:
-          // wrong
-          break;
-      }
+        break;
+      case U_MOVE:
+        // wrong
+        if (m_LastBinOp) {
+          this->m_TypeErrorMessages.emplace_back(
+              "'move' operator cannot be used as an operand of the binary "
+              "operation",
+              symbolInfo);
+        }
+        break;
+      default:
+        assert(false && "Unreacheable!");
     }
   }
 
@@ -811,6 +825,9 @@ void Visitor::typeCheckerScopeHandler(std::unique_ptr<IAST> &node) {
     }
   } else if (node->m_ASTKind == ASTKind::Expr &&
              node->m_ExprKind == ExprKind::ParamExpr) {
+    auto temp = node->acceptBefore(*this);
+  } else if (node->m_ASTKind == ASTKind::Expr &&
+             node->m_ExprKind == ExprKind::AssignmentExpr) {
     auto temp = node->acceptBefore(*this);
   }
 }

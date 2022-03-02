@@ -23,14 +23,24 @@ void CStarCodegen::pass0() {
 
         SymbolInfoList symbolInfoList;
         for (auto& symbolInfo : preVisitor.getSymbolInfoList()) {
-          if (!redefinitionCheck(symbolInfoList, symbolInfo)) {
-            symbolInfoList.push_back(
-                SymbolInfoEntry(symbolInfo.symbolName, symbolInfo));
-          } else {
+          bool isGlobShadowing = false;
+          if (redefinitionCheck(m_GlobalSymbols, symbolInfo)) {
+            isGlobShadowing = true;
             localSymbolMessages.emplace_back(
-                "Redefinition of the local symbol '" + symbolInfo.symbolName +
-                    "'",
+                "Redefinition of the global symbol '" + symbolInfo.symbolName +
+                    "'. Not allowed to the variable shadowing",
                 symbolInfo);
+
+          } else {
+            if (!redefinitionCheck(symbolInfoList, symbolInfo)) {
+              symbolInfoList.push_back(
+                  SymbolInfoEntry(symbolInfo.symbolName, symbolInfo));
+            } else {
+              localSymbolMessages.emplace_back(
+                  "Redefinition of the local symbol '" + symbolInfo.symbolName +
+                      "'",
+                  symbolInfo);
+            }
           }
         }
 
@@ -73,7 +83,6 @@ void CStarCodegen::pass0() {
   return;
 }
 
-
 bool CStarCodegen::redefinitionCheck(SymbolInfo& symbol) {
   return redefinitionCheck(m_GlobalSymbols, symbol);
 }
@@ -83,7 +92,7 @@ bool CStarCodegen::redefinitionCheck(SymbolInfoList& symbols,
   bool redefinationFlag = false;
 
   auto entries = std::find(symbols.begin(), symbols.end(), symbol);
-  if(entries != symbols.end()) {
+  if (entries != symbols.end()) {
     redefinationFlag = true;
   }
 
