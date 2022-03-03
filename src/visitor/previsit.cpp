@@ -179,7 +179,9 @@ void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
   std::string typeQualifier;
   if (this->m_LastSymbolInfo.isReadOnly) typeQualifier = "readonly";
   if (this->m_LastSymbolInfo.isConstRef) typeQualifier = "constref";
-  if (this->m_LastSymbolInfo.isConstPtr) typeQualifier = "constptr";
+  if (this->m_LastSymbolInfo.isConstPtr &&
+      this->m_LastSymbolInfo.indirectionLevel > 1)
+    typeQualifier = "constptr";
   if (this->m_LastSymbolInfo.isConstVal) typeQualifier = "const";
 
   std::string indirection;
@@ -212,45 +214,44 @@ void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
 SymbolInfo Visitor::preVisit(VarAST &varAst) {
   SymbolInfo symbolInfo;
 
-  if (m_TypeChecking || true) {
-    symbolInfo.symbolName = varAst.m_Name;
-    symbolInfo.begin = varAst.m_SemLoc.begin;
-    symbolInfo.end = varAst.m_SemLoc.end;
-    symbolInfo.line = varAst.m_SemLoc.line;
+  symbolInfo.symbolName = varAst.m_Name;
+  symbolInfo.begin = varAst.m_SemLoc.begin;
+  symbolInfo.end = varAst.m_SemLoc.end;
+  symbolInfo.line = varAst.m_SemLoc.line;
 
-    // symbolInfo.symbolId = Visitor::SymbolId;
-    // Visitor::SymbolIdList[symbolInfo.symbolName] = symbolInfo.symbolId;
+  // symbolInfo.symbolId = Visitor::SymbolId;
+  // Visitor::SymbolIdList[symbolInfo.symbolName] = symbolInfo.symbolId;
 
-    if (varAst.m_IsLocal) {
-      // will be evualated later
-      // symbolInfo = varAst.m_RHS->acceptBefore(*this);
-      symbolInfo.isGlob = false;
+  if (varAst.m_IsLocal) {
+    // will be evualated later
+    // symbolInfo = varAst.m_RHS->acceptBefore(*this);
+    symbolInfo.isGlob = false;
 
-      symbolInfo.symbolId = Visitor::SymbolId++ + 1;
-    } else {
-      symbolInfo.isGlob = true;
-      symbolInfo.scopeLevel = 0;
-      symbolInfo.scopeId = 0;
+    symbolInfo.symbolId = Visitor::SymbolId;
+    Visitor::SymbolId += 1;
+  } else {
+    symbolInfo.isGlob = true;
+    symbolInfo.scopeLevel = 0;
+    symbolInfo.scopeId = 0;
 
-      symbolInfo.symbolId = Visitor::SymbolId;
-    }
+    symbolInfo.symbolId = Visitor::SymbolId;
+  }
 
-    symbolInfo.type = varAst.m_TypeSpec;
-    symbolInfo.isSubscriptable = varAst.m_IsInitializerList;
-    symbolInfo.indirectionLevel = varAst.m_IndirectLevel;
-    symbolInfo.isConstRef = varAst.m_TypeQualifier == Q_CONSTREF;
-    symbolInfo.isConstPtr = varAst.m_TypeQualifier == Q_CONSTPTR;
-    symbolInfo.isReadOnly = varAst.m_TypeQualifier == Q_READONLY;
-    symbolInfo.isConstVal = varAst.m_TypeQualifier == Q_CONST;
-    symbolInfo.isRef = varAst.m_IsRef;
-    symbolInfo.isUnique = varAst.m_IsUniquePtr;
+  symbolInfo.type = varAst.m_TypeSpec;
+  symbolInfo.isSubscriptable = varAst.m_IsInitializerList;
+  symbolInfo.indirectionLevel = varAst.m_IndirectLevel;
+  symbolInfo.isConstRef = varAst.m_TypeQualifier == Q_CONSTREF;
+  symbolInfo.isConstPtr = varAst.m_TypeQualifier == Q_CONSTPTR;
+  symbolInfo.isReadOnly = varAst.m_TypeQualifier == Q_READONLY;
+  symbolInfo.isConstVal = varAst.m_TypeQualifier == Q_CONST;
+  symbolInfo.isRef = varAst.m_IsRef;
+  symbolInfo.isUnique = varAst.m_IsUniquePtr;
 
-    symbolInfo.isNeededEval = true;
+  symbolInfo.isNeededEval = true;
 
-    if (!varAst.m_RHS) {
-      // Well,the symbol it's not initialized.
-      symbolInfo.isNeededEval = false;
-    }
+  if (!varAst.m_RHS) {
+    // Well,the symbol it's not initialized.
+    symbolInfo.isNeededEval = false;
   }
 
   // Do not need to look up the symbol table
@@ -258,6 +259,16 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   // take the information from decl.
   if (this->m_TypeChecking && symbolInfo.isNeededEval) {
     this->m_ExpectedType = varAst.m_TypeSpec;
+
+    if ((symbolInfo.isConstPtr &&
+         (symbolInfo.indirectionLevel == 0 || symbolInfo.isRef)) ||
+        (symbolInfo.isConstVal && symbolInfo.indirectionLevel > 0) ||
+        (symbolInfo.isConstRef && !symbolInfo.isRef)) {
+      // error
+      this->m_TypeErrorMessages.emplace_back(
+          "The type qualifier and the type of the variable does not meet",
+          symbolInfo);
+    }
 
     if (varAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED) {
       if (varAst.m_Typename->m_ExprKind == ExprKind::SymbolExpr) {
@@ -295,7 +306,21 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
       symbolInfo.end = lhs->m_SemLoc.end;
       symbolInfo.line = lhs->m_SemLoc.line;
 
+      this->m_LastAssignment = true;
+
+      bool indirectable = false;
       if (symbolValidation(lhs->m_SymbolName, symbolInfo, matchedSymbol)) {
+        if (assignmentAst.m_IsDereferenced) {
+          if (matchedSymbol.indirectionLevel != assignmentAst.m_DerefLevel) {
+            m_TypeErrorMessages.emplace_back(
+                "It's not a indirectable or not a valid indirection level",
+                symbolInfo);
+          } else {
+            matchedSymbol.indirectionLevel -= assignmentAst.m_DerefLevel;
+            indirectable = true;
+          }
+        }
+
         this->m_ExpectedType = matchedSymbol.type;
 
         if (matchedSymbol.type == TypeSpecifier::SPEC_DEFINED) {
@@ -304,11 +329,17 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
         }
 
         this->m_LastBinOpHasAtLeastOnePtr = false;
-        //        this->m_LastSymbolInfo = matchedSymbol;
+        this->m_LastSymbolInfo = matchedSymbol;
 
         //      this->m_LastIde
+        //        if(indirectable)
         auto rhs = assignmentAst.m_RHS->acceptBefore(*this);
+
+        this->m_LastReferenced = false;
+        this->m_DereferenceLevel = 0;
       }
+
+      this->m_LastAssignment = false;
     }
   }
 
@@ -327,7 +358,8 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
 
   SymbolInfo matchedSymbol;
   if (this->m_TypeChecking) {
-    if (!this->m_LastLoopDataSymbol && !this->m_LastLoopIndexSymbol) {
+    if (!this->m_LastLoopDataSymbol && !this->m_LastLoopIndexSymbol &&
+        !this->m_LastParamSymbol) {
       if (symbolValidation(symbolName, symbolInfo, matchedSymbol)) {
         this->m_MatchedSymbolType = matchedSymbol.type;
 
@@ -340,7 +372,6 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
           } else if (matchedSymbol.indirectionLevel +
                              (this->m_LastReferenced ? 1 : 0) !=
                          this->m_LastSymbolInfo.indirectionLevel &&
-                     this->m_LastSymbolInfo.indirectionLevel &&
                      !this->m_LastBinOp) {
             accumulateIncompatiblePtrErrMesg(symbolInfo);
           }
@@ -442,7 +473,9 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
                     this->m_ExpectedType == TypeSpecifier::SPEC_INT ||
                     this->m_ExpectedType == TypeSpecifier::SPEC_ISIZE) &&
                    scalarAst.m_IsIntegral &&
-                   this->m_LastSymbolInfo.indirectionLevel == 0) {
+                   (this->m_LastSymbolInfo.indirectionLevel == 0 ||
+                    this->m_LastSymbolInfo.isConstRef &&
+                        this->m_LastSymbolInfo.isRef)) {
           if (scalarAst.m_IsFloat) {
             this->m_TypeWarningMessages.emplace_back(
                 "A 'float' type is casting to '" +
@@ -465,6 +498,21 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
         if (!m_LastCondExpr) {
           this->accumulateIncompatiblePtrErrMesg(symbolInfo);
         }
+      }
+
+      // checking mutability
+      if (m_LastSymbolInfo.isConstRef) {
+        // okay
+      } else if (m_LastSymbolInfo.isConstPtr) {
+        // wrong
+        //        this->m_TypeErrorMessages.emplace_back(
+        //            "The value is not suitable with reference type",
+        //            symbolInfo);
+      } else if (m_LastSymbolInfo.isConstVal) {
+        // okay
+      } else if (m_LastSymbolInfo.isReadOnly) {
+        // partially okay ( actually not really qualifying to the address of the
+        // value. )
       }
     }
   }
@@ -517,6 +565,13 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
       }
     }
 
+    // checking mutability
+    if (lhsSymbol.isConstRef) {
+    } else if (lhsSymbol.isConstPtr) {
+    } else if (lhsSymbol.isConstVal) {
+    } else if (lhsSymbol.isReadOnly) {
+    }
+
     this->m_LastBinOp = false;
   } else {
     // nothing to do
@@ -536,6 +591,12 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
 
   if (m_TypeChecking) {
     this->m_LastScopeSymbols = this->m_LocalSymbolTable[funcAst.m_FuncName];
+    for (auto &param : funcAst.m_Params) {
+      auto symbol = param->acceptBefore(*this);
+      //      typeCheckerScopeHandler(param);
+      Visitor::SymbolId++;
+    }
+
     for (auto &node : funcAst.m_Scope) {
       typeCheckerScopeHandler(node);
     }
@@ -547,6 +608,7 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
 
     for (auto &param : funcAst.m_Params) {
       auto symbol = param->acceptBefore(*this);
+
       if (symbol.isNeededTypeCheck) {
         //      if(m_TypeTable.count(symbol.ty))
         bool isLeftOne = false, isRightOne = false;
@@ -584,7 +646,12 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
           }
         }
       } else {
-        scopeHandler(param, SymbolScope::Func, scopeLevel, scopeId);
+        symbol.symbolScope = SymbolScope::Func;
+        symbol.scopeLevel = scopeLevel;
+        symbol.scopeId = scopeId;
+
+        this->m_SymbolInfos.push_back(symbol);
+        //        scopeHandler(param, SymbolScope::Func, scopeLevel, scopeId);
       }
     }
 
@@ -685,12 +752,13 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
 }
 
 SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
-  //TODO: return type checking...
+  // TODO: return type checking...
 }
-
 
 SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
   SymbolInfo symbolInfo;
+
+  symbolInfo.isParam = this->m_LastParamSymbol = true;
 
   if (paramAst.m_IsNotClear) {
     symbolInfo.isNeededTypeCheck = true;
@@ -706,15 +774,45 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
     symbolInfo.definedTypenamePair = std::make_pair(leftOne, rightOne);
   } else {
     symbolInfo = paramAst.m_Symbol0->acceptBefore(*this);
-    if (paramAst.m_IsPrimitive) {
-      auto typeInfo = paramAst.m_TypeNode->acceptBefore(*this);
-      symbolInfo.type = typeInfo.type;
-    } else {
-      symbolInfo.type = TypeSpecifier::SPEC_DEFINED;
-    }
+  }
+
+  auto typeInfo = dynamic_cast<TypeAST *>(paramAst.m_TypeNode.get());
+
+  if (!m_TypeChecking) {
+    symbolInfo.symbolId = Visitor::SymbolId;
+    Visitor::SymbolId += 1;
   }
 
   symbolInfo.isSubscriptable = paramAst.m_IsSubscriptable;
+  symbolInfo.isConstRef = paramAst.m_TypeQualifier == Q_CONSTREF;
+  symbolInfo.isConstPtr = paramAst.m_TypeQualifier == Q_CONSTPTR;
+  symbolInfo.isReadOnly = paramAst.m_TypeQualifier == Q_READONLY;
+  symbolInfo.isConstVal = paramAst.m_TypeQualifier == Q_CONST;
+  symbolInfo.isRef = typeInfo->m_IsRef;
+  symbolInfo.isUnique = typeInfo->m_IsUniquePtr;
+  symbolInfo.indirectionLevel = typeInfo->m_IndirectLevel;
+
+  m_LastParamSymbol = false;
+
+  if (paramAst.m_IsPrimitive) {
+    symbolInfo.type = typeInfo->m_TypeSpec;
+  } else {
+    symbolInfo.type = TypeSpecifier::SPEC_DEFINED;
+  }
+
+  if (m_TypeChecking) {
+    if ((symbolInfo.isConstPtr &&
+         (symbolInfo.indirectionLevel == 0 || symbolInfo.isRef)) ||
+        (symbolInfo.isConstVal && symbolInfo.indirectionLevel > 0) ||
+        (symbolInfo.isConstRef && !symbolInfo.isRef)) {
+      // error
+      this->m_TypeErrorMessages.emplace_back(
+          "The type qualifier and the type of the variable does not meet",
+          symbolInfo);
+    }
+  }
+
+  // symbolInfo.isNeededEval = true;
 
   return symbolInfo;
 }
@@ -840,7 +938,7 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
   size_t index = this->m_LastSymbolInfo.symbolId;
   for (auto &it : m_GlobalSymbolTable) {
     if (it.symbolName == symbolName) {
-      if (it.symbolInfo.symbolId > index) {
+      if (it.symbolInfo.symbolId > index && !m_LastAssignment) {
         this->m_TypeWarningMessages.emplace_back(
             "'" + symbolName + "' was not in a valid place", it.symbolInfo);
         this->m_TypeErrorMessages.emplace_back(
@@ -851,6 +949,7 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
             symbolInfo);
         break;
       }
+
       matchedSymbol = it.symbolInfo;
       isGlobSymbol = true;
       break;
@@ -859,7 +958,7 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
 
   for (auto &it : this->m_LastScopeSymbols) {
     if (it.symbolName == symbolName) {
-      if (it.symbolInfo.symbolId > index) {
+      if (it.symbolInfo.symbolId > index && !m_LastAssignment) {
         this->m_TypeWarningMessages.emplace_back(
             "'" + symbolName + "' was not in a valid place", it.symbolInfo);
         this->m_TypeErrorMessages.emplace_back(

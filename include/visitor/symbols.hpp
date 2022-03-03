@@ -32,6 +32,7 @@ struct SymbolInfo {
   bool isSubscriptable = false;
   bool isNeededTypeCheck = false;
   bool isUnique = false;
+  bool isParam = false;
 
   std::string value;
   std::pair<std::string, std::string>

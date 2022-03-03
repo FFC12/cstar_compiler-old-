@@ -1,17 +1,11 @@
 
 main() :: void {
-    /*
-    float x = 10.0;
-    int y = 20;
-
-    int a = !x + ~y;
-    int b = ++x + -y;
-
-    int *p = &a;*/
-
-    // need to handle..
-    *s = 20;
-    deref a = 30;
+    int b = 20;
+    int *a = &b;
+    int *s = a;
+    *s = a;
+    **a = 30;
 
     ret;
 }
+

@@ -96,6 +96,10 @@ class Visitor {
   bool m_LastBinOp = false;
   bool m_LastBinOpHasAtLeastOnePtr = false;
   bool m_LastReferenced = false;
+  bool m_LastParamSymbol = false;
+  bool m_LastAssignment = false;
+  bool m_LastDereferenced = false;
+  size_t m_DereferenceLevel = 0;
   bool m_LastLoopDataSymbol = false;
   bool m_LastLoopIndexSymbol = false;
   bool m_LastCondExpr = false;
@@ -171,6 +175,7 @@ class Visitor {
   }
   void accumulateIncompatiblePtrErrMesg(const SymbolInfo& symbolInfo,
                                         const std::string& s);
+
 };
 
 #endif

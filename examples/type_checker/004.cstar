@@ -1,8 +1,11 @@
 
+constptr int* t = 20;
+
 main(constptr int* p, readonly int l) {
-    int a = 20;
-    p = a;
+    constptr int* a = &l;
     *p = a;
+    l = 20;
+    p = &a;
 
     ret;
 } 

@@ -278,7 +278,10 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
             ParserError("Incomplete declaration or expression",
                         currentTokenInfo());
           }
-          dereferencedLevel += 1;
+
+          if (is(TokenKind::DEREF) || is(TokenKind::STAR))
+            dereferencedLevel += 1;
+
           deref = true;
         }
       }
