@@ -1,4 +1,4 @@
-#ifndef TYPE_QUALIFIER_HPPhint_specifier
+#ifndef TYPE_QUALIFIER_HPP
 #define TYPE_QUALIFIER_HPP
 
 enum TypeQualifier{

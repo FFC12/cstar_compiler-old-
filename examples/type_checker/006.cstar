@@ -1,0 +1,6 @@
+main() :: constptr int* {
+    int a = 20;
+    int* p = &a;
+
+    ret p;
+}

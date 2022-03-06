@@ -489,24 +489,46 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
         // type qualifier of the variable decl
         if ((matchedSymbol.isConstVal != m_LastSymbolInfo.isConstVal) &&
             matchedSymbol.indirectionLevel != 0) {
-          this->m_TypeErrorMessages.emplace_back(
-              "Cannot initialize a variable with the different type of "
-              "qualifier",
-              symbolInfo);
+          if (this->m_LastRetExpr) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Cannot return a variable with the different type of "
+                "qualifier",
+                symbolInfo);
+          } else {
+            this->m_TypeErrorMessages.emplace_back(
+                "Cannot initialize a variable with the different type of "
+                "qualifier",
+                symbolInfo);
+          }
         }
 
         if (matchedSymbol.isConstRef != m_LastSymbolInfo.isConstRef) {
-          this->m_TypeErrorMessages.emplace_back(
-              "Cannot initialize a variable with the different type of "
-              "qualifier",
-              symbolInfo);
+          if (this->m_LastRetExpr) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Cannot return a variable with the different type of "
+                "qualifier",
+                symbolInfo);
+          } else {
+            this->m_TypeErrorMessages.emplace_back(
+                "Cannot initialize a variable with the different type of "
+                "qualifier",
+                symbolInfo);
+          }
         }
 
-        if (matchedSymbol.isConstPtr != m_LastSymbolInfo.isConstPtr && !matchedSymbol.isConstRef && !matchedSymbol.isConstVal) {
-          this->m_TypeErrorMessages.emplace_back(
-              "Cannot initialize a variable with the different type of "
-              "qualifier",
-              symbolInfo);
+        if (matchedSymbol.isConstPtr != m_LastSymbolInfo.isConstPtr &&
+            !matchedSymbol.isConstRef && !matchedSymbol.isConstVal) {
+          if (this->m_LastRetExpr) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Cannot return a variable with the different type of "
+                "qualifier",
+                symbolInfo);
+          } else {
+            this->m_TypeErrorMessages.emplace_back(
+                "Cannot initialize a variable with the different type of "
+                "qualifier",
+                symbolInfo);
+          }
         }
 
       } else {
@@ -703,6 +725,21 @@ SymbolInfo Visitor::preVisit(CastOpAST &castOpAst) {
 
 SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
   SymbolInfo symbolInfo;
+
+  if (funcAst.m_RetType != nullptr) {
+    auto retType = dynamic_cast<TypeAST *>(funcAst.m_RetType.get());
+
+    symbolInfo.type = retType->m_TypeSpec;
+    symbolInfo.indirectionLevel = retType->m_IndirectLevel;
+    symbolInfo.isConstRef = funcAst.m_RetTypeQualifier == Q_CONSTREF;
+    symbolInfo.isConstPtr = funcAst.m_RetTypeQualifier == Q_CONSTPTR;
+    symbolInfo.isReadOnly = funcAst.m_RetTypeQualifier == Q_READONLY;
+    symbolInfo.isConstVal = funcAst.m_RetTypeQualifier == Q_CONST;
+    symbolInfo.isRef = retType->m_IsRef;
+    symbolInfo.isUnique = retType->m_IsUniquePtr;
+
+    m_LastFuncRetTypeInfo = symbolInfo;
+  }
 
   symbolInfo.assocFuncName = funcAst.m_FuncName;
   symbolInfo.begin = funcAst.m_SemLoc.begin;
@@ -943,7 +980,13 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
 SymbolInfo Visitor::preVisit(RetAST &retAst) {
   SymbolInfo symbolInfo;
 
-
+  if (m_TypeChecking) {
+    this->m_LastRetExpr = true;
+    m_LastSymbolInfo = m_LastFuncRetTypeInfo;
+    m_LastSymbolInfo.symbolId = Visitor::SymbolId;
+    retAst.m_RetExpr->acceptBefore(*this);
+    this->m_LastRetExpr = false;
+  }
 
   return symbolInfo;
 }
@@ -1051,6 +1094,9 @@ void Visitor::scopeHandler(std::unique_ptr<IAST> &node, SymbolScope symbolScope,
     temp.scopeId = scopeId;
 
     this->m_SymbolInfos.push_back(temp);
+  } else if (node->m_ASTKind == ASTKind::Expr &&
+             node->m_ExprKind == ExprKind::RetExpr) {
+    node->acceptBefore(*this);
   }
 }
 
@@ -1071,6 +1117,9 @@ void Visitor::typeCheckerScopeHandler(std::unique_ptr<IAST> &node) {
   } else if (node->m_ASTKind == ASTKind::Expr &&
              node->m_ExprKind == ExprKind::AssignmentExpr) {
     auto temp = node->acceptBefore(*this);
+  } else if (node->m_ASTKind == ASTKind::Expr &&
+             node->m_ExprKind == ExprKind::RetExpr) {
+    node->acceptBefore(*this);
   }
 }
 

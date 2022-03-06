@@ -26,8 +26,15 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
   this->advance();
 
   ASTNode returnType;
+  TypeQualifier retTypeQualifier = TypeQualifier::Q_NONE;
   if (is(TokenKind::COLONCOLON)) {
     this->advance();
+
+    if (isTypeQualifier(currentTokenInfo())) {
+      retTypeQualifier = typeQualifierOf(currentTokenInfo());
+      this->advance();
+    }
+
     if (isType(currentTokenInfo())) {
       returnType = this->advanceType();
     } else if (is(TokenKind::IDENT)) {
@@ -58,9 +65,9 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
   size_t end = posInfo.end;
   SemanticLoc semLoc = SemanticLoc(begin, end, line);
 
-  auto func = std::make_unique<FuncAST>(funcName, std::move(returnType),
-                                        std::move(params), std::move(scope),
-                                        isForwardDecl, isExported, semLoc);
+  auto func = std::make_unique<FuncAST>(
+      funcName, std::move(returnType), std::move(params), std::move(scope),
+      retTypeQualifier, isForwardDecl, isExported, semLoc);
 
   this->m_AST.emplace_back(std::move(func));
 }

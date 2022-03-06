@@ -89,6 +89,7 @@ class Visitor {
   std::string m_DefinedTypeName;
   SymbolInfoList m_LastScopeSymbols;
   SymbolInfo m_LastSymbolInfo;
+  SymbolInfo m_LastFuncRetTypeInfo;
 
   // Those are for if we're checking
   // some types which's pointing a address (ptr-type)
@@ -103,6 +104,7 @@ class Visitor {
   bool m_LastLoopDataSymbol = false;
   bool m_LastLoopIndexSymbol = false;
   bool m_LastCondExpr = false;
+  bool m_LastRetExpr = false;
   size_t m_BinOpTermCount = 0;
 
   void enterScope(bool globScope) {
