@@ -99,7 +99,7 @@ class Visitor {
   bool m_LastParamSymbol = false;
   bool m_LastAssignment = false;
   bool m_LastDereferenced = false;
-  size_t m_DereferenceLevel = 0;
+  size_t m_DereferenceLevel = 1;
   bool m_LastLoopDataSymbol = false;
   bool m_LastLoopIndexSymbol = false;
   bool m_LastCondExpr = false;

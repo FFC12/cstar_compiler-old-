@@ -38,6 +38,7 @@ struct SymbolInfo {
   std::pair<std::string, std::string>
       definedTypenamePair;  // left one is for symbol0 and right one is for
                             // symbol1
+  std::map<size_t, std::string> ptrAliases;
   std::string symbolName;
   std::string assocFuncName;  // if it's global, then no assoc. func.
   TypeSpecifier type = TypeSpecifier::SPEC_VOID;

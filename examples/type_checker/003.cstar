@@ -1,7 +1,7 @@
 
 main() :: void {
     int b = 20;
-    int *a = &b;
+    int *a = unsafe_cast<int*>(&b);
     int *s = a;
     *s = a;
     **a = 30;

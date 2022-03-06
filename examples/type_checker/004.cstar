@@ -1,11 +1,21 @@
 
-constptr int* t = 20;
+//constptr int* t = 20;
 
-main(constptr int* p, readonly int l) {
-    constptr int* a = &l;
+main(constptr int* p, int l, const int* s) {
+    /*int a = 10;
     *p = a;
-    l = 20;
-    p = &a;
+    l = 20; 
+    s = &a;*/
+
+
+    int u = 10;
+
+    int* k = &u;
+    //const int** w = &k;
+
+    //**w = u;
+    int& r = u;
+    const int& t = r;
 
     ret;
 } 

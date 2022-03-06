@@ -262,7 +262,6 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
 
     if ((symbolInfo.isConstPtr &&
          (symbolInfo.indirectionLevel == 0 || symbolInfo.isRef)) ||
-        (symbolInfo.isConstVal && symbolInfo.indirectionLevel > 0) ||
         (symbolInfo.isConstRef && !symbolInfo.isRef)) {
       // error
       this->m_TypeErrorMessages.emplace_back(
@@ -284,6 +283,12 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
 
     this->m_LastSymbolInfo = symbolInfo;
     auto tempSymbolInfo = varAst.m_RHS->acceptBefore(*this);
+  } else {
+    if (varAst.m_RHS != nullptr) {
+      this->m_LastSymbolInfo = symbolInfo;
+      auto tempSmbolInfo = varAst.m_RHS->acceptBefore(*this);
+      symbolInfo.ptrAliases = std::move(tempSmbolInfo.ptrAliases);
+    }
   }
 
   return symbolInfo;
@@ -310,16 +315,81 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
 
       bool indirectable = false;
       if (symbolValidation(lhs->m_SymbolName, symbolInfo, matchedSymbol)) {
+        // TODO: for different scenerarios.
+
         if (assignmentAst.m_IsDereferenced) {
-          if (matchedSymbol.indirectionLevel != assignmentAst.m_DerefLevel) {
+          int a = static_cast<int>(matchedSymbol.indirectionLevel);
+          int b = static_cast<int>(assignmentAst.m_DerefLevel);
+          if (a - b < 0) {
             m_TypeErrorMessages.emplace_back(
                 "It's not a indirectable or not a valid indirection level",
                 symbolInfo);
           } else {
             matchedSymbol.indirectionLevel -= assignmentAst.m_DerefLevel;
+
             indirectable = true;
           }
         }
+
+        //
+        // type qualifier checking..
+        //
+        if (matchedSymbol.indirectionLevel == 0 &&
+            (matchedSymbol.isConstRef || matchedSymbol.isConstVal)) {
+          m_TypeErrorMessages.emplace_back(
+              "const-qualified value is not assignable", symbolInfo);
+        }
+
+        if (matchedSymbol.isReadOnly) {
+          m_TypeErrorMessages.emplace_back(
+              "readonly-qualified symbol is neither assignable with a value "
+              "nor pointer with a reference",
+              symbolInfo);
+        }
+
+        if (matchedSymbol.indirectionLevel > 0 && matchedSymbol.isConstPtr) {
+          m_TypeErrorMessages.emplace_back(
+              "constptr-qualified pointer is not assignable", symbolInfo);
+        } else {
+          if (matchedSymbol.ptrAliases.count(assignmentAst.m_DerefLevel) > 0) {
+            SymbolInfo indirectedSymbol;
+            SymbolInfo &currentSymbol = matchedSymbol;
+            size_t derefLevel = assignmentAst.m_DerefLevel;
+            while (!currentSymbol.symbolName.empty()) {
+              //              symbolValidation(currentSymbol.ptrAliases[derefLevel],symbolInfo,
+              //              indirectedSymbol);
+              if (currentSymbol.ptrAliases.count(derefLevel) > 0) {
+                bool x = symbolValidation(currentSymbol.ptrAliases[derefLevel],
+                                          symbolInfo, currentSymbol);
+                derefLevel = currentSymbol.indirectionLevel;
+              } else {
+                break;
+              }
+            }
+
+            if (currentSymbol.indirectionLevel == 0 &&
+                (currentSymbol.isConstRef || currentSymbol.isConstVal)) {
+              m_TypeErrorMessages.emplace_back(
+                  "const-qualified value is not assignable", symbolInfo);
+            }
+
+            if (currentSymbol.isReadOnly) {
+              m_TypeErrorMessages.emplace_back(
+                  "readonly-qualified symbol is neither assignable with a "
+                  "value "
+                  "nor pointer with a reference",
+                  symbolInfo);
+            }
+
+            if (currentSymbol.indirectionLevel > 0 &&
+                currentSymbol.isConstPtr) {
+              m_TypeErrorMessages.emplace_back(
+                  "constptr-qualified pointer is not assignable", symbolInfo);
+            }
+          }
+        }
+
+        // ----------------------
 
         this->m_ExpectedType = matchedSymbol.type;
 
@@ -334,6 +404,8 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
         //      this->m_LastIde
         //        if(indirectable)
         auto rhs = assignmentAst.m_RHS->acceptBefore(*this);
+
+        // rhs symbol need to check
 
         this->m_LastReferenced = false;
         this->m_DereferenceLevel = 0;
@@ -364,22 +436,35 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
         this->m_MatchedSymbolType = matchedSymbol.type;
 
         if (matchedSymbol.type == this->m_LastSymbolInfo.type) {
-          if (matchedSymbol.indirectionLevel +
-                      (this->m_LastReferenced ? 1 : 0) !=
-                  this->m_LastSymbolInfo.indirectionLevel &&
-              this->m_LastBinOp) {
-            symbolInfo.typeCheckerInfo.isCompatiblePtr = false;
-          } else if (matchedSymbol.indirectionLevel +
-                             (this->m_LastReferenced ? 1 : 0) !=
-                         this->m_LastSymbolInfo.indirectionLevel &&
-                     !this->m_LastBinOp) {
-            accumulateIncompatiblePtrErrMesg(symbolInfo);
-          }
+          if (matchedSymbol.indirectionLevel == 0 &&
+              m_LastSymbolInfo.indirectionLevel == 1 &&
+              m_LastSymbolInfo.isRef && !this->m_LastBinOp) {
+          } else {
+            if (matchedSymbol.indirectionLevel +
+                        (this->m_LastReferenced ? 1 : 0) -
+                        (this->m_LastDereferenced ? this->m_DereferenceLevel
+                                                  : 0) !=
+                    this->m_LastSymbolInfo.indirectionLevel &&
+                this->m_LastBinOp) {
+              symbolInfo.typeCheckerInfo.isCompatiblePtr = false;
+            } else if (matchedSymbol.indirectionLevel +
+                               (this->m_LastReferenced ? 1 : 0) -
+                               (this->m_LastDereferenced
+                                    ? this->m_DereferenceLevel
+                                    : 0) !=
+                           this->m_LastSymbolInfo.indirectionLevel &&
+                       !this->m_LastBinOp) {
+              accumulateIncompatiblePtrErrMesg(symbolInfo);
+            }
 
-          if ((this->m_LastBinOp &&
-               matchedSymbol.indirectionLevel ==
-                   this->m_LastSymbolInfo.indirectionLevel)) {
-            this->m_LastBinOpHasAtLeastOnePtr = true;
+            if ((this->m_LastBinOp && matchedSymbol.indirectionLevel > 0 &&
+                 matchedSymbol.indirectionLevel +
+                         (this->m_LastReferenced ? 1 : 0) -
+                         (this->m_LastDereferenced ? this->m_DereferenceLevel
+                                                   : 0) ==
+                     this->m_LastSymbolInfo.indirectionLevel)) {
+              this->m_LastBinOpHasAtLeastOnePtr = true;
+            }
           }
         } else {
           if (IsPrimitiveType(this->m_ExpectedType) &&
@@ -401,6 +486,29 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
           }
         }
 
+        // type qualifier of the variable decl
+        if ((matchedSymbol.isConstVal != m_LastSymbolInfo.isConstVal) &&
+            matchedSymbol.indirectionLevel != 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Cannot initialize a variable with the different type of "
+              "qualifier",
+              symbolInfo);
+        }
+
+        if (matchedSymbol.isConstRef != m_LastSymbolInfo.isConstRef) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Cannot initialize a variable with the different type of "
+              "qualifier",
+              symbolInfo);
+        }
+
+        if (matchedSymbol.isConstPtr != m_LastSymbolInfo.isConstPtr && !matchedSymbol.isConstRef && !matchedSymbol.isConstVal) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Cannot initialize a variable with the different type of "
+              "qualifier",
+              symbolInfo);
+        }
+
       } else {
         if (this->m_LastLoopDataSymbol || this->m_LastLoopIndexSymbol) {
           // okay
@@ -410,6 +518,11 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
       }
     }
   } else {
+    if (!this->m_LastLoopDataSymbol && !this->m_LastLoopIndexSymbol &&
+        !this->m_LastParamSymbol) {
+      symbolInfo.ptrAliases[this->m_LastSymbolInfo.indirectionLevel] =
+          symbolName;
+    }
   }
 
   return symbolInfo;
@@ -515,7 +628,10 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
         // value. )
       }
     }
+  } else {
+    symbolInfo.value = scalarAst.m_Value;
   }
+
   return symbolInfo;
 }
 
@@ -579,7 +695,11 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
 
   return symbolInfo;
 }
-SymbolInfo Visitor::preVisit(CastOpAST &castOpAst) {}
+SymbolInfo Visitor::preVisit(CastOpAST &castOpAst) {
+  SymbolInfo symbolInfo;
+
+  return symbolInfo;
+}
 
 SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
   SymbolInfo symbolInfo;
@@ -752,7 +872,10 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
 }
 
 SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
+  SymbolInfo symbolInfo;
   // TODO: return type checking...
+
+  return symbolInfo;
 }
 
 SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
@@ -788,9 +911,11 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
   symbolInfo.isConstPtr = paramAst.m_TypeQualifier == Q_CONSTPTR;
   symbolInfo.isReadOnly = paramAst.m_TypeQualifier == Q_READONLY;
   symbolInfo.isConstVal = paramAst.m_TypeQualifier == Q_CONST;
-  symbolInfo.isRef = typeInfo->m_IsRef;
-  symbolInfo.isUnique = typeInfo->m_IsUniquePtr;
-  symbolInfo.indirectionLevel = typeInfo->m_IndirectLevel;
+  if (typeInfo != nullptr) {
+    symbolInfo.isRef = typeInfo->m_IsRef;
+    symbolInfo.isUnique = typeInfo->m_IsUniquePtr;
+    symbolInfo.indirectionLevel = typeInfo->m_IndirectLevel;
+  }
 
   m_LastParamSymbol = false;
 
@@ -803,7 +928,6 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
   if (m_TypeChecking) {
     if ((symbolInfo.isConstPtr &&
          (symbolInfo.indirectionLevel == 0 || symbolInfo.isRef)) ||
-        (symbolInfo.isConstVal && symbolInfo.indirectionLevel > 0) ||
         (symbolInfo.isConstRef && !symbolInfo.isRef)) {
       // error
       this->m_TypeErrorMessages.emplace_back(
@@ -816,7 +940,14 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
 
   return symbolInfo;
 }
-SymbolInfo Visitor::preVisit(RetAST &retAst) {}
+SymbolInfo Visitor::preVisit(RetAST &retAst) {
+  SymbolInfo symbolInfo;
+
+
+
+  return symbolInfo;
+}
+
 SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
   SymbolInfo symbolInfo;
 
@@ -837,8 +968,17 @@ SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
         this->m_LastReferenced = false;
         break;
       }
-      case U_DEREF:
+      case U_DEREF: {
+        this->m_LastDereferenced = true;
+        symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
+        if (unaryOpAst.m_Node->m_ExprKind == ExprKind::SymbolExpr) {
+          this->m_LastDereferenced = false;
+          this->m_DereferenceLevel = 1;
+        } else {
+          this->m_DereferenceLevel += 1;
+        }
         break;
+      }
       case U_SIZEOF:
       case U_PREFIX:
       case U_POSTFIX:
@@ -868,6 +1008,10 @@ SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
       default:
         assert(false && "Unreacheable!");
     }
+  } else {
+    this->m_LastReferenced = true;
+    symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
+    this->m_LastReferenced = false;
   }
 
   return symbolInfo;
