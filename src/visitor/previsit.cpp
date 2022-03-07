@@ -260,6 +260,39 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   if (this->m_TypeChecking && symbolInfo.isNeededEval) {
     this->m_ExpectedType = varAst.m_TypeSpec;
 
+    // Array intializer
+    if (symbolInfo.isSubscriptable) {
+      size_t dimension = 1;
+      for (auto &v : varAst.m_ArrDim) {
+        auto scalar = dynamic_cast<ScalarOrLiteralAST *>(v.get());
+        symbolInfo.arrayDimensions.push_back(std::stoi(scalar->m_Value));
+      }
+
+      bool oneVal = varAst.m_ArrDim.size() == 1 &&
+                    (varAst.m_RHS->m_ExprKind == ExprKind::ScalarExpr ||
+                     varAst.m_RHS->m_ExprKind == ExprKind::SymbolExpr);
+
+      if (varAst.m_RHS->m_ExprKind != ExprKind::BinOp &&
+          varAst.m_RHS->m_ASTKind == ASTKind::Expr && !oneVal) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Array initializer must be an initilizer list", symbolInfo);
+      } else {
+        if (oneVal) {
+          auto scalar =
+              dynamic_cast<ScalarOrLiteralAST *>(varAst.m_ArrDim[0].get());
+          if (scalar->m_Value != "1") {
+            this->m_TypeErrorMessages.emplace_back(
+                "Array initializer does not meet with size of array",
+                symbolInfo);
+          }
+        } else {
+          // auto binaryExpr = dynamic_cast<BinaryOpAST*>(varAst.m_RHS.get());
+          //  TODO: will be added later on
+        }
+      }
+    }
+    // --
+
     if ((symbolInfo.isConstPtr &&
          (symbolInfo.indirectionLevel == 0 || symbolInfo.isRef)) ||
         (symbolInfo.isConstRef && !symbolInfo.isRef)) {
@@ -328,6 +361,31 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
             matchedSymbol.indirectionLevel -= assignmentAst.m_DerefLevel;
 
             indirectable = true;
+          }
+        }
+
+        if (assignmentAst.m_Subscriptable) {
+          if (assignmentAst.m_SubscriptIndexes.size() !=
+              matchedSymbol.arrayDimensions.size()) {
+            m_TypeErrorMessages.emplace_back(
+                "Array type with index(es) is not assignable", symbolInfo);
+          } else {
+            for (int i = 0; i < matchedSymbol.arrayDimensions.size(); ++i) {
+              auto index = dynamic_cast<ScalarOrLiteralAST *>(
+                  assignmentAst.m_SubscriptIndexes[i].get());
+              auto indexVal = std::stoi(index->m_Value);
+              if (indexVal > matchedSymbol.arrayDimensions[i]) {
+                m_TypeWarningMessages.emplace_back(
+                    "Array index '" + index->m_Value +
+                        "' is after the beginning of the array",
+                    symbolInfo);
+              } else if (indexVal < 0) {
+                m_TypeWarningMessages.emplace_back(
+                    "Array index '" + index->m_Value +
+                        "' is before the beginning of the array",
+                    symbolInfo);
+              }
+            }
           }
         }
 
@@ -954,6 +1012,13 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
     symbolInfo.indirectionLevel = typeInfo->m_IndirectLevel;
   }
 
+  if (paramAst.m_IsSubscriptable) {
+    for (auto &v : paramAst.m_ArrDim) {
+      auto scalar = dynamic_cast<ScalarOrLiteralAST *>(v.get());
+      symbolInfo.arrayDimensions.push_back(std::stoi(scalar->m_Value));
+    }
+  }
+
   m_LastParamSymbol = false;
 
   if (paramAst.m_IsPrimitive) {
@@ -984,7 +1049,7 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {
     this->m_LastRetExpr = true;
     m_LastSymbolInfo = m_LastFuncRetTypeInfo;
     m_LastSymbolInfo.symbolId = Visitor::SymbolId;
-    retAst.m_RetExpr->acceptBefore(*this);
+    if (retAst.m_RetExpr != nullptr) retAst.m_RetExpr->acceptBefore(*this);
     this->m_LastRetExpr = false;
   }
 

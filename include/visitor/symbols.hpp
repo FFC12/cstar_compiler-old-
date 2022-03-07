@@ -35,6 +35,7 @@ struct SymbolInfo {
   bool isParam = false;
 
   std::string value;
+  std::vector<size_t> arrayDimensions;
   std::pair<std::string, std::string>
       definedTypenamePair;  // left one is for symbol0 and right one is for
                             // symbol1
