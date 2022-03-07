@@ -59,6 +59,7 @@ class SymbolAST;
 class TypeAST;
 class UnaryOpAST;
 class VarAST;
+class FixAST;
 
 using ValuePtr = llvm::Value*;
 using SymbolInfoList = std::vector<SymbolInfoEntry>;
@@ -152,6 +153,7 @@ class Visitor {
   ValuePtr visit(TypeAST& typeAst);
   ValuePtr visit(ScalarOrLiteralAST& scalarAst);
   ValuePtr visit(SymbolAST& symbolAst);
+  ValuePtr visit(FixAST& fixAst);
 
   SymbolInfo preVisit(VarAST& varAst);
   SymbolInfo preVisit(AssignmentAST& assignmentAst);
@@ -167,6 +169,7 @@ class Visitor {
   SymbolInfo preVisit(TypeAST& typeAst);
   SymbolInfo preVisit(ScalarOrLiteralAST& scalarAst);
   SymbolInfo preVisit(SymbolAST& symbolAst);
+  SymbolInfo preVisit(FixAST& fixAst);
 
   std::vector<SymbolInfo> getSymbolInfoList() { return this->m_SymbolInfos; }
   std::vector<SemanticErrorMessage> getUnknownTypeErrorMessages() {

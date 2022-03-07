@@ -293,7 +293,7 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
     }
     // --
 
-    if ((symbolInfo.isConstPtr &&
+    if (((symbolInfo.isConstPtr && !symbolInfo.isSubscriptable) &&
          (symbolInfo.indirectionLevel == 0 || symbolInfo.isRef)) ||
         (symbolInfo.isConstRef && !symbolInfo.isRef)) {
       // error
@@ -1028,7 +1028,7 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
   }
 
   if (m_TypeChecking) {
-    if ((symbolInfo.isConstPtr &&
+    if (((symbolInfo.isConstPtr && !symbolInfo.isSubscriptable) &&
          (symbolInfo.indirectionLevel == 0 || symbolInfo.isRef)) ||
         (symbolInfo.isConstRef && !symbolInfo.isRef)) {
       // error
@@ -1048,6 +1048,7 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {
   if (m_TypeChecking) {
     this->m_LastRetExpr = true;
     m_LastSymbolInfo = m_LastFuncRetTypeInfo;
+    m_ExpectedType = m_LastFuncRetTypeInfo.type;
     m_LastSymbolInfo.symbolId = Visitor::SymbolId;
     if (retAst.m_RetExpr != nullptr) retAst.m_RetExpr->acceptBefore(*this);
     this->m_LastRetExpr = false;
@@ -1129,6 +1130,14 @@ SymbolInfo Visitor::preVisit(TypeAST &typeAst) {
 
   symbolInfo.type = typeAst.m_TypeSpec;
   symbolInfo.isPrimitive = typeAst.m_IsPrimitiveType;
+
+  return symbolInfo;
+}
+
+SymbolInfo Visitor::preVisit(FixAST& fixAst) {
+  SymbolInfo symbolInfo;
+
+
 
   return symbolInfo;
 }

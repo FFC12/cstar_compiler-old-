@@ -92,6 +92,11 @@ param_again:
 
     std::vector<ASTNode> arrayDimensions;
     bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
+    if (is(TokenKind::AND)) {
+      this->advance();
+      auto typeAst = dynamic_cast<TypeAST*>(type.get());
+      typeAst->setIsRef(true);
+    }
 
     if (!isForwardDecl) {
       // expected param name
@@ -123,6 +128,11 @@ param_again:
 
       std::vector<ASTNode> arrayDimensions;
       bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
+      if (is(TokenKind::AND)) {
+        this->advance();
+        auto typeAst = dynamic_cast<TypeAST*>(type.get());
+        typeAst->setIsRef(true);
+      }
 
       if (!isForwardDecl) {
         expected(TokenKind::IDENT);
@@ -151,6 +161,11 @@ param_again:
 
         std::vector<ASTNode> arrayDimensions;
         bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
+        if (is(TokenKind::AND)) {
+          this->advance();
+          auto typeAst = dynamic_cast<TypeAST*>(type.get());
+          typeAst->setIsRef(true);
+        }
 
         size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
         auto semLoc = SemanticLoc(beginLoc, endLoc, line);
@@ -181,6 +196,11 @@ param_again:
           auto type = std::move(this->advanceSymbol());
           std::vector<ASTNode> arrayDimensions;
           bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
+          if (is(TokenKind::AND)) {
+            this->advance();
+            auto typeAst = dynamic_cast<TypeAST*>(type.get());
+            typeAst->setIsRef(true);
+          }
 
           size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
           auto semLoc = SemanticLoc(beginLoc, endLoc, line);
@@ -405,9 +425,55 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         this->advanceIfStmt(scope);
       } else if (is(TokenKind::LOOP)) {
         this->advanceLoopStmt(scope);
+      } else if (is(TokenKind::IDENT) || is(TokenKind::MINUSMINUS) ||
+                 is(TokenKind::PLUSPLUS)) {
+        bool outOfSize = false;
+        auto nextToken = nextTokenInfo(outOfSize).getTokenKind();
+        if (outOfSize) {
+          ParserError("Unexpected token", currentTokenInfo());
+        }
+
+        PositionInfo posInfo = currentTokenInfo().getTokenPositionInfo();
+        size_t begin = posInfo.begin;
+        size_t line = posInfo.line;
+
+        bool postfix = false, prefix = false;
+        bool increment = false, decrement = false;
+        std::string name;
+        if (is(TokenKind::MINUSMINUS) || is(TokenKind::PLUSPLUS)) {
+          increment = is(TokenKind::PLUSPLUS);
+          decrement = is(TokenKind::MINUSMINUS);
+          prefix = true;
+
+          if (nextToken == TokenKind::IDENT) {
+            this->advance();
+            name = currentTokenStr();
+            this->advance();
+          }
+        } else if (is(TokenKind::IDENT)) {
+          name = currentTokenStr();
+
+          if (nextToken == TokenKind::MINUSMINUS ||
+              nextToken == TokenKind::PLUSPLUS) {
+            postfix = true;
+            this->advance();
+            increment = is(TokenKind::PLUSPLUS);
+            decrement = is(TokenKind::MINUSMINUS);
+            this->advance();
+          }
+        }
+        posInfo = currentTokenInfo().getTokenPositionInfo();
+        size_t end = posInfo.end;
+        SemanticLoc semLoc = SemanticLoc(begin, end, line);
+
+        auto fixExpr = std::make_unique<FixAST>(name, prefix, postfix,
+                                                increment, decrement, semLoc);
+        scope.emplace_back(std::move(fixExpr));
+      } else {
+        ParserError("Unexpected token", currentTokenInfo());
       }
 
-      // option
+      // option - case
     }
   }
 

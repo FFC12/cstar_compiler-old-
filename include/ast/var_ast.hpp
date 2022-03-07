@@ -4,6 +4,7 @@
 #include <memory>
 #include <parser/type_specifiers.hpp>
 #include <parser/visibility_specifiers.hpp>
+#include <parser/type_qualifier.hpp>
 #include <string>
 #include <vector>
 

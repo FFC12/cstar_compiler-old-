@@ -4,6 +4,7 @@
 #include <ast/ast.hpp>
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
+#include <ast/fix_ast.hpp>
 #include <ast/func_ast.hpp>
 #include <ast/func_call_ast.hpp>
 #include <ast/if_stmt.hpp>
@@ -214,7 +215,8 @@ class CStarParser {
                                       size_t& rlend, size_t& offset);
 
   // variable.cpp
-  void varDecl(TypeQualifier typeQualifier, VisibilitySpecifier visibilitySpecifier, bool definedType,
+  void varDecl(TypeQualifier typeQualifier,
+               VisibilitySpecifier visibilitySpecifier, bool definedType,
                bool isLocal, std::vector<ASTNode>* scope = nullptr);
   DeclKind getDeclKind(VisibilitySpecifier visibilitySpecifier);
   ASTNode initializer();
@@ -344,9 +346,10 @@ class CStarParser {
     m_PrecTable[OpType::OP_CAST] = std::move(m_PrecTableCast);
   }
 
-  //for semantics analysis
+  // for semantics analysis
   void ParserError(std::string mesg, size_t begin, size_t end, size_t line);
-  void ParserWarning(std::string mesg, size_t newBegin, size_t newEnd, size_t newLine);
+  void ParserWarning(std::string mesg, size_t newBegin, size_t newEnd,
+                     size_t newLine);
 
   void parse();
   void ownedAST(std::vector<ASTNode>& newOwner) {

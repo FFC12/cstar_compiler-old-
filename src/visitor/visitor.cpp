@@ -29,4 +29,4 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {}
 ValuePtr Visitor::visit(TypeAST &typeAst) {}
 ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {}
 ValuePtr Visitor::visit(SymbolAST &symbolAst) {}
-
+ValuePtr Visitor::visit(FixAST& fixAst){}

@@ -1,8 +1,8 @@
 #ifndef TYPE_AST_HPP
 #define TYPE_AST_HPP
 #include <ast/ast.hpp>
-#include <parser/types.hpp>
 #include <parser/type_specifiers.hpp>
+#include <parser/types.hpp>
 
 class TypeAST : public IAST {
   friend Visitor;
@@ -14,8 +14,9 @@ class TypeAST : public IAST {
   bool m_IsRef;
 
  public:
-  TypeAST(TypeSpecifier typeSpec, ASTNode symbol, bool isUniquePtr, bool isPrimitive,
-          bool isRef, size_t indirectLevel, SemanticLoc& semanticLoc)
+  TypeAST(TypeSpecifier typeSpec, ASTNode symbol, bool isUniquePtr,
+          bool isPrimitive, bool isRef, size_t indirectLevel,
+          SemanticLoc& semanticLoc)
       : IAST(semanticLoc),
         m_TypeSpec(typeSpec),
         m_Symbol(std::move(symbol)),
@@ -26,6 +27,8 @@ class TypeAST : public IAST {
     this->m_ASTKind = ASTKind::Expr;
     this->m_ExprKind = ExprKind::TypeExpr;
   }
+
+  void setIsRef(bool v) { this->m_IsRef = true; }
 
   void debugNode() override {
     std::cout << this->m_TypeSpec << " as type";
