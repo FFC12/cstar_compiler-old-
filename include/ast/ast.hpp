@@ -20,6 +20,7 @@ enum ExprKind {
   RetExpr,
   FuncCallExpr,
   SymbolExpr,
+  FixExpr,
 };
 
 enum DeclKind {

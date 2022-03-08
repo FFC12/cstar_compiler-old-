@@ -58,8 +58,8 @@ class ScalarOrLiteralAST;
 class SymbolAST;
 class TypeAST;
 class UnaryOpAST;
-class VarAST;
 class FixAST;
+class VarAST;
 
 using ValuePtr = llvm::Value*;
 using SymbolInfoList = std::vector<SymbolInfoEntry>;
@@ -106,6 +106,7 @@ class Visitor {
   bool m_LastLoopIndexSymbol = false;
   bool m_LastCondExpr = false;
   bool m_LastRetExpr = false;
+  bool m_LastFixExpr = false;
   size_t m_BinOpTermCount = 0;
 
   void enterScope(bool globScope) {
@@ -180,7 +181,6 @@ class Visitor {
   }
   void accumulateIncompatiblePtrErrMesg(const SymbolInfo& symbolInfo,
                                         const std::string& s);
-
 };
 
 #endif

@@ -270,7 +270,8 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
     }
 
     if (isType(currentTokenInfo()) || is(TokenKind::IDENT) ||
-        is(TokenKind::STAR) || is(TokenKind::DEREF)) {
+        is(TokenKind::STAR) || is(TokenKind::DEREF) ||
+        is(TokenKind::PLUSPLUS) || is(TokenKind::MINUSMINUS)) {
       bool outOfSize = false;
       auto nextTokenInfo = this->nextTokenInfo(outOfSize);
       auto nextToken = nextTokenInfo.getTokenKind();
@@ -313,7 +314,9 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         }
       }
 
-      if (isType(currentTokenInfo()) || nextToken == TokenKind::IDENT ||
+      if (isType(currentTokenInfo()) ||
+          (!(is(TokenKind::PLUSPLUS) || is(TokenKind::MINUSMINUS)) &&
+           nextToken == TokenKind::IDENT) ||
           (isTypeQualifier(prevTokenInfo()) && hasConstness)) {
         varDecl(typeQualifier, VisibilitySpecifier::VIS_LOCAL,
                 is(TokenKind::IDENT), true, &scope);
@@ -383,6 +386,49 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
             std::move(symbol), std::move(expr), deref, dereferencedLevel,
             std::move(indexes), shortcutOp, shortcutOpStr, semanticLoc);
         scope.emplace_back(std::move(assignmentExpr));
+      } else if (is(TokenKind::IDENT) || is(TokenKind::MINUSMINUS) ||
+                 is(TokenKind::PLUSPLUS)) {
+        PositionInfo posInfo = currentTokenInfo().getTokenPositionInfo();
+        begin = posInfo.begin;
+        line = posInfo.line;
+
+        bool postfix = false, prefix = false;
+        bool increment = false, decrement = false;
+        std::string name;
+        if (is(TokenKind::MINUSMINUS) || is(TokenKind::PLUSPLUS)) {
+          increment = is(TokenKind::PLUSPLUS);
+          decrement = is(TokenKind::MINUSMINUS);
+          prefix = true;
+
+          if (nextToken == TokenKind::IDENT) {
+            this->advance();
+            name = currentTokenStr();
+            this->advance();
+          }
+        } else if (is(TokenKind::IDENT)) {
+          name = currentTokenStr();
+
+          if (nextToken == TokenKind::MINUSMINUS ||
+              nextToken == TokenKind::PLUSPLUS) {
+            postfix = true;
+            this->advance();
+            increment = is(TokenKind::PLUSPLUS);
+            decrement = is(TokenKind::MINUSMINUS);
+            this->advance();
+          }
+        }
+        expected(SEMICOLON);
+        this->advance();
+
+        posInfo = currentTokenInfo().getTokenPositionInfo();
+        size_t end = posInfo.end;
+        SemanticLoc semLoc = SemanticLoc(begin, end, line);
+
+        auto symbol = std::make_unique<SymbolAST>(name, semLoc);
+
+        auto fixExpr = std::make_unique<FixAST>(
+            std::move(symbol), prefix, postfix, increment, decrement, semLoc);
+        scope.emplace_back(std::move(fixExpr));
       }
     } else {
       while (is(TokenKind::LINEFEED) || is(TokenKind::COMMENT)) {
@@ -425,52 +471,8 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         this->advanceIfStmt(scope);
       } else if (is(TokenKind::LOOP)) {
         this->advanceLoopStmt(scope);
-      } else if (is(TokenKind::IDENT) || is(TokenKind::MINUSMINUS) ||
-                 is(TokenKind::PLUSPLUS)) {
-        bool outOfSize = false;
-        auto nextToken = nextTokenInfo(outOfSize).getTokenKind();
-        if (outOfSize) {
-          ParserError("Unexpected token", currentTokenInfo());
-        }
-
-        PositionInfo posInfo = currentTokenInfo().getTokenPositionInfo();
-        size_t begin = posInfo.begin;
-        size_t line = posInfo.line;
-
-        bool postfix = false, prefix = false;
-        bool increment = false, decrement = false;
-        std::string name;
-        if (is(TokenKind::MINUSMINUS) || is(TokenKind::PLUSPLUS)) {
-          increment = is(TokenKind::PLUSPLUS);
-          decrement = is(TokenKind::MINUSMINUS);
-          prefix = true;
-
-          if (nextToken == TokenKind::IDENT) {
-            this->advance();
-            name = currentTokenStr();
-            this->advance();
-          }
-        } else if (is(TokenKind::IDENT)) {
-          name = currentTokenStr();
-
-          if (nextToken == TokenKind::MINUSMINUS ||
-              nextToken == TokenKind::PLUSPLUS) {
-            postfix = true;
-            this->advance();
-            increment = is(TokenKind::PLUSPLUS);
-            decrement = is(TokenKind::MINUSMINUS);
-            this->advance();
-          }
-        }
-        posInfo = currentTokenInfo().getTokenPositionInfo();
-        size_t end = posInfo.end;
-        SemanticLoc semLoc = SemanticLoc(begin, end, line);
-
-        auto fixExpr = std::make_unique<FixAST>(name, prefix, postfix,
-                                                increment, decrement, semLoc);
-        scope.emplace_back(std::move(fixExpr));
       } else {
-        ParserError("Unexpected token", currentTokenInfo());
+        // ParserError("Unexpected token", currentTokenInfo());
       }
 
       // option - case

@@ -45,8 +45,6 @@ class AssignmentAST : public IAST {
     this->m_ASTKind = ASTKind::Expr;
     this->m_ExprKind = ExprKind::AssignmentExpr;
     this->m_Subscriptable = true;
-    this->m_ASTKind = ASTKind::Expr;
-    this->m_ExprKind = ExprKind::AssignmentExpr;
   }
 
   AssignmentAST(ASTNode lhs, ASTNode rhs, bool isDereferenced,

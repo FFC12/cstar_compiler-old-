@@ -2,6 +2,7 @@
 #include <ast/ast.hpp>
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
+#include <ast/fix_ast.hpp>
 #include <ast/func_ast.hpp>
 #include <ast/func_call_ast.hpp>
 #include <ast/if_stmt.hpp>
@@ -330,6 +331,7 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
 SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
   SymbolInfo symbolInfo;
 
+  Visitor::SymbolId += 1;
   if (m_TypeChecking) {
     if (assignmentAst.m_LHS->m_ASTKind != ASTKind::Expr &&
         assignmentAst.m_ExprKind != ExprKind::SymbolExpr) {
@@ -493,102 +495,104 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
       if (symbolValidation(symbolName, symbolInfo, matchedSymbol)) {
         this->m_MatchedSymbolType = matchedSymbol.type;
 
-        if (matchedSymbol.type == this->m_LastSymbolInfo.type) {
-          if (matchedSymbol.indirectionLevel == 0 &&
-              m_LastSymbolInfo.indirectionLevel == 1 &&
-              m_LastSymbolInfo.isRef && !this->m_LastBinOp) {
+        if (!this->m_LastCondExpr && !this->m_LastFixExpr) {
+          if (matchedSymbol.type == this->m_LastSymbolInfo.type) {
+            if (matchedSymbol.indirectionLevel == 0 &&
+                m_LastSymbolInfo.indirectionLevel == 1 &&
+                m_LastSymbolInfo.isRef && !this->m_LastBinOp) {
+            } else {
+              if (matchedSymbol.indirectionLevel +
+                          (this->m_LastReferenced ? 1 : 0) -
+                          (this->m_LastDereferenced ? this->m_DereferenceLevel
+                                                    : 0) !=
+                      this->m_LastSymbolInfo.indirectionLevel &&
+                  this->m_LastBinOp) {
+                symbolInfo.typeCheckerInfo.isCompatiblePtr = false;
+              } else if (matchedSymbol.indirectionLevel +
+                                 (this->m_LastReferenced ? 1 : 0) -
+                                 (this->m_LastDereferenced
+                                      ? this->m_DereferenceLevel
+                                      : 0) !=
+                             this->m_LastSymbolInfo.indirectionLevel &&
+                         !this->m_LastBinOp) {
+                accumulateIncompatiblePtrErrMesg(symbolInfo);
+              }
+
+              if ((this->m_LastBinOp && matchedSymbol.indirectionLevel > 0 &&
+                   matchedSymbol.indirectionLevel +
+                           (this->m_LastReferenced ? 1 : 0) -
+                           (this->m_LastDereferenced ? this->m_DereferenceLevel
+                                                     : 0) ==
+                       this->m_LastSymbolInfo.indirectionLevel)) {
+                this->m_LastBinOpHasAtLeastOnePtr = true;
+              }
+            }
+
           } else {
-            if (matchedSymbol.indirectionLevel +
-                        (this->m_LastReferenced ? 1 : 0) -
-                        (this->m_LastDereferenced ? this->m_DereferenceLevel
-                                                  : 0) !=
-                    this->m_LastSymbolInfo.indirectionLevel &&
-                this->m_LastBinOp) {
-              symbolInfo.typeCheckerInfo.isCompatiblePtr = false;
-            } else if (matchedSymbol.indirectionLevel +
-                               (this->m_LastReferenced ? 1 : 0) -
-                               (this->m_LastDereferenced
-                                    ? this->m_DereferenceLevel
-                                    : 0) !=
-                           this->m_LastSymbolInfo.indirectionLevel &&
-                       !this->m_LastBinOp) {
+            if (IsPrimitiveType(this->m_ExpectedType) &&
+                IsPrimitiveType(this->m_MatchedSymbolType) &&
+                !this->m_LastReferenced) {
+              // Plain type without ptr-level
+              if (LosslessCasting(this->m_ExpectedType,
+                                  this->m_MatchedSymbolType) &&
+                  this->m_LastSymbolInfo.indirectionLevel == 0) {
+                this->m_TypeWarningMessages.emplace_back(
+                    "A '" + GetTypeStr(this->m_MatchedSymbolType) +
+                        "' type is casting to '" +
+                        GetTypeStr(this->m_ExpectedType) +
+                        "'. Potential data loss might be occured!",
+                    symbolInfo);
+              }
+            } else {
               accumulateIncompatiblePtrErrMesg(symbolInfo);
             }
-
-            if ((this->m_LastBinOp && matchedSymbol.indirectionLevel > 0 &&
-                 matchedSymbol.indirectionLevel +
-                         (this->m_LastReferenced ? 1 : 0) -
-                         (this->m_LastDereferenced ? this->m_DereferenceLevel
-                                                   : 0) ==
-                     this->m_LastSymbolInfo.indirectionLevel)) {
-              this->m_LastBinOpHasAtLeastOnePtr = true;
-            }
           }
-        } else {
-          if (IsPrimitiveType(this->m_ExpectedType) &&
-              IsPrimitiveType(this->m_MatchedSymbolType) &&
-              !this->m_LastReferenced) {
-            // Plain type without ptr-level
-            if (LosslessCasting(this->m_ExpectedType,
-                                this->m_MatchedSymbolType) &&
-                this->m_LastSymbolInfo.indirectionLevel == 0) {
-              this->m_TypeWarningMessages.emplace_back(
-                  "A '" + GetTypeStr(this->m_MatchedSymbolType) +
-                      "' type is casting to '" +
-                      GetTypeStr(this->m_ExpectedType) +
-                      "'. Potential data loss might be occured!",
+
+          // type qualifier of the variable decl
+          if ((matchedSymbol.isConstVal != m_LastSymbolInfo.isConstVal) &&
+              matchedSymbol.indirectionLevel != 0) {
+            if (this->m_LastRetExpr) {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Cannot return a variable with the different type of "
+                  "qualifier",
+                  symbolInfo);
+            } else {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Cannot initialize a variable with the different type of "
+                  "qualifier",
                   symbolInfo);
             }
-          } else {
-            accumulateIncompatiblePtrErrMesg(symbolInfo);
+          }
+
+          if (matchedSymbol.isConstRef != m_LastSymbolInfo.isConstRef) {
+            if (this->m_LastRetExpr) {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Cannot return a variable with the different type of "
+                  "qualifier",
+                  symbolInfo);
+            } else {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Cannot initialize a variable with the different type of "
+                  "qualifier",
+                  symbolInfo);
+            }
+          }
+
+          if (matchedSymbol.isConstPtr != m_LastSymbolInfo.isConstPtr &&
+              !matchedSymbol.isConstRef && !matchedSymbol.isConstVal) {
+            if (this->m_LastRetExpr) {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Cannot return a variable with the different type of "
+                  "qualifier",
+                  symbolInfo);
+            } else {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Cannot initialize a variable with the different type of "
+                  "qualifier",
+                  symbolInfo);
+            }
           }
         }
-
-        // type qualifier of the variable decl
-        if ((matchedSymbol.isConstVal != m_LastSymbolInfo.isConstVal) &&
-            matchedSymbol.indirectionLevel != 0) {
-          if (this->m_LastRetExpr) {
-            this->m_TypeErrorMessages.emplace_back(
-                "Cannot return a variable with the different type of "
-                "qualifier",
-                symbolInfo);
-          } else {
-            this->m_TypeErrorMessages.emplace_back(
-                "Cannot initialize a variable with the different type of "
-                "qualifier",
-                symbolInfo);
-          }
-        }
-
-        if (matchedSymbol.isConstRef != m_LastSymbolInfo.isConstRef) {
-          if (this->m_LastRetExpr) {
-            this->m_TypeErrorMessages.emplace_back(
-                "Cannot return a variable with the different type of "
-                "qualifier",
-                symbolInfo);
-          } else {
-            this->m_TypeErrorMessages.emplace_back(
-                "Cannot initialize a variable with the different type of "
-                "qualifier",
-                symbolInfo);
-          }
-        }
-
-        if (matchedSymbol.isConstPtr != m_LastSymbolInfo.isConstPtr &&
-            !matchedSymbol.isConstRef && !matchedSymbol.isConstVal) {
-          if (this->m_LastRetExpr) {
-            this->m_TypeErrorMessages.emplace_back(
-                "Cannot return a variable with the different type of "
-                "qualifier",
-                symbolInfo);
-          } else {
-            this->m_TypeErrorMessages.emplace_back(
-                "Cannot initialize a variable with the different type of "
-                "qualifier",
-                symbolInfo);
-          }
-        }
-
       } else {
         if (this->m_LastLoopDataSymbol || this->m_LastLoopIndexSymbol) {
           // okay
@@ -804,12 +808,12 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
   symbolInfo.end = funcAst.m_SemLoc.end;
   symbolInfo.line = funcAst.m_SemLoc.line;
 
+  Visitor::SymbolId++;
   if (m_TypeChecking) {
     this->m_LastScopeSymbols = this->m_LocalSymbolTable[funcAst.m_FuncName];
     for (auto &param : funcAst.m_Params) {
       auto symbol = param->acceptBefore(*this);
       //      typeCheckerScopeHandler(param);
-      Visitor::SymbolId++;
     }
 
     for (auto &node : funcAst.m_Scope) {
@@ -996,10 +1000,8 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
 
   auto typeInfo = dynamic_cast<TypeAST *>(paramAst.m_TypeNode.get());
 
-  if (!m_TypeChecking) {
-    symbolInfo.symbolId = Visitor::SymbolId;
-    Visitor::SymbolId += 1;
-  }
+  symbolInfo.symbolId = Visitor::SymbolId;
+  Visitor::SymbolId += 1;
 
   symbolInfo.isSubscriptable = paramAst.m_IsSubscriptable;
   symbolInfo.isConstRef = paramAst.m_TypeQualifier == Q_CONSTREF;
@@ -1134,10 +1136,18 @@ SymbolInfo Visitor::preVisit(TypeAST &typeAst) {
   return symbolInfo;
 }
 
-SymbolInfo Visitor::preVisit(FixAST& fixAst) {
+SymbolInfo Visitor::preVisit(FixAST &fixAst) {
   SymbolInfo symbolInfo;
 
-
+  // Problem symbolId den kaynaklanıyor. Validate ederken
+  // symbol ıd si olmadığı için hata veriyor. Bunun uzerinde düşünmen gerekiyor.
+  Visitor::SymbolId += 1;
+  if (m_TypeChecking) {
+    this->m_LastFixExpr = true;
+    this->m_LastSymbolInfo = symbolInfo;
+    fixAst.m_Symbol->acceptBefore(*this);
+    this->m_LastFixExpr = false;
+  }
 
   return symbolInfo;
 }
@@ -1169,7 +1179,13 @@ void Visitor::scopeHandler(std::unique_ptr<IAST> &node, SymbolScope symbolScope,
 
     this->m_SymbolInfos.push_back(temp);
   } else if (node->m_ASTKind == ASTKind::Expr &&
+             node->m_ExprKind == ExprKind::AssignmentExpr) {
+    auto temp = node->acceptBefore(*this);
+  } else if (node->m_ASTKind == ASTKind::Expr &&
              node->m_ExprKind == ExprKind::RetExpr) {
+    node->acceptBefore(*this);
+  } else if (node->m_ASTKind == ASTKind::Expr &&
+             node->m_ExprKind == ExprKind::FixExpr) {
     node->acceptBefore(*this);
   }
 }
@@ -1194,6 +1210,9 @@ void Visitor::typeCheckerScopeHandler(std::unique_ptr<IAST> &node) {
   } else if (node->m_ASTKind == ASTKind::Expr &&
              node->m_ExprKind == ExprKind::RetExpr) {
     node->acceptBefore(*this);
+  } else if (node->m_ASTKind == ASTKind::Expr &&
+             node->m_ExprKind == ExprKind::FixExpr) {
+    node->acceptBefore(*this);
   }
 }
 
@@ -1203,9 +1222,14 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
   bool isGlobSymbol = false;
 
   size_t index = this->m_LastSymbolInfo.symbolId;
+
+  if (m_LastAssignment || m_LastFixExpr) {
+    index = Visitor::SymbolId - 1;
+  }
+
   for (auto &it : m_GlobalSymbolTable) {
     if (it.symbolName == symbolName) {
-      if (it.symbolInfo.symbolId > index && !m_LastAssignment) {
+      if (it.symbolInfo.symbolId > index) {
         this->m_TypeWarningMessages.emplace_back(
             "'" + symbolName + "' was not in a valid place", it.symbolInfo);
         this->m_TypeErrorMessages.emplace_back(
@@ -1225,7 +1249,7 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
 
   for (auto &it : this->m_LastScopeSymbols) {
     if (it.symbolName == symbolName) {
-      if (it.symbolInfo.symbolId > index && !m_LastAssignment) {
+      if (it.symbolInfo.symbolId > index) {
         this->m_TypeWarningMessages.emplace_back(
             "'" + symbolName + "' was not in a valid place", it.symbolInfo);
         this->m_TypeErrorMessages.emplace_back(
