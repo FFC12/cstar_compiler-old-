@@ -9,7 +9,7 @@ func0(X* x, p int) :: void {
     bool x = true;
 }
 
-// not allowed to the casting none of 
+// not allowed to the casting of none of 
 // params of this function...
 func1(x int, p X*) { // :: void
     float b = 212.324234;

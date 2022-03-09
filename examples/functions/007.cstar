@@ -1,0 +1,10 @@
+main(int argc, char** argv) :: int {
+    int f;
+}
+
+func(int a, int& c, k float) :: void {
+    float z = k;
+    bool x;
+    int b,l,m,n;
+    ret;
+}

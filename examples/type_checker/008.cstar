@@ -1,10 +1,8 @@
 
 main(int argc, char** argv) :: int {
-    f += 20.2;
-    f2++;
 	float32 f = 12.2345345;
 	float64 f2 = 234.34564645;	
-    constptr char^ str = "Hello world!";
+    constptr char* str = "Hello world!";
 
     if(f > 23 && f2 < 34) {
         loop(true) {
@@ -13,5 +11,5 @@ main(int argc, char** argv) :: int {
         }
     }
 
-	ret 23.0;
+	ret 23;
 } 

@@ -3,10 +3,15 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Verifier.h>
+#include <llvm/Target/TargetMachine.h>
 
+#include <fstream>
 #include <map>
 #include <parser/parser.hpp>
 #include <visitor/visitor.hpp>
+
+#define ENABLE_CODEGEN
 
 class CStarCodegen {
   GlobalSymbolInfoList m_GlobalSymbols;
@@ -28,6 +33,8 @@ class CStarCodegen {
   size_t m_ErrorCount = 0;
   size_t m_WarningCount = 0;
 
+  std::string m_Filename;
+
   // pass0 is for detecting and booking all symbols (gathering preinfo)
   // pass0.cpp
   void pass0();
@@ -41,14 +48,17 @@ class CStarCodegen {
   // pass1 is for type checking
   void pass1();
 
+  // codegen
+  void codegen();
+
  public:
   explicit CStarCodegen(CStarParser&& parser, std::string& filepath)
       : m_Parser(std::move(parser)) {
     time_t startTime = time(nullptr);
 
     m_MainContext = std::make_unique<llvm::LLVMContext>();
-    auto filename = ExtractFilenameFromPath(filepath, "/");
-    m_MainModule = std::make_unique<llvm::Module>(filename, *m_MainContext);
+    m_Filename = ExtractFilenameFromPath(filepath, "/");
+    m_MainModule = std::make_unique<llvm::Module>(m_Filename, *m_MainContext);
     m_IRBuilder = std::make_unique<llvm::IRBuilder<>>(*m_MainContext);
 
     showStats(startTime, "LLVM Init");
@@ -58,20 +68,16 @@ class CStarCodegen {
     this->m_Parser.parse();
     m_Parser.ownedAST(m_AST);
 
+    // Symbol anaylsis
     time_t startTime = time(nullptr);
     pass0();
     showStats(startTime, "Pass 0 (Symbol Analysis)");
 
-    /* if (m_SemAnalysisFailure) {
-       std::cout << REDISH "Compilation failed. " << m_ErrorCount
-                 << " error(s) generated.\n" RES;
-       exit(1);
-     }
-     */
-
+    // Type checking
     startTime = time(nullptr);
     pass1();
     showStats(startTime, "Pass 1 (Type Checking)");
+
     if (m_SemAnalysisFailure) {
       std::cout << YEL
                 << std::to_string(this->m_WarningCount) +
@@ -81,7 +87,31 @@ class CStarCodegen {
       exit(1);
     }
 
-    m_MainModule->print(llvm::errs(), nullptr);
+    // codegen
+    Visitor::Builder = std::move(this->m_IRBuilder);
+    Visitor::Module = std::move(this->m_MainModule);
+
+#ifdef ENABLE_CODEGEN
+    codegen();
+
+    Visitor::Module->print(llvm::errs(), nullptr);
+
+    // write to file
+    std::string outstr;
+    llvm::raw_string_ostream oss(outstr);
+    Visitor::Module->print(oss, nullptr);
+    auto filename = m_Filename + ".ll";
+    std::ofstream outfile(filename.c_str());
+    outfile << outstr << std::endl;
+    outfile.close();
+    std::string command =
+        "llc -x86-asm-syntax=intel " + filename + " -o " + m_Filename + ".s";
+    system(command.c_str());
+    command = "gcc " + m_Filename + ".s " + "-o " + m_Filename + ".out";
+    system(command.c_str());
+    command = "./" + m_Filename + ".out";
+    system(command.c_str());
+#endif
   }
 
   void printAST() const noexcept {
@@ -92,7 +122,7 @@ class CStarCodegen {
 
   ~CStarCodegen() {
     // Need to release and delete it manually
-    auto moduleRef = m_MainModule.release();
+    auto moduleRef = Visitor::Module.release();
     moduleRef->dropAllReferences();
   }
 

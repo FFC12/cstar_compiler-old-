@@ -4,6 +4,7 @@
 
 #include <utility>
 #include <visitor/symbols.hpp>
+#include <llvm/IR/IRBuilder.h>
 
 struct SemanticErrorMessage {
   std::string message;
@@ -97,6 +98,7 @@ class Visitor {
   // and if it's a part of binary operation
   bool m_LastBinOp = false;
   bool m_LastBinOpHasAtLeastOnePtr = false;
+
   bool m_LastReferenced = false;
   bool m_LastParamSymbol = false;
   bool m_LastAssignment = false;
@@ -108,6 +110,10 @@ class Visitor {
   bool m_LastRetExpr = false;
   bool m_LastFixExpr = false;
   size_t m_BinOpTermCount = 0;
+
+  // codegen
+  std::map<std::string, llvm::AllocaInst*> m_LocalVarsOnScope;
+  //--
 
   void enterScope(bool globScope) {
     if (!globScope) m_ScopeId += 1;
@@ -129,6 +135,9 @@ class Visitor {
 
  public:
   static size_t SymbolId;
+  static std::unique_ptr<llvm::IRBuilder<>> Builder;
+  static std::unique_ptr<llvm::Module> Module;
+
   explicit Visitor(const std::map<std::string, size_t>& typeTable)
       : m_TypeTable(typeTable) {}
 
@@ -137,6 +146,13 @@ class Visitor {
           LocalSymbolInfoList localSymbolInfoList, bool typeCheck)
       : m_TypeTable(typeTable),
         m_TypeChecking(typeCheck),
+        m_GlobalSymbolTable(std::move(globalSymbolInfoList)),
+        m_LocalSymbolTable(std::move(localSymbolInfoList)) {}
+
+  Visitor(const std::map<std::string, size_t>& typeTable,
+          GlobalSymbolInfoList globalSymbolInfoList,
+          LocalSymbolInfoList localSymbolInfoList)
+      : m_TypeTable(typeTable),
         m_GlobalSymbolTable(std::move(globalSymbolInfoList)),
         m_LocalSymbolTable(std::move(localSymbolInfoList)) {}
 
