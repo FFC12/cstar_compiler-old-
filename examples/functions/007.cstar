@@ -2,9 +2,10 @@ main(int argc, char** argv) :: int {
     int f;
 }
 
-func(int a, int& c, k float) :: void {
+func(uint k) :: void {
+    constptr char* mesg = "Hello world";
+    char a = 'A';
+    uint8 p = -128;
     float z = k;
-    bool x;
-    int b,l,m,n;
     ret;
 }

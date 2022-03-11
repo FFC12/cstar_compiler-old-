@@ -94,6 +94,9 @@ class CStarCodegen {
 #ifdef ENABLE_CODEGEN
     codegen();
 
+    // -fPIC
+    // https://stackoverflow.com/questions/15985186/create-position-independent-object-file-from-llvm-bit-code
+
     Visitor::Module->print(llvm::errs(), nullptr);
 
     // write to file
@@ -105,12 +108,13 @@ class CStarCodegen {
     outfile << outstr << std::endl;
     outfile.close();
     std::string command =
-        "llc -x86-asm-syntax=intel " + filename + " -o " + m_Filename + ".s";
+        "llc --relocation-model=pic -x86-asm-syntax=intel " + filename + " -o " + m_Filename + ".s";
     system(command.c_str());
     command = "gcc " + m_Filename + ".s " + "-o " + m_Filename + ".out";
     system(command.c_str());
     command = "./" + m_Filename + ".out";
     system(command.c_str());
+    showStats(startTime, "Pass 2 (Codegen)");
 #endif
   }
 

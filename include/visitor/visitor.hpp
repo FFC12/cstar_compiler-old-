@@ -112,7 +112,15 @@ class Visitor {
   size_t m_BinOpTermCount = 0;
 
   // codegen
+  bool m_LastVarDecl = false;
+  bool m_LastSigned = false;
+  bool m_LastNegConstant = false;
+  bool m_LastInitializerList = false;
+  std::string m_LastFuncName;
+  llvm::Type* m_LastType = nullptr;
+  std::vector<size_t> m_LastArrayDims;
   std::map<std::string, llvm::AllocaInst*> m_LocalVarsOnScope;
+  std::map<std::string, llvm::GlobalVariable*> m_GlobalVars;
   //--
 
   void enterScope(bool globScope) {
@@ -197,6 +205,7 @@ class Visitor {
   }
   void accumulateIncompatiblePtrErrMesg(const SymbolInfo& symbolInfo,
                                         const std::string& s);
+  SymbolInfo getSymbolInfo(const std::string& symbolName);
 };
 
 #endif

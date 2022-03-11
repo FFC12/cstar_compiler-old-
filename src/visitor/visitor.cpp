@@ -15,6 +15,34 @@
 #include <ast/var_ast.hpp>
 #include <visitor/visitor.hpp>
 
+static bool IsSigned(TypeSpecifier typeSpecifier) {
+  switch (typeSpecifier) {
+    case SPEC_U8:
+    case SPEC_U16:
+    case SPEC_U32:
+    case SPEC_U64:
+    case SPEC_U128:
+    case SPEC_UINT:
+    case SPEC_USIZE:
+      return false;
+    default:
+      return true;
+  }
+}
+
+SymbolInfo Visitor::getSymbolInfo(const std::string &symbolName) {
+  SymbolInfo symbolInfo;
+
+  for (auto &symbol : m_LocalSymbolTable[m_LastFuncName]) {
+    if (symbol.symbolName == symbolName) {
+      symbolInfo = symbol.symbolInfo;
+      break;
+    }
+  }
+
+  return symbolInfo;
+}
+
 static llvm::Type *GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
                            bool isRef = false) {
   llvm::Type *type = nullptr;
@@ -200,47 +228,209 @@ static llvm::Type *GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
   return type;
 }
 
-ValuePtr Visitor::visit(VarAST &varAst) {
-  llvm::Value *value;
+ValuePtr Visitor::visit(SymbolAST &symbolAst) {
+  llvm::Value *value = nullptr;
+  bool isSigned = false;
 
-  auto type = GetType(varAst.m_TypeSpec, varAst.m_IndirectLevel);
-  if (varAst.m_RHS != nullptr) {
-    value = varAst.m_RHS->accept(*this);
-  } else {
-    // if no data bound
-    if(type->isFloatTy() || type->isDoubleTy()) {
-      value = llvm::ConstantFP::get(type, 0.0f);
-    }  else {
-      value = llvm::ConstantInt::get(type, 0);
+  llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
+  llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
+                                parentFunc->getEntryBlock().end());
+  if (this->m_LastVarDecl) {
+    value = m_LocalVarsOnScope[symbolAst.m_SymbolName];
+    isSigned = IsSigned(getSymbolInfo(symbolAst.m_SymbolName).type);
+    llvm::Type *type = value->getType();
+
+    if (value->getType()->isPointerTy()) {
+      type = value->getType()->getPointerElementType();
     }
-  }
+    auto loadedVal = tempBuilder.CreateLoad(type, value, llvm::Twine(""));
 
-  if(value != nullptr) {
-    llvm::Function *parentFunc =
-        Visitor::Builder->GetInsertBlock()->getParent();
-    llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
-                                  parentFunc->getEntryBlock().end());
+    llvm::Type *lastType = m_LastType;
+    if (m_LastType->isPointerTy()) {
+      lastType->getPointerElementType();
+    }
 
-    llvm::AllocaInst *var =
-        tempBuilder.CreateAlloca(type, nullptr, llvm::Twine(varAst.m_Name));
+    if (type->getTypeID() != lastType->getTypeID()) {
+      if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
+        if (isSigned) {
+          value = tempBuilder.CreateSIToFP(loadedVal, m_LastType);
+        } else {
+          value = tempBuilder.CreateUIToFP(loadedVal, m_LastType);
+        }
+      }
+    } else {
+      if (value->getType()->getTypeID() != m_LastType->getTypeID()) {
+      }
+    }
 
-    m_LocalVarsOnScope[varAst.m_Name] = var;
-    Visitor::Builder->CreateStore(value, var);
   } else {
-    assert(false && "'value' is nullptr");
+    value = m_LocalVarsOnScope[symbolAst.m_SymbolName];
   }
+
   return value;
 }
 
-ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
-  return nullptr;
+ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {
+  llvm::Value *value = nullptr;
+
+  // TODO: scalarast has type info.. perform castings
+
+  if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
+    value = llvm::ConstantFP::get(m_LastType, scalarAst.m_Value);
+  } else {
+    if (scalarAst.m_IsLiteral) {
+      value = Visitor::Builder->CreateGlobalStringPtr(
+          llvm::StringRef(scalarAst.m_Value));
+    } else {
+      if (!m_LastSigned) {
+        auto scalarVal = std::stoull(scalarAst.m_Value);
+        value = llvm::ConstantInt::get(m_LastType, scalarVal);
+        /*value = llvm::ConstantInt::get(
+            m_LastType, llvm::APInt(128, "-" + scalarAst.m_Value, 10));*/
+      } else {
+        if (scalarAst.m_IsLetter) {
+          char val = scalarAst.m_Value[0];
+          value = llvm::ConstantInt::get(m_LastType, (int)val);
+        } else {
+          value = llvm::ConstantInt::get(m_LastType,
+                                         std::stoull(scalarAst.m_Value));
+        }
+      }
+    }
+  }
+
+  return value;
 }
-ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {}
+
+ValuePtr Visitor::visit(VarAST &varAst) {
+  llvm::Value *value;
+  this->m_LastVarDecl = true;
+  auto type = GetType(varAst.m_TypeSpec, varAst.m_IndirectLevel);
+  this->m_LastType = type;
+  this->m_LastSigned = IsSigned(varAst.m_TypeSpec);
+  this->m_LastInitializerList = varAst.m_IsInitializerList;
+
+  if (varAst.m_IsInitializerList) {
+    this->m_LastArrayDims.clear();
+
+    for (auto &dim : varAst.m_ArrDim) {
+      auto val = (ScalarOrLiteralAST *)dim.get();
+      this->m_LastArrayDims.push_back(std::stoull(val->m_Value));
+      
+      // for the right order
+      std::reverse(this->m_LastArrayDims.begin(), this->m_LastArrayDims.end());
+    }
+  }
+
+  if (varAst.m_RHS != nullptr) {
+    value = varAst.m_RHS->accept(*this);
+
+    if (varAst.m_IsInitializerList) {
+      value->setName(varAst.m_Name);
+    }
+  } else {
+    // if no data bound
+    if (varAst.m_IsInitializerList) {
+      auto first = this->m_LastArrayDims[0];
+      auto arrayType = llvm::ArrayType::get(type, first);
+      for (int i = 1; i < this->m_LastArrayDims.size(); i++) {
+        arrayType = llvm::ArrayType::get(arrayType, this->m_LastArrayDims[i]);
+      }
+      llvm::Function *parentFunc =
+          Visitor::Builder->GetInsertBlock()->getParent();
+      llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
+                                    parentFunc->getEntryBlock().end());
+
+      value = tempBuilder.CreateAlloca(arrayType, nullptr, varAst.m_Name);
+    } else {
+      if (type->isFloatTy() || type->isDoubleTy()) {
+        value = llvm::ConstantFP::get(type, 0.0f);
+      } else {
+        value = llvm::ConstantInt::get(type, 0);
+      }
+    }
+  }
+
+  if (!varAst.m_IsLocal) {
+    Visitor::Module->getOrInsertGlobal(llvm::StringRef(varAst.m_Name), type);
+    auto globVar =
+        Visitor::Module->getNamedGlobal(llvm::StringRef(varAst.m_Name));
+
+    auto *constant = llvm::dyn_cast<llvm::Constant>(value);
+    if (!constant) {
+      assert(false && "Impossible!");
+    }
+
+    if (varAst.m_VisibilitySpec == VisibilitySpecifier::VIS_STATIC) {
+      globVar->setLinkage(llvm::GlobalValue::InternalLinkage);
+      globVar->setInitializer(constant);
+    } else if (varAst.m_VisibilitySpec == VisibilitySpecifier::VIS_DEFAULT) {
+      // ConstantStruct
+      globVar->setDSOLocal(true);
+      globVar->setInitializer(constant);
+    } else if (varAst.m_VisibilitySpec == VisibilitySpecifier::VIS_EXPORT ||
+               varAst.m_VisibilitySpec == VisibilitySpecifier::VIS_IMPORT) {
+      globVar->setDSOLocal(true);
+      globVar->setLinkage(llvm::GlobalValue::ExternalLinkage);
+    }
+
+    this->m_GlobalVars[varAst.m_Name] = globVar;
+    value = globVar;
+  } else {
+    if (value != nullptr) {
+      if (varAst.m_IsInitializerList) {
+        m_LocalVarsOnScope[varAst.m_Name] =
+            llvm::dyn_cast<llvm::AllocaInst>(value);
+      } else {
+        llvm::Function *parentFunc =
+            Visitor::Builder->GetInsertBlock()->getParent();
+        llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
+                                      parentFunc->getEntryBlock().end());
+        llvm::AllocaInst *var =
+            tempBuilder.CreateAlloca(type, nullptr, llvm::Twine(varAst.m_Name));
+
+        m_LocalVarsOnScope[varAst.m_Name] = var;
+        Visitor::Builder->CreateStore(value, var);
+      }
+    } else {
+      assert(false && "'value' is nullptr");
+    }
+  }
+  this->m_LastVarDecl = false;
+  this->m_LastType = nullptr;
+  this->m_LastSigned = false;
+
+  return value;
+}
+
+ValuePtr Visitor::visit(AssignmentAST &assignmentAst) { return nullptr; }
+ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
+  llvm::Value *value = nullptr;
+
+  llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
+  llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
+                                parentFunc->getEntryBlock().end());
+
+  if (m_LastVarDecl && m_LastInitializerList) {
+    auto first = this->m_LastArrayDims[0];
+    auto arrayType = llvm::ArrayType::get(m_LastType, first);
+    for (int i = 1; i < this->m_LastArrayDims.size(); i++) {
+      arrayType = llvm::ArrayType::get(arrayType, this->m_LastArrayDims[i]);
+    }
+
+    value = tempBuilder.CreateAlloca(arrayType, nullptr);
+  } else {
+  }
+
+  return value;
+}
+
 ValuePtr Visitor::visit(CastOpAST &castOpAst) {}
 
 ValuePtr Visitor::visit(FuncAST &funcAst) {
   auto retType = (TypeAST *)funcAst.m_RetType.get();
 
+  this->m_LastFuncName = funcAst.m_FuncName;
   std::vector<llvm::Type *> paramTypes;
   std::vector<std::string> paramNames;
   bool hasParam = false;
@@ -353,10 +543,17 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {}
 ValuePtr Visitor::visit(LoopStmtAST &loopStmtAst) {}
 ValuePtr Visitor::visit(ParamAST &paramAst) {}
 ValuePtr Visitor::visit(RetAST &retAst) {}
-ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {}
-ValuePtr Visitor::visit(TypeAST &typeAst) {}
-ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {}
-ValuePtr Visitor::visit(SymbolAST &symbolAst) {
-  return nullptr;
+ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
+  llvm::Value *value = nullptr;
+
+  if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_NEGATIVE) {
+    this->m_LastNegConstant = true;
+    value = unaryOpAst.m_Node->accept(*this);
+    this->m_LastNegConstant = false;
+  }
+
+  return value;
 }
+ValuePtr Visitor::visit(TypeAST &typeAst) {}
+
 ValuePtr Visitor::visit(FixAST &fixAst) {}

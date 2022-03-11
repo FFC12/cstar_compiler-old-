@@ -1,8 +1,17 @@
-int x = 23;
+static int z = 23;
+export int t;
+import int s;
+int r = 46;
 
-func(int a, int& c, k int&, s Type) :: void {
-    float x = 3,y = 4;
+func() :: void {
+    int x = 3,y = 4;
+    int32 p[2:2:4] = ((0,1),(2,3));
 
-    char b = 'a';
+    char b = 'a', k = 'b';
+    b = 'b';
+    ret;
+}
+
+main() :: int {
     ret;
 }

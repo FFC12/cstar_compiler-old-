@@ -198,11 +198,16 @@ void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
     }
   }
 
+  auto extra = !this->m_LastSymbolInfo.isConstPtr &&
+                       this->m_ExpectedType == TypeSpecifier::SPEC_CHAR
+                   ? "String must have a 'constptr' or 'readonly' qualifier"
+                   : "";
+
   if (s.empty()) {
     this->m_TypeErrorMessages.emplace_back(
         "Incompatible type. Expected a suitable value with '" +
             (typeQualifier.empty() ? "" : (typeQualifier + " ")) +
-            GetTypeStr(this->m_ExpectedType) + indirection + "'",
+            GetTypeStr(this->m_ExpectedType) + indirection + "'. " + extra,
         symbolInfo);
   } else {
     this->m_TypeErrorMessages.emplace_back(
@@ -500,8 +505,8 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
           if (!matchedSymbol.isCastable &&
               matchedSymbol.type != this->m_LastSymbolInfo.type) {
             this->m_TypeErrorMessages.emplace_back(
-                "Casting is not allowed for the symbol '" + matchedSymbol.symbolName +
-                    "'",
+                "Casting is not allowed for the symbol '" +
+                    matchedSymbol.symbolName + "'",
                 symbolInfo);
           } else {
             if (matchedSymbol.type == this->m_LastSymbolInfo.type) {
