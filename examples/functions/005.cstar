@@ -3,9 +3,12 @@ export int t;
 import int s;
 int r = 46;
 
+int32 p[2:2];
+
 func() :: void {
     int x = 3,y = 4;
-    int32 p[2:2:4] = ((0,1),(2,3));
+    // 4:2
+    //int32 p[3:3] = ((0,7,3 + 4),(2,3 + 3,5),(4,5,9));
 
     char b = 'a', k = 'b';
     b = 'b';

@@ -43,6 +43,19 @@ SymbolInfo Visitor::getSymbolInfo(const std::string &symbolName) {
   return symbolInfo;
 }
 
+static bool IsAnyBinOpOrSymbolInvolved(std::vector<BinOpOrVal> &v) {
+  bool flag = false;
+
+  for (auto &e : v) {
+    if (e.isBinOp || e.isSymbol) {
+      flag = true;
+      break;
+    }
+  }
+
+  return flag = true;
+}
+
 static llvm::Type *GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
                            bool isRef = false) {
   llvm::Type *type = nullptr;
@@ -316,7 +329,7 @@ ValuePtr Visitor::visit(VarAST &varAst) {
     for (auto &dim : varAst.m_ArrDim) {
       auto val = (ScalarOrLiteralAST *)dim.get();
       this->m_LastArrayDims.push_back(std::stoull(val->m_Value));
-      
+
       // for the right order
       std::reverse(this->m_LastArrayDims.begin(), this->m_LastArrayDims.end());
     }
@@ -336,12 +349,17 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       for (int i = 1; i < this->m_LastArrayDims.size(); i++) {
         arrayType = llvm::ArrayType::get(arrayType, this->m_LastArrayDims[i]);
       }
-      llvm::Function *parentFunc =
-          Visitor::Builder->GetInsertBlock()->getParent();
-      llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
-                                    parentFunc->getEntryBlock().end());
 
-      value = tempBuilder.CreateAlloca(arrayType, nullptr, varAst.m_Name);
+      if (varAst.m_IsLocal) {
+        llvm::Function *parentFunc =
+            Visitor::Builder->GetInsertBlock()->getParent();
+        llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
+                                      parentFunc->getEntryBlock().end());
+
+        value = tempBuilder.CreateAlloca(arrayType, nullptr, varAst.m_Name);
+      } else {
+        type = arrayType;
+      }
     } else {
       if (type->isFloatTy() || type->isDoubleTy()) {
         value = llvm::ConstantFP::get(type, 0.0f);
@@ -356,9 +374,16 @@ ValuePtr Visitor::visit(VarAST &varAst) {
     auto globVar =
         Visitor::Module->getNamedGlobal(llvm::StringRef(varAst.m_Name));
 
-    auto *constant = llvm::dyn_cast<llvm::Constant>(value);
-    if (!constant) {
-      assert(false && "Impossible!");
+    llvm::Constant *constant = nullptr;
+
+    if (varAst.m_IsInitializerList) {
+      // zero initialization
+      constant = llvm::ConstantAggregateZero::get(type);
+    } else {  // if it's not array type of global var
+      constant = llvm::dyn_cast<llvm::Constant>(value);
+      if (!constant) {
+        assert(false && "Impossible!");
+      }
     }
 
     if (varAst.m_VisibilitySpec == VisibilitySpecifier::VIS_STATIC) {
@@ -373,7 +398,6 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       globVar->setDSOLocal(true);
       globVar->setLinkage(llvm::GlobalValue::ExternalLinkage);
     }
-
     this->m_GlobalVars[varAst.m_Name] = globVar;
     value = globVar;
   } else {

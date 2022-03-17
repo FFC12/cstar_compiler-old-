@@ -1,10 +1,10 @@
 #ifndef VISITOR_HPP
 #define VISITOR_HPP
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Value.h>
 
 #include <utility>
 #include <visitor/symbols.hpp>
-#include <llvm/IR/IRBuilder.h>
 
 struct SemanticErrorMessage {
   std::string message;
@@ -43,6 +43,16 @@ struct SymbolInfoEntry {
   not_equal:
     return flag;
   }
+};
+
+struct BinOpOrVal {
+  bool isBinOp;
+  bool isSymbol;
+  uintptr_t address;
+  std::string value;
+
+  BinOpOrVal(bool isBin, bool isSym, uintptr_t addr, std::string val)
+      : isBinOp(isBin), isSymbol(isSym), address(addr), value(val) {}
 };
 
 class IAST;
@@ -109,6 +119,7 @@ class Visitor {
   bool m_LastCondExpr = false;
   bool m_LastRetExpr = false;
   bool m_LastFixExpr = false;
+  std::vector<size_t> m_LastArrayDims;
   size_t m_BinOpTermCount = 0;
 
   // codegen
@@ -118,7 +129,6 @@ class Visitor {
   bool m_LastInitializerList = false;
   std::string m_LastFuncName;
   llvm::Type* m_LastType = nullptr;
-  std::vector<size_t> m_LastArrayDims;
   std::map<std::string, llvm::AllocaInst*> m_LocalVarsOnScope;
   std::map<std::string, llvm::GlobalVariable*> m_GlobalVars;
   //--
@@ -206,6 +216,10 @@ class Visitor {
   void accumulateIncompatiblePtrErrMesg(const SymbolInfo& symbolInfo,
                                         const std::string& s);
   SymbolInfo getSymbolInfo(const std::string& symbolName);
+  bool validateArray(
+      IAST& binaryExpr, size_t level,size_t& index);
+
+  void getElementsOfArray(IAST& binaryExpr, std::vector<BinOpOrVal>& vector);
 };
 
 #endif

@@ -89,8 +89,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       }
     }
 
-    // well RPAREN checking is a little bit confused since LPAREN is not
-    // included to the expression itself example: if( [expr )]
+    // well RPAREN checking is a little bit confusing since LPAREN is not
+    // included to the expression itself as seen in this example: if( [expr )]
     if (is(TokenKind::SEMICOLON) || is(TokenKind::RPAREN) ||
         (is(TokenKind::COMMA) && !isSubExpr) || is(TokenKind::RSQPAR) ||
         is(TokenKind::COLON) || (is(TokenKind::GT) && typeOpFlag) ||

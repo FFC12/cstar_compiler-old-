@@ -175,6 +175,112 @@ static bool LosslessCasting(TypeSpecifier target, TypeSpecifier source) {
   return GetBitSize(target) < GetBitSize(source);
 }
 
+void Visitor::getElementsOfArray(IAST &binaryExpr,
+                                 std::vector<BinOpOrVal> &vector) {
+  if (binaryExpr.m_ExprKind == BinOp) {
+    auto isBinExpr = (BinaryOpAST *)&binaryExpr;
+
+    if (isBinExpr->m_BinOpKind != B_COMM) goto invalid_binop;
+
+    auto lhs = isBinExpr->m_LHS.get();
+    auto rhs = isBinExpr->m_RHS.get();
+
+    if (lhs == nullptr || rhs == nullptr) {
+      assert(false && "This should not be happened!");
+    }
+
+    if (lhs->m_ExprKind == BinOp) {
+      getElementsOfArray(*(BinaryOpAST *)lhs, vector);
+    } else {
+      if (lhs->m_ExprKind == ScalarExpr) {
+        auto expr = (ScalarOrLiteralAST *)lhs;
+        vector.emplace_back(false, false, 0, expr->m_Value);
+      } else if (lhs->m_ExprKind == SymbolExpr) {
+        auto expr = (SymbolAST *)lhs;
+        vector.emplace_back(false, true, 0, expr->m_SymbolName);
+      } else if (lhs->m_ExprKind == BinOp) {
+        auto expr = (uintptr_t)((BinaryOpAST *)lhs);
+        vector.emplace_back(true, false, expr, "");
+      } else {
+        assert(false && "Unimplemented array expr is involved!");
+      }
+    }
+
+    if (rhs->m_ExprKind == BinOp) {
+      getElementsOfArray(*(BinaryOpAST *)rhs, vector);
+    } else {
+      if (rhs->m_ExprKind == ScalarExpr) {
+        auto expr = (ScalarOrLiteralAST *)rhs;
+        vector.emplace_back(false, false, 0, expr->m_Value);
+      } else if (rhs->m_ExprKind == SymbolExpr) {
+        auto expr = (SymbolAST *)rhs;
+        vector.emplace_back(false, true, 0, expr->m_SymbolName);
+      } else if (rhs->m_ExprKind == BinOp) {
+        auto expr = (uintptr_t)((BinaryOpAST *)rhs);
+        vector.emplace_back(true, false, expr, "");
+      } else {
+        assert(false && "Unimplemented array expr is involved!");
+      }
+    }
+  } else {
+  invalid_binop:
+    if (binaryExpr.m_ExprKind == ScalarExpr) {
+      auto expr = (ScalarOrLiteralAST *)&binaryExpr;
+      vector.emplace_back(false, false, 0, expr->m_Value);
+    } else if (binaryExpr.m_ExprKind == SymbolExpr) {
+      auto expr = (SymbolAST *)&binaryExpr;
+      vector.emplace_back(false, true, 0, expr->m_SymbolName);
+    } else if (binaryExpr.m_ExprKind == BinOp) {
+      auto expr = (uintptr_t)((BinaryOpAST *)&binaryExpr);
+      vector.emplace_back(true, false, expr, "");
+    } else {
+      assert(false && "Unimplemented array expr is involved!");
+    }
+  }
+}
+
+// TODO: Need to fixed.
+bool Visitor::validateArray(IAST &binaryExpr, size_t level, size_t &index) {
+  if (binaryExpr.m_ExprKind == BinOp) {
+    auto isBinExpr = (BinaryOpAST *)&binaryExpr;
+
+    SymbolInfo symbolInfo;
+    symbolInfo.begin = isBinExpr->m_SemLoc.begin;
+    symbolInfo.end = isBinExpr->m_SemLoc.end;
+    symbolInfo.line = isBinExpr->m_SemLoc.line;
+
+    if (isBinExpr->m_BinOpKind != B_COMM) goto invalid_binop;
+
+    auto lhs = isBinExpr->m_LHS.get();
+    auto rhs = isBinExpr->m_RHS.get();
+
+    if (lhs == nullptr || rhs == nullptr) {
+      assert(false && "This should not be happened!");
+    }
+
+    if (lhs->m_ExprKind == BinOp) {
+      validateArray(*(BinaryOpAST *)lhs, level + 1, index);
+      if (level == 0) {
+        if (index != m_LastArrayDims[m_LastArrayDims.size()]) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Array initializer does not meet with size of array", symbolInfo);
+        }
+      }
+    } else {
+      index++;
+    }
+
+    if (rhs->m_ExprKind == BinOp) {
+      validateArray(*(BinaryOpAST *)rhs, level, index);
+    } else {
+      index++;
+    }
+  } else {
+  invalid_binop:
+    std::cout << std::endl;
+  }
+}
+
 void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
                                                const std::string &s = "") {
   std::string typeQualifier;
@@ -273,18 +379,21 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
       for (auto &v : varAst.m_ArrDim) {
         auto scalar = dynamic_cast<ScalarOrLiteralAST *>(v.get());
         symbolInfo.arrayDimensions.push_back(std::stoi(scalar->m_Value));
+        std::reverse(symbolInfo.arrayDimensions.begin(),
+                     symbolInfo.arrayDimensions.end());
+        m_LastArrayDims = symbolInfo.arrayDimensions;
       }
 
-      bool oneVal = varAst.m_ArrDim.size() == 1 &&
-                    (varAst.m_RHS->m_ExprKind == ExprKind::ScalarExpr ||
-                     varAst.m_RHS->m_ExprKind == ExprKind::SymbolExpr);
+      bool constant = varAst.m_ArrDim.size() == 1 &&
+                      (varAst.m_RHS->m_ExprKind == ExprKind::ScalarExpr ||
+                       varAst.m_RHS->m_ExprKind == ExprKind::SymbolExpr);
 
       if (varAst.m_RHS->m_ExprKind != ExprKind::BinOp &&
-          varAst.m_RHS->m_ASTKind == ASTKind::Expr && !oneVal) {
+          varAst.m_RHS->m_ASTKind == ASTKind::Expr && !constant) {
         this->m_TypeErrorMessages.emplace_back(
             "Array initializer must be an initilizer list", symbolInfo);
       } else {
-        if (oneVal) {
+        if (constant) {
           auto scalar =
               dynamic_cast<ScalarOrLiteralAST *>(varAst.m_ArrDim[0].get());
           if (scalar->m_Value != "1") {
@@ -293,9 +402,14 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
                 symbolInfo);
           }
         } else {
-          // auto binaryExpr = dynamic_cast<BinaryOpAST*>(varAst.m_RHS.get());
-          //  TODO: will be added later on
+          std::vector<BinOpOrVal> vec;
+          auto binaryExpr = dynamic_cast<BinaryOpAST *>(varAst.m_RHS.get());
+          getElementsOfArray(*binaryExpr, vec);
+
+          // size_t index = 1;
+          // validateArray(*binaryExpr, 0, index);
         }
+        m_LastArrayDims.clear();
       }
     }
     // --
