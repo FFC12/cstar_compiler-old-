@@ -125,6 +125,7 @@ class Visitor {
   // codegen
   bool m_LastVarDecl = false;
   bool m_LastSigned = false;
+  bool m_LastGlobVar = false;
   bool m_LastNegConstant = false;
   bool m_LastInitializerList = false;
   std::string m_LastFuncName;

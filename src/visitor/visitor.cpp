@@ -53,7 +53,7 @@ static bool IsAnyBinOpOrSymbolInvolved(std::vector<BinOpOrVal> &v) {
     }
   }
 
-  return flag = true;
+  return flag;
 }
 
 static llvm::Type *GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
@@ -315,13 +315,103 @@ ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {
   return value;
 }
 
+static llvm::GlobalVariable *CreateConstantGlobalVar(
+    const std::string &name, VisibilitySpecifier specifier, llvm::Type *type,
+    llvm::Value *value) {
+  Visitor::Module->getOrInsertGlobal(llvm::StringRef(name), type);
+  auto globVar = Visitor::Module->getNamedGlobal(llvm::StringRef(name));
+
+  auto *constant = llvm::dyn_cast<llvm::Constant>(value);
+  if (!constant) {
+    assert(false && "Impossible!");
+  }
+
+  if (specifier == VisibilitySpecifier::VIS_STATIC) {
+    globVar->setLinkage(llvm::GlobalValue::InternalLinkage);
+    globVar->setInitializer(constant);
+  } else if (specifier == VisibilitySpecifier::VIS_DEFAULT) {
+    // ConstantStruct
+    globVar->setDSOLocal(true);
+    globVar->setInitializer(constant);
+  } else if (specifier == VisibilitySpecifier::VIS_EXPORT ||
+             specifier == VisibilitySpecifier::VIS_IMPORT) {
+    globVar->setDSOLocal(true);
+    globVar->setLinkage(llvm::GlobalValue::ExternalLinkage);
+  }
+
+  return globVar;
+}
+
+static llvm::GlobalVariable *CreateZeroInitConstantGlobalVar(
+    const std::string &name, VisibilitySpecifier specifier, llvm::Type *type) {
+  Visitor::Module->getOrInsertGlobal(llvm::StringRef(name), type);
+  auto globVar = Visitor::Module->getNamedGlobal(llvm::StringRef(name));
+
+  llvm::Constant *constant = llvm::ConstantAggregateZero::get(type);
+  if (!constant) {
+    assert(false && "Impossible!");
+  }
+
+  if (specifier == VisibilitySpecifier::VIS_STATIC) {
+    globVar->setLinkage(llvm::GlobalValue::InternalLinkage);
+    globVar->setInitializer(constant);
+  } else if (specifier == VisibilitySpecifier::VIS_DEFAULT) {
+    // ConstantStruct
+    globVar->setDSOLocal(true);
+    globVar->setInitializer(constant);
+  } else if (specifier == VisibilitySpecifier::VIS_EXPORT ||
+             specifier == VisibilitySpecifier::VIS_IMPORT) {
+    globVar->setDSOLocal(true);
+    globVar->setLinkage(llvm::GlobalValue::ExternalLinkage);
+  }
+
+  return globVar;
+}
+
+static llvm::GlobalVariable *CreateInitConstantGlobalVar(
+    const std::string &name, VisibilitySpecifier specifier, llvm::Type *type,
+    llvm::Constant *value) {
+  Visitor::Module->getOrInsertGlobal(llvm::StringRef(name), type);
+  auto globVar = Visitor::Module->getNamedGlobal(llvm::StringRef(name));
+
+  if (specifier == VisibilitySpecifier::VIS_STATIC) {
+    globVar->setLinkage(llvm::GlobalValue::InternalLinkage);
+    globVar->setInitializer(value);
+  } else if (specifier == VisibilitySpecifier::VIS_DEFAULT) {
+    // ConstantStruct
+    globVar->setDSOLocal(true);
+    globVar->setInitializer(value);
+  } else if (specifier == VisibilitySpecifier::VIS_EXPORT ||
+             specifier == VisibilitySpecifier::VIS_IMPORT) {
+    globVar->setDSOLocal(true);
+    globVar->setLinkage(llvm::GlobalValue::ExternalLinkage);
+  }
+
+  return globVar;
+}
+
+static llvm::Value *CreateLocalVariable(const std::string &name,
+                                        llvm::Type *type, llvm::Value *value) {
+  llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
+  llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
+                                parentFunc->getEntryBlock().end());
+  llvm::AllocaInst *var =
+      tempBuilder.CreateAlloca(type, nullptr, llvm::Twine(name));
+
+  Visitor::Builder->CreateStore(value, var);
+
+  return var;
+}
+
 ValuePtr Visitor::visit(VarAST &varAst) {
   llvm::Value *value;
   this->m_LastVarDecl = true;
   auto type = GetType(varAst.m_TypeSpec, varAst.m_IndirectLevel);
   this->m_LastType = type;
+  this->m_LastGlobVar = !varAst.m_IsLocal;
   this->m_LastSigned = IsSigned(varAst.m_TypeSpec);
   this->m_LastInitializerList = varAst.m_IsInitializerList;
+  llvm::ArrayType *arrayType = nullptr;
 
   if (varAst.m_IsInitializerList) {
     this->m_LastArrayDims.clear();
@@ -333,93 +423,75 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       // for the right order
       std::reverse(this->m_LastArrayDims.begin(), this->m_LastArrayDims.end());
     }
+    auto first = this->m_LastArrayDims[0];
+    arrayType = llvm::ArrayType::get(type, first);
+    for (int i = 1; i < this->m_LastArrayDims.size(); i++) {
+      arrayType = llvm::ArrayType::get(arrayType, this->m_LastArrayDims[i]);
+    }
   }
 
   if (varAst.m_RHS != nullptr) {
     value = varAst.m_RHS->accept(*this);
 
-    if (varAst.m_IsInitializerList) {
-      value->setName(varAst.m_Name);
+    if (varAst.m_RHS->m_ExprKind != BinOp) {
+      if (varAst.m_IsLocal) {
+        if (varAst.m_IsInitializerList) {
+          value->setName(varAst.m_Name);
+        } else {
+          m_LocalVarsOnScope[varAst.m_Name] = llvm::dyn_cast<llvm::AllocaInst>(
+              CreateLocalVariable(varAst.m_Name, type, value));
+        }
+      } else {
+        auto globVar = CreateConstantGlobalVar(
+            varAst.m_Name, varAst.m_VisibilitySpec, type, value);
+        this->m_GlobalVars[varAst.m_Name] = globVar;
+      }
+    } else {
+      if (varAst.m_IsLocal) {
+      } else {
+        auto globVar =
+            varAst.m_IsInitializerList
+                ? CreateInitConstantGlobalVar(
+                      varAst.m_Name, varAst.m_VisibilitySpec, arrayType,
+                      llvm::dyn_cast<llvm::Constant>(value))
+                : CreateConstantGlobalVar(varAst.m_Name,
+                                          varAst.m_VisibilitySpec, type, value);
+        this->m_GlobalVars[varAst.m_Name] = globVar;
+      }
     }
   } else {
     // if no data bound
-    if (varAst.m_IsInitializerList) {
-      auto first = this->m_LastArrayDims[0];
-      auto arrayType = llvm::ArrayType::get(type, first);
-      for (int i = 1; i < this->m_LastArrayDims.size(); i++) {
-        arrayType = llvm::ArrayType::get(arrayType, this->m_LastArrayDims[i]);
-      }
-
-      if (varAst.m_IsLocal) {
-        llvm::Function *parentFunc =
-            Visitor::Builder->GetInsertBlock()->getParent();
-        llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
-                                      parentFunc->getEntryBlock().end());
-
-        value = tempBuilder.CreateAlloca(arrayType, nullptr, varAst.m_Name);
-      } else {
-        type = arrayType;
-      }
-    } else {
-      if (type->isFloatTy() || type->isDoubleTy()) {
-        value = llvm::ConstantFP::get(type, 0.0f);
-      } else {
-        value = llvm::ConstantInt::get(type, 0);
-      }
-    }
-  }
-
-  if (!varAst.m_IsLocal) {
-    Visitor::Module->getOrInsertGlobal(llvm::StringRef(varAst.m_Name), type);
-    auto globVar =
-        Visitor::Module->getNamedGlobal(llvm::StringRef(varAst.m_Name));
-
-    llvm::Constant *constant = nullptr;
-
-    if (varAst.m_IsInitializerList) {
-      // zero initialization
-      constant = llvm::ConstantAggregateZero::get(type);
-    } else {  // if it's not array type of global var
-      constant = llvm::dyn_cast<llvm::Constant>(value);
-      if (!constant) {
-        assert(false && "Impossible!");
-      }
-    }
-
-    if (varAst.m_VisibilitySpec == VisibilitySpecifier::VIS_STATIC) {
-      globVar->setLinkage(llvm::GlobalValue::InternalLinkage);
-      globVar->setInitializer(constant);
-    } else if (varAst.m_VisibilitySpec == VisibilitySpecifier::VIS_DEFAULT) {
-      // ConstantStruct
-      globVar->setDSOLocal(true);
-      globVar->setInitializer(constant);
-    } else if (varAst.m_VisibilitySpec == VisibilitySpecifier::VIS_EXPORT ||
-               varAst.m_VisibilitySpec == VisibilitySpecifier::VIS_IMPORT) {
-      globVar->setDSOLocal(true);
-      globVar->setLinkage(llvm::GlobalValue::ExternalLinkage);
-    }
-    this->m_GlobalVars[varAst.m_Name] = globVar;
-    value = globVar;
-  } else {
-    if (value != nullptr) {
+    if (!varAst.m_IsLocal) {
+      llvm::GlobalVariable *globVar = nullptr;
       if (varAst.m_IsInitializerList) {
-        m_LocalVarsOnScope[varAst.m_Name] =
-            llvm::dyn_cast<llvm::AllocaInst>(value);
+        CreateZeroInitConstantGlobalVar(varAst.m_Name, varAst.m_VisibilitySpec,
+                                        arrayType);
       } else {
-        llvm::Function *parentFunc =
-            Visitor::Builder->GetInsertBlock()->getParent();
-        llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
-                                      parentFunc->getEntryBlock().end());
-        llvm::AllocaInst *var =
-            tempBuilder.CreateAlloca(type, nullptr, llvm::Twine(varAst.m_Name));
-
-        m_LocalVarsOnScope[varAst.m_Name] = var;
-        Visitor::Builder->CreateStore(value, var);
+        if (type->isFloatTy() || type->isDoubleTy()) {
+          value = llvm::ConstantFP::get(type, 0.0f);
+        } else {
+          value = llvm::ConstantInt::get(type, 0);
+        }
+        CreateConstantGlobalVar(varAst.m_Name, varAst.m_VisibilitySpec, type,
+                                value);
       }
+      this->m_GlobalVars[varAst.m_Name] = globVar;
     } else {
-      assert(false && "'value' is nullptr");
+      if (varAst.m_IsInitializerList) {
+        m_LocalVarsOnScope[varAst.m_Name] = llvm::dyn_cast<llvm::AllocaInst>(
+            CreateLocalVariable(varAst.m_Name, arrayType, value));
+      } else {
+        if (type->isFloatTy() || type->isDoubleTy()) {
+          value = llvm::ConstantFP::get(type, 0.0f);
+        } else {
+          value = llvm::ConstantInt::get(type, 0);
+        }
+        m_LocalVarsOnScope[varAst.m_Name] = llvm::dyn_cast<llvm::AllocaInst>(
+            CreateLocalVariable(varAst.m_Name, arrayType, value));
+      }
     }
   }
+
   this->m_LastVarDecl = false;
   this->m_LastType = nullptr;
   this->m_LastSigned = false;
@@ -431,19 +503,45 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) { return nullptr; }
 ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
   llvm::Value *value = nullptr;
 
-  llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
-  llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
-                                parentFunc->getEntryBlock().end());
+  if (m_LastVarDecl) {
+    llvm::ArrayType *arrayType = nullptr;
 
-  if (m_LastVarDecl && m_LastInitializerList) {
-    auto first = this->m_LastArrayDims[0];
-    auto arrayType = llvm::ArrayType::get(m_LastType, first);
-    for (int i = 1; i < this->m_LastArrayDims.size(); i++) {
-      arrayType = llvm::ArrayType::get(arrayType, this->m_LastArrayDims[i]);
+    if (m_LastInitializerList) {
+      auto first = this->m_LastArrayDims[0];
+      arrayType = llvm::ArrayType::get(m_LastType, first);
+      for (int i = 1; i < this->m_LastArrayDims.size(); i++) {
+        arrayType = llvm::ArrayType::get(arrayType, this->m_LastArrayDims[i]);
+      }
     }
 
-    value = tempBuilder.CreateAlloca(arrayType, nullptr);
+    if (m_LastGlobVar) {
+      std::vector<BinOpOrVal> elements;
+      getElementsOfArray(binaryOpAst, elements);
+
+      if (IsAnyBinOpOrSymbolInvolved(elements)) {
+      } else {
+        std::vector<llvm::Constant *> values;
+
+        for (auto &e : elements) {
+          auto scalarVal = std::stoull(e.value);
+          auto v = llvm::ConstantInt::get(m_LastType, scalarVal);
+          values.push_back(v);
+        }
+
+        llvm::Constant *init = llvm::ConstantArray::get(arrayType, values);
+        value = init;
+      }
+
+    } else {
+      llvm::Function *parentFunc =
+          Visitor::Builder->GetInsertBlock()->getParent();
+      llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
+                                    parentFunc->getEntryBlock().end());
+
+      value = tempBuilder.CreateAlloca(arrayType, nullptr);
+    }
   } else {
+    // not a variable decl
   }
 
   return value;
