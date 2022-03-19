@@ -26,6 +26,8 @@ bool CStarParser::isCastOp() {
   return this->isCastableOperator(this->currentTokenInfo());
 }
 
+static bool TypeFlag = false;
+
 // parsing expressions
 // opFor means the subexpr will be
 // parsing of which kind of operator:
@@ -61,6 +63,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
 
   bool castOpFlag = false;
   bool typeOpFlag = isSubExpr ? typeFlag : false;
+  TypeFlag = typeOpFlag;
 
   // this is for offset from beginning of parenthesis
   std::deque<size_t> parenthesesPos;
@@ -967,6 +970,18 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
                       std::string(tokenToStr(tokenInfo.getTokenKind())) + "'",
                   tokenInfo);
     }
+    /*else {
+
+      auto expr = exprBucket[exprBucket.size() - 1].get();
+      auto semLoc = expr->getSemLoc();
+      TokenInfo tokenInfo(
+          TokenKind::UNKNOWN,
+          PositionInfo(semLoc.begin, semLoc.end, semLoc.line));
+      ParserError(
+          "Unexpected token. Types cannot be involved to arithmetic "
+          "operations.",
+          tokenInfo);
+    }*/
   }
 
   return std::move(exprBucket[0]);
@@ -1015,23 +1030,25 @@ ASTNode CStarParser::advanceSymbol() {
     size_t indirectionLevel = 0;
     bool isRef = false;
 
-    if (is(TokenKind::AND)) {
-      isRef = true;
-      this->advance();
-      semLoc.end += indirectionLevel;
-    } else {
-      // This is symbol to type transition (Actually this can be done when
-      // performed semantic analysis for this node but we make things easier
-      // or maybe we not... Not sure)
-      // * | ^
-      while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
-        isUniquePtr = this->currentTokenKind() == TokenKind::XOR;
-        transitionFlag = true;
-
-        indirectionLevel = advancePointerType(isUniquePtr);
-        // std::cout << "Symbol to Type Transition Indirection Level: "
-        //           << indirectionLevel << "\n";
+    if (TypeFlag) {
+      if (is(TokenKind::AND)) {
+        isRef = true;
+        this->advance();
         semLoc.end += indirectionLevel;
+      } else {
+        // This is symbol to type transition (Actually this can be done when
+        // performed semantic analysis for this node but we make things easier
+        // or maybe we not... Not sure)
+        // * | ^
+        while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
+          isUniquePtr = this->currentTokenKind() == TokenKind::XOR;
+          transitionFlag = true;
+
+          indirectionLevel = advancePointerType(isUniquePtr);
+          // std::cout << "Symbol to Type Transition Indirection Level: "
+          //           << indirectionLevel << "\n";
+          semLoc.end += indirectionLevel;
+        }
       }
     }
 

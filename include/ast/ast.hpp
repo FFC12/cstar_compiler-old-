@@ -67,6 +67,8 @@ class IAST {
  public:
   explicit IAST(SemanticLoc semLoc) : m_SemLoc(semLoc){};
 
+  [[nodiscard]] SemanticLoc getSemLoc() const { return m_SemLoc; }
+
   virtual void debugNode() { std::cout << "Root\n"; };
 
   virtual SymbolInfo acceptBefore(Visitor& visitor) = 0;

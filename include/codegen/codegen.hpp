@@ -29,6 +29,7 @@ class CStarCodegen {
   std::unique_ptr<llvm::Module> m_MainModule;
   std::unique_ptr<llvm::LLVMContext> m_MainContext;
   std::unique_ptr<llvm::IRBuilder<>> m_IRBuilder;
+  std::unique_ptr<llvm::DataLayout> m_DataLayout;
   bool m_SemAnalysisFailure = false;
   size_t m_ErrorCount = 0;
   size_t m_WarningCount = 0;
@@ -107,8 +108,8 @@ class CStarCodegen {
     std::ofstream outfile(filename.c_str());
     outfile << outstr << std::endl;
     outfile.close();
-    std::string command =
-        "llc --relocation-model=pic -x86-asm-syntax=intel " + filename + " -o " + m_Filename + ".s";
+    std::string command = "llc --relocation-model=pic -x86-asm-syntax=intel " +
+                          filename + " -o " + m_Filename + ".s";
     system(command.c_str());
     command = "gcc " + m_Filename + ".s " + "-o " + m_Filename + ".out";
     system(command.c_str());

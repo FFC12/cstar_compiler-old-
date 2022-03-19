@@ -1,18 +1,18 @@
-static int z = 23;
-export int t;
-import int s;
-int r = 46;
+func() :: void { 
+    int x = 20; 
+    if(x > 20) {
+        int u = 20;
+        int z = 30;
+        if(u > 30) {
+            int p = 40;
+        } else {
+            int v = 60;
+        }
+    } else {
+        int w = 30;
+        int k = 15;
+    }   
 
-int32 p[2:2];
-int32 z1[4] = ((0,1),(2,3));
-
-func() :: void {
-    int x = 3,y = 4;
-    // 4:2
-    int32 o[3:3] = ((0,7,3),(2,3,5),(4,5,9));
-
-    char b = 'a', k = 'b';
-    b = 'b';
     ret;
 }
 

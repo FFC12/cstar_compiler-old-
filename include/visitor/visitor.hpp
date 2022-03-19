@@ -134,6 +134,8 @@ class Visitor {
   std::map<std::string, llvm::GlobalVariable*> m_GlobalVars;
   //--
 
+
+
   void enterScope(bool globScope) {
     if (!globScope) m_ScopeId += 1;
     m_ScopeLevel += (globScope ? 0 : 1);
@@ -156,6 +158,7 @@ class Visitor {
   static size_t SymbolId;
   static std::unique_ptr<llvm::IRBuilder<>> Builder;
   static std::unique_ptr<llvm::Module> Module;
+  static std::unique_ptr<llvm::DataLayout> m_DataLayout;
 
   explicit Visitor(const std::map<std::string, size_t>& typeTable)
       : m_TypeTable(typeTable) {}
@@ -173,7 +176,8 @@ class Visitor {
           LocalSymbolInfoList localSymbolInfoList)
       : m_TypeTable(typeTable),
         m_GlobalSymbolTable(std::move(globalSymbolInfoList)),
-        m_LocalSymbolTable(std::move(localSymbolInfoList)) {}
+        m_LocalSymbolTable(std::move(localSymbolInfoList)) {
+  }
 
   ValuePtr visit(VarAST& varAst);
   ValuePtr visit(AssignmentAST& assignmentAst);
@@ -221,6 +225,7 @@ class Visitor {
       IAST& binaryExpr, size_t level,size_t& index);
 
   void getElementsOfArray(IAST& binaryExpr, std::vector<BinOpOrVal>& vector);
+  ValuePtr createBinaryOp(BinaryOpAST& binaryOpAst);
 };
 
 #endif

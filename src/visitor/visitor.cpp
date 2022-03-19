@@ -240,81 +240,6 @@ static llvm::Type *GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
 
   return type;
 }
-
-ValuePtr Visitor::visit(SymbolAST &symbolAst) {
-  llvm::Value *value = nullptr;
-  bool isSigned = false;
-
-  llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
-  llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
-                                parentFunc->getEntryBlock().end());
-  if (this->m_LastVarDecl) {
-    value = m_LocalVarsOnScope[symbolAst.m_SymbolName];
-    isSigned = IsSigned(getSymbolInfo(symbolAst.m_SymbolName).type);
-    llvm::Type *type = value->getType();
-
-    if (value->getType()->isPointerTy()) {
-      type = value->getType()->getPointerElementType();
-    }
-    auto loadedVal = tempBuilder.CreateLoad(type, value, llvm::Twine(""));
-
-    llvm::Type *lastType = m_LastType;
-    if (m_LastType->isPointerTy()) {
-      lastType->getPointerElementType();
-    }
-
-    if (type->getTypeID() != lastType->getTypeID()) {
-      if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
-        if (isSigned) {
-          value = tempBuilder.CreateSIToFP(loadedVal, m_LastType);
-        } else {
-          value = tempBuilder.CreateUIToFP(loadedVal, m_LastType);
-        }
-      }
-    } else {
-      if (value->getType()->getTypeID() != m_LastType->getTypeID()) {
-      }
-    }
-
-  } else {
-    value = m_LocalVarsOnScope[symbolAst.m_SymbolName];
-  }
-
-  return value;
-}
-
-ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {
-  llvm::Value *value = nullptr;
-
-  // TODO: scalarast has type info.. perform castings
-
-  if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
-    value = llvm::ConstantFP::get(m_LastType, scalarAst.m_Value);
-  } else {
-    if (scalarAst.m_IsLiteral) {
-      value = Visitor::Builder->CreateGlobalStringPtr(
-          llvm::StringRef(scalarAst.m_Value));
-    } else {
-      if (!m_LastSigned) {
-        auto scalarVal = std::stoull(scalarAst.m_Value);
-        value = llvm::ConstantInt::get(m_LastType, scalarVal);
-        /*value = llvm::ConstantInt::get(
-            m_LastType, llvm::APInt(128, "-" + scalarAst.m_Value, 10));*/
-      } else {
-        if (scalarAst.m_IsLetter) {
-          char val = scalarAst.m_Value[0];
-          value = llvm::ConstantInt::get(m_LastType, (int)val);
-        } else {
-          value = llvm::ConstantInt::get(m_LastType,
-                                         std::stoull(scalarAst.m_Value));
-        }
-      }
-    }
-  }
-
-  return value;
-}
-
 static llvm::GlobalVariable *CreateConstantGlobalVar(
     const std::string &name, VisibilitySpecifier specifier, llvm::Type *type,
     llvm::Value *value) {
@@ -325,6 +250,10 @@ static llvm::GlobalVariable *CreateConstantGlobalVar(
   if (!constant) {
     assert(false && "Impossible!");
   }
+
+  auto dl = Visitor::Module->getDataLayout();
+  auto align = dl.getPrefTypeAlignment(type);
+  globVar->setAlignment(llvm::Align(align));
 
   if (specifier == VisibilitySpecifier::VIS_STATIC) {
     globVar->setLinkage(llvm::GlobalValue::InternalLinkage);
@@ -352,6 +281,10 @@ static llvm::GlobalVariable *CreateZeroInitConstantGlobalVar(
     assert(false && "Impossible!");
   }
 
+  auto dl = Visitor::Module->getDataLayout();
+  auto align = dl.getPrefTypeAlignment(type);
+  globVar->setAlignment(llvm::Align(align));
+
   if (specifier == VisibilitySpecifier::VIS_STATIC) {
     globVar->setLinkage(llvm::GlobalValue::InternalLinkage);
     globVar->setInitializer(constant);
@@ -374,6 +307,10 @@ static llvm::GlobalVariable *CreateInitConstantGlobalVar(
   Visitor::Module->getOrInsertGlobal(llvm::StringRef(name), type);
   auto globVar = Visitor::Module->getNamedGlobal(llvm::StringRef(name));
 
+  auto dl = Visitor::Module->getDataLayout();
+  auto align = dl.getPrefTypeAlignment(type);
+  globVar->setAlignment(llvm::Align(align));
+
   if (specifier == VisibilitySpecifier::VIS_STATIC) {
     globVar->setLinkage(llvm::GlobalValue::InternalLinkage);
     globVar->setInitializer(value);
@@ -390,17 +327,261 @@ static llvm::GlobalVariable *CreateInitConstantGlobalVar(
   return globVar;
 }
 
+static llvm::Value *CreateAlloca(const std::string &name, llvm::Type *type) {
+  llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
+  llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
+                                parentFunc->getEntryBlock().begin());
+  llvm::AllocaInst *var =
+      Visitor::Builder->CreateAlloca(type, nullptr, llvm::Twine(name));
+
+  return var;
+}
+
 static llvm::Value *CreateLocalVariable(const std::string &name,
                                         llvm::Type *type, llvm::Value *value) {
   llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
   llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
                                 parentFunc->getEntryBlock().end());
-  llvm::AllocaInst *var =
-      tempBuilder.CreateAlloca(type, nullptr, llvm::Twine(name));
-
+  auto *var = llvm::dyn_cast<llvm::AllocaInst>(CreateAlloca(name, type));
   Visitor::Builder->CreateStore(value, var);
 
   return var;
+}
+
+ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
+  llvm::Value *value = nullptr;
+
+  auto lhs = binaryOpAst.m_LHS->accept(*this);
+  auto rhs = binaryOpAst.m_RHS->accept(*this);
+
+  // NSW (No Signed Wrap) and NUW(No Unsigned Wrap)
+  switch (binaryOpAst.m_BinOpKind) {
+    case B_ADD: {
+      if (m_LastSigned)
+        value = Builder->CreateNUWAdd(lhs, rhs, "addtmp");
+      else
+        value = Builder->CreateNSWAdd(lhs, rhs, "addtmp");
+      //            Builder->CreateStore(value, alloca);
+      break;
+    }
+    case B_SUB:
+      if (m_LastSigned)
+        value = Builder->CreateNUWSub(lhs, rhs, "subtmp");
+      else
+        value = Builder->CreateNSWSub(lhs, rhs, "subtmp");
+      break;
+    case B_MUL:
+      if (m_LastSigned)
+        value = Builder->CreateNUWMul(lhs, rhs, "subtmp");
+      else
+        value = Builder->CreateNSWMul(lhs, rhs, "subtmp");
+      break;
+    case B_DIV: {
+      if (m_LastType->isDoubleTy() || m_LastType->isFloatTy())
+        value = Builder->CreateFDiv(lhs, rhs, "subtmp");
+      else {
+        if (m_LastSigned)
+          value = Builder->CreateSDiv(lhs, rhs, "subtmp");
+        else
+          value = Builder->CreateUDiv(lhs, rhs, "subtmp");
+      }
+      break;
+    }
+    case B_MOD:
+      if (m_LastType->isDoubleTy() || m_LastType->isFloatTy())
+        value = Builder->CreateFRem(lhs, rhs, "sremtmp");
+      else {
+        if (m_LastSigned)
+          value = Builder->CreateSRem(lhs, rhs, "subtmp");
+        else
+          value = Builder->CreateURem(lhs, rhs, "subtmp");
+      }
+
+      break;
+    case B_AND:
+      value = Builder->CreateAnd(lhs, rhs, "andtemp");
+      break;
+    case B_LAND:
+      value = Builder->CreateLogicalAnd(lhs, rhs, "andtemp");
+      break;
+    case B_OR:
+      value = Builder->CreateOr(lhs, rhs, "andtemp");
+      break;
+    case B_LOR:
+      value = Builder->CreateLogicalOr(lhs, rhs, "andtemp");
+      break;
+    case B_XOR:
+      value = Builder->CreateXor(lhs, rhs, "andtemp");
+      break;
+    case B_GT:
+      value = Builder->CreateICmpSGT(lhs, rhs, "cmpsgttemp");
+      if (value->getType()->getIntegerBitWidth() == 1) {
+        value = Builder->CreateIntCast(value, m_LastType, false);
+      }
+      break;
+    case B_GTEQ:
+      value = Builder->CreateICmpSGE(lhs, rhs, "cmpsgetemp");
+      if (value->getType()->getIntegerBitWidth() == 1) {
+        value = Builder->CreateIntCast(value, m_LastType, false);
+      }
+      break;
+    case B_LT:
+      value = Builder->CreateICmpSLT(lhs, rhs, "cmpslttemp");
+      if (value->getType()->getIntegerBitWidth() == 1) {
+        value = Builder->CreateIntCast(value, m_LastType, false);
+      }
+      break;
+    case B_LTEQ:
+      value = Builder->CreateICmpSLE(lhs, rhs, "cmpsletemp");
+      if (value->getType()->getIntegerBitWidth() == 1) {
+        value = Builder->CreateIntCast(value, m_LastType, false);
+      }
+      break;
+    case B_SHL:
+      value = Builder->CreateShl(lhs, rhs, "andtemp");
+      break;
+    case B_SHR:
+      if (m_LastSigned) {
+        value = Builder->CreateAShr(lhs, rhs, "ashrtemp");
+      } else {
+        value = Builder->CreateLShr(lhs, rhs, "lshrtemp");
+      }
+      break;
+    case B_EQ: {
+      if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
+        value = Builder->CreateFCmp(llvm::CmpInst::Predicate::FCMP_OEQ, lhs,
+                                    rhs, "fcmptemp");
+      } else {
+        value = Builder->CreateICmpEQ(lhs, rhs, "icmptemp");
+      }
+
+      if (value->getType()->getIntegerBitWidth() == 1) {
+        value = Builder->CreateIntCast(value, m_LastType, false);
+      }
+
+      break;
+    }
+    case B_TER: {
+      auto extra = binaryOpAst.m_Extra->accept(*this);
+      if (lhs->getType()->getIntegerBitWidth() != 1) {
+        lhs = Builder->CreateIntCast(lhs, Builder->getInt1Ty(), false);
+      }
+
+      value = Builder->CreateSelect(lhs, rhs, extra, "selectmp");
+      break;
+    }
+    case B_ARRS:
+      break;
+    case B_COMM:
+      break;
+    case B_DOT:
+      break;
+    case B_ARW:
+      break;
+    case B_CCOL:
+      break;
+    case B_MARRS:
+      break;
+  }
+
+  return value;
+}
+
+ValuePtr Visitor::visit(SymbolAST &symbolAst) {
+  llvm::Value *value = nullptr;
+  bool isSigned = false;
+
+  llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
+  llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
+                                parentFunc->getEntryBlock().end());
+  // if (this->m_LastVarDecl) {
+  value = m_LocalVarsOnScope[symbolAst.m_SymbolName];
+  if (!this->m_LastVarDecl)
+    m_LastType = value->getType()->getPointerElementType();
+
+  isSigned = IsSigned(getSymbolInfo(symbolAst.m_SymbolName).type);
+  llvm::Type *type = value->getType();
+
+  if (value->getType()->isPointerTy()) {
+    type = value->getType()->getPointerElementType();
+  }
+  auto loadedVal = Builder->CreateLoad(type, value, llvm::Twine(""));
+
+  llvm::Type *lastType = m_LastType;
+  if (m_LastType->isPointerTy()) {
+    lastType->getPointerElementType();
+  }
+
+  if (type->getTypeID() != lastType->getTypeID()) {
+    if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
+      if (isSigned) {
+        value = Builder->CreateSIToFP(loadedVal, m_LastType);
+      } else {
+        value = Builder->CreateUIToFP(loadedVal, m_LastType);
+      }
+    }
+  } else {
+    value = loadedVal;
+  }
+
+  /* } else {
+     value = m_LocalVarsOnScope[symbolAst.m_SymbolName];
+     llvm::Type *type = value->getType();
+     while (type->isPointerTy()) {
+       type = value->getType()->getPointerElementType();
+     }
+     m_LastType = type;
+   }*/
+
+  return value;
+}
+
+ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {
+  llvm::Value *value = nullptr;
+
+  // TODO: scalarast has type info.. perform castings
+
+  if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
+    value = llvm::ConstantFP::get(m_LastType, scalarAst.m_Value);
+  } else {
+    if (scalarAst.m_IsLiteral) {
+      value = Visitor::Builder->CreateGlobalStringPtr(
+          llvm::StringRef(scalarAst.m_Value));
+    } else {
+      if (!m_LastSigned) {
+        auto scalarVal = std::stoull(scalarAst.m_Value);
+        auto maxVal = 1 << m_LastType->getIntegerBitWidth();
+
+        // two's complement
+        if (scalarVal > maxVal) {
+          scalarVal = 0 - ~scalarVal;
+        }
+
+        value = llvm::ConstantInt::get(m_LastType, scalarVal);
+      } else {
+        if (scalarAst.m_IsLetter) {
+          char val = scalarAst.m_Value[0];
+          value = llvm::ConstantInt::get(m_LastType, (int)val);
+        } else {
+          auto scalarVal = std::stoll(scalarAst.m_Value);
+          auto maxVal = 1 << (m_LastType->getIntegerBitWidth() - 1);
+
+          // -1 for 0
+          maxVal = scalarVal > 0 ? maxVal - 1 : maxVal;
+
+          // two's complement
+          if (scalarVal > maxVal) {
+            // - 1 for 0
+            scalarVal = (0 - ~scalarVal) - ((scalarVal > 0) ? 1 : 0);
+          }
+
+          value = llvm::ConstantInt::get(m_LastType, scalarVal);
+        }
+      }
+    }
+  }
+
+  return value;
 }
 
 ValuePtr Visitor::visit(VarAST &varAst) {
@@ -448,6 +629,18 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       }
     } else {
       if (varAst.m_IsLocal) {
+        if (varAst.m_IsInitializerList) {
+          value->setName(varAst.m_Name);
+        } else {
+          if (value->getType()->getIntegerBitWidth() == 1) {
+            value = Builder->CreateBitCast(value, type);
+            type = Builder->getInt1Ty();
+          }
+
+          this->m_LocalVarsOnScope[varAst.m_Name] =
+              llvm::dyn_cast<llvm::AllocaInst>(
+                  CreateLocalVariable(varAst.m_Name, type, value));
+        }
       } else {
         auto globVar =
             varAst.m_IsInitializerList
@@ -487,7 +680,7 @@ ValuePtr Visitor::visit(VarAST &varAst) {
           value = llvm::ConstantInt::get(type, 0);
         }
         m_LocalVarsOnScope[varAst.m_Name] = llvm::dyn_cast<llvm::AllocaInst>(
-            CreateLocalVariable(varAst.m_Name, arrayType, value));
+            CreateLocalVariable(varAst.m_Name, type, value));
       }
     }
   }
@@ -520,28 +713,41 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
 
       if (IsAnyBinOpOrSymbolInvolved(elements)) {
       } else {
-        std::vector<llvm::Constant *> values;
+        std::vector<llvm::Constant *> init_list;
 
-        for (auto &e : elements) {
-          auto scalarVal = std::stoull(e.value);
-          auto v = llvm::ConstantInt::get(m_LastType, scalarVal);
-          values.push_back(v);
+        size_t offset = 0;
+        // FIXME: It does not work as expected
+        for (auto &dim : this->m_LastArrayDims) {
+          std::vector<llvm::Constant *> values;
+          for (size_t i = offset; i < offset + dim; i++) {
+            auto e = elements[i];
+            auto scalarVal = std::stoull(e.value);
+            auto v = llvm::ConstantInt::get(m_LastType, scalarVal);
+            values.push_back(v);
+          }
+          offset += dim;
+          llvm::Constant *init = llvm::ConstantArray::get(arrayType, values);
+          init_list.push_back(init);
         }
 
-        llvm::Constant *init = llvm::ConstantArray::get(arrayType, values);
-        value = init;
+        if (init_list.size() == 1) {
+          value = init_list[0];
+        } else {
+          llvm::Constant *init = llvm::ConstantArray::get(arrayType, init_list);
+          value = init;
+        }
       }
 
     } else {
-      llvm::Function *parentFunc =
-          Visitor::Builder->GetInsertBlock()->getParent();
-      llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
-                                    parentFunc->getEntryBlock().end());
-
-      value = tempBuilder.CreateAlloca(arrayType, nullptr);
+      if (m_LastInitializerList) {
+        value = Builder->CreateAlloca(arrayType, nullptr);
+      } else {
+        value = createBinaryOp(binaryOpAst);
+      }
     }
   } else {
     // not a variable decl
+    value = createBinaryOp(binaryOpAst);
   }
 
   return value;
@@ -661,7 +867,60 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
 }
 
 ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {}
-ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {}
+ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
+  // if condition (binop)
+  auto ifCond = ifStmtAst.m_Cond.begin()->second.first.get();
+  auto cond = ifCond->accept(*this);
+
+  // tempBuilder, parentFunc
+  cond = Builder->CreateFPCast(cond, Builder->getDoubleTy());
+  cond = Builder->CreateFCmpONE(
+      cond, llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0)),
+      "ifcond");
+
+  llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
+
+  llvm::BasicBlock *thenBB =
+      llvm::BasicBlock::Create(Builder->getContext(), "then", parentFunc);
+
+  llvm::BasicBlock *elseBB =
+      llvm::BasicBlock::Create(Builder->getContext(), "else", parentFunc);
+
+  llvm::BasicBlock *mergeBB =
+      llvm::BasicBlock::Create(Builder->getContext(), "ifcont", parentFunc);
+
+  Builder->CreateCondBr(cond, thenBB, elseBB);
+  Builder->SetInsertPoint(thenBB);
+
+  // if block
+  for (auto &el : ifStmtAst.m_Cond.begin()->second.second) {
+    auto value = el->accept(*this);
+  }
+
+  Builder->CreateBr(mergeBB);
+
+  thenBB = Builder->GetInsertBlock();
+  //  Builder->SetInsertPoint(thenBB);
+
+  if (ifStmtAst.m_HasElif) {
+  }
+
+  if (ifStmtAst.m_HasElse) {
+    Builder->SetInsertPoint(elseBB);
+    for (auto &el : ifStmtAst.m_Else) {
+      auto value = el->accept(*this);
+    }
+    Builder->CreateBr(mergeBB);
+    elseBB = Builder->GetInsertBlock();
+    //   Builder->SetInsertPoint(elseBB);
+  }
+
+  Builder->SetInsertPoint(mergeBB);
+  // FIXME: Will be added to PHI Node...
+
+  return nullptr;
+}
+
 ValuePtr Visitor::visit(LoopStmtAST &loopStmtAst) {}
 ValuePtr Visitor::visit(ParamAST &paramAst) {}
 ValuePtr Visitor::visit(RetAST &retAst) {}
