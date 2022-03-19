@@ -226,6 +226,9 @@ class Visitor {
 
   void getElementsOfArray(IAST& binaryExpr, std::vector<BinOpOrVal>& vector);
   ValuePtr createBinaryOp(BinaryOpAST& binaryOpAst);
+  llvm::BranchInst* createBranch(IAST& ifCond, llvm::BasicBlock* thenBB,
+                    llvm::BasicBlock* elseBB, llvm::BasicBlock* mergeBB,
+                    bool elif);
 };
 
 #endif

@@ -414,27 +414,71 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
       value = Builder->CreateXor(lhs, rhs, "andtemp");
       break;
     case B_GT:
-      value = Builder->CreateICmpSGT(lhs, rhs, "cmpsgttemp");
-      if (value->getType()->getIntegerBitWidth() == 1) {
-        value = Builder->CreateIntCast(value, m_LastType, false);
+      if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
+        value = Builder->CreateFCmpOGT(lhs, rhs, "fcmpogttemp");
+      } else {
+        if (m_LastSigned) {
+          value = Builder->CreateICmpSGT(lhs, rhs, "cmpsgttemp");
+          if (value->getType()->getIntegerBitWidth() == 1) {
+            value = Builder->CreateIntCast(value, m_LastType, false);
+          }
+        } else {
+          value = Builder->CreateICmpUGT(lhs, rhs, "cmpugttemp");
+          if (value->getType()->getIntegerBitWidth() == 1) {
+            value = Builder->CreateIntCast(value, m_LastType, true);
+          }
+        }
       }
       break;
     case B_GTEQ:
-      value = Builder->CreateICmpSGE(lhs, rhs, "cmpsgetemp");
-      if (value->getType()->getIntegerBitWidth() == 1) {
-        value = Builder->CreateIntCast(value, m_LastType, false);
+      if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
+        value = Builder->CreateFCmpOGE(lhs, rhs, "fcmpogetemp");
+      } else {
+        if (m_LastSigned) {
+          value = Builder->CreateICmpSGE(lhs, rhs, "cmpsgetemp");
+          if (value->getType()->getIntegerBitWidth() == 1) {
+            value = Builder->CreateIntCast(value, m_LastType, false);
+          }
+        } else {
+          value = Builder->CreateICmpUGE(lhs, rhs, "cmpugetemp");
+          if (value->getType()->getIntegerBitWidth() == 1) {
+            value = Builder->CreateIntCast(value, m_LastType, true);
+          }
+        }
       }
       break;
     case B_LT:
-      value = Builder->CreateICmpSLT(lhs, rhs, "cmpslttemp");
-      if (value->getType()->getIntegerBitWidth() == 1) {
-        value = Builder->CreateIntCast(value, m_LastType, false);
+      if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
+        value = Builder->CreateFCmpOLT(lhs, rhs, "fcmpolttemp");
+      } else {
+        if (m_LastSigned) {
+          value = Builder->CreateICmpSLT(lhs, rhs, "cmpslttemp");
+          if (value->getType()->getIntegerBitWidth() == 1) {
+            value = Builder->CreateIntCast(value, m_LastType, false);
+          }
+        } else {
+          value = Builder->CreateICmpULT(lhs, rhs, "cmpulttemp");
+          if (value->getType()->getIntegerBitWidth() == 1) {
+            value = Builder->CreateIntCast(value, m_LastType, true);
+          }
+        }
       }
       break;
     case B_LTEQ:
-      value = Builder->CreateICmpSLE(lhs, rhs, "cmpsletemp");
-      if (value->getType()->getIntegerBitWidth() == 1) {
-        value = Builder->CreateIntCast(value, m_LastType, false);
+      if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
+        value = Builder->CreateFCmpOLE(lhs, rhs, "fcmposletemp");
+      } else {
+        if (m_LastSigned) {
+          value = Builder->CreateICmpSLE(lhs, rhs, "cmpsletemp");
+          if (value->getType()->getIntegerBitWidth() == 1) {
+            value = Builder->CreateIntCast(value, m_LastType, false);
+          }
+        } else {
+          value = Builder->CreateICmpULE(lhs, rhs, "cmpuletemp");
+          if (value->getType()->getIntegerBitWidth() == 1) {
+            value = Builder->CreateIntCast(value, m_LastType, true);
+          }
+        }
       }
       break;
     case B_SHL:
@@ -453,12 +497,10 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
                                     rhs, "fcmptemp");
       } else {
         value = Builder->CreateICmpEQ(lhs, rhs, "icmptemp");
+        if (value->getType()->getIntegerBitWidth() == 1) {
+          value = Builder->CreateIntCast(value, m_LastType, false);
+        }
       }
-
-      if (value->getType()->getIntegerBitWidth() == 1) {
-        value = Builder->CreateIntCast(value, m_LastType, false);
-      }
-
       break;
     }
     case B_TER: {
@@ -867,13 +909,57 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
 }
 
 ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {}
+
+llvm::BranchInst *Visitor::createBranch(IAST &ifCond, llvm::BasicBlock *thenBB,
+                                        llvm::BasicBlock *elseBB,
+                                        llvm::BasicBlock *mergeBB,
+                                        bool elif = false) {
+  auto cond = ifCond.accept(*this);
+
+  // tempBuilder, parentFunc
+  // if(!cond->getType()->isFloatTy() && !cond->getType()->isDoubleTy())
+  //   cond = Builder->CreateFPCast(cond, Builder->getDoubleTy());
+  if (m_LastSigned) {
+    cond = Builder->CreateSIToFP(cond, Builder->getDoubleTy());
+  } else {
+    cond = Builder->CreateUIToFP(cond, Builder->getDoubleTy());
+  }
+
+  cond = Builder->CreateFCmpONE(
+      cond, llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0)),
+      "ifcond");
+
+  llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
+
+  thenBB = llvm::BasicBlock::Create(Builder->getContext(), "then", parentFunc);
+
+  elseBB = llvm::BasicBlock::Create(Builder->getContext(), "else", parentFunc);
+
+  if (!elif) {
+    mergeBB =
+        llvm::BasicBlock::Create(Builder->getContext(), "ifcont", parentFunc);
+  }
+
+  auto branchInst = Builder->CreateCondBr(cond, thenBB, elseBB);
+
+  return branchInst;
+}
+
 ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
   // if condition (binop)
   auto ifCond = ifStmtAst.m_Cond.begin()->second.first.get();
+
   auto cond = ifCond->accept(*this);
 
   // tempBuilder, parentFunc
-  cond = Builder->CreateFPCast(cond, Builder->getDoubleTy());
+  // if(!cond->getType()->isFloatTy() && !cond->getType()->isDoubleTy())
+  //   cond = Builder->CreateFPCast(cond, Builder->getDoubleTy());
+  if (m_LastSigned) {
+    cond = Builder->CreateSIToFP(cond, Builder->getDoubleTy());
+  } else {
+    cond = Builder->CreateUIToFP(cond, Builder->getDoubleTy());
+  }
+
   cond = Builder->CreateFCmpONE(
       cond, llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0)),
       "ifcond");
@@ -883,40 +969,152 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
   llvm::BasicBlock *thenBB =
       llvm::BasicBlock::Create(Builder->getContext(), "then", parentFunc);
 
-  llvm::BasicBlock *elseBB =
-      llvm::BasicBlock::Create(Builder->getContext(), "else", parentFunc);
+  llvm::BasicBlock *elseBB = nullptr;
 
   llvm::BasicBlock *mergeBB =
-      llvm::BasicBlock::Create(Builder->getContext(), "ifcont", parentFunc);
+      llvm::BasicBlock::Create(Builder->getContext(), "endif", parentFunc);
 
-  Builder->CreateCondBr(cond, thenBB, elseBB);
-  Builder->SetInsertPoint(thenBB);
+  llvm::Value *thenVal = nullptr, *elseVal = nullptr;
 
-  // if block
-  for (auto &el : ifStmtAst.m_Cond.begin()->second.second) {
-    auto value = el->accept(*this);
+  if (!ifStmtAst.m_HasElif) {
+    elseBB = llvm::BasicBlock::Create(Builder->getContext(), "", parentFunc);
+
+    auto branchInst = Builder->CreateCondBr(cond, thenBB, elseBB);
+
+    Builder->SetInsertPoint(thenBB);
+    // if block
+    for (auto &el : ifStmtAst.m_Cond.begin()->second.second) {
+      thenVal = el->accept(*this);
+    }
+
+    Builder->CreateBr(mergeBB);
+    thenBB = Builder->GetInsertBlock();
   }
 
-  Builder->CreateBr(mergeBB);
-
-  thenBB = Builder->GetInsertBlock();
-  //  Builder->SetInsertPoint(thenBB);
-
   if (ifStmtAst.m_HasElif) {
+    if (ifStmtAst.m_HasElse) {
+      elseBB = llvm::BasicBlock::Create(Builder->getContext(), "elifelse",
+                                        parentFunc);
+
+      // retrieving an else if block to be able to connect this with the other
+      // branches properly
+      llvm::BasicBlock *elifThenBB, *elifElseBB, *elifMergeBB;
+      std::vector<std::pair<
+          std::unique_ptr<IAST>,
+          std::pair<std::vector<std::unique_ptr<IAST>>, llvm::BasicBlock *>>>
+          elifBBs;
+      auto it = ifStmtAst.m_ElseIfs.begin();
+      const auto end = ifStmtAst.m_ElseIfs.end();
+      while (it != end) {
+        // WARNING: IAST MOVED
+        elifThenBB =
+            llvm::BasicBlock::Create(Builder->getContext(), "elif", parentFunc);
+        std::vector<std::unique_ptr<IAST>> v;
+        v.assign(std::make_move_iterator(it->second.second.begin()),
+                 std::make_move_iterator(it->second.second.end()));
+        elifBBs.emplace_back(
+            std::make_pair(std::move(it->second.first),
+                           std::make_pair(std::move(v), elifThenBB)));
+        // Builder->CreateCondBr(cond,elifThenBB,elifElseBB);
+        it++;
+      }
+
+      if (elifBBs.size() == 1) {
+        auto branchInst =
+            Builder->CreateCondBr(cond, thenBB, elifBBs[0].second.second);
+
+        Builder->SetInsertPoint(thenBB);
+        // if block
+        for (auto &el : elifBBs[0].second.first) {
+          thenVal = el->accept(*this);
+        }
+
+        // br elif
+        Builder->CreateBr(elifBBs[0].second.second);
+        thenBB = Builder->GetInsertBlock();
+
+        // elif
+        Builder->SetInsertPoint(elifBBs[0].second.second);
+        auto &elifCond = elifBBs[0].first;
+        cond = elifCond->accept(*this);
+
+        if (m_LastSigned) {
+          cond = Builder->CreateSIToFP(cond, Builder->getDoubleTy());
+        } else {
+          cond = Builder->CreateUIToFP(cond, Builder->getDoubleTy());
+        }
+
+        cond = Builder->CreateFCmpONE(
+            cond,
+            llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0)),
+            "elifcond");
+
+        for (auto &el : elifBBs[0].second.first) {
+          thenVal = el->accept(*this);
+        }
+
+        Builder->CreateBr(elseBB);
+        thenBB = Builder->GetInsertBlock();
+
+        // else
+        Builder->SetInsertPoint(elseBB);
+
+        for (auto &el : ifStmtAst.m_Else) {
+          elseVal = el->accept(*this);
+        }
+
+        Builder->CreateBr(mergeBB);
+        elseBB = Builder->GetInsertBlock();
+
+      } else {
+        // Else which comes after elif
+        llvm::BasicBlock *elseBBAfterElif = llvm::BasicBlock::Create(
+            Builder->getContext(), "elifelse", parentFunc);
+        Builder->SetInsertPoint(elseBBAfterElif);
+
+        for (int i = 0; i < elifBBs.size(); i++) {
+          if (i != elifBBs.size()) {
+          } else {
+            // last else..
+          }
+        }
+
+        // else which contains all the elifs and their else
+        Builder->SetInsertPoint(elseBB);
+
+        for (auto &el : ifStmtAst.m_Else) {
+          elseVal = el->accept(*this);
+        }
+
+        Builder->CreateBr(elseBB);
+        elseBB = Builder->GetInsertBlock();
+      }
+
+    } else {
+    }
+
+    goto skip_else;
   }
 
   if (ifStmtAst.m_HasElse) {
     Builder->SetInsertPoint(elseBB);
+
     for (auto &el : ifStmtAst.m_Else) {
-      auto value = el->accept(*this);
+      elseVal = el->accept(*this);
     }
     Builder->CreateBr(mergeBB);
     elseBB = Builder->GetInsertBlock();
     //   Builder->SetInsertPoint(elseBB);
   }
+skip_else:
 
   Builder->SetInsertPoint(mergeBB);
   // FIXME: Will be added to PHI Node...
+  /*if (thenVal != nullptr) {
+    llvm::PHINode *pn = Builder->CreatePHI(thenVal->getType(), 2, "iftmp");
+    pn->addIncoming(thenVal, thenBB);
+    pn->addIncoming(elseVal, elseBB);
+  }*/
 
   return nullptr;
 }

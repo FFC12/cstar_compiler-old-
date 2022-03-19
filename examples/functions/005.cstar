@@ -1,13 +1,9 @@
-func() :: void { 
-    int x = 20; 
+main() :: void { 
+    int x = 20.0; 
     if(x > 20) {
-        int u = 20;
-        int z = 30;
-        if(u > 30) {
-            int p = 40;
-        } else {
-            int v = 60;
-        }
+        int p = 20;
+    } elif(x == 50) {
+        int z = 24; 
     } else {
         int w = 30;
         int k = 15;
@@ -16,6 +12,4 @@ func() :: void {
     ret;
 }
 
-main() :: int {
-    ret;
-}
+
