@@ -590,32 +590,26 @@ ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {
       value = Visitor::Builder->CreateGlobalStringPtr(
           llvm::StringRef(scalarAst.m_Value));
     } else {
-      if (!m_LastSigned) {
+      if (!m_LastSigned) {  // unsigned
         auto scalarVal = std::stoull(scalarAst.m_Value);
-        auto maxVal = 1 << m_LastType->getIntegerBitWidth();
+        auto maxVal = 1 << (m_LastType->getIntegerBitWidth() - 1);
+
+        // -1 for 0
+        maxVal = scalarVal > 0 ? maxVal - 1 : maxVal;
 
         // two's complement
         if (scalarVal > maxVal) {
-          scalarVal = 0 - ~scalarVal;
+          // - 1 for 0
+          scalarVal = (0 - ~scalarVal) - ((scalarVal > 0) ? 1 : 0);
         }
 
         value = llvm::ConstantInt::get(m_LastType, scalarVal);
-      } else {
+      } else {  // signed
         if (scalarAst.m_IsLetter) {
           char val = scalarAst.m_Value[0];
           value = llvm::ConstantInt::get(m_LastType, (int)val);
         } else {
           auto scalarVal = std::stoll(scalarAst.m_Value);
-          auto maxVal = 1 << (m_LastType->getIntegerBitWidth() - 1);
-
-          // -1 for 0
-          maxVal = scalarVal > 0 ? maxVal - 1 : maxVal;
-
-          // two's complement
-          if (scalarVal > maxVal) {
-            // - 1 for 0
-            scalarVal = (0 - ~scalarVal) - ((scalarVal > 0) ? 1 : 0);
-          }
 
           value = llvm::ConstantInt::get(m_LastType, scalarVal);
         }
@@ -992,32 +986,32 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
   }
 
   if (ifStmtAst.m_HasElif) {
+    // retrieving an else if block to be able to connect this with the other
+    // branches properly
+    llvm::BasicBlock *elifThenBB, *elifElseBB, *elifMergeBB;
+    std::vector<std::pair<
+        std::unique_ptr<IAST>,
+        std::pair<std::vector<std::unique_ptr<IAST>>, llvm::BasicBlock *>>>
+        elifBBs;
+    auto it = ifStmtAst.m_ElseIfs.begin();
+    const auto end = ifStmtAst.m_ElseIfs.end();
+    while (it != end) {
+      // WARNING: IAST MOVED
+      elifThenBB =
+          llvm::BasicBlock::Create(Builder->getContext(), "elif", parentFunc);
+      std::vector<std::unique_ptr<IAST>> v;
+      v.assign(std::make_move_iterator(it->second.second.begin()),
+               std::make_move_iterator(it->second.second.end()));
+      elifBBs.emplace_back(
+          std::make_pair(std::move(it->second.first),
+                         std::make_pair(std::move(v), elifThenBB)));
+      // Builder->CreateCondBr(cond,elifThenBB,elifElseBB);
+      it++;
+    }
+
     if (ifStmtAst.m_HasElse) {
       elseBB = llvm::BasicBlock::Create(Builder->getContext(), "elifelse",
                                         parentFunc);
-
-      // retrieving an else if block to be able to connect this with the other
-      // branches properly
-      llvm::BasicBlock *elifThenBB, *elifElseBB, *elifMergeBB;
-      std::vector<std::pair<
-          std::unique_ptr<IAST>,
-          std::pair<std::vector<std::unique_ptr<IAST>>, llvm::BasicBlock *>>>
-          elifBBs;
-      auto it = ifStmtAst.m_ElseIfs.begin();
-      const auto end = ifStmtAst.m_ElseIfs.end();
-      while (it != end) {
-        // WARNING: IAST MOVED
-        elifThenBB =
-            llvm::BasicBlock::Create(Builder->getContext(), "elif", parentFunc);
-        std::vector<std::unique_ptr<IAST>> v;
-        v.assign(std::make_move_iterator(it->second.second.begin()),
-                 std::make_move_iterator(it->second.second.end()));
-        elifBBs.emplace_back(
-            std::make_pair(std::move(it->second.first),
-                           std::make_pair(std::move(v), elifThenBB)));
-        // Builder->CreateCondBr(cond,elifThenBB,elifElseBB);
-        it++;
-      }
 
       if (elifBBs.size() == 1) {
         auto branchInst =
@@ -1025,7 +1019,7 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
 
         Builder->SetInsertPoint(thenBB);
         // if block
-        for (auto &el : elifBBs[0].second.first) {
+        for (auto &el : ifStmtAst.m_Cond.begin()->second.second) {
           thenVal = el->accept(*this);
         }
 
@@ -1035,6 +1029,7 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
 
         // elif
         Builder->SetInsertPoint(elifBBs[0].second.second);
+
         auto &elifCond = elifBBs[0].first;
         cond = elifCond->accept(*this);
 
@@ -1049,11 +1044,18 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
             llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0)),
             "elifcond");
 
+        elifThenBB = llvm::BasicBlock::Create(Builder->getContext(), "elifthen",
+                                              parentFunc);
+
+        branchInst = Builder->CreateCondBr(cond, elifThenBB, elseBB);
+
+        Builder->SetInsertPoint(elifThenBB);
+
         for (auto &el : elifBBs[0].second.first) {
           thenVal = el->accept(*this);
         }
 
-        Builder->CreateBr(elseBB);
+        Builder->CreateBr(mergeBB);
         thenBB = Builder->GetInsertBlock();
 
         // else
@@ -1068,29 +1070,9 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
 
       } else {
         // Else which comes after elif
-        llvm::BasicBlock *elseBBAfterElif = llvm::BasicBlock::Create(
-            Builder->getContext(), "elifelse", parentFunc);
-        Builder->SetInsertPoint(elseBBAfterElif);
-
-        for (int i = 0; i < elifBBs.size(); i++) {
-          if (i != elifBBs.size()) {
-          } else {
-            // last else..
-          }
-        }
-
-        // else which contains all the elifs and their else
-        Builder->SetInsertPoint(elseBB);
-
-        for (auto &el : ifStmtAst.m_Else) {
-          elseVal = el->accept(*this);
-        }
-
-        Builder->CreateBr(elseBB);
-        elseBB = Builder->GetInsertBlock();
       }
 
-    } else {
+    } else {  // if it has not else connect then the elif to merge
     }
 
     goto skip_else;
