@@ -3,10 +3,12 @@
 #include <utility>
 
 size_t Visitor::SymbolId = 0;
+size_t Visitor::ScopeId = 0;
 
 void CStarCodegen::pass0() {
   std::string funcName;
   Visitor::SymbolId = 0;
+  Visitor::ScopeId = 0;
 
   // TODO: Will be revised
   // this->m_DefinedTypes["Type"] = 1;
@@ -37,7 +39,7 @@ void CStarCodegen::pass0() {
                   SymbolInfoEntry(symbolInfo.symbolName, symbolInfo));
             } else {
               localSymbolMessages.emplace_back(
-                  "Redefinition of the local symbol '" + symbolInfo.symbolName +
+                  "Redefinition of the symbol'" + symbolInfo.symbolName +
                       "'",
                   symbolInfo);
             }
@@ -91,9 +93,12 @@ bool CStarCodegen::redefinitionCheck(SymbolInfoList& symbols,
                                      SymbolInfo& symbol) {
   bool redefinationFlag = false;
 
-  auto entries = std::find(symbols.begin(), symbols.end(), symbol);
-  if (entries != symbols.end()) {
-    redefinationFlag = true;
+  auto entries = symbols;
+  for(auto &entry: entries) {
+    if(entry.symbolName == symbol.symbolName) {
+      redefinationFlag = true;
+      break;
+    }
   }
 
   return redefinationFlag;

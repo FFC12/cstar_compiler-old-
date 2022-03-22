@@ -5,6 +5,7 @@
 
 #include <utility>
 #include <visitor/symbols.hpp>
+#include <stack>
 
 struct SemanticErrorMessage {
   std::string message;
@@ -88,6 +89,7 @@ class Visitor {
   std::vector<SymbolInfo> m_SymbolInfos;
   size_t m_ScopeLevel = 0;
   size_t m_ScopeId = 0;
+  size_t m_SymbolId = 0;
   bool m_InsideScope = false;
   bool m_TypeChecking = false;
 
@@ -110,6 +112,7 @@ class Visitor {
   bool m_LastBinOpHasAtLeastOnePtr = false;
 
   bool m_LastReferenced = false;
+  bool m_LastSubscriptable = false;
   bool m_LastParamSymbol = false;
   bool m_LastAssignment = false;
   bool m_LastDereferenced = false;
@@ -134,17 +137,23 @@ class Visitor {
   std::map<std::string, llvm::GlobalVariable*> m_GlobalVars;
   //--
 
-
+  std::stack<size_t> m_SymbolIds;
 
   void enterScope(bool globScope) {
-    if (!globScope) m_ScopeId += 1;
+    if (!globScope) {
+      m_ScopeId += 1;
+    }
     m_ScopeLevel += (globScope ? 0 : 1);
+    m_SymbolIds.push(m_SymbolId);
+    m_SymbolId = 0;
     m_InsideScope = true;
   }
 
   void exitScope(bool globScope) {
     assert(m_InsideScope && "Missed the call enterScope");
     m_ScopeLevel -= (globScope ? 0 : 1);
+    m_SymbolId = m_SymbolIds.top();
+    m_SymbolIds.pop();
   }
 
   void scopeHandler(std::unique_ptr<IAST>& node, SymbolScope symbolScope,
@@ -155,7 +164,7 @@ class Visitor {
                         SymbolInfo& matchedSymbolInfo);
 
  public:
-  static size_t SymbolId;
+  static size_t SymbolId, ScopeId;
   static std::unique_ptr<llvm::IRBuilder<>> Builder;
   static std::unique_ptr<llvm::Module> Module;
   static std::unique_ptr<llvm::DataLayout> m_DataLayout;
@@ -229,6 +238,10 @@ class Visitor {
   llvm::BranchInst* createBranch(IAST& ifCond, llvm::BasicBlock* thenBB,
                     llvm::BasicBlock* elseBB, llvm::BasicBlock* mergeBB,
                     bool elif);
+  void scopeHandler(std::unique_ptr<IAST>& node, SymbolScope symbolScope);
+  size_t getIndexesOfArray(IAST& binaryExpr);
+  size_t getIndexesOfArray(BinaryOpAST& binaryExpr);
+  size_t m_LastArrayIndexCount;
 };
 
 #endif

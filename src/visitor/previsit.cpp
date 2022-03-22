@@ -175,6 +175,29 @@ static bool LosslessCasting(TypeSpecifier target, TypeSpecifier source) {
   return GetBitSize(target) < GetBitSize(source);
 }
 
+// It must be binaryExpr the param
+size_t Visitor::getIndexesOfArray(IAST &expr) {
+  BinaryOpAST *binaryExpr = nullptr;
+  size_t i = 1;
+
+  if (expr.m_ExprKind == BinOp) {
+    binaryExpr = (BinaryOpAST *)&expr;
+    i = 2;
+
+    auto rhs = binaryExpr->m_RHS.get();
+    auto op = binaryExpr->m_BinOpKind;
+
+    while (rhs->m_ExprKind == ExprKind::BinOp && op == B_MARRS) {
+      rhs = ((BinaryOpAST *)rhs)->m_RHS.get();
+      op = ((BinaryOpAST *)rhs)->m_BinOpKind;
+
+      i += 1;
+    }
+  }
+
+  return i;
+}
+
 void Visitor::getElementsOfArray(IAST &binaryExpr,
                                  std::vector<BinOpOrVal> &vector) {
   if (binaryExpr.m_ExprKind == BinOp) {
@@ -339,14 +362,18 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
     // symbolInfo = varAst.m_RHS->acceptBefore(*this);
     symbolInfo.isGlob = false;
 
-    symbolInfo.symbolId = Visitor::SymbolId;
-    Visitor::SymbolId += 1;
+    symbolInfo.symbolId = this->m_SymbolId;
+    symbolInfo.scopeId = this->m_ScopeId;
+    symbolInfo.scopeLevel = this->m_ScopeLevel;
+    this->m_SymbolId += 1;
   } else {
     symbolInfo.isGlob = true;
     symbolInfo.scopeLevel = 0;
     symbolInfo.scopeId = 0;
 
-    symbolInfo.symbolId = Visitor::SymbolId;
+    symbolInfo.symbolId = this->m_SymbolId;
+    symbolInfo.scopeId = this->m_ScopeId;
+    symbolInfo.scopeLevel = this->m_ScopeLevel;
   }
 
   symbolInfo.type = varAst.m_TypeSpec;
@@ -451,7 +478,6 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
 SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
   SymbolInfo symbolInfo;
 
-  Visitor::SymbolId += 1;
   if (m_TypeChecking) {
     if (assignmentAst.m_LHS->m_ASTKind != ASTKind::Expr &&
         assignmentAst.m_ExprKind != ExprKind::SymbolExpr) {
@@ -467,6 +493,9 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
       symbolInfo.line = lhs->m_SemLoc.line;
 
       this->m_LastAssignment = true;
+      this->m_LastSymbolInfo.symbolId = m_SymbolId;
+      this->m_LastSymbolInfo.scopeId = m_ScopeId;
+      this->m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
 
       bool indirectable = false;
       if (symbolValidation(lhs->m_SymbolName, symbolInfo, matchedSymbol)) {
@@ -608,6 +637,14 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
   symbolInfo.end = symbolAst.m_SemLoc.end;
   symbolInfo.line = symbolAst.m_SemLoc.line;
 
+  if (this->m_LastCondExpr || this->m_LastLoopDataSymbol ||
+      this->m_LastLoopIndexSymbol) {
+    this->m_LastSymbolInfo.symbolId = m_SymbolId;
+    m_SymbolId += 1;
+    this->m_LastSymbolInfo.scopeId = m_ScopeId;
+    this->m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
+  }
+
   SymbolInfo matchedSymbol;
   if (this->m_TypeChecking) {
     if (!this->m_LastLoopDataSymbol && !this->m_LastLoopIndexSymbol &&
@@ -618,12 +655,59 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
         if (!this->m_LastCondExpr && !this->m_LastFixExpr) {
           if (!matchedSymbol.isCastable &&
               matchedSymbol.type != this->m_LastSymbolInfo.type) {
-            this->m_TypeErrorMessages.emplace_back(
-                "Casting is not allowed for the symbol '" +
-                    matchedSymbol.symbolName + "'",
-                symbolInfo);
+            if (!matchedSymbol.isCastable) {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Casting is not allowed for the symbol '" +
+                      matchedSymbol.symbolName + "'",
+                  symbolInfo);
+            } else {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Casting is not possible for the symbol '" +
+                      matchedSymbol.symbolName + "'",
+                  symbolInfo);
+            }
           } else {
             if (matchedSymbol.type == this->m_LastSymbolInfo.type) {
+              if (matchedSymbol.isSubscriptable == m_LastSubscriptable) {
+                // all arrays has indirection level since nature of being array.
+                matchedSymbol.indirectionLevel =
+                    matchedSymbol.arrayDimensions.size();
+                // already checking in BinaryOpAst visitor..
+                //              int f =
+                //              static_cast<int>(matchedSymbol.arrayDimensions.size());
+                //              int s =
+                //              static_cast<int>(m_LastArrayIndexCount); if(f
+                //              - s < 0) {
+                //              }
+                if (m_LastSymbolInfo.indirectionLevel !=
+                        (matchedSymbol.indirectionLevel -
+                         m_LastArrayIndexCount -
+                         (this->m_LastDereferenced ? this->m_DereferenceLevel
+                                                   : 0) +
+                         (m_LastReferenced ? 1 : 0)) &&
+                    m_LastBinOp) {
+                  symbolInfo.typeCheckerInfo.isCompatibleSubs = false;
+                } else if (m_LastSymbolInfo.indirectionLevel !=
+                               (matchedSymbol.indirectionLevel -
+                                m_LastArrayIndexCount +
+                                (m_LastReferenced ? 1 : 0)) &&
+                           !m_LastBinOp) {
+                  accumulateIncompatiblePtrErrMesg(symbolInfo);
+                }
+
+              } else {
+                this->m_TypeErrorMessages.emplace_back(
+                    "Incompatible array index(es)", symbolInfo);
+                accumulateIncompatiblePtrErrMesg(symbolInfo);
+              }
+
+              if ((this->m_LastBinOp && matchedSymbol.indirectionLevel > 0 &&
+                   (matchedSymbol.indirectionLevel - m_LastArrayIndexCount -
+                    (this->m_LastDereferenced ? this->m_DereferenceLevel : 0) +
+                    (m_LastReferenced ? 1 : 0)) ==
+                       this->m_LastSymbolInfo.indirectionLevel)) {
+                this->m_LastBinOpHasAtLeastOnePtr = true;
+              }
               if (matchedSymbol.indirectionLevel == 0 &&
                   m_LastSymbolInfo.indirectionLevel == 1 &&
                   m_LastSymbolInfo.isRef && !this->m_LastBinOp) {
@@ -723,11 +807,24 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
           }
         }
       } else {
-        if (this->m_LastLoopDataSymbol || this->m_LastLoopIndexSymbol) {
-          // okay
-        }
         // Symbol could not validate obviously.
         // but it will be processed inside of the symbolValidation func.
+      }
+    } else {
+      if (this->m_LastLoopDataSymbol || this->m_LastLoopIndexSymbol) {
+        if (symbolValidation(symbolName, symbolInfo, matchedSymbol)) {
+          if (m_LastLoopIndexSymbol) {
+            this->m_TypeWarningMessages.emplace_back(
+                "The index symbol of the loop is shadowing a local or "
+                "global variable",
+                symbolInfo);
+          } else {
+            this->m_TypeWarningMessages.emplace_back(
+                "The value symbol of the loop is shadowing a local or "
+                "global variable",
+                symbolInfo);
+          }
+        }
       }
     }
   } else {
@@ -862,46 +959,87 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
 
     m_LastBinOp = true;
 
-    this->m_BinOpTermCount += 1;
-    auto rhsSymbol = rhs->acceptBefore(*this);
-    this->m_BinOpTermCount -= 1;
-
-    if (isPtrType) {
-      if (!rhsSymbol.typeCheckerInfo.isCompatiblePtr &&
-          (this->m_LastBinOp && !this->m_LastBinOpHasAtLeastOnePtr) &&
-          this->m_BinOpTermCount == 0) {
-        this->m_TypeErrorMessages.emplace_back("Invalid operand '" +
-                                                   rhsSymbol.symbolName + "'" +
-                                                   " of binary operation",
-                                               rhsSymbol);
-        rhsSymbol.typeCheckerInfo.isCompatiblePtr = true;
-        errorFlag = true;
+    SymbolInfo rhsSymbol;
+    if (binaryOpAst.m_BinOpKind == B_MARRS) {
+      rhsSymbol.begin = binaryOpAst.m_SemLoc.begin;
+      rhsSymbol.end = binaryOpAst.m_SemLoc.end;
+      rhsSymbol.line = binaryOpAst.m_SemLoc.line;
+      return rhsSymbol;
+    } else {
+      size_t indexCount = 0;
+      size_t hasIndexes = false;
+      if (binaryOpAst.m_BinOpKind == B_ARRS) {
+        indexCount = this->getIndexesOfArray(*binaryOpAst.m_RHS.get());
+        hasIndexes = true;
+      } else {
+        this->m_BinOpTermCount += 1;
+        rhsSymbol = rhs->acceptBefore(*this);
+        this->m_BinOpTermCount -= 1;
       }
-    }
 
-    this->m_BinOpTermCount += 1;
-    auto lhsSymbol = lhs->acceptBefore(*this);
-    this->m_BinOpTermCount -= 1;
-    if (isPtrType && !errorFlag) {
-      if (!lhsSymbol.typeCheckerInfo.isCompatiblePtr &&
-          (this->m_LastBinOp && !this->m_LastBinOpHasAtLeastOnePtr) &&
-          this->m_BinOpTermCount == 0) {
-        this->m_TypeErrorMessages.emplace_back("Invalid operand '" +
-                                                   lhsSymbol.symbolName + "'" +
-                                                   " of binary operation",
-                                               lhsSymbol);
-        lhsSymbol.typeCheckerInfo.isCompatiblePtr = true;
+      if (isPtrType) {
+        if (!rhsSymbol.typeCheckerInfo.isCompatiblePtr &&
+            (this->m_LastBinOp && !this->m_LastBinOpHasAtLeastOnePtr) &&
+            this->m_BinOpTermCount == 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Invalid operand '" + rhsSymbol.symbolName + "'" +
+                  " of binary operation",
+              rhsSymbol);
+          rhsSymbol.typeCheckerInfo.isCompatiblePtr = true;
+          errorFlag = true;
+        }
       }
-    }
 
-    // checking mutability
-    if (lhsSymbol.isConstRef) {
-    } else if (lhsSymbol.isConstPtr) {
-    } else if (lhsSymbol.isConstVal) {
-    } else if (lhsSymbol.isReadOnly) {
-    }
+      // Array index op...
+      if (this->m_LastBinOp && binaryOpAst.m_BinOpKind == B_ARRS) {
+        SymbolInfo matchedSymbol;
+        auto symbolName = ((SymbolAST *)binaryOpAst.m_LHS.get())->m_SymbolName;
 
-    this->m_LastBinOp = false;
+        if (symbolValidation(symbolName, rhsSymbol, matchedSymbol)) {
+          if (matchedSymbol.isSubscriptable &&
+              indexCount <= matchedSymbol.arrayDimensions.size()) {
+            m_LastArrayIndexCount = indexCount;
+            m_LastSubscriptable = true;
+          } else {
+            if (indexCount > matchedSymbol.arrayDimensions.size()) {
+              this->m_TypeErrorMessages.emplace_back("Invalid array index(es)",
+                                                     rhsSymbol);
+            }
+          }
+        }
+      }
+
+      this->m_BinOpTermCount += 1;
+      auto lhsSymbol = lhs->acceptBefore(*this);
+      this->m_BinOpTermCount -= 1;
+      if (isPtrType && !errorFlag) {
+        if (!lhsSymbol.typeCheckerInfo.isCompatiblePtr &&
+            (this->m_LastBinOp && !this->m_LastBinOpHasAtLeastOnePtr) &&
+            this->m_BinOpTermCount == 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Invalid operand '" + lhsSymbol.symbolName + "'" +
+                  " of binary operation",
+              lhsSymbol);
+          lhsSymbol.typeCheckerInfo.isCompatiblePtr = true;
+        } else if (!lhsSymbol.typeCheckerInfo.isCompatibleSubs &&
+                   (this->m_LastBinOp && !this->m_LastBinOpHasAtLeastOnePtr) &&
+                   this->m_BinOpTermCount == 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Invalid operand '" + lhsSymbol.symbolName + "'" +
+                  " of binary operation",
+              lhsSymbol);
+        }
+      }
+
+      if (!lhsSymbol.typeCheckerInfo.isCompatibleSubs) {
+        this->m_TypeErrorMessages.emplace_back("Invalid array index(es)",
+                                               symbolInfo);
+      }
+
+      this->m_LastBinOp = false;
+      this->m_LastArrayIndexCount = 0;
+      this->m_LastSubscriptable = false;
+    }
   } else {
     // nothing to do
   }
@@ -937,7 +1075,6 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
   symbolInfo.end = funcAst.m_SemLoc.end;
   symbolInfo.line = funcAst.m_SemLoc.line;
 
-  Visitor::SymbolId++;
   if (m_TypeChecking) {
     this->m_LastScopeSymbols = this->m_LocalSymbolTable[funcAst.m_FuncName];
     for (auto &param : funcAst.m_Params) {
@@ -945,15 +1082,11 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
       //      typeCheckerScopeHandler(param);
     }
 
+    enterScope(false);
     for (auto &node : funcAst.m_Scope) {
       typeCheckerScopeHandler(node);
     }
   } else {
-    enterScope(false);
-
-    auto scopeLevel = this->m_ScopeLevel;
-    auto scopeId = this->m_ScopeId;
-
     for (auto &param : funcAst.m_Params) {
       auto symbol = param->acceptBefore(*this);
 
@@ -976,9 +1109,6 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
                   symbol.definedTypenamePair.second + "'",
               symbol);
         } else {
-          symbol.scopeLevel = scopeLevel;
-          symbol.scopeId = scopeId;
-
           if (isRightOne && isLeftOne) {
             auto firstSymbol = symbol.definedTypenamePair.first;
             this->m_TypeErrorMessages.emplace_back(
@@ -995,46 +1125,45 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
         }
       } else {
         symbol.symbolScope = SymbolScope::Func;
-        symbol.scopeLevel = scopeLevel;
-        symbol.scopeId = scopeId;
-
         this->m_SymbolInfos.push_back(symbol);
-        //        scopeHandler(param, SymbolScope::Func, scopeLevel, scopeId);
       }
     }
 
+    enterScope(false);
     for (auto &node : funcAst.m_Scope) {
-      scopeHandler(node, SymbolScope::Func, scopeLevel, scopeId);
+      scopeHandler(node, SymbolScope::Func);
     }
-
-    exitScope(false);
   }
+
+  exitScope(false);
   return symbolInfo;
 }
 
 SymbolInfo Visitor::preVisit(IfStmtAST &ifStmtAst) {
   SymbolInfo symbolInfo;
-  enterScope(false);
 
   auto scopeLevel = this->m_ScopeLevel;
-  auto scopeId = this->m_ScopeId;
 
   for (auto &block : ifStmtAst.m_Cond) {
     // type checking for condition
+    enterScope(false);
     if (m_TypeChecking) {
       this->m_LastCondExpr = true;
       block.second.first->acceptBefore(*this);
       this->m_LastCondExpr = false;
     }
+
     // there is only one node actually..
     for (auto &node : block.second.second) {
-      scopeHandler(node, SymbolScope::IfSt, scopeLevel, scopeId);
+      scopeHandler(node, SymbolScope::IfSt);
     }
+    exitScope(false);
   }
 
   if (ifStmtAst.m_HasElif) {
     for (auto &entry : ifStmtAst.m_ElseIfs) {
       // type checking for condition
+      enterScope(false);
       if (m_TypeChecking) {
         this->m_LastCondExpr = true;
         entry.second.first->acceptBefore(*this);
@@ -1042,18 +1171,21 @@ SymbolInfo Visitor::preVisit(IfStmtAST &ifStmtAst) {
       }
       auto &elseIfBlock = entry.second;
       // manually increasing
-      scopeId++;
+      this->m_SymbolId++;
       for (auto &node : elseIfBlock.second) {
-        scopeHandler(node, SymbolScope::IfSt, scopeLevel, scopeId);
+        scopeHandler(node, SymbolScope::IfSt);
       }
+      exitScope(false);
     }
   }
 
+  enterScope(false);
+
   if (ifStmtAst.m_HasElse) {
     // manually increasing
-    scopeId++;
+    this->m_SymbolId++;
     for (auto &node : ifStmtAst.m_Else) {
-      scopeHandler(node, SymbolScope::IfSt, scopeLevel, scopeId);
+      scopeHandler(node, SymbolScope::IfSt);
     }
   }
 
@@ -1088,11 +1220,9 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
       this->m_LastCondExpr = false;
     }
   }
-  auto scopeLevel = this->m_ScopeLevel;
-  auto scopeId = this->m_ScopeId;
 
   for (auto &node : loopStmtAst.m_Scope) {
-    scopeHandler(node, SymbolScope::LoopSt, scopeLevel, scopeId);
+    scopeHandler(node, SymbolScope::LoopSt);
   }
 
   exitScope(false);
@@ -1129,8 +1259,10 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
 
   auto typeInfo = dynamic_cast<TypeAST *>(paramAst.m_TypeNode.get());
 
-  symbolInfo.symbolId = Visitor::SymbolId;
-  Visitor::SymbolId += 1;
+  this->m_LastSymbolInfo.symbolId = m_SymbolId;
+  this->m_SymbolId += 1;
+  this->m_LastSymbolInfo.scopeId = m_ScopeId;
+  this->m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
 
   symbolInfo.isSubscriptable = paramAst.m_IsSubscriptable;
   symbolInfo.isConstRef = paramAst.m_TypeQualifier == Q_CONSTREF;
@@ -1182,7 +1314,9 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {
     this->m_LastRetExpr = true;
     m_LastSymbolInfo = m_LastFuncRetTypeInfo;
     m_ExpectedType = m_LastFuncRetTypeInfo.type;
-    m_LastSymbolInfo.symbolId = Visitor::SymbolId;
+    this->m_LastSymbolInfo.symbolId = m_SymbolId;
+    this->m_LastSymbolInfo.scopeId = m_ScopeId;
+    this->m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
     if (retAst.m_RetExpr != nullptr) retAst.m_RetExpr->acceptBefore(*this);
     this->m_LastRetExpr = false;
   }
@@ -1283,16 +1417,11 @@ SymbolInfo Visitor::preVisit(FixAST &fixAst) {
   return symbolInfo;
 }
 
-void Visitor::scopeHandler(std::unique_ptr<IAST> &node, SymbolScope symbolScope,
-                           size_t scopeLevel, size_t scopeId) {
+void Visitor::scopeHandler(std::unique_ptr<IAST> &node,
+                           SymbolScope symbolScope) {
   if (node->m_ASTKind == ASTKind::Decl) {
     if (node->m_DeclKind == DeclKind::VarDecl) {
       auto temp = node->acceptBefore(*this);
-
-      temp.symbolScope = symbolScope;
-      temp.scopeLevel = scopeLevel;
-      temp.scopeId = scopeId;
-
       this->m_SymbolInfos.push_back(temp);
     }
   } else if (node->m_ASTKind == ASTKind::Stmt) {
@@ -1304,10 +1433,6 @@ void Visitor::scopeHandler(std::unique_ptr<IAST> &node, SymbolScope symbolScope,
   } else if (node->m_ASTKind == ASTKind::Expr &&
              node->m_ExprKind == ExprKind::ParamExpr) {
     auto temp = node->acceptBefore(*this);
-    temp.symbolScope = symbolScope;
-    temp.scopeLevel = scopeLevel;
-    temp.scopeId = scopeId;
-
     this->m_SymbolInfos.push_back(temp);
   } else if (node->m_ASTKind == ASTKind::Expr &&
              node->m_ExprKind == ExprKind::AssignmentExpr) {
@@ -1353,14 +1478,25 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
   bool isGlobSymbol = false;
 
   size_t index = this->m_LastSymbolInfo.symbolId;
-
-  if (m_LastAssignment || m_LastFixExpr) {
-    index = Visitor::SymbolId - 1;
-  }
+  size_t scopeId = this->m_LastSymbolInfo.scopeId;
+  size_t scopeLevel = this->m_LastSymbolInfo.scopeLevel;
 
   for (auto &it : m_GlobalSymbolTable) {
     if (it.symbolName == symbolName) {
-      if (it.symbolInfo.symbolId > index) {
+      if (it.symbolInfo.scopeLevel < scopeLevel) {
+        // nothing
+      } else {
+        if (it.symbolInfo.scopeLevel == scopeLevel) {
+          if (it.symbolInfo.symbolId > index ||
+              it.symbolInfo.scopeId != scopeId) {
+            goto pitfallGlob;
+          } else {
+            goto doneGlob;
+          }
+        } else {
+          continue;
+        }
+      pitfallGlob:
         this->m_TypeWarningMessages.emplace_back(
             "'" + symbolName + "' was not in a valid place", it.symbolInfo);
         this->m_TypeErrorMessages.emplace_back(
@@ -1371,7 +1507,7 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
             symbolInfo);
         break;
       }
-
+    doneGlob:
       matchedSymbol = it.symbolInfo;
       isGlobSymbol = true;
       break;
@@ -1380,7 +1516,28 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
 
   for (auto &it : this->m_LastScopeSymbols) {
     if (it.symbolName == symbolName) {
-      if (it.symbolInfo.symbolId > index) {
+      if (it.symbolInfo.scopeLevel < scopeLevel) {
+        // nothing
+      } else {
+        if (it.symbolInfo.scopeLevel == scopeLevel) {
+          if (scopeLevel == 1) {
+            if (it.symbolInfo.symbolId > index) {
+              goto pitfall;
+            } else {
+              goto done;
+            }
+          } else {
+            if (it.symbolInfo.symbolId > index ||
+                it.symbolInfo.scopeId != scopeId) {
+              goto pitfall;
+            } else {
+              goto done;
+            }
+          }
+        } else {
+          continue;
+        }
+      pitfall:
         this->m_TypeWarningMessages.emplace_back(
             "'" + symbolName + "' was not in a valid place", it.symbolInfo);
         this->m_TypeErrorMessages.emplace_back(
@@ -1391,6 +1548,7 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
             symbolInfo);
         break;
       }
+    done:
       matchedSymbol = it.symbolInfo;
       isLocalSymbol = true;
       break;

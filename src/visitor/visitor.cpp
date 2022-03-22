@@ -522,8 +522,14 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
       break;
     case B_CCOL:
       break;
-    case B_MARRS:
+    case B_MARRS: {
+      // TODO: You have to extract values and symbols from the
+      // rhs and you have to use it as index for GEP
+      // but if it's symbol or any binary op then you have to
+      // call m_RHS->accept before...
+      //       value = Builder->CreateInBoundsGEP()
       break;
+    }
   }
 
   return value;
@@ -728,7 +734,8 @@ ValuePtr Visitor::visit(VarAST &varAst) {
   return value;
 }
 
-ValuePtr Visitor::visit(AssignmentAST &assignmentAst) { return nullptr; }
+ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {}
+
 ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
   llvm::Value *value = nullptr;
 
@@ -971,9 +978,13 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
   llvm::Value *thenVal = nullptr, *elseVal = nullptr;
 
   if (!ifStmtAst.m_HasElif) {
-    elseBB = llvm::BasicBlock::Create(Builder->getContext(), "", parentFunc);
-
-    auto branchInst = Builder->CreateCondBr(cond, thenBB, elseBB);
+    if (ifStmtAst.m_HasElse) {
+      elseBB =
+          llvm::BasicBlock::Create(Builder->getContext(), "else", parentFunc);
+      auto branchInst = Builder->CreateCondBr(cond, thenBB, elseBB);
+    } else {
+      auto branchInst = Builder->CreateCondBr(cond, thenBB, mergeBB);
+    }
 
     Builder->SetInsertPoint(thenBB);
     // if block
@@ -983,9 +994,7 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
 
     Builder->CreateBr(mergeBB);
     thenBB = Builder->GetInsertBlock();
-  }
-
-  if (ifStmtAst.m_HasElif) {
+  } else {
     // retrieving an else if block to be able to connect this with the other
     // branches properly
     llvm::BasicBlock *elifThenBB, *elifElseBB, *elifMergeBB;
@@ -1009,70 +1018,76 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
       it++;
     }
 
-    if (ifStmtAst.m_HasElse) {
-      elseBB = llvm::BasicBlock::Create(Builder->getContext(), "elifelse",
-                                        parentFunc);
+    auto branchInst =
+        Builder->CreateCondBr(cond, thenBB, elifBBs[0].second.second);
 
-      if (elifBBs.size() == 1) {
-        auto branchInst =
-            Builder->CreateCondBr(cond, thenBB, elifBBs[0].second.second);
+    Builder->SetInsertPoint(thenBB);
+    // if block
+    for (auto &el : ifStmtAst.m_Cond.begin()->second.second) {
+      thenVal = el->accept(*this);
+    }
 
-        Builder->SetInsertPoint(thenBB);
-        // if block
-        for (auto &el : ifStmtAst.m_Cond.begin()->second.second) {
-          thenVal = el->accept(*this);
-        }
+    Builder->CreateBr(mergeBB);
+    thenBB = Builder->GetInsertBlock();
+    // ---
 
-        // br elif
-        Builder->CreateBr(elifBBs[0].second.second);
-        thenBB = Builder->GetInsertBlock();
+    // elif
+    for (int i = 0; i < elifBBs.size(); i++) {
+      Builder->SetInsertPoint(elifBBs[i].second.second);
 
-        // elif
-        Builder->SetInsertPoint(elifBBs[0].second.second);
+      auto &elifCond = elifBBs[i].first;
+      cond = elifCond->accept(*this);
 
-        auto &elifCond = elifBBs[0].first;
-        cond = elifCond->accept(*this);
-
-        if (m_LastSigned) {
-          cond = Builder->CreateSIToFP(cond, Builder->getDoubleTy());
-        } else {
-          cond = Builder->CreateUIToFP(cond, Builder->getDoubleTy());
-        }
-
-        cond = Builder->CreateFCmpONE(
-            cond,
-            llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0)),
-            "elifcond");
-
-        elifThenBB = llvm::BasicBlock::Create(Builder->getContext(), "elifthen",
-                                              parentFunc);
-
-        branchInst = Builder->CreateCondBr(cond, elifThenBB, elseBB);
-
-        Builder->SetInsertPoint(elifThenBB);
-
-        for (auto &el : elifBBs[0].second.first) {
-          thenVal = el->accept(*this);
-        }
-
-        Builder->CreateBr(mergeBB);
-        thenBB = Builder->GetInsertBlock();
-
-        // else
-        Builder->SetInsertPoint(elseBB);
-
-        for (auto &el : ifStmtAst.m_Else) {
-          elseVal = el->accept(*this);
-        }
-
-        Builder->CreateBr(mergeBB);
-        elseBB = Builder->GetInsertBlock();
-
+      if (m_LastSigned) {
+        cond = Builder->CreateSIToFP(cond, Builder->getDoubleTy());
       } else {
-        // Else which comes after elif
+        cond = Builder->CreateUIToFP(cond, Builder->getDoubleTy());
       }
 
-    } else {  // if it has not else connect then the elif to merge
+      cond = Builder->CreateFCmpONE(
+          cond,
+          llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0)),
+          "elifcond");
+
+      elifThenBB = llvm::BasicBlock::Create(Builder->getContext(), "elifthen",
+                                            parentFunc);
+
+      bool terminate = false;
+      // next elif
+      if (elifBBs.size() - 1 == i) {
+        if (ifStmtAst.m_HasElse) {
+          elseBB = llvm::BasicBlock::Create(Builder->getContext(), "elifelse",
+                                            parentFunc);
+          branchInst = Builder->CreateCondBr(cond, elifThenBB, elseBB);
+        } else {
+          branchInst = Builder->CreateCondBr(cond, elifThenBB, mergeBB);
+          terminate = true;
+        }
+      } else {
+        branchInst = Builder->CreateCondBr(cond, elifThenBB,
+                                           elifBBs[i + 1].second.second);
+      }
+
+      Builder->SetInsertPoint(elifThenBB);
+
+      for (auto &el : elifBBs[i].second.first) {
+        thenVal = el->accept(*this);
+      }
+
+      Builder->CreateBr(mergeBB);
+      thenBB = Builder->GetInsertBlock();
+    }
+
+    // else
+    if (ifStmtAst.m_HasElse) {
+      Builder->SetInsertPoint(elseBB);
+
+      for (auto &el : ifStmtAst.m_Else) {
+        elseVal = el->accept(*this);
+      }
+
+      Builder->CreateBr(mergeBB);
+      elseBB = Builder->GetInsertBlock();
     }
 
     goto skip_else;
@@ -1098,12 +1113,43 @@ skip_else:
     pn->addIncoming(elseVal, elseBB);
   }*/
 
+  // There is no returning value here.
   return nullptr;
 }
 
-ValuePtr Visitor::visit(LoopStmtAST &loopStmtAst) {}
+ValuePtr Visitor::visit(LoopStmtAST &loopStmtAst) {
+  llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
+  llvm::BasicBlock *headerBB = Builder->GetInsertBlock();
+  llvm::BasicBlock *loopBB =
+      llvm::BasicBlock::Create(Builder->getContext(), "loop", parentFunc);
+
+  Builder->CreateBr(loopBB);
+  Builder->SetInsertPoint(loopBB);
+
+  if(loopStmtAst.m_RangeLoop) {
+    auto symbolName = "";
+    auto oldVal = m_LocalVarsOnScope[symbolName];
+    if(loopStmtAst.m_Indexable) {
+
+    } else {
+
+    }
+
+    if(loopStmtAst.m_HasNumericRange) {
+
+    } else {
+
+    }
+  } else {
+   //conditions...
+  }
+
+}
+
 ValuePtr Visitor::visit(ParamAST &paramAst) {}
+
 ValuePtr Visitor::visit(RetAST &retAst) {}
+
 ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
   llvm::Value *value = nullptr;
 

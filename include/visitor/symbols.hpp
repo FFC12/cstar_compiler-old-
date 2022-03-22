@@ -8,6 +8,7 @@ enum SymbolScope { Func, LoopSt, IfSt };
 
 struct TypeCheckerInfo {
   bool isCompatiblePtr = true;
+  bool isCompatibleSubs = true;
   bool isCompatibleType = true;
   bool isCompatibleCast = true;
   bool isCompatibleVal =  true;
