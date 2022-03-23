@@ -1,3 +1,5 @@
+#include <llvm/IR/Verifier.h>
+
 #include <ast/assignment_ast.hpp>
 #include <ast/ast.hpp>
 #include <ast/binary_op_ast.hpp>
@@ -14,6 +16,9 @@
 #include <ast/unary_op_ast.hpp>
 #include <ast/var_ast.hpp>
 #include <visitor/visitor.hpp>
+
+llvm::BasicBlock *Visitor::MainFuncBB = nullptr;
+llvm::GlobalVariable *Visitor::LastGlobVarRef = nullptr;
 
 static bool IsSigned(TypeSpecifier typeSpecifier) {
   switch (typeSpecifier) {
@@ -33,7 +38,7 @@ static bool IsSigned(TypeSpecifier typeSpecifier) {
 SymbolInfo Visitor::getSymbolInfo(const std::string &symbolName) {
   SymbolInfo symbolInfo;
 
-  for (auto &symbol : m_LocalSymbolTable[m_LastFuncName]) {
+  for (auto &symbol : LocalSymbolTable[m_LastFuncName]) {
     if (symbol.symbolName == symbolName) {
       symbolInfo = symbol.symbolInfo;
       break;
@@ -240,6 +245,7 @@ static llvm::Type *GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
 
   return type;
 }
+
 static llvm::GlobalVariable *CreateConstantGlobalVar(
     const std::string &name, VisibilitySpecifier specifier, llvm::Type *type,
     llvm::Value *value) {
@@ -327,10 +333,54 @@ static llvm::GlobalVariable *CreateInitConstantGlobalVar(
   return globVar;
 }
 
+// This will be added to .text.startup
+static llvm::Function *CreateGlobalVarInitFunc() {
+  llvm::Function *function = llvm::Function::Create(
+      llvm::FunctionType::get(Visitor::Builder->getVoidTy(), false),
+      llvm::Function::LinkageTypes::InternalLinkage, "__cstar_global_var_init",
+      *Visitor::Module);
+  function->setSection(".text.startup");
+
+  llvm::BasicBlock *entry =
+      llvm::BasicBlock::Create(Visitor::Builder->getContext(), "", function);
+
+  Visitor::Builder->SetInsertPoint(entry);
+  llvm::verifyFunction(*function);
+
+  return function;
+}
+
+// This will be inserted and called before "main" function.
+static llvm::Function *CreateGlobalFuncSubToMain(
+    std::vector<llvm::StringRef> &initFuncs) {
+  // sub for main (calling before main)
+  llvm::Function *function = llvm::Function::Create(
+      llvm::FunctionType::get(Visitor::Builder->getVoidTy(), false),
+      llvm::Function::LinkageTypes::InternalLinkage,
+      "__GLOBAL_cstar__sub__" + Visitor::Module->getName(), *Visitor::Module);
+  function->setSection(".text.startup");
+
+  auto insertPoint = Visitor::Builder->GetInsertBlock();
+
+  llvm::BasicBlock *entry = llvm::BasicBlock::Create(
+      Visitor::Builder->getContext(), "sub_entry", function);
+
+  Visitor::Builder->SetInsertPoint(entry);
+
+  std::vector<llvm::Value *> emptyArgs;
+  for (auto &initFunc : initFuncs) {
+    Visitor::Builder->CreateCall(Visitor::Module->getFunction(initFunc),
+                                 emptyArgs);
+  }
+
+  Visitor::Builder->CreateRetVoid();
+  Visitor::Builder->SetInsertPoint(insertPoint);
+
+  return function;
+}
+
 static llvm::Value *CreateAlloca(const std::string &name, llvm::Type *type) {
   llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
-  llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
-                                parentFunc->getEntryBlock().begin());
   llvm::AllocaInst *var =
       Visitor::Builder->CreateAlloca(type, nullptr, llvm::Twine(name));
 
@@ -340,8 +390,7 @@ static llvm::Value *CreateAlloca(const std::string &name, llvm::Type *type) {
 static llvm::Value *CreateLocalVariable(const std::string &name,
                                         llvm::Type *type, llvm::Value *value) {
   llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
-  llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
-                                parentFunc->getEntryBlock().end());
+
   auto *var = llvm::dyn_cast<llvm::AllocaInst>(CreateAlloca(name, type));
   Visitor::Builder->CreateStore(value, var);
 
@@ -539,11 +588,17 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
   llvm::Value *value = nullptr;
   bool isSigned = false;
 
-  llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
-  llvm::IRBuilder<> tempBuilder(&(parentFunc->getEntryBlock()),
-                                parentFunc->getEntryBlock().end());
   // if (this->m_LastVarDecl) {
-  value = m_LocalVarsOnScope[symbolAst.m_SymbolName];
+  if (m_LocalVarsOnScope.count(symbolAst.m_SymbolName) == 0) {
+    if (m_GlobalVars.count(symbolAst.m_SymbolName) == 0) {
+      assert(false && "This should not be happened. _WTF_");
+    } else {
+      value = m_GlobalVars[symbolAst.m_SymbolName];
+    }
+  } else {
+    value = m_LocalVarsOnScope[symbolAst.m_SymbolName];
+  }
+
   if (!this->m_LastVarDecl)
     m_LastType = value->getType()->getPointerElementType();
 
@@ -553,11 +608,20 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
   if (value->getType()->isPointerTy()) {
     type = value->getType()->getPointerElementType();
   }
-  auto loadedVal = Builder->CreateLoad(type, value, llvm::Twine(""));
+
+  llvm::LoadInst *loadedVal = nullptr;
+  if (m_LastGlobVar) {
+    auto dl = Visitor::Module->getDataLayout();
+    auto align = dl.getPrefTypeAlignment(type);
+    loadedVal = Builder->CreateAlignedLoad(type, value, llvm::MaybeAlign(align),
+                                           llvm::Twine(""));
+  } else {
+    loadedVal = Builder->CreateLoad(type, value, llvm::Twine(""));
+  }
 
   llvm::Type *lastType = m_LastType;
   if (m_LastType->isPointerTy()) {
-    lastType->getPointerElementType();
+    m_LastType = lastType->getPointerElementType();
   }
 
   if (type->getTypeID() != lastType->getTypeID()) {
@@ -571,15 +635,6 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
   } else {
     value = loadedVal;
   }
-
-  /* } else {
-     value = m_LocalVarsOnScope[symbolAst.m_SymbolName];
-     llvm::Type *type = value->getType();
-     while (type->isPointerTy()) {
-       type = value->getType()->getPointerElementType();
-     }
-     m_LastType = type;
-   }*/
 
   return value;
 }
@@ -634,6 +689,7 @@ ValuePtr Visitor::visit(VarAST &varAst) {
   this->m_LastGlobVar = !varAst.m_IsLocal;
   this->m_LastSigned = IsSigned(varAst.m_TypeSpec);
   this->m_LastInitializerList = varAst.m_IsInitializerList;
+  this->LastGlobVarRef = nullptr;
   llvm::ArrayType *arrayType = nullptr;
 
   if (varAst.m_IsInitializerList) {
@@ -654,6 +710,19 @@ ValuePtr Visitor::visit(VarAST &varAst) {
   }
 
   if (varAst.m_RHS != nullptr) {
+    llvm::GlobalVariable *globVar = nullptr;
+    if (!varAst.m_IsLocal && varAst.m_RHS->m_ExprKind == BinOp) {
+      llvm::Constant *constant = nullptr;
+      if (type->isFloatTy() || type->isDoubleTy()) {
+        constant = llvm::ConstantFP::get(type, 0.0f);
+      } else {
+        constant = llvm::ConstantInt::get(type, 0);
+      }
+      globVar = CreateConstantGlobalVar(varAst.m_Name, varAst.m_VisibilitySpec,
+                                        type, constant);
+      this->LastGlobVarRef = globVar;
+    }
+
     value = varAst.m_RHS->accept(*this);
 
     if (varAst.m_RHS->m_ExprKind != BinOp) {
@@ -665,14 +734,16 @@ ValuePtr Visitor::visit(VarAST &varAst) {
               CreateLocalVariable(varAst.m_Name, type, value));
         }
       } else {
-        auto globVar = CreateConstantGlobalVar(
-            varAst.m_Name, varAst.m_VisibilitySpec, type, value);
+        globVar = CreateConstantGlobalVar(varAst.m_Name,
+                                          varAst.m_VisibilitySpec, type, value);
         this->m_GlobalVars[varAst.m_Name] = globVar;
       }
     } else {
       if (varAst.m_IsLocal) {
         if (varAst.m_IsInitializerList) {
           value->setName(varAst.m_Name);
+          this->m_LocalVarsOnScope[varAst.m_Name] =
+              llvm::dyn_cast<llvm::AllocaInst>(value);
         } else {
           if (value->getType()->getIntegerBitWidth() == 1) {
             value = Builder->CreateBitCast(value, type);
@@ -684,13 +755,6 @@ ValuePtr Visitor::visit(VarAST &varAst) {
                   CreateLocalVariable(varAst.m_Name, type, value));
         }
       } else {
-        auto globVar =
-            varAst.m_IsInitializerList
-                ? CreateInitConstantGlobalVar(
-                      varAst.m_Name, varAst.m_VisibilitySpec, arrayType,
-                      llvm::dyn_cast<llvm::Constant>(value))
-                : CreateConstantGlobalVar(varAst.m_Name,
-                                          varAst.m_VisibilitySpec, type, value);
         this->m_GlobalVars[varAst.m_Name] = globVar;
       }
     }
@@ -707,8 +771,8 @@ ValuePtr Visitor::visit(VarAST &varAst) {
         } else {
           value = llvm::ConstantInt::get(type, 0);
         }
-        CreateConstantGlobalVar(varAst.m_Name, varAst.m_VisibilitySpec, type,
-                                value);
+        globVar = CreateConstantGlobalVar(varAst.m_Name,
+                                          varAst.m_VisibilitySpec, type, value);
       }
       this->m_GlobalVars[varAst.m_Name] = globVar;
     } else {
@@ -751,36 +815,31 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
     }
 
     if (m_LastGlobVar) {
-      std::vector<BinOpOrVal> elements;
-      getElementsOfArray(binaryOpAst, elements);
-
-      if (IsAnyBinOpOrSymbolInvolved(elements)) {
-      } else {
-        std::vector<llvm::Constant *> init_list;
-
-        size_t offset = 0;
-        // FIXME: It does not work as expected
-        for (auto &dim : this->m_LastArrayDims) {
-          std::vector<llvm::Constant *> values;
-          for (size_t i = offset; i < offset + dim; i++) {
-            auto e = elements[i];
-            auto scalarVal = std::stoull(e.value);
-            auto v = llvm::ConstantInt::get(m_LastType, scalarVal);
-            values.push_back(v);
-          }
-          offset += dim;
-          llvm::Constant *init = llvm::ConstantArray::get(arrayType, values);
-          init_list.push_back(init);
-        }
-
-        if (init_list.size() == 1) {
-          value = init_list[0];
+      if (m_LastInitializerList) {
+        std::vector<BinOpOrVal> elements;
+        getElementsOfArray(binaryOpAst, elements);
+        if (IsAnyBinOpOrSymbolInvolved(elements)) {
+          // TODO: Global Init Functionality just like in C++:
         } else {
-          llvm::Constant *init = llvm::ConstantArray::get(arrayType, init_list);
-          value = init;
+          // there is no binary operation in the initializer list so just
+          // initialize the array
         }
-      }
+      } else {
+        // global variable which has binary operation
+        auto lastInsertPoint = Builder->GetInsertBlock();
+        auto globInitFunc = CreateGlobalVarInitFunc();
+        m_GlobaInitVarFunc.push_back(globInitFunc->getName());
+        Builder->SetInsertPoint(&globInitFunc->getEntryBlock());
 
+        // Since if we let it to call itself again
+        // it will cause to a problem.
+        if (m_LastVarDecl) m_LastVarDecl = !m_LastVarDecl;
+        value = createBinaryOp(binaryOpAst);
+        // insert binary instruction to this global_Var_init func
+        // Builder->Insert(value);
+        value = Visitor::Builder->CreateStore(value, LastGlobVarRef);
+        Visitor::Builder->CreateRetVoid();
+      }
     } else {
       if (m_LastInitializerList) {
         value = Builder->CreateAlloca(arrayType, nullptr);
@@ -855,13 +914,18 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
 
   auto function =
       llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
-                             funcAst.m_FuncName, *Module);
+                             funcAst.m_FuncName, *Visitor::Module);
   function->setCallingConv(llvm::CallingConv::C);
 
   if (!funcAst.m_IsForwardDecl) {
     llvm::BasicBlock *funcBlock = llvm::BasicBlock::Create(
         Visitor::Builder->getContext(), "entry", function);
     Visitor::Builder->SetInsertPoint(funcBlock);
+
+    // Keep the main function body's address
+    if (funcAst.m_FuncName == "main") {
+      MainFuncBB = funcBlock;
+    }
 
     auto datalayout = Visitor::Module->getDataLayout();
     if (hasParam) {
@@ -1126,24 +1190,36 @@ ValuePtr Visitor::visit(LoopStmtAST &loopStmtAst) {
   Builder->CreateBr(loopBB);
   Builder->SetInsertPoint(loopBB);
 
-  if(loopStmtAst.m_RangeLoop) {
-    auto symbolName = "";
-    auto oldVal = m_LocalVarsOnScope[symbolName];
-    if(loopStmtAst.m_Indexable) {
+  llvm::PHINode *pn = Builder->CreatePHI(Builder->getDoubleTy(), 2);
 
-    } else {
+  if (loopStmtAst.m_RangeLoop) {  // this is basically high level for loop
+    auto dataSymbol = (SymbolAST *)loopStmtAst.m_DataSymbol.get();
+    auto symbolName = dataSymbol->m_SymbolName;
 
+    // we're keeping the old value for restoring..
+    llvm::Value *oldVal = nullptr;
+    if (m_LocalVarsOnScope.count(symbolName) > 0) {
+      oldVal = m_LocalVarsOnScope[symbolName];
     }
 
-    if(loopStmtAst.m_HasNumericRange) {
-
+    if (loopStmtAst.m_Indexable) {
     } else {
-
     }
-  } else {
-   //conditions...
+
+    if (loopStmtAst.m_HasNumericRange) {
+    } else {
+      auto iterableSymbol = (SymbolAST *)loopStmtAst.m_IterSymbol.get();
+      auto *value = m_LocalVarsOnScope[iterableSymbol->m_SymbolName];
+      if (value->isArrayAllocation()) {
+      } else {
+        assert(false &&
+               "Only array type of iterable symbols are supported currently. "
+               "Struct types or SequenceTraits will be added later.");
+      }
+    }
+  } else {  // this is basically a while loop.
+    // conditions...
   }
-
 }
 
 ValuePtr Visitor::visit(ParamAST &paramAst) {}
@@ -1164,3 +1240,8 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
 ValuePtr Visitor::visit(TypeAST &typeAst) {}
 
 ValuePtr Visitor::visit(FixAST &fixAst) {}
+
+void Visitor::finalizeCodegen() {
+  auto function = CreateGlobalFuncSubToMain(this->m_GlobaInitVarFunc);
+  llvm::verifyFunction(*function);
+}

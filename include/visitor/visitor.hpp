@@ -3,9 +3,9 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Value.h>
 
+#include <stack>
 #include <utility>
 #include <visitor/symbols.hpp>
-#include <stack>
 
 struct SemanticErrorMessage {
   std::string message;
@@ -81,9 +81,6 @@ using GlobalSymbolInfoList = SymbolInfoList;
 class Visitor {
   friend VarAST;
 
-  // These are from pass0;
-  GlobalSymbolInfoList m_GlobalSymbolTable;
-  LocalSymbolInfoList m_LocalSymbolTable;
 
   std::vector<SemanticErrorMessage> m_TypeErrorMessages;
   std::vector<SymbolInfo> m_SymbolInfos;
@@ -117,8 +114,10 @@ class Visitor {
   bool m_LastAssignment = false;
   bool m_LastDereferenced = false;
   size_t m_DereferenceLevel = 1;
+  bool m_LastLoop = false;
   bool m_LastLoopDataSymbol = false;
   bool m_LastLoopIndexSymbol = false;
+  bool m_LastLoopIter = false;
   bool m_LastCondExpr = false;
   bool m_LastRetExpr = false;
   bool m_LastFixExpr = false;
@@ -135,6 +134,9 @@ class Visitor {
   llvm::Type* m_LastType = nullptr;
   std::map<std::string, llvm::AllocaInst*> m_LocalVarsOnScope;
   std::map<std::string, llvm::GlobalVariable*> m_GlobalVars;
+  std::vector<llvm::StringRef> m_GlobaInitVarFunc;
+  static llvm::BasicBlock* MainFuncBB;
+  static llvm::GlobalVariable* LastGlobVarRef;
   //--
 
   std::stack<size_t> m_SymbolIds;
@@ -155,15 +157,18 @@ class Visitor {
     m_SymbolId = m_SymbolIds.top();
     m_SymbolIds.pop();
   }
+  bool symbolValidation(std::string& symbolName, SymbolInfo& symbolInfo,
+                        SymbolInfo& matchedSymbol, bool noError = false);
 
   void scopeHandler(std::unique_ptr<IAST>& node, SymbolScope symbolScope,
                     size_t scopeLevel, size_t scopeId);
 
   void typeCheckerScopeHandler(std::unique_ptr<IAST>& node);
-  bool symbolValidation(std::string& symbolName, SymbolInfo& symbolInfo,
-                        SymbolInfo& matchedSymbolInfo);
 
  public:
+  // These are from pass0;
+  static GlobalSymbolInfoList GlobalSymbolTable;
+  static LocalSymbolInfoList LocalSymbolTable;
   static size_t SymbolId, ScopeId;
   static std::unique_ptr<llvm::IRBuilder<>> Builder;
   static std::unique_ptr<llvm::Module> Module;
@@ -172,21 +177,8 @@ class Visitor {
   explicit Visitor(const std::map<std::string, size_t>& typeTable)
       : m_TypeTable(typeTable) {}
 
-  Visitor(const std::map<std::string, size_t>& typeTable,
-          GlobalSymbolInfoList globalSymbolInfoList,
-          LocalSymbolInfoList localSymbolInfoList, bool typeCheck)
-      : m_TypeTable(typeTable),
-        m_TypeChecking(typeCheck),
-        m_GlobalSymbolTable(std::move(globalSymbolInfoList)),
-        m_LocalSymbolTable(std::move(localSymbolInfoList)) {}
-
-  Visitor(const std::map<std::string, size_t>& typeTable,
-          GlobalSymbolInfoList globalSymbolInfoList,
-          LocalSymbolInfoList localSymbolInfoList)
-      : m_TypeTable(typeTable),
-        m_GlobalSymbolTable(std::move(globalSymbolInfoList)),
-        m_LocalSymbolTable(std::move(localSymbolInfoList)) {
-  }
+  Visitor(const std::map<std::string, size_t>& typeTable, bool typeCheck)
+      : m_TypeTable(typeTable), m_TypeChecking(typeCheck) {}
 
   ValuePtr visit(VarAST& varAst);
   ValuePtr visit(AssignmentAST& assignmentAst);
@@ -220,6 +212,8 @@ class Visitor {
   SymbolInfo preVisit(SymbolAST& symbolAst);
   SymbolInfo preVisit(FixAST& fixAst);
 
+  void finalizeCodegen();
+
   std::vector<SymbolInfo> getSymbolInfoList() { return this->m_SymbolInfos; }
   std::vector<SemanticErrorMessage> getUnknownTypeErrorMessages() {
     return this->m_TypeErrorMessages;
@@ -230,14 +224,13 @@ class Visitor {
   void accumulateIncompatiblePtrErrMesg(const SymbolInfo& symbolInfo,
                                         const std::string& s);
   SymbolInfo getSymbolInfo(const std::string& symbolName);
-  bool validateArray(
-      IAST& binaryExpr, size_t level,size_t& index);
+  bool validateArray(IAST& binaryExpr, size_t level, size_t& index);
 
   void getElementsOfArray(IAST& binaryExpr, std::vector<BinOpOrVal>& vector);
   ValuePtr createBinaryOp(BinaryOpAST& binaryOpAst);
   llvm::BranchInst* createBranch(IAST& ifCond, llvm::BasicBlock* thenBB,
-                    llvm::BasicBlock* elseBB, llvm::BasicBlock* mergeBB,
-                    bool elif);
+                                 llvm::BasicBlock* elseBB,
+                                 llvm::BasicBlock* mergeBB, bool elif);
   void scopeHandler(std::unique_ptr<IAST>& node, SymbolScope symbolScope);
   size_t getIndexesOfArray(IAST& binaryExpr);
   size_t getIndexesOfArray(BinaryOpAST& binaryExpr);

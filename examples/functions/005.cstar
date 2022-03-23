@@ -1,9 +1,9 @@
-main(int a) :: void {
+int z = 40;
+int x = 20 + z + 50;
+int p = z + 3;
+
+main() :: void {
     
-    loop(a in [0,20]) {
-
-    }
-
 
     ret;
 }

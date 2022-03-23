@@ -668,37 +668,39 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
             }
           } else {
             if (matchedSymbol.type == this->m_LastSymbolInfo.type) {
-              if (matchedSymbol.isSubscriptable == m_LastSubscriptable) {
-                // all arrays has indirection level since nature of being array.
-                matchedSymbol.indirectionLevel =
-                    matchedSymbol.arrayDimensions.size();
-                // already checking in BinaryOpAst visitor..
-                //              int f =
-                //              static_cast<int>(matchedSymbol.arrayDimensions.size());
-                //              int s =
-                //              static_cast<int>(m_LastArrayIndexCount); if(f
-                //              - s < 0) {
-                //              }
-                if (m_LastSymbolInfo.indirectionLevel !=
-                        (matchedSymbol.indirectionLevel -
-                         m_LastArrayIndexCount -
-                         (this->m_LastDereferenced ? this->m_DereferenceLevel
-                                                   : 0) +
-                         (m_LastReferenced ? 1 : 0)) &&
-                    m_LastBinOp) {
-                  symbolInfo.typeCheckerInfo.isCompatibleSubs = false;
-                } else if (m_LastSymbolInfo.indirectionLevel !=
-                               (matchedSymbol.indirectionLevel -
-                                m_LastArrayIndexCount +
-                                (m_LastReferenced ? 1 : 0)) &&
-                           !m_LastBinOp) {
+              if (m_LastSubscriptable) {
+                if (m_LastSubscriptable == matchedSymbol.isSubscriptable) {
+                  // all arrays has indirection level since nature of being
+                  // array.
+                  matchedSymbol.indirectionLevel =
+                      matchedSymbol.arrayDimensions.size();
+                  // already checking in BinaryOpAst visitor..
+                  //              int f =
+                  //              static_cast<int>(matchedSymbol.arrayDimensions.size());
+                  //              int s =
+                  //              static_cast<int>(m_LastArrayIndexCount); if(f
+                  //              - s < 0) {
+                  //              }
+                  if (m_LastSymbolInfo.indirectionLevel !=
+                          (matchedSymbol.indirectionLevel -
+                           m_LastArrayIndexCount -
+                           (this->m_LastDereferenced ? this->m_DereferenceLevel
+                                                     : 0) +
+                           (m_LastReferenced ? 1 : 0)) &&
+                      m_LastBinOp) {
+                    symbolInfo.typeCheckerInfo.isCompatibleSubs = false;
+                  } else if (m_LastSymbolInfo.indirectionLevel !=
+                                 (matchedSymbol.indirectionLevel -
+                                  m_LastArrayIndexCount +
+                                  (m_LastReferenced ? 1 : 0)) &&
+                             !m_LastBinOp) {
+                    accumulateIncompatiblePtrErrMesg(symbolInfo);
+                  }
+                } else {
+                  this->m_TypeErrorMessages.emplace_back(
+                      "Incompatible array index(es)", symbolInfo);
                   accumulateIncompatiblePtrErrMesg(symbolInfo);
                 }
-
-              } else {
-                this->m_TypeErrorMessages.emplace_back(
-                    "Incompatible array index(es)", symbolInfo);
-                accumulateIncompatiblePtrErrMesg(symbolInfo);
               }
 
               if ((this->m_LastBinOp && matchedSymbol.indirectionLevel > 0 &&
@@ -812,7 +814,8 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
       }
     } else {
       if (this->m_LastLoopDataSymbol || this->m_LastLoopIndexSymbol) {
-        if (symbolValidation(symbolName, symbolInfo, matchedSymbol)) {
+        if (symbolValidation(symbolName, symbolInfo, matchedSymbol,
+                             m_LastLoop)) {
           if (m_LastLoopIndexSymbol) {
             this->m_TypeWarningMessages.emplace_back(
                 "The index symbol of the loop is shadowing a local or "
@@ -918,7 +921,7 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
           }
         }
       } else {
-        if (!m_LastCondExpr) {
+        if (!m_LastCondExpr && !m_LastLoop) {
           this->accumulateIncompatiblePtrErrMesg(symbolInfo);
         }
       }
@@ -1076,7 +1079,7 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
   symbolInfo.line = funcAst.m_SemLoc.line;
 
   if (m_TypeChecking) {
-    this->m_LastScopeSymbols = this->m_LocalSymbolTable[funcAst.m_FuncName];
+    this->m_LastScopeSymbols = LocalSymbolTable[funcAst.m_FuncName];
     for (auto &param : funcAst.m_Params) {
       auto symbol = param->acceptBefore(*this);
       //      typeCheckerScopeHandler(param);
@@ -1197,20 +1200,50 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
   SymbolInfo symbolInfo;
   enterScope(false);
 
+  this->m_LastLoop = true;
+
   if (m_TypeChecking) {
     if (loopStmtAst.m_RangeLoop) {
       if (loopStmtAst.m_Indexable) {
-        if (loopStmtAst.m_HasNumericRange) {
-          loopStmtAst.m_Min->acceptBefore(*this);
-          loopStmtAst.m_Max->acceptBefore(*this);
-        } else {
-          // TODO: Need to extra check for iterable data.
-          loopStmtAst.m_IterSymbol->acceptBefore(*this);
-        }
         this->m_LastLoopIndexSymbol = true;
         loopStmtAst.m_IndexSymbol->acceptBefore(*this);
         this->m_LastLoopIndexSymbol = false;
       }
+
+      if (loopStmtAst.m_HasNumericRange) {
+        // To checking symbols are valid and exists..
+        // if they are symbols...
+        this->m_LastCondExpr = true;
+        loopStmtAst.m_Min->acceptBefore(*this);
+        loopStmtAst.m_Max->acceptBefore(*this);
+        this->m_LastCondExpr = false;
+      } else {
+        // TODO: Need to extra check for iterable data.
+        this->m_LastLoopIter = true;
+        if (loopStmtAst.m_IterSymbol->m_ExprKind == SymbolExpr) {
+          // loopStmtAst.m_IterSymbol->acceptBefore(*this);
+          this->m_LastLoopIter = false;
+          auto iterSymbol = (SymbolAST *)loopStmtAst.m_IterSymbol.get();
+          SymbolInfo matchedSymbol;
+          if (symbolValidation(iterSymbol->m_SymbolName, symbolInfo,
+                               matchedSymbol)) {
+            if (!matchedSymbol.isSubscriptable) {
+              symbolInfo.begin = iterSymbol->m_SemLoc.begin;
+              symbolInfo.end = iterSymbol->m_SemLoc.end;
+              symbolInfo.line = iterSymbol->m_SemLoc.line;
+              this->m_TypeErrorMessages.emplace_back(
+                  "Symbol must be iterable or provided a sequenceable trait "
+                  "(built-in trait)",
+                  symbolInfo);
+            }
+          }
+        } else {
+          this->m_TypeErrorMessages.emplace_back(
+              "Iterable version of loop needs an symbol which is also iterable",
+              symbolInfo);
+        }
+      }
+
       this->m_LastLoopDataSymbol = true;
       loopStmtAst.m_DataSymbol->acceptBefore(*this);
       this->m_LastLoopDataSymbol = false;
@@ -1225,7 +1258,9 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
     scopeHandler(node, SymbolScope::LoopSt);
   }
 
+  this->m_LastLoop = false;
   exitScope(false);
+
   return symbolInfo;
 }
 
@@ -1405,7 +1440,8 @@ SymbolInfo Visitor::preVisit(FixAST &fixAst) {
   SymbolInfo symbolInfo;
 
   // Problem symbolId den kaynaklanıyor. Validate ederken
-  // symbol ıd si olmadığı için hata veriyor. Bunun uzerinde düşünmen gerekiyor.
+  // symbol ıd si olmadığı için hata veriyor. Bunun uzerinde düşünmen
+  // gerekiyor.
   Visitor::SymbolId += 1;
   if (m_TypeChecking) {
     this->m_LastFixExpr = true;
@@ -1473,7 +1509,7 @@ void Visitor::typeCheckerScopeHandler(std::unique_ptr<IAST> &node) {
 }
 
 bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
-                               SymbolInfo &matchedSymbol) {
+                               SymbolInfo &matchedSymbol, bool noError) {
   bool isLocalSymbol = false;
   bool isGlobSymbol = false;
 
@@ -1481,7 +1517,7 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
   size_t scopeId = this->m_LastSymbolInfo.scopeId;
   size_t scopeLevel = this->m_LastSymbolInfo.scopeLevel;
 
-  for (auto &it : m_GlobalSymbolTable) {
+  for (auto &it : GlobalSymbolTable) {
     if (it.symbolName == symbolName) {
       if (it.symbolInfo.scopeLevel < scopeLevel) {
         // nothing
@@ -1497,14 +1533,16 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
           continue;
         }
       pitfallGlob:
-        this->m_TypeWarningMessages.emplace_back(
-            "'" + symbolName + "' was not in a valid place", it.symbolInfo);
-        this->m_TypeErrorMessages.emplace_back(
-            "'" + symbolName +
-                "' was declared in the wrong place. Probably it used "
-                "before "
-                "declaration",
-            symbolInfo);
+        if (!noError) {
+          this->m_TypeWarningMessages.emplace_back(
+              "'" + symbolName + "' was not in a valid place", it.symbolInfo);
+          this->m_TypeErrorMessages.emplace_back(
+              "'" + symbolName +
+                  "' was declared in the wrong place. Probably it used "
+                  "before "
+                  "declaration",
+              symbolInfo);
+        }
         break;
       }
     doneGlob:
@@ -1538,14 +1576,16 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
           continue;
         }
       pitfall:
-        this->m_TypeWarningMessages.emplace_back(
-            "'" + symbolName + "' was not in a valid place", it.symbolInfo);
-        this->m_TypeErrorMessages.emplace_back(
-            "'" + symbolName +
-                "' was declared in the wrong place. Probably it used "
-                "before "
-                "declaration",
-            symbolInfo);
+        if (!noError) {
+          this->m_TypeWarningMessages.emplace_back(
+              "'" + symbolName + "' was not in a valid place", it.symbolInfo);
+          this->m_TypeErrorMessages.emplace_back(
+              "'" + symbolName +
+                  "' was declared in the wrong place. Probably it used "
+                  "before "
+                  "declaration",
+              symbolInfo);
+        }
         break;
       }
     done:
@@ -1555,10 +1595,14 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
     }
   }
 
-  if (!isLocalSymbol && !isGlobSymbol) {
+  if (!isLocalSymbol && !isGlobSymbol && !noError) {
     this->m_TypeErrorMessages.emplace_back(
         "'" + symbolName + "' was not declared in this scope or global scope",
         symbolInfo);
+    return false;
+  }
+
+  if (noError && !isLocalSymbol && !isGlobSymbol) {
     return false;
   }
 
