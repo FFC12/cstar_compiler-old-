@@ -1244,4 +1244,28 @@ ValuePtr Visitor::visit(FixAST &fixAst) {}
 void Visitor::finalizeCodegen() {
   auto function = CreateGlobalFuncSubToMain(this->m_GlobaInitVarFunc);
   llvm::verifyFunction(*function);
+
+  std::vector<llvm::Type *> types;
+  types.push_back(Builder->getInt32Ty());
+  types.push_back(function->getType());
+  types.push_back(Builder->getInt8PtrTy());
+
+  auto structType = llvm::StructType::get(Builder->getContext(), types);
+  auto type = llvm::ArrayType::get(structType, 1);
+  Visitor::Module->getOrInsertGlobal(llvm::StringRef("llvm.global_ctors"),
+                                     type);
+  auto globVar =
+      Visitor::Module->getNamedGlobal(llvm::StringRef("llvm.global_ctors"));
+  globVar->setLinkage(llvm::GlobalVariable::AppendingLinkage);
+  //  globVar->setSection(llvm::StringRef(".ctor"));
+  std::vector<llvm::Constant *> values;
+  values.push_back(llvm::ConstantInt::get(Builder->getInt32Ty(), 65535));
+  values.push_back(function);
+  values.push_back(llvm::ConstantPointerNull::get(Builder->getInt8PtrTy()));
+  auto *ctorVal = llvm::ConstantStruct::get(structType, values);
+
+  std::vector<llvm::Constant *> ctorValues;
+  ctorValues.push_back(ctorVal);
+  auto init = llvm::ConstantArray::get(type, ctorValues);
+  globVar->setInitializer(init);
 }

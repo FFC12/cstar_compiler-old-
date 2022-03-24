@@ -1,9 +1,12 @@
-int z = 40;
+int z;
 int x = 20 + z + 50;
 int p = z + 3;
 
 main() :: void {
     
+    if(p > 2) {
+        int i = 20;
+    }
 
     ret;
 }
