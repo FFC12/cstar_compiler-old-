@@ -1,12 +1,8 @@
-int z;
-int x = 20 + z + 50;
-int p = z + 3;
+int z[2:2] = ((0,1),(2,3.0)); 
 
 main() :: void {
-    
-    if(p > 2) {
-        int i = 20;
-    }
+    if(z[0:1] > 2) { 
+    } 
 
     ret;
 }

@@ -1,2 +1,2 @@
-#!/usr/bin/bash
-nvim -p src/parser/parser.cpp src/parser/variable.cpp src/parser/expr.cpp include/parser/parser.hpp include/lexer/lexer.hpp
+#/usr/bin/bash
+nvim -p src/visitor/previsit.cpp src/visitor/visitor.cpp src/codegen/codegen.cpp include/visitor/visitor.hpp include/codegen/codegen.hpp 

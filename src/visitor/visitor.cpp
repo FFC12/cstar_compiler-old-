@@ -653,7 +653,14 @@ ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {
     } else {
       if (!m_LastSigned) {  // unsigned
         auto scalarVal = std::stoull(scalarAst.m_Value);
-        auto maxVal = 1 << (m_LastType->getIntegerBitWidth() - 1);
+
+        int maxVal = 0;
+        if (m_LastType->isArrayTy()) {
+          auto type = m_LastType->getArrayElementType();
+          maxVal = 1 << (type->getIntegerBitWidth() - 1);
+        } else {
+          maxVal = 1 << (m_LastType->getIntegerBitWidth() - 1);
+        }
 
         // -1 for 0
         maxVal = scalarVal > 0 ? maxVal - 1 : maxVal;
@@ -689,7 +696,7 @@ ValuePtr Visitor::visit(VarAST &varAst) {
   this->m_LastGlobVar = !varAst.m_IsLocal;
   this->m_LastSigned = IsSigned(varAst.m_TypeSpec);
   this->m_LastInitializerList = varAst.m_IsInitializerList;
-  this->LastGlobVarRef = nullptr;
+  Visitor::LastGlobVarRef = nullptr;
   llvm::ArrayType *arrayType = nullptr;
 
   if (varAst.m_IsInitializerList) {
@@ -702,16 +709,17 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       // for the right order
       std::reverse(this->m_LastArrayDims.begin(), this->m_LastArrayDims.end());
     }
-    auto first = this->m_LastArrayDims[0];
-    arrayType = llvm::ArrayType::get(type, first);
-    for (int i = 1; i < this->m_LastArrayDims.size(); i++) {
-      arrayType = llvm::ArrayType::get(arrayType, this->m_LastArrayDims[i]);
+    size_t length = 0;
+    for (auto &dim : m_LastArrayDims) {
+      length += dim;
     }
+    arrayType = llvm::ArrayType::get(type, length);
   }
 
   if (varAst.m_RHS != nullptr) {
     llvm::GlobalVariable *globVar = nullptr;
-    if (!varAst.m_IsLocal && varAst.m_RHS->m_ExprKind == BinOp) {
+    if (!varAst.m_IsLocal && varAst.m_RHS->m_ExprKind == BinOp &&
+        !m_LastInitializerList) {
       llvm::Constant *constant = nullptr;
       if (type->isFloatTy() || type->isDoubleTy()) {
         constant = llvm::ConstantFP::get(type, 0.0f);
@@ -720,7 +728,7 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       }
       globVar = CreateConstantGlobalVar(varAst.m_Name, varAst.m_VisibilitySpec,
                                         type, constant);
-      this->LastGlobVarRef = globVar;
+      Visitor::LastGlobVarRef = globVar;
     }
 
     value = varAst.m_RHS->accept(*this);
@@ -755,6 +763,11 @@ ValuePtr Visitor::visit(VarAST &varAst) {
                   CreateLocalVariable(varAst.m_Name, type, value));
         }
       } else {
+        if (varAst.m_IsInitializerList) {
+          globVar = CreateInitConstantGlobalVar(
+              varAst.m_Name, varAst.m_VisibilitySpec, arrayType,
+              llvm::dyn_cast<llvm::Constant>(value));
+        }
         this->m_GlobalVars[varAst.m_Name] = globVar;
       }
     }
@@ -807,11 +820,11 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
     llvm::ArrayType *arrayType = nullptr;
 
     if (m_LastInitializerList) {
-      auto first = this->m_LastArrayDims[0];
-      arrayType = llvm::ArrayType::get(m_LastType, first);
-      for (int i = 1; i < this->m_LastArrayDims.size(); i++) {
-        arrayType = llvm::ArrayType::get(arrayType, this->m_LastArrayDims[i]);
+      size_t length = 0;
+      for (auto &dim : m_LastArrayDims) {
+        length += dim;
       }
+      arrayType = llvm::ArrayType::get(m_LastType, length);
     }
 
     if (m_LastGlobVar) {
@@ -823,6 +836,18 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
         } else {
           // there is no binary operation in the initializer list so just
           // initialize the array
+          std::vector<llvm::Constant *> values;
+
+          for (auto &el : elements) {
+            if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
+              values.push_back(llvm::ConstantFP::get(m_LastType, el.value));
+            } else {
+              uint64_t val = std::stoull(el.value);
+              values.push_back(llvm::ConstantInt::get(m_LastType, val));
+            }
+          }
+
+          value = llvm::ConstantArray::get(arrayType, values);
         }
       } else {
         // global variable which has binary operation

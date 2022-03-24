@@ -383,10 +383,15 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
         opType = OpType::OP_UNARY;
       } else {
         if (this->isUnaryOp()) {
+          if (prevTokenInfo() == RSQPAR && closedSPar > 0 &&
+              closedSPar % 2 == 0) {
+            opType = OpType::OP_BINARY;
+            stride += 1;
+          }
           if (is(TokenKind::PLUS) || is(TokenKind::MINUS)) {
             if (prevTokenKind() == TokenKind::PLUSPLUS ||
                 prevTokenKind() == TokenKind::MINUSMINUS ||
-                prevTokenInfo() == RSQPAR) {
+                prevTokenKind() == TokenKind::RSQPAR) {
               opType = OpType::OP_BINARY;
               stride += 1;
             } else {

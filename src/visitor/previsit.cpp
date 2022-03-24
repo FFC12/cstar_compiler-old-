@@ -262,7 +262,7 @@ void Visitor::getElementsOfArray(IAST &binaryExpr,
   }
 }
 
-// TODO: Need to fixed.
+// FIXME: Need to fixed.
 bool Visitor::validateArray(IAST &binaryExpr, size_t level, size_t &index) {
   if (binaryExpr.m_ExprKind == BinOp) {
     auto isBinExpr = (BinaryOpAST *)&binaryExpr;
@@ -354,6 +354,7 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   symbolInfo.end = varAst.m_SemLoc.end;
   symbolInfo.line = varAst.m_SemLoc.line;
 
+  this->m_LastVarDecl = true;
   // symbolInfo.symbolId = Visitor::SymbolId;
   // Visitor::SymbolIdList[symbolInfo.symbolName] = symbolInfo.symbolId;
 
@@ -471,6 +472,8 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
       symbolInfo.ptrAliases = std::move(tempSmbolInfo.ptrAliases);
     }
   }
+
+  this->m_LastVarDecl = false;
 
   return symbolInfo;
 }
@@ -807,6 +810,18 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
               }
             }
           }
+        } else {
+          matchedSymbol.indirectionLevel =
+              m_LastSymbolInfo.arrayDimensions.size();
+          if (m_LastSymbolInfo.isSubscriptable) {
+            if (0 !=
+                    (matchedSymbol.indirectionLevel - m_LastArrayIndexCount -
+                     (this->m_LastDereferenced ? this->m_DereferenceLevel : 0) +
+                     (m_LastReferenced ? 1 : 0)) &&
+                m_LastBinOp) {
+              symbolInfo.typeCheckerInfo.isCompatibleSubsForBinOp = false;
+            }
+          }
         }
       } else {
         // Symbol could not validate obviously.
@@ -937,8 +952,8 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
       } else if (m_LastSymbolInfo.isConstVal) {
         // okay
       } else if (m_LastSymbolInfo.isReadOnly) {
-        // partially okay ( actually not really qualifying to the address of the
-        // value. )
+        // partially okay ( actually not really qualifying to the address of
+        // the value. )
       }
     }
   } else {
@@ -998,9 +1013,12 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
         SymbolInfo matchedSymbol;
         auto symbolName = ((SymbolAST *)binaryOpAst.m_LHS.get())->m_SymbolName;
 
+        size_t arraySize = m_LastVarDecl
+                               ? matchedSymbol.arrayDimensions.size()
+                               : getIndexesOfArray(*binaryOpAst.m_RHS.get());
+
         if (symbolValidation(symbolName, rhsSymbol, matchedSymbol)) {
-          if (matchedSymbol.isSubscriptable &&
-              indexCount <= matchedSymbol.arrayDimensions.size()) {
+          if (matchedSymbol.isSubscriptable && indexCount <= arraySize) {
             m_LastArrayIndexCount = indexCount;
             m_LastSubscriptable = true;
           } else {
@@ -1037,6 +1055,11 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
       if (!lhsSymbol.typeCheckerInfo.isCompatibleSubs) {
         this->m_TypeErrorMessages.emplace_back("Invalid array index(es)",
                                                symbolInfo);
+      } else if (!lhsSymbol.typeCheckerInfo.isCompatibleSubsForBinOp) {
+        this->m_TypeErrorMessages.emplace_back("Invalid operand '" +
+                                                   lhsSymbol.symbolName + "'" +
+                                                   " of binary operation",
+                                               lhsSymbol);
       }
 
       this->m_LastBinOp = false;
@@ -1232,14 +1255,16 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
               symbolInfo.end = iterSymbol->m_SemLoc.end;
               symbolInfo.line = iterSymbol->m_SemLoc.line;
               this->m_TypeErrorMessages.emplace_back(
-                  "Symbol must be iterable or provided a sequenceable trait "
+                  "Symbol must be iterable or provided a sequenceable "
+                  "trait "
                   "(built-in trait)",
                   symbolInfo);
             }
           }
         } else {
           this->m_TypeErrorMessages.emplace_back(
-              "Iterable version of loop needs an symbol which is also iterable",
+              "Iterable version of loop needs an symbol which is also "
+              "iterable",
               symbolInfo);
         }
       }
@@ -1402,7 +1427,8 @@ SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
       case U_TYPEOF:
         if (m_LastBinOp) {
           this->m_TypeErrorMessages.emplace_back(
-              "'typeof' operator cannot be used as an operand of the binary "
+              "'typeof' operator cannot be used as an operand of the "
+              "binary "
               "operation for now. It",
               symbolInfo);
         }
