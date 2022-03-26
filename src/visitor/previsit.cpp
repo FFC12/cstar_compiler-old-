@@ -395,6 +395,17 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
     symbolInfo.isNeededEval = false;
   }
 
+  if (symbolInfo.isSubscriptable) {
+    size_t dimension = 1;
+    for (auto &v : varAst.m_ArrDim) {
+      auto scalar = dynamic_cast<ScalarOrLiteralAST *>(v.get());
+      symbolInfo.arrayDimensions.push_back(std::stoi(scalar->m_Value));
+      std::reverse(symbolInfo.arrayDimensions.begin(),
+                   symbolInfo.arrayDimensions.end());
+      m_LastArrayDims = symbolInfo.arrayDimensions;
+    }
+  }
+
   // Do not need to look up the symbol table
   // for the declared name. since we can directly
   // take the information from decl.
@@ -403,15 +414,6 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
 
     // Array intializer
     if (symbolInfo.isSubscriptable) {
-      size_t dimension = 1;
-      for (auto &v : varAst.m_ArrDim) {
-        auto scalar = dynamic_cast<ScalarOrLiteralAST *>(v.get());
-        symbolInfo.arrayDimensions.push_back(std::stoi(scalar->m_Value));
-        std::reverse(symbolInfo.arrayDimensions.begin(),
-                     symbolInfo.arrayDimensions.end());
-        m_LastArrayDims = symbolInfo.arrayDimensions;
-      }
-
       bool constant = varAst.m_ArrDim.size() == 1 &&
                       (varAst.m_RHS->m_ExprKind == ExprKind::ScalarExpr ||
                        varAst.m_RHS->m_ExprKind == ExprKind::SymbolExpr);
@@ -1023,8 +1025,13 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
             m_LastSubscriptable = true;
           } else {
             if (indexCount > matchedSymbol.arrayDimensions.size()) {
-              this->m_TypeErrorMessages.emplace_back("Invalid array index(es)",
-                                                     rhsSymbol);
+              if(m_LastVarDecl) {
+                this->m_TypeErrorMessages.emplace_back(
+                    "Invalid array index(es)", m_LastSymbolInfo);
+              } else {
+                this->m_TypeErrorMessages.emplace_back(
+                    "Invalid array index(es)", rhsSymbol);
+              }
             }
           }
         }
@@ -1056,10 +1063,12 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
         this->m_TypeErrorMessages.emplace_back("Invalid array index(es)",
                                                symbolInfo);
       } else if (!lhsSymbol.typeCheckerInfo.isCompatibleSubsForBinOp) {
-        this->m_TypeErrorMessages.emplace_back("Invalid operand '" +
-                                                   lhsSymbol.symbolName + "'" +
-                                                   " of binary operation",
-                                               lhsSymbol);
+        this->m_TypeErrorMessages.emplace_back(
+            "Invalid array index(es). Subscripted value is not array",
+            lhsSymbol);
+        this->m_TypeWarningMessages.emplace_back(
+            "You exceeded to the maximum dimension count of the array",
+            lhsSymbol);
       }
 
       this->m_LastBinOp = false;

@@ -34,7 +34,7 @@ void CStarCodegen::pass1() {
     }
   }
   auto warnMessages = preVisitor.getTypeWarningMessages();
-  for (auto it = warnMessages.rbegin(); it != warnMessages.rend(); ++it) {
+  for (auto it = warnMessages.begin(); it != warnMessages.end(); ++it) {
     SemanticHint(it->message, it->symbolInfo);
   }
 

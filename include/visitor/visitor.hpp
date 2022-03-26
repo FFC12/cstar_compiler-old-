@@ -129,8 +129,11 @@ class Visitor {
   bool m_LastSigned = false;
   bool m_LastGlobVar = false;
   bool m_LastNegConstant = false;
+  bool m_LastArrayIndex = false;
   bool m_LastInitializerList = false;
   std::string m_LastFuncName;
+  std::vector<llvm::Value*> m_Indices{};
+  std::vector<std::pair<std::string,bool>> m_IndicesAsStr{};
   llvm::Type* m_LastType = nullptr;
   std::map<std::string, llvm::AllocaInst*> m_LocalVarsOnScope;
   std::map<std::string, llvm::GlobalVariable*> m_GlobalVars;

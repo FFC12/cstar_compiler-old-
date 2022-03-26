@@ -176,6 +176,8 @@ bool CStarParser::isOperator(const TokenInfo& token) {
     case QMARK:
       // those are because detecting is binary op
     case COLON:
+      // suspicious
+   // case LSQPAR:
     case RSQPAR:
       //
     case COLONCOLON:
@@ -449,8 +451,8 @@ void CStarParser::ParserHint(std::string mesg, TokenInfo tokenInfo) {
   std::cout << RES;
   std::cout << std::endl << std::endl;
 }
-void CStarParser::ParserWarning(std::string mesg, size_t newBegin, size_t newEnd,
-                             size_t newLine) {
+void CStarParser::ParserWarning(std::string mesg, size_t newBegin,
+                                size_t newEnd, size_t newLine) {
   // copy one time for each translation unit
   std::string messageHeader(this->m_Lexer.getFilepath().get());
   const size_t CHAR_LIMIT = 256;

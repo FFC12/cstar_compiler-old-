@@ -38,10 +38,22 @@ static bool IsSigned(TypeSpecifier typeSpecifier) {
 SymbolInfo Visitor::getSymbolInfo(const std::string &symbolName) {
   SymbolInfo symbolInfo;
 
+  bool flag = false;
   for (auto &symbol : LocalSymbolTable[m_LastFuncName]) {
     if (symbol.symbolName == symbolName) {
       symbolInfo = symbol.symbolInfo;
+      flag = true;
       break;
+    }
+  }
+
+  if (!flag) {
+    for (auto &symbol : GlobalSymbolTable) {
+      if (symbol.symbolName == symbolName) {
+        symbolInfo = symbol.symbolInfo;
+        flag = true;
+        break;
+      }
     }
   }
 
@@ -398,10 +410,13 @@ static llvm::Value *CreateLocalVariable(const std::string &name,
 }
 
 ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
-  llvm::Value *value = nullptr;
+  llvm::Value *value = nullptr, *rhs, *lhs;
 
-  auto lhs = binaryOpAst.m_LHS->accept(*this);
-  auto rhs = binaryOpAst.m_RHS->accept(*this);
+  if (binaryOpAst.m_BinOpKind == B_ARRS) m_LastArrayIndex = true;
+  lhs = binaryOpAst.m_LHS->accept(*this);
+
+  rhs = binaryOpAst.m_RHS->accept(*this);
+  if (binaryOpAst.m_BinOpKind == B_ARRS) m_LastArrayIndex = false;
 
   // NSW (No Signed Wrap) and NUW(No Unsigned Wrap)
   switch (binaryOpAst.m_BinOpKind) {
@@ -561,8 +576,104 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
       value = Builder->CreateSelect(lhs, rhs, extra, "selectmp");
       break;
     }
-    case B_ARRS:
+    case B_ARRS: {
+      // just constant or getelement will be in the value...
+      if (rhs != nullptr) {
+        // if the rhs is constant and also float number then we have to
+        // interpret as int of it.
+        if (rhs->getType()->isFloatTy() || rhs->getType()->isDoubleTy()) {
+          SymbolInfo symbolInfo;
+          symbolInfo.begin = binaryOpAst.m_SemLoc.begin;
+          symbolInfo.end = binaryOpAst.m_SemLoc.end;
+          symbolInfo.line = binaryOpAst.m_SemLoc.line;
+
+          // not working right now.
+          m_TypeWarningMessages.emplace_back(
+              "Array subscript is not an integer. It casted to int value",
+              symbolInfo);
+
+          rhs = Builder->CreateFPToSI(rhs, Builder->getInt64Ty());
+        }
+      }
+
+      auto symbol = lhs;
+      std::vector<llvm::Value *> idxList;
+      idxList.push_back(llvm::ConstantInt::get(Builder->getInt64Ty(), 0));
+      if (rhs != nullptr) {
+        idxList.push_back(rhs);
+      } else {
+        // flattening the array here.
+        //      auto arrayType =
+        //      llvm::dyn_cast<llvm::ArrayType>(lhs->getType()->getPointerElementType());
+        //        auto arrSize = arrayType->getNumElements();
+
+        auto symbolName = ((SymbolAST *)binaryOpAst.m_LHS.get())->m_SymbolName;
+        auto symbolInfo = getSymbolInfo(symbolName);
+
+        size_t el = 0;
+        bool lastDim = false;
+        for (int i = 0; i < m_Indices.size(); i++) {
+          if (i == m_Indices.size() - 1) {
+            lastDim = true;
+          }
+
+          if (m_IndicesAsStr[i].second) {  // it's float
+            long long val = 0;
+            if (m_IndicesAsStr[i].first[0] == '0') {
+              val = 0;
+            } else {
+              val = std::stoll(m_IndicesAsStr[i].first);
+            }
+
+            if (lastDim) {
+              el += val;
+            } else {
+              if (val < 0 || val >= symbolInfo.arrayDimensions[i]) {
+                val %= (long long)symbolInfo.arrayDimensions[i];
+              }
+
+              if (val != 0) {
+                el += val * symbolInfo.arrayDimensions[i];
+              }
+            }
+          } else {
+            auto val = std::stoll(m_IndicesAsStr[i].first);
+            if (lastDim) {
+              el += val;
+            } else {
+              if (val < 0 || val >= symbolInfo.arrayDimensions[i]) {
+                val %= (long long)symbolInfo.arrayDimensions[i];
+              }
+
+              if (val != 0) {
+                el += val * symbolInfo.arrayDimensions[i];
+              }
+            }
+          }
+        }
+
+        auto index = llvm::ConstantInt::get(Builder->getInt64Ty(), el);
+        idxList.push_back(index);
+
+        // reset globals/flags
+        m_Indices.clear();
+        m_IndicesAsStr.clear();
+      }
+
+      auto gep = Builder->CreateInBoundsGEP(
+          symbol->getType()->getPointerElementType(), symbol, idxList);
+      auto loaded = Visitor::Builder->CreateLoad(
+          symbol->getType()->getPointerElementType()->getArrayElementType(),
+          gep);
+      m_LastType = symbol->getType()->getPointerElementType();
+      if (m_LastType->isArrayTy()) {
+        m_LastType = m_LastType->getArrayElementType();
+      }
+
+      value = loaded;
+
       break;
+    }
     case B_COMM:
       break;
     case B_DOT:
@@ -576,7 +687,16 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
       // rhs and you have to use it as index for GEP
       // but if it's symbol or any binary op then you have to
       // call m_RHS->accept before...
-      //       value = Builder->CreateInBoundsGEP()
+      this->m_LastArrayIndex = true;
+      if (lhs != nullptr) {
+        m_Indices.push_back(lhs);
+      }
+
+      if (rhs != nullptr) {
+        m_Indices.push_back(rhs);
+      }
+      this->m_LastArrayIndex = false;
+      // value = Builder->CreateInBoundsGEP(m_LastType, )
       break;
     }
   }
@@ -599,41 +719,45 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
     value = m_LocalVarsOnScope[symbolAst.m_SymbolName];
   }
 
-  if (!this->m_LastVarDecl)
-    m_LastType = value->getType()->getPointerElementType();
-
-  isSigned = IsSigned(getSymbolInfo(symbolAst.m_SymbolName).type);
-  llvm::Type *type = value->getType();
-
-  if (value->getType()->isPointerTy()) {
-    type = value->getType()->getPointerElementType();
-  }
-
-  llvm::LoadInst *loadedVal = nullptr;
-  if (m_LastGlobVar) {
-    auto dl = Visitor::Module->getDataLayout();
-    auto align = dl.getPrefTypeAlignment(type);
-    loadedVal = Builder->CreateAlignedLoad(type, value, llvm::MaybeAlign(align),
-                                           llvm::Twine(""));
-  } else {
-    loadedVal = Builder->CreateLoad(type, value, llvm::Twine(""));
-  }
-
   llvm::Type *lastType = m_LastType;
-  if (m_LastType->isPointerTy()) {
-    m_LastType = lastType->getPointerElementType();
-  }
 
-  if (type->getTypeID() != lastType->getTypeID()) {
-    if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
-      if (isSigned) {
-        value = Builder->CreateSIToFP(loadedVal, m_LastType);
-      } else {
-        value = Builder->CreateUIToFP(loadedVal, m_LastType);
+  if (this->m_LastVarDecl && !this->m_LastArrayIndex) {
+    lastType = value->getType()->getPointerElementType();
+
+    isSigned = IsSigned(getSymbolInfo(symbolAst.m_SymbolName).type);
+    llvm::Type *type = value->getType();
+
+    if (value->getType()->isPointerTy()) {
+      type = value->getType()->getPointerElementType();
+    }
+
+    llvm::LoadInst *loadedVal = nullptr;
+    if (m_LastGlobVar) {
+      auto dl = Visitor::Module->getDataLayout();
+      auto align = dl.getPrefTypeAlignment(type);
+      loadedVal = Builder->CreateAlignedLoad(
+          type, value, llvm::MaybeAlign(align), llvm::Twine(""));
+    } else {
+      loadedVal = Builder->CreateLoad(type, value, llvm::Twine(""));
+    }
+
+    if (lastType->isPointerTy()) {
+      lastType = lastType->getPointerElementType();
+    }
+
+    if (type->getTypeID() != lastType->getTypeID()) {
+      if (lastType->isFloatTy() || lastType->isDoubleTy()) {
+        if (isSigned) {
+          value = Builder->CreateSIToFP(loadedVal, lastType);
+        } else {
+          value = Builder->CreateUIToFP(loadedVal, lastType);
+        }
       }
+    } else {
+      value = loadedVal;
     }
   } else {
-    value = loadedVal;
+    m_LastType = value->getType();
   }
 
   return value;
@@ -642,44 +766,69 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
 ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {
   llvm::Value *value = nullptr;
 
-  // TODO: scalarast has type info.. perform castings
+  // TODO: m_LastType is always null for the binary operation which is not RHS
+  // of any vardecl.
 
-  if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
-    value = llvm::ConstantFP::get(m_LastType, scalarAst.m_Value);
-  } else {
-    if (scalarAst.m_IsLiteral) {
-      value = Visitor::Builder->CreateGlobalStringPtr(
-          llvm::StringRef(scalarAst.m_Value));
+  if (m_LastArrayIndex) {
+    m_IndicesAsStr.emplace_back(scalarAst.m_Value, scalarAst.m_IsFloat);
+  }
+
+  if (!m_LastVarDecl) {
+    if (scalarAst.m_IsFloat) {
+      value = llvm::ConstantFP::get(Builder->getDoubleTy(), scalarAst.m_Value);
     } else {
-      if (!m_LastSigned) {  // unsigned
-        auto scalarVal = std::stoull(scalarAst.m_Value);
-
-        int maxVal = 0;
-        if (m_LastType->isArrayTy()) {
-          auto type = m_LastType->getArrayElementType();
-          maxVal = 1 << (type->getIntegerBitWidth() - 1);
-        } else {
-          maxVal = 1 << (m_LastType->getIntegerBitWidth() - 1);
-        }
-
-        // -1 for 0
-        maxVal = scalarVal > 0 ? maxVal - 1 : maxVal;
-
-        // two's complement
-        if (scalarVal > maxVal) {
-          // - 1 for 0
-          scalarVal = (0 - ~scalarVal) - ((scalarVal > 0) ? 1 : 0);
-        }
-
-        value = llvm::ConstantInt::get(m_LastType, scalarVal);
-      } else {  // signed
-        if (scalarAst.m_IsLetter) {
-          char val = scalarAst.m_Value[0];
-          value = llvm::ConstantInt::get(m_LastType, (int)val);
+      if (m_LastType != nullptr) {
+        if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
+          value = llvm::ConstantFP::get(m_LastType, scalarAst.m_Value);
         } else {
           auto scalarVal = std::stoll(scalarAst.m_Value);
+          value = llvm::ConstantInt::get(Builder->getInt64Ty(), scalarVal);
+        }
+      }
+    }
+  } else {
+    if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
+      value = llvm::ConstantFP::get(m_LastType, scalarAst.m_Value);
+    } else {
+      if (scalarAst.m_IsLiteral) {
+        value = Visitor::Builder->CreateGlobalStringPtr(
+            llvm::StringRef(scalarAst.m_Value));
+      } else {
+        if (!m_LastSigned) {  // unsigned
+          auto scalarVal = std::stoull(scalarAst.m_Value);
 
-          value = llvm::ConstantInt::get(m_LastType, scalarVal);
+          llvm::Type *type = m_LastType;
+          if (type->isPointerTy()) {
+            type = type->getPointerElementType();
+          }
+
+          int maxVal = 0;
+          if (type->isArrayTy()) {
+            type = type->getArrayElementType();
+            maxVal = 1 << (type->getIntegerBitWidth() - 1);
+          } else {
+            maxVal = 1 << (type->getIntegerBitWidth() - 1);
+          }
+
+          // -1 for 0
+          maxVal = scalarVal > 0 ? maxVal - 1 : maxVal;
+
+          // two's complement
+          if (scalarVal > maxVal) {
+            // - 1 for 0
+            scalarVal = (0 - ~scalarVal) - ((scalarVal > 0) ? 1 : 0);
+          }
+
+          value = llvm::ConstantInt::get(type, scalarVal);
+        } else {  // signed
+          if (scalarAst.m_IsLetter) {
+            char val = scalarAst.m_Value[0];
+            value = llvm::ConstantInt::get(m_LastType, (int)val);
+          } else {
+            auto scalarVal = std::stoll(scalarAst.m_Value);
+
+            value = llvm::ConstantInt::get(m_LastType, scalarVal);
+          }
         }
       }
     }
@@ -833,6 +982,7 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
         getElementsOfArray(binaryOpAst, elements);
         if (IsAnyBinOpOrSymbolInvolved(elements)) {
           // TODO: Global Init Functionality just like in C++:
+          
         } else {
           // there is no binary operation in the initializer list so just
           // initialize the array
@@ -1267,30 +1417,32 @@ ValuePtr Visitor::visit(TypeAST &typeAst) {}
 ValuePtr Visitor::visit(FixAST &fixAst) {}
 
 void Visitor::finalizeCodegen() {
-  auto function = CreateGlobalFuncSubToMain(this->m_GlobaInitVarFunc);
-  llvm::verifyFunction(*function);
+  if (this->m_GlobaInitVarFunc.size() > 0) {
+    auto function = CreateGlobalFuncSubToMain(this->m_GlobaInitVarFunc);
+    llvm::verifyFunction(*function);
 
-  std::vector<llvm::Type *> types;
-  types.push_back(Builder->getInt32Ty());
-  types.push_back(function->getType());
-  types.push_back(Builder->getInt8PtrTy());
+    std::vector<llvm::Type *> types;
+    types.push_back(Builder->getInt32Ty());
+    types.push_back(function->getType());
+    types.push_back(Builder->getInt8PtrTy());
 
-  auto structType = llvm::StructType::get(Builder->getContext(), types);
-  auto type = llvm::ArrayType::get(structType, 1);
-  Visitor::Module->getOrInsertGlobal(llvm::StringRef("llvm.global_ctors"),
-                                     type);
-  auto globVar =
-      Visitor::Module->getNamedGlobal(llvm::StringRef("llvm.global_ctors"));
-  globVar->setLinkage(llvm::GlobalVariable::AppendingLinkage);
-  //  globVar->setSection(llvm::StringRef(".ctor"));
-  std::vector<llvm::Constant *> values;
-  values.push_back(llvm::ConstantInt::get(Builder->getInt32Ty(), 65535));
-  values.push_back(function);
-  values.push_back(llvm::ConstantPointerNull::get(Builder->getInt8PtrTy()));
-  auto *ctorVal = llvm::ConstantStruct::get(structType, values);
+    auto structType = llvm::StructType::get(Builder->getContext(), types);
+    auto type = llvm::ArrayType::get(structType, 1);
+    Visitor::Module->getOrInsertGlobal(llvm::StringRef("llvm.global_ctors"),
+                                       type);
+    auto globVar =
+        Visitor::Module->getNamedGlobal(llvm::StringRef("llvm.global_ctors"));
+    globVar->setLinkage(llvm::GlobalVariable::AppendingLinkage);
+    //  globVar->setSection(llvm::StringRef(".ctor"));
+    std::vector<llvm::Constant *> values;
+    values.push_back(llvm::ConstantInt::get(Builder->getInt32Ty(), 65535));
+    values.push_back(function);
+    values.push_back(llvm::ConstantPointerNull::get(Builder->getInt8PtrTy()));
+    auto *ctorVal = llvm::ConstantStruct::get(structType, values);
 
-  std::vector<llvm::Constant *> ctorValues;
-  ctorValues.push_back(ctorVal);
-  auto init = llvm::ConstantArray::get(type, ctorValues);
-  globVar->setInitializer(init);
+    std::vector<llvm::Constant *> ctorValues;
+    ctorValues.push_back(ctorVal);
+    auto init = llvm::ConstantArray::get(type, ctorValues);
+    globVar->setInitializer(init);
+  }
 }
