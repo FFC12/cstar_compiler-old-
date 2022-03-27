@@ -219,8 +219,8 @@ void Visitor::getElementsOfArray(IAST &binaryExpr,
         auto expr = (ScalarOrLiteralAST *)lhs;
         vector.emplace_back(false, false, 0, expr->m_Value);
       } else if (lhs->m_ExprKind == SymbolExpr) {
-        auto expr = (SymbolAST *)lhs;
-        vector.emplace_back(false, true, 0, expr->m_SymbolName);
+        auto expr = (uintptr_t)(SymbolAST *)rhs;
+        vector.emplace_back(false, true, expr, "");
       } else if (lhs->m_ExprKind == BinOp) {
         auto expr = (uintptr_t)((BinaryOpAST *)lhs);
         vector.emplace_back(true, false, expr, "");
@@ -236,8 +236,8 @@ void Visitor::getElementsOfArray(IAST &binaryExpr,
         auto expr = (ScalarOrLiteralAST *)rhs;
         vector.emplace_back(false, false, 0, expr->m_Value);
       } else if (rhs->m_ExprKind == SymbolExpr) {
-        auto expr = (SymbolAST *)rhs;
-        vector.emplace_back(false, true, 0, expr->m_SymbolName);
+        auto expr = (uintptr_t)(SymbolAST *)rhs;
+        vector.emplace_back(false, true, expr, "");
       } else if (rhs->m_ExprKind == BinOp) {
         auto expr = (uintptr_t)((BinaryOpAST *)rhs);
         vector.emplace_back(true, false, expr, "");
@@ -251,8 +251,8 @@ void Visitor::getElementsOfArray(IAST &binaryExpr,
       auto expr = (ScalarOrLiteralAST *)&binaryExpr;
       vector.emplace_back(false, false, 0, expr->m_Value);
     } else if (binaryExpr.m_ExprKind == SymbolExpr) {
-      auto expr = (SymbolAST *)&binaryExpr;
-      vector.emplace_back(false, true, 0, expr->m_SymbolName);
+      auto expr = (uintptr_t)(SymbolAST *)&binaryExpr;
+      vector.emplace_back(false, true, expr, "");
     } else if (binaryExpr.m_ExprKind == BinOp) {
       auto expr = (uintptr_t)((BinaryOpAST *)&binaryExpr);
       vector.emplace_back(true, false, expr, "");

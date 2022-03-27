@@ -757,7 +757,22 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
       value = loadedVal;
     }
   } else {
-    m_LastType = value->getType();
+    if (!m_LastArrayIndex) {
+      m_LastType = value->getType();
+      if (m_LastType->isPointerTy()) {
+        llvm::LoadInst *loadedVal = nullptr;
+        llvm::Type *type = m_LastType = m_LastType->getPointerElementType();
+        if (m_LastGlobVar) {
+          auto dl = Visitor::Module->getDataLayout();
+          auto align = dl.getPrefTypeAlignment(type);
+          loadedVal = Builder->CreateAlignedLoad(
+              type, value, llvm::MaybeAlign(align), llvm::Twine(""));
+        } else {
+          loadedVal = Builder->CreateLoad(type, value, llvm::Twine(""));
+        }
+        value = loadedVal;
+      }
+    }
   }
 
   return value;
@@ -771,9 +786,8 @@ ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {
 
   if (m_LastArrayIndex) {
     m_IndicesAsStr.emplace_back(scalarAst.m_Value, scalarAst.m_IsFloat);
-  }
-
-  if (!m_LastVarDecl) {
+    // }
+    // if (!m_LastVarDecl) {
     if (scalarAst.m_IsFloat) {
       value = llvm::ConstantFP::get(Builder->getDoubleTy(), scalarAst.m_Value);
     } else {
@@ -878,6 +892,20 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       globVar = CreateConstantGlobalVar(varAst.m_Name, varAst.m_VisibilitySpec,
                                         type, constant);
       Visitor::LastGlobVarRef = globVar;
+    } else {
+      if (!varAst.m_IsLocal && m_LastInitializerList &&
+          varAst.m_RHS->m_ExprKind == BinOp) {
+        std::vector<BinOpOrVal> elements;
+        getElementsOfArray(*varAst.m_RHS, elements);
+
+        if (IsAnyBinOpOrSymbolInvolved(elements)) {
+          value = llvm::ConstantAggregateZero::get(arrayType);
+          globVar = CreateInitConstantGlobalVar(
+              varAst.m_Name, varAst.m_VisibilitySpec, arrayType,
+              llvm::dyn_cast<llvm::Constant>(value));
+        }
+        Visitor::LastGlobVarRef = globVar;
+      }
     }
 
     value = varAst.m_RHS->accept(*this);
@@ -912,11 +940,6 @@ ValuePtr Visitor::visit(VarAST &varAst) {
                   CreateLocalVariable(varAst.m_Name, type, value));
         }
       } else {
-        if (varAst.m_IsInitializerList) {
-          globVar = CreateInitConstantGlobalVar(
-              varAst.m_Name, varAst.m_VisibilitySpec, arrayType,
-              llvm::dyn_cast<llvm::Constant>(value));
-        }
         this->m_GlobalVars[varAst.m_Name] = globVar;
       }
     }
@@ -981,8 +1004,49 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
         std::vector<BinOpOrVal> elements;
         getElementsOfArray(binaryOpAst, elements);
         if (IsAnyBinOpOrSymbolInvolved(elements)) {
-          // TODO: Global Init Functionality just like in C++:
-          
+          // zeroinitializer will be set for the global variable.
+          value = nullptr;
+
+          // global variable which has binary operation
+          auto lastInsertPoint = Builder->GetInsertBlock();
+          auto globInitFunc = CreateGlobalVarInitFunc();
+          m_GlobaInitVarFunc.push_back(globInitFunc->getName());
+          Builder->SetInsertPoint(&globInitFunc->getEntryBlock());
+          std::vector<llvm::Value *> values;
+          auto symbol = LastGlobVarRef;
+
+          int i = 0;
+          for (auto &el : elements) {
+            if (el.isSymbol) {
+              auto symbolAst = reinterpret_cast<SymbolAST *>(el.address);
+              value = symbolAst->accept(*this);
+            } else if (el.isBinOp) {
+              auto binaryAst = reinterpret_cast<BinaryOpAST *>(el.address);
+              value = createBinaryOp(*binaryAst);
+            } else {
+              if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
+                value = llvm::ConstantFP::get(m_LastType, el.value);
+              } else {
+                uint64_t val = std::stoull(el.value);
+                value = llvm::ConstantInt::get(m_LastType, val);
+              }
+            }
+
+            std::vector<llvm::Value *> idxList;
+            auto index = llvm::ConstantInt::get(Builder->getInt64Ty(), 0);
+            idxList.push_back(index);
+            index = llvm::ConstantInt::get(Builder->getInt64Ty(), i);
+            idxList.push_back(index);
+            i++;
+
+            auto gep = Builder->CreateInBoundsGEP(
+                symbol->getType()->getPointerElementType(), symbol, idxList);
+
+            Visitor::Builder->CreateStore(value, gep);
+          }
+
+          // value = Visitor::Builder->CreateStore(value, LastGlobVarRef);
+          Visitor::Builder->CreateRetVoid();
         } else {
           // there is no binary operation in the initializer list so just
           // initialize the array
@@ -1017,7 +1081,38 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
       }
     } else {
       if (m_LastInitializerList) {
-        value = Builder->CreateAlloca(arrayType, nullptr);
+        auto ptr = Builder->CreateAlloca(arrayType, nullptr);
+        std::vector<BinOpOrVal> elements;
+        getElementsOfArray(binaryOpAst, elements);
+
+        size_t i = 0;
+        for (auto &el : elements) {
+          if (el.isSymbol) {
+            auto symbolAst = reinterpret_cast<SymbolAST *>(el.address);
+            value = symbolAst->accept(*this);
+          } else if (el.isBinOp) {
+            auto binaryAst = reinterpret_cast<BinaryOpAST *>(el.address);
+            value = createBinaryOp(*binaryAst);
+          } else {
+            if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
+              value = llvm::ConstantFP::get(m_LastType, el.value);
+            } else {
+              uint64_t val = std::stoull(el.value);
+              value = llvm::ConstantInt::get(m_LastType, val);
+            }
+          }
+
+          std::vector<llvm::Value *> idxList;
+          auto index = llvm::ConstantInt::get(Builder->getInt64Ty(), 0);
+          idxList.push_back(index);
+          index = llvm::ConstantInt::get(Builder->getInt64Ty(), i);
+          idxList.push_back(index);
+          i++;
+
+          auto gep = Builder->CreateInBoundsGEP(arrayType, ptr, idxList);
+
+          Visitor::Builder->CreateStore(value, gep);
+        }
       } else {
         value = createBinaryOp(binaryOpAst);
       }
