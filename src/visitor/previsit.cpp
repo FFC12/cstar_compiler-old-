@@ -1025,7 +1025,7 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
             m_LastSubscriptable = true;
           } else {
             if (indexCount > matchedSymbol.arrayDimensions.size()) {
-              if(m_LastVarDecl) {
+              if (m_LastVarDecl) {
                 this->m_TypeErrorMessages.emplace_back(
                     "Invalid array index(es)", m_LastSymbolInfo);
               } else {
@@ -1242,6 +1242,7 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
         this->m_LastLoopIndexSymbol = false;
       }
 
+      bool iterSymbolNotExist = false;
       if (loopStmtAst.m_HasNumericRange) {
         // To checking symbols are valid and exists..
         // if they are symbols...
@@ -1256,6 +1257,11 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
           // loopStmtAst.m_IterSymbol->acceptBefore(*this);
           this->m_LastLoopIter = false;
           auto iterSymbol = (SymbolAST *)loopStmtAst.m_IterSymbol.get();
+
+          symbolInfo.begin = iterSymbol->m_SemLoc.begin;
+          symbolInfo.end = iterSymbol->m_SemLoc.end;
+          symbolInfo.line = iterSymbol->m_SemLoc.line;
+
           SymbolInfo matchedSymbol;
           if (symbolValidation(iterSymbol->m_SymbolName, symbolInfo,
                                matchedSymbol)) {
@@ -1269,6 +1275,10 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
                   "(built-in trait)",
                   symbolInfo);
             }
+          } else {
+            iterSymbolNotExist = true;
+            this->m_TypeErrorMessages.emplace_back(
+                "Iterable symbol is not valid", symbolInfo);
           }
         } else {
           this->m_TypeErrorMessages.emplace_back(
@@ -1278,9 +1288,11 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
         }
       }
 
-      this->m_LastLoopDataSymbol = true;
-      loopStmtAst.m_DataSymbol->acceptBefore(*this);
-      this->m_LastLoopDataSymbol = false;
+      if (!iterSymbolNotExist) {
+        this->m_LastLoopDataSymbol = true;
+        loopStmtAst.m_DataSymbol->acceptBefore(*this);
+        this->m_LastLoopDataSymbol = false;
+      }
     } else {
       this->m_LastCondExpr = true;
       loopStmtAst.m_Cond->acceptBefore(*this);

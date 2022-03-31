@@ -330,7 +330,7 @@ static llvm::GlobalVariable *CreateInitConstantGlobalVar(
   globVar->setAlignment(llvm::Align(align));
 
   if (specifier == VisibilitySpecifier::VIS_STATIC) {
-    globVar->setLinkage(llvm::GlobalValue::InternalLinkage);
+    globVar->setLinkage(llvm::GlobalVariable::LinkageTypes::InternalLinkage);
     globVar->setInitializer(value);
   } else if (specifier == VisibilitySpecifier::VIS_DEFAULT) {
     // ConstantStruct
@@ -339,7 +339,11 @@ static llvm::GlobalVariable *CreateInitConstantGlobalVar(
   } else if (specifier == VisibilitySpecifier::VIS_EXPORT ||
              specifier == VisibilitySpecifier::VIS_IMPORT) {
     globVar->setDSOLocal(true);
-    globVar->setLinkage(llvm::GlobalValue::ExternalLinkage);
+    globVar->setLinkage(llvm::GlobalVariable::LinkageTypes::ExternalLinkage);
+  } else {
+    globVar->setLinkage(llvm::GlobalVariable::LinkageTypes::PrivateLinkage);
+    globVar->setUnnamedAddr(llvm::GlobalVariable::UnnamedAddr::Global);
+    globVar->setInitializer(value);
   }
 
   return globVar;
@@ -612,6 +616,7 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
 
         size_t el = 0;
         bool lastDim = false;
+        // FIXME: It's buggy.
         for (int i = 0; i < m_Indices.size(); i++) {
           if (i == m_Indices.size() - 1) {
             lastDim = true;
@@ -719,10 +724,10 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
     value = m_LocalVarsOnScope[symbolAst.m_SymbolName];
   }
 
-  llvm::Type *lastType = m_LastType;
+  llvm::Type *valueType = m_LastType;
 
   if (this->m_LastVarDecl && !this->m_LastArrayIndex) {
-    lastType = value->getType()->getPointerElementType();
+    valueType = value->getType()->getPointerElementType();
 
     isSigned = IsSigned(getSymbolInfo(symbolAst.m_SymbolName).type);
     llvm::Type *type = value->getType();
@@ -741,16 +746,22 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
       loadedVal = Builder->CreateLoad(type, value, llvm::Twine(""));
     }
 
-    if (lastType->isPointerTy()) {
-      lastType = lastType->getPointerElementType();
+    if (valueType->isPointerTy()) {
+      valueType = valueType->getPointerElementType();
     }
 
-    if (type->getTypeID() != lastType->getTypeID()) {
-      if (lastType->isFloatTy() || lastType->isDoubleTy()) {
+    if (type->getTypeID() != m_LastType->getTypeID()) {
+      if (m_LastType->isFloatTy() || m_LastType->isDoubleTy()) {
         if (isSigned) {
-          value = Builder->CreateSIToFP(loadedVal, lastType);
+          value = Builder->CreateSIToFP(loadedVal, m_LastType);
         } else {
-          value = Builder->CreateUIToFP(loadedVal, lastType);
+          value = Builder->CreateUIToFP(loadedVal, m_LastType);
+        }
+      } else {
+        if (isSigned) {
+          value = Builder->CreateFPToSI(loadedVal, m_LastType);
+        } else {
+          value = Builder->CreateFPToUI(loadedVal, m_LastType);
         }
       }
     } else {
@@ -859,6 +870,7 @@ ValuePtr Visitor::visit(VarAST &varAst) {
   this->m_LastGlobVar = !varAst.m_IsLocal;
   this->m_LastSigned = IsSigned(varAst.m_TypeSpec);
   this->m_LastInitializerList = varAst.m_IsInitializerList;
+  this->m_LastVarName = varAst.m_Name;
   Visitor::LastGlobVarRef = nullptr;
   llvm::ArrayType *arrayType = nullptr;
 
@@ -992,9 +1004,9 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
     llvm::ArrayType *arrayType = nullptr;
 
     if (m_LastInitializerList) {
-      size_t length = 0;
+      size_t length = 1;
       for (auto &dim : m_LastArrayDims) {
-        length += dim;
+        length *= dim;
       }
       arrayType = llvm::ArrayType::get(m_LastType, length);
     }
@@ -1085,33 +1097,60 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
         std::vector<BinOpOrVal> elements;
         getElementsOfArray(binaryOpAst, elements);
 
-        size_t i = 0;
-        for (auto &el : elements) {
-          if (el.isSymbol) {
-            auto symbolAst = reinterpret_cast<SymbolAST *>(el.address);
-            value = symbolAst->accept(*this);
-          } else if (el.isBinOp) {
-            auto binaryAst = reinterpret_cast<BinaryOpAST *>(el.address);
-            value = createBinaryOp(*binaryAst);
-          } else {
+        if (IsAnyBinOpOrSymbolInvolved(elements)) {
+          size_t i = 0;
+          for (auto &el : elements) {
+            if (el.isSymbol) {
+              auto symbolAst = reinterpret_cast<SymbolAST *>(el.address);
+              value = symbolAst->accept(*this);
+            } else if (el.isBinOp) {
+              auto binaryAst = reinterpret_cast<BinaryOpAST *>(el.address);
+              value = createBinaryOp(*binaryAst);
+            } else {
+              if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
+                value = llvm::ConstantFP::get(m_LastType, el.value);
+              } else {
+                uint64_t val = std::stoull(el.value);
+                value = llvm::ConstantInt::get(m_LastType, val);
+              }
+            }
+
+            std::vector<llvm::Value *> idxList;
+            auto index = llvm::ConstantInt::get(Builder->getInt64Ty(), 0);
+            idxList.push_back(index);
+            index = llvm::ConstantInt::get(Builder->getInt64Ty(), i);
+            idxList.push_back(index);
+            i++;
+
+            auto gep = Builder->CreateInBoundsGEP(arrayType, ptr, idxList);
+
+            Visitor::Builder->CreateStore(value, gep);
+          }
+
+          value = ptr;
+        } else {
+          std::vector<llvm::Constant *> values;
+          for (auto &el : elements) {
             if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
               value = llvm::ConstantFP::get(m_LastType, el.value);
             } else {
               uint64_t val = std::stoull(el.value);
               value = llvm::ConstantInt::get(m_LastType, val);
             }
+            values.push_back(llvm::dyn_cast<llvm::Constant>(value));
           }
-
-          std::vector<llvm::Value *> idxList;
-          auto index = llvm::ConstantInt::get(Builder->getInt64Ty(), 0);
-          idxList.push_back(index);
-          index = llvm::ConstantInt::get(Builder->getInt64Ty(), i);
-          idxList.push_back(index);
-          i++;
-
-          auto gep = Builder->CreateInBoundsGEP(arrayType, ptr, idxList);
-
-          Visitor::Builder->CreateStore(value, gep);
+          auto init = llvm::ConstantArray::get(arrayType, values);
+          auto globVar = CreateInitConstantGlobalVar(
+              "__const." + m_LastFuncName + "." + m_LastVarName,
+              VisibilitySpecifier::VIS_NONE, arrayType, init);
+          auto bitcast = Builder->CreateBitCast(
+              ptr, llvm::PointerType::getInt8PtrTy(Builder->getContext()));
+          auto globBitcast = Builder->CreateBitCast(
+              globVar, llvm::PointerType::getInt8PtrTy(Builder->getContext()));
+          Builder->CreateMemCpy(bitcast, ptr->getAlign(), globBitcast,
+                                globVar->getAlign(),
+                                ptr->getAlignment() * elements.size());
+          value = ptr;
         }
       } else {
         value = createBinaryOp(binaryOpAst);
@@ -1460,36 +1499,132 @@ ValuePtr Visitor::visit(LoopStmtAST &loopStmtAst) {
   Builder->CreateBr(loopBB);
   Builder->SetInsertPoint(loopBB);
 
-  llvm::PHINode *pn = Builder->CreatePHI(Builder->getDoubleTy(), 2);
-
   if (loopStmtAst.m_RangeLoop) {  // this is basically high level for loop
     auto dataSymbol = (SymbolAST *)loopStmtAst.m_DataSymbol.get();
     auto symbolName = dataSymbol->m_SymbolName;
 
-    // we're keeping the old value for restoring..
-    llvm::Value *oldVal = nullptr;
+    llvm::Value *data = nullptr, *oldDataVal = nullptr;
+    auto val = llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0));
+    //      auto newLocal = CreateLocalVariable("", Builder->getDoubleTy(),
+    //      index);
+    data = Visitor::Builder->CreateAlloca(Builder->getDoubleTy(), nullptr);
+    auto newLocal = llvm::dyn_cast<llvm::AllocaInst>(data);
+    Visitor::Builder->CreateStore(val, newLocal);
+
     if (m_LocalVarsOnScope.count(symbolName) > 0) {
-      oldVal = m_LocalVarsOnScope[symbolName];
+      oldDataVal = m_LocalVarsOnScope[symbolName];
+      m_LocalVarsOnScope[symbolName] = llvm::dyn_cast<llvm::AllocaInst>(data);
+    } else {
+      m_LocalVarsOnScope[symbolName] = llvm::dyn_cast<llvm::AllocaInst>(data);
     }
 
+    /*llvm::Value *iterVal = nullptr;
+    if (m_LocalVarsOnScope.count(symbolName) > 0) {
+      iterVal = m_LocalVarsOnScope[symbolName];
+    } else if (m_GlobalVars.count(symbolName) > 0) {
+      iterVal = m_GlobalVars[symbolName];
+    }*/
+
+    llvm::Value *index = nullptr, *oldIndexVal = nullptr;
     if (loopStmtAst.m_Indexable) {
+      val = llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0));
+      //      auto newLocal = CreateLocalVariable("", Builder->getDoubleTy(),
+      //      index);
+      index = Visitor::Builder->CreateAlloca(Builder->getDoubleTy(), nullptr);
+      newLocal = llvm::dyn_cast<llvm::AllocaInst>(index);
+      Visitor::Builder->CreateStore(val, newLocal);
+
+      auto indexSymbol = (SymbolAST *)loopStmtAst.m_IndexSymbol.get();
+      symbolName = indexSymbol->m_SymbolName;
+      if (m_LocalVarsOnScope.count(symbolName) > 0) {
+        oldIndexVal = m_LocalVarsOnScope[symbolName];
+        m_LocalVarsOnScope[symbolName] =
+            llvm::dyn_cast<llvm::AllocaInst>(index);
+      } else {
+        m_LocalVarsOnScope[symbolName] =
+            llvm::dyn_cast<llvm::AllocaInst>(index);
+      }
     } else {
+      val = llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0));
+      index = Visitor::Builder->CreateAlloca(Builder->getDoubleTy(), nullptr);
+      newLocal = llvm::dyn_cast<llvm::AllocaInst>(index);
+      Visitor::Builder->CreateStore(val, newLocal);
     }
 
     if (loopStmtAst.m_HasNumericRange) {
     } else {
       auto iterableSymbol = (SymbolAST *)loopStmtAst.m_IterSymbol.get();
-      auto *value = m_LocalVarsOnScope[iterableSymbol->m_SymbolName];
-      if (value->isArrayAllocation()) {
+      auto iterSymbolName = iterableSymbol->m_SymbolName;
+
+      llvm::Value *value = nullptr;
+      bool isLocal = false;
+      if (m_LocalVarsOnScope.count(iterSymbolName) > 0) {
+        value = m_LocalVarsOnScope[iterSymbolName];
+        isLocal = true;
+      } else if (m_GlobalVars.count(iterSymbolName)) {
+        value = m_GlobalVars[iterSymbolName];
+      } else {
+        assert(false && "WTF! This is not even possible!");
+      }
+
+      llvm::Type *type = value->getType();
+      if (type->isPointerTy()) {
+        type = type->getPointerElementType();
+      }
+
+      llvm::Value *arrSize = nullptr;
+      if (type->isArrayTy()) {
+        if (isLocal) {
+          auto alloca = llvm::dyn_cast<llvm::AllocaInst>(value);
+          auto numElements = alloca->getAllocatedType()->getArrayNumElements();
+          arrSize = llvm::ConstantFP::get(Builder->getDoubleTy(),
+                                          static_cast<int>(numElements));
+        } else {
+          auto globVar = llvm::dyn_cast<llvm::GlobalVariable>(value);
+          auto numElements = globVar->getType()->getArrayNumElements();
+          arrSize = llvm::ConstantFP::get(Builder->getDoubleTy(),
+                                          static_cast<int>(numElements));
+        }
       } else {
         assert(false &&
                "Only array type of iterable symbols are supported currently. "
-               "Struct types or SequenceTraits will be added later.");
+               "SequenceTraits will be added later.");
       }
+
+      llvm::Value *cond;
+      index = Builder->CreateLoad(Builder->getDoubleTy(), index);
+      index = Builder->CreateFAdd(
+          llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(1.0)),
+          index, "next");
+
+      arrSize = Builder->CreateFSub(index, arrSize, "left");
+      cond = Builder->CreateFCmpONE(
+          arrSize,
+          llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0)),
+          "loopcond");
+
+      std::vector<llvm::Value *> idxList;
+      idxList.push_back(llvm::ConstantInt::get(Builder->getInt64Ty(), 0));
+      index = Builder->CreateFPToSI(index, Builder->getInt64Ty());
+      idxList.push_back(index);
+
+      auto gep = Builder->CreateInBoundsGEP(type, value, idxList);
+
+      llvm::BasicBlock *loopEndBB = Builder->GetInsertBlock();
+      llvm::BasicBlock *afterBB = llvm::BasicBlock::Create(
+          Builder->getContext(), "afterloop", parentFunc);
+      Builder->CreateCondBr(cond, loopBB, afterBB);
+      Builder->SetInsertPoint(afterBB);
+
+      //      Builder->CreateRet(llvm::Constant::getNullValue(Builder->getDoubleTy()));
+      //      Builder->CreateRetVoid();
+      //      pn->addIncoming(endVal, loopEndBB);
     }
   } else {  // this is basically a while loop.
     // conditions...
   }
+
+  return nullptr;
 }
 
 ValuePtr Visitor::visit(ParamAST &paramAst) {}

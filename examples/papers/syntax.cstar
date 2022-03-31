@@ -78,7 +78,7 @@ macro unique_vec(expr){
 
 
 //Attributing functions from Area (this is like an interface but not exactly interface...)
-prototype Shape<T> from Area<T> { 
+struct Shape<T> from Area<T> { 
     float32 x;
     float32 y;
     float32 _z; // private
@@ -205,9 +205,9 @@ __greater_than_hook() :: void {
 
 
 
-//This is directive defination here. It can take param or not.
-//Depends on what it'll do. If need to take params then must be matched
-//all params with the target function 
+//This is directive defination here. It can or can't takes param.
+//If it takes params then its params must be matched with
+//the parameters of target function
 #this_function_may_throw_an_error(bool a_param) {
     //$func, $line,, $col,
     // this means function will be copied here
@@ -219,7 +219,7 @@ __greater_than_hook() :: void {
 }
 
 #pretend_integer_overflow -> k_of {
-
+    // ... some overflow magics here
 }
 
 //this is directive and can be used for functions or variables.

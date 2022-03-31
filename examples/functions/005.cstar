@@ -1,8 +1,12 @@
-
 main() :: void {
-    int a = 20;
-    int v[2:2] = ((0,1),(2,a));
+	int x = 20;
+	int y = 30;
+	int z = x + y;
+	int values[2:2] = ((0,1),(2,3));
 
-    ret;
+	loop(v in values) {
+		int s = v;
+	}
+	
+	ret;
 }
-

@@ -132,6 +132,7 @@ class Visitor {
   bool m_LastArrayIndex = false;
   bool m_LastInitializerList = false;
   std::string m_LastFuncName;
+  std::string m_LastVarName;
   std::vector<llvm::Value*> m_Indices{};
   std::vector<std::pair<std::string,bool>> m_IndicesAsStr{};
   llvm::Type* m_LastType = nullptr;
