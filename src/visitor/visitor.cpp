@@ -8,6 +8,7 @@
 #include <ast/ast.hpp>
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
+#include <ast/control_flow_ast.hpp>
 #include <ast/func_ast.hpp>
 #include <ast/func_call_ast.hpp>
 #include <ast/if_stmt.hpp>
@@ -19,6 +20,7 @@
 #include <ast/type_ast.hpp>
 #include <ast/unary_op_ast.hpp>
 #include <ast/var_ast.hpp>
+#include <codegen/native_runtime.hpp>
 #include <visitor/visitor.hpp>
 
 llvm::BasicBlock *Visitor::MainFuncBB = nullptr;
@@ -90,6 +92,39 @@ static llvm::ArrayType *GetArrayType(llvm::Type *elementType,
   }
 
   return llvm::ArrayType::get(elementType, length);
+}
+
+static llvm::Value *CastArrayIndex(llvm::Value *index) {
+  if (index->getType()->isIntegerTy()) {
+    return Visitor::Builder->CreateIntCast(index, Visitor::Builder->getInt64Ty(),
+                                           true);
+  }
+
+  if (index->getType()->isFloatTy() || index->getType()->isDoubleTy()) {
+    return Visitor::Builder->CreateFPToSI(index, Visitor::Builder->getInt64Ty());
+  }
+
+  return index;
+}
+
+static llvm::Value *CreateLinearArrayIndex(
+    const std::vector<llvm::Value *> &indexes,
+    const std::vector<size_t> &dimensions) {
+  if (indexes.empty()) {
+    return llvm::ConstantInt::get(Visitor::Builder->getInt64Ty(), 0);
+  }
+
+  llvm::Value *linear = CastArrayIndex(indexes.front());
+  const size_t usableDims = std::min(indexes.size(), dimensions.size());
+  for (size_t i = 1; i < usableDims; ++i) {
+    auto *stride =
+        llvm::ConstantInt::get(Visitor::Builder->getInt64Ty(), dimensions[i]);
+    linear = Visitor::Builder->CreateMul(linear, stride, "array.stride");
+    linear = Visitor::Builder->CreateAdd(linear, CastArrayIndex(indexes[i]),
+                                         "array.index");
+  }
+
+  return linear;
 }
 
 static llvm::Type *GetPointeeType(llvm::Value *value) {
@@ -355,6 +390,16 @@ static void CreateBranchIfNeeded(llvm::BasicBlock *target) {
   auto *insertBlock = Visitor::Builder->GetInsertBlock();
   if (insertBlock != nullptr && insertBlock->getTerminator() == nullptr) {
     Visitor::Builder->CreateBr(target);
+  }
+}
+
+static void EmitScope(Visitor &visitor, std::vector<ASTNode> &scope) {
+  for (auto &node : scope) {
+    auto *insertBlock = Visitor::Builder->GetInsertBlock();
+    if (insertBlock != nullptr && insertBlock->getTerminator() != nullptr) {
+      break;
+    }
+    node->accept(visitor);
   }
 }
 
@@ -1147,66 +1192,13 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
       }
 
       auto symbol = lhs;
-      std::vector<llvm::Value *> idxList;
-      idxList.push_back(llvm::ConstantInt::get(Builder->getInt64Ty(), 0));
+      std::vector<llvm::Value *> indexes;
+      auto symbolName = ((SymbolAST *)binaryOpAst.m_LHS.get())->m_SymbolName;
+      auto symbolInfo = getSymbolInfo(symbolName);
       if (rhs != nullptr) {
-        idxList.push_back(rhs);
+        indexes.push_back(CastArrayIndex(rhs));
       } else {
-        // flattening the array here.
-        //      auto arrayType =
-        //      llvm::dyn_cast<llvm::ArrayType>(lhs->getType()->getPointerElementType());
-        //        auto arrSize = arrayType->getNumElements();
-
-        auto symbolName = ((SymbolAST *)binaryOpAst.m_LHS.get())->m_SymbolName;
-        auto symbolInfo = getSymbolInfo(symbolName);
-
-        size_t el = 0;
-        bool lastDim = false;
-        // FIXME: It's buggy.
-        for (int i = 0; i < m_Indices.size(); i++) {
-          if (i == m_Indices.size() - 1) {
-            lastDim = true;
-          }
-
-          if (m_IndicesAsStr[i].second) {  // it's float
-            long long val = 0;
-            if (m_IndicesAsStr[i].first[0] == '0') {
-              val = 0;
-            } else {
-              val = std::stoll(m_IndicesAsStr[i].first);
-            }
-
-            if (lastDim) {
-              el += val;
-            } else {
-              if (val < 0 || val >= symbolInfo.arrayDimensions[i]) {
-                val %= (long long)symbolInfo.arrayDimensions[i];
-              }
-
-              if (val != 0) {
-                el += val * symbolInfo.arrayDimensions[i];
-              }
-            }
-          } else {
-            auto val = std::stoll(m_IndicesAsStr[i].first);
-            if (lastDim) {
-              el += val;
-            } else {
-              if (val < 0 || val >= symbolInfo.arrayDimensions[i]) {
-                val %= (long long)symbolInfo.arrayDimensions[i];
-              }
-
-              if (val != 0) {
-                el += val * symbolInfo.arrayDimensions[i];
-              }
-            }
-          }
-        }
-
-        auto index = llvm::ConstantInt::get(Builder->getInt64Ty(), el);
-        idxList.push_back(index);
-
-        // reset globals/flags
+        indexes = std::move(m_Indices);
         m_Indices.clear();
         m_IndicesAsStr.clear();
       }
@@ -1220,6 +1212,9 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
           symbolType = arrayParamType->second;
         }
       }
+      std::vector<llvm::Value *> idxList = {
+          llvm::ConstantInt::get(Builder->getInt64Ty(), 0),
+          CreateLinearArrayIndex(indexes, symbolInfo.arrayDimensions)};
       auto gep = Builder->CreateInBoundsGEP(symbolType, symbol, idxList);
       auto loaded = Visitor::Builder->CreateLoad(
           symbolType->getArrayElementType(), gep);
@@ -1477,9 +1472,6 @@ ValuePtr Visitor::visit(VarAST &varAst) {
     for (auto &dim : varAst.m_ArrDim) {
       auto val = (ScalarOrLiteralAST *)dim.get();
       this->m_LastArrayDims.push_back(std::stoull(val->m_Value));
-
-      // for the right order
-      std::reverse(this->m_LastArrayDims.begin(), this->m_LastArrayDims.end());
     }
     size_t length = 1;
     for (auto &dim : m_LastArrayDims) {
@@ -1644,10 +1636,6 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
   bool previousVarDecl = m_LastVarDecl;
 
   if (assignmentAst.m_Subscriptable) {
-    if (assignmentAst.m_SubscriptIndexes.size() != 1) {
-      assert(false && "Only one-dimensional array assignment is supported.");
-    }
-
     llvm::Type *arrayType = GetPointeeType(target.address);
     auto arrayParamType = m_ArrayParamValueTypes.find(lhs->m_SymbolName);
     if (arrayParamType != m_ArrayParamValueTypes.end()) {
@@ -1664,11 +1652,16 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
     m_LastSigned = true;
     m_LastVarDecl = false;
 
-    llvm::Value *index = assignmentAst.m_SubscriptIndexes[0]->accept(*this);
-    index = CastValueToType(index, Builder->getInt64Ty(), true);
+    std::vector<llvm::Value *> indexes;
+    indexes.reserve(assignmentAst.m_SubscriptIndexes.size());
+    for (auto &indexAst : assignmentAst.m_SubscriptIndexes) {
+      auto *index = indexAst->accept(*this);
+      indexes.push_back(CastArrayIndex(index));
+    }
 
     std::vector<llvm::Value *> idxList = {
-        llvm::ConstantInt::get(Builder->getInt64Ty(), 0), index};
+        llvm::ConstantInt::get(Builder->getInt64Ty(), 0),
+        CreateLinearArrayIndex(indexes, symbolInfo.arrayDimensions)};
     target.address =
         Builder->CreateInBoundsGEP(arrayType, target.address, idxList,
                                    lhs->m_SymbolName + ".element");
@@ -2061,18 +2054,10 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     argNodes.push_back(node);
   };
   collectArgs(collectArgs, funcCallAst.m_Args.get());
+  cstar::codegen::NativeRuntime nativeRuntime(*Visitor::Module,
+                                              *Visitor::Builder);
 
   if (funcSymbol->m_SymbolName == "print") {
-    auto *printfFunction = Visitor::Module->getFunction("printf");
-    if (printfFunction == nullptr) {
-      auto *printfType = llvm::FunctionType::get(
-          Builder->getInt32Ty(), {GetI8PtrTy()}, true);
-      printfFunction = llvm::Function::Create(
-          printfType, llvm::Function::ExternalLinkage, "printf",
-          *Visitor::Module);
-      printfFunction->setCallingConv(llvm::CallingConv::C);
-    }
-
     llvm::Value *lastCall = nullptr;
     llvm::Type *previousType = m_LastType;
     bool previousSigned = m_LastSigned;
@@ -2085,20 +2070,7 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
         continue;
       }
 
-      const char *format = "%s";
-      if (argValue->getType()->isIntegerTy()) {
-        format = "%lld";
-        argValue = Builder->CreateIntCast(argValue, Builder->getInt64Ty(),
-                                          m_LastSigned);
-      } else if (argValue->getType()->isFloatTy()) {
-        format = "%f";
-        argValue = Builder->CreateFPExt(argValue, Builder->getDoubleTy());
-      } else if (argValue->getType()->isDoubleTy()) {
-        format = "%f";
-      }
-
-      auto *formatValue = CreateGlobalStringPointer(format);
-      lastCall = Builder->CreateCall(printfFunction, {formatValue, argValue});
+      lastCall = nativeRuntime.emitPrintValue(argValue, m_LastSigned);
     }
 
     m_LastType = previousType;
@@ -2111,25 +2083,68 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
       assert(false && "Builtin 'input_int' does not accept arguments.");
     }
 
-    auto *scanfFunction = Visitor::Module->getFunction("scanf");
-    if (scanfFunction == nullptr) {
-      auto *scanfType =
-          llvm::FunctionType::get(Builder->getInt32Ty(), {GetI8PtrTy()}, true);
-      scanfFunction = llvm::Function::Create(
-          scanfType, llvm::Function::ExternalLinkage, "scanf",
-          *Visitor::Module);
-      scanfFunction->setCallingConv(llvm::CallingConv::C);
+    auto *value = nativeRuntime.emitInputInt();
+    m_LastType = Builder->getInt64Ty();
+    m_LastSigned = true;
+    return value;
+  }
+
+  if (funcSymbol->m_SymbolName == "input_string") {
+    if (!argNodes.empty()) {
+      assert(false && "Builtin 'input_string' does not accept arguments.");
     }
 
-    auto *valueType = Builder->getInt64Ty();
-    auto *slot = Builder->CreateAlloca(valueType, nullptr, "input.int.slot");
-    Builder->CreateStore(llvm::ConstantInt::get(valueType, 0), slot);
+    auto *bufferPtr = nativeRuntime.emitInputString();
+    m_LastType = GetI8PtrTy();
+    m_LastSigned = false;
+    return bufferPtr;
+  }
 
-    auto *formatValue = CreateGlobalStringPointer("%lld");
-    Builder->CreateCall(scanfFunction, {formatValue, slot});
+  if (funcSymbol->m_SymbolName == "clear_screen") {
+    if (!argNodes.empty()) {
+      assert(false && "Builtin 'clear_screen' does not accept arguments.");
+    }
+    return nativeRuntime.emitClearScreen();
+  }
 
-    auto *value = Builder->CreateLoad(valueType, slot, "input.int");
-    m_LastType = valueType;
+  if (funcSymbol->m_SymbolName == "sleep_ms") {
+    if (argNodes.size() != 1) {
+      assert(false && "Builtin 'sleep_ms' expects one argument.");
+    }
+
+    llvm::Type *previousType = m_LastType;
+    bool previousSigned = m_LastSigned;
+    m_LastType = Builder->getInt32Ty();
+    m_LastSigned = true;
+    auto *milliseconds = argNodes[0]->accept(*this);
+    milliseconds = CastValueToType(milliseconds, Builder->getInt32Ty(), true);
+    auto *call = nativeRuntime.emitSleepMs(milliseconds, m_LastSigned);
+    m_LastType = previousType;
+    m_LastSigned = previousSigned;
+    return call;
+  }
+
+  if (funcSymbol->m_SymbolName == "enable_raw_input") {
+    if (!argNodes.empty()) {
+      assert(false && "Builtin 'enable_raw_input' does not accept arguments.");
+    }
+    return nativeRuntime.emitEnableRawInput();
+  }
+
+  if (funcSymbol->m_SymbolName == "disable_raw_input") {
+    if (!argNodes.empty()) {
+      assert(false && "Builtin 'disable_raw_input' does not accept arguments.");
+    }
+    return nativeRuntime.emitDisableRawInput();
+  }
+
+  if (funcSymbol->m_SymbolName == "read_key") {
+    if (!argNodes.empty()) {
+      assert(false && "Builtin 'read_key' does not accept arguments.");
+    }
+
+    auto *value = nativeRuntime.emitReadKey();
+    m_LastType = Builder->getInt32Ty();
     m_LastSigned = true;
     return value;
   }
@@ -2303,9 +2318,7 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
 
     Builder->SetInsertPoint(thenBB);
     // if block
-    for (auto &el : ifStmtAst.m_Cond.begin()->second.second) {
-      thenVal = el->accept(*this);
-    }
+    EmitScope(*this, ifStmtAst.m_Cond.begin()->second.second);
 
     CreateBranchIfNeeded(mergeBB);
     thenBB = Builder->GetInsertBlock();
@@ -2338,9 +2351,7 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
 
     Builder->SetInsertPoint(thenBB);
     // if block
-    for (auto &el : ifStmtAst.m_Cond.begin()->second.second) {
-      thenVal = el->accept(*this);
-    }
+    EmitScope(*this, ifStmtAst.m_Cond.begin()->second.second);
 
     CreateBranchIfNeeded(mergeBB);
     thenBB = Builder->GetInsertBlock();
@@ -2376,9 +2387,7 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
 
       Builder->SetInsertPoint(elifThenBB);
 
-      for (auto &el : elifBBs[i].second.first) {
-        thenVal = el->accept(*this);
-      }
+      EmitScope(*this, elifBBs[i].second.first);
 
       CreateBranchIfNeeded(mergeBB);
       thenBB = Builder->GetInsertBlock();
@@ -2388,9 +2397,7 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
     if (ifStmtAst.m_HasElse) {
       Builder->SetInsertPoint(elseBB);
 
-      for (auto &el : ifStmtAst.m_Else) {
-        elseVal = el->accept(*this);
-      }
+      EmitScope(*this, ifStmtAst.m_Else);
 
       CreateBranchIfNeeded(mergeBB);
       elseBB = Builder->GetInsertBlock();
@@ -2402,9 +2409,7 @@ ValuePtr Visitor::visit(IfStmtAST &ifStmtAst) {
   if (ifStmtAst.m_HasElse) {
     Builder->SetInsertPoint(elseBB);
 
-    for (auto &el : ifStmtAst.m_Else) {
-      elseVal = el->accept(*this);
-    }
+    EmitScope(*this, ifStmtAst.m_Else);
     CreateBranchIfNeeded(mergeBB);
     elseBB = Builder->GetInsertBlock();
     //   Builder->SetInsertPoint(elseBB);
@@ -2425,139 +2430,191 @@ skip_else:
 
 ValuePtr Visitor::visit(LoopStmtAST &loopStmtAst) {
   llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
-  llvm::BasicBlock *headerBB = Builder->GetInsertBlock();
-  llvm::BasicBlock *loopBB =
-      llvm::BasicBlock::Create(Builder->getContext(), "loop", parentFunc);
 
-  Builder->CreateBr(loopBB);
-  Builder->SetInsertPoint(loopBB);
+  if (!loopStmtAst.m_RangeLoop) {
+    llvm::BasicBlock *conditionBB =
+        llvm::BasicBlock::Create(Builder->getContext(), "loop.cond", parentFunc);
+    llvm::BasicBlock *bodyBB =
+        llvm::BasicBlock::Create(Builder->getContext(), "loop.body", parentFunc);
+    llvm::BasicBlock *afterBB =
+        llvm::BasicBlock::Create(Builder->getContext(), "loop.end", parentFunc);
 
-  if (loopStmtAst.m_RangeLoop) {  // this is basically high level for loop
-    auto dataSymbol = (SymbolAST *)loopStmtAst.m_DataSymbol.get();
-    auto symbolName = dataSymbol->m_SymbolName;
+    CreateBranchIfNeeded(conditionBB);
 
-    llvm::Value *data = nullptr, *oldDataVal = nullptr;
-    auto val = llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0));
-    //      auto newLocal = CreateLocalVariable("", Builder->getDoubleTy(),
-    //      index);
-    data = Visitor::Builder->CreateAlloca(Builder->getDoubleTy(), nullptr);
-    auto newLocal = llvm::dyn_cast<llvm::AllocaInst>(data);
-    Visitor::Builder->CreateStore(val, newLocal);
+    Builder->SetInsertPoint(conditionBB);
+    llvm::Value *condition = loopStmtAst.m_Cond->accept(*this);
+    condition = CastValueToBranchCondition(condition, m_LastSigned);
+    Builder->CreateCondBr(condition, bodyBB, afterBB);
 
-    if (m_LocalVarsOnScope.count(symbolName) > 0) {
-      oldDataVal = m_LocalVarsOnScope[symbolName];
-      m_LocalVarsOnScope[symbolName] = llvm::dyn_cast<llvm::AllocaInst>(data);
-    } else {
-      m_LocalVarsOnScope[symbolName] = llvm::dyn_cast<llvm::AllocaInst>(data);
-    }
+    Builder->SetInsertPoint(bodyBB);
+    m_LoopBreakTargets.push_back(afterBB);
+    m_LoopContinueTargets.push_back(conditionBB);
+    EmitScope(*this, loopStmtAst.m_Scope);
+    m_LoopContinueTargets.pop_back();
+    m_LoopBreakTargets.pop_back();
+    CreateBranchIfNeeded(conditionBB);
 
-    /*llvm::Value *iterVal = nullptr;
-    if (m_LocalVarsOnScope.count(symbolName) > 0) {
-      iterVal = m_LocalVarsOnScope[symbolName];
-    } else if (m_GlobalVars.count(symbolName) > 0) {
-      iterVal = m_GlobalVars[symbolName];
-    }*/
-
-    llvm::Value *index = nullptr, *oldIndexVal = nullptr;
-    if (loopStmtAst.m_Indexable) {
-      val = llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0));
-      //      auto newLocal = CreateLocalVariable("", Builder->getDoubleTy(),
-      //      index);
-      index = Visitor::Builder->CreateAlloca(Builder->getDoubleTy(), nullptr);
-      newLocal = llvm::dyn_cast<llvm::AllocaInst>(index);
-      Visitor::Builder->CreateStore(val, newLocal);
-
-      auto indexSymbol = (SymbolAST *)loopStmtAst.m_IndexSymbol.get();
-      symbolName = indexSymbol->m_SymbolName;
-      if (m_LocalVarsOnScope.count(symbolName) > 0) {
-        oldIndexVal = m_LocalVarsOnScope[symbolName];
-        m_LocalVarsOnScope[symbolName] =
-            llvm::dyn_cast<llvm::AllocaInst>(index);
-      } else {
-        m_LocalVarsOnScope[symbolName] =
-            llvm::dyn_cast<llvm::AllocaInst>(index);
-      }
-    } else {
-      val = llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0));
-      index = Visitor::Builder->CreateAlloca(Builder->getDoubleTy(), nullptr);
-      newLocal = llvm::dyn_cast<llvm::AllocaInst>(index);
-      Visitor::Builder->CreateStore(val, newLocal);
-    }
-
-    if (loopStmtAst.m_HasNumericRange) {
-    } else {
-      auto iterableSymbol = (SymbolAST *)loopStmtAst.m_IterSymbol.get();
-      auto iterSymbolName = iterableSymbol->m_SymbolName;
-
-      llvm::Value *value = nullptr;
-      bool isLocal = false;
-      if (m_LocalVarsOnScope.count(iterSymbolName) > 0) {
-        value = m_LocalVarsOnScope[iterSymbolName];
-        isLocal = true;
-      } else if (m_GlobalVars.count(iterSymbolName)) {
-        value = m_GlobalVars[iterSymbolName];
-      } else {
-        assert(false && "WTF! This is not even possible!");
-      }
-
-      llvm::Type *type = value->getType();
-      if (type->isPointerTy()) {
-        type = GetPointeeType(value);
-      }
-
-      llvm::Value *arrSize = nullptr;
-      if (type->isArrayTy()) {
-        if (isLocal) {
-          auto alloca = llvm::dyn_cast<llvm::AllocaInst>(value);
-          auto numElements = alloca->getAllocatedType()->getArrayNumElements();
-          arrSize = llvm::ConstantFP::get(Builder->getDoubleTy(),
-                                          static_cast<int>(numElements));
-        } else {
-          auto globVar = llvm::dyn_cast<llvm::GlobalVariable>(value);
-          auto numElements = globVar->getValueType()->getArrayNumElements();
-          arrSize = llvm::ConstantFP::get(Builder->getDoubleTy(),
-                                          static_cast<int>(numElements));
-        }
-      } else {
-        assert(false &&
-               "Only array type of iterable symbols are supported currently. "
-               "SequenceTraits will be added later.");
-      }
-
-      llvm::Value *cond;
-      index = Builder->CreateLoad(Builder->getDoubleTy(), index);
-      index = Builder->CreateFAdd(
-          llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(1.0)),
-          index, "next");
-
-      arrSize = Builder->CreateFSub(index, arrSize, "left");
-      cond = Builder->CreateFCmpONE(
-          arrSize,
-          llvm::ConstantFP::get(Builder->getContext(), llvm::APFloat(0.0)),
-          "loopcond");
-
-      std::vector<llvm::Value *> idxList;
-      idxList.push_back(llvm::ConstantInt::get(Builder->getInt64Ty(), 0));
-      index = Builder->CreateFPToSI(index, Builder->getInt64Ty());
-      idxList.push_back(index);
-
-      auto gep = Builder->CreateInBoundsGEP(type, value, idxList);
-
-      llvm::BasicBlock *loopEndBB = Builder->GetInsertBlock();
-      llvm::BasicBlock *afterBB = llvm::BasicBlock::Create(
-          Builder->getContext(), "afterloop", parentFunc);
-      Builder->CreateCondBr(cond, loopBB, afterBB);
-      Builder->SetInsertPoint(afterBB);
-
-      //      Builder->CreateRet(llvm::Constant::getNullValue(Builder->getDoubleTy()));
-      //      Builder->CreateRetVoid();
-      //      pn->addIncoming(endVal, loopEndBB);
-    }
-  } else {  // this is basically a while loop.
-    // conditions...
+    Builder->SetInsertPoint(afterBB);
+    return nullptr;
   }
 
+  llvm::BasicBlock *conditionBB =
+      llvm::BasicBlock::Create(Builder->getContext(), "loop.iter.cond",
+                               parentFunc);
+  llvm::BasicBlock *bodyBB =
+      llvm::BasicBlock::Create(Builder->getContext(), "loop.iter.body",
+                               parentFunc);
+  llvm::BasicBlock *latchBB =
+      llvm::BasicBlock::Create(Builder->getContext(), "loop.iter.latch",
+                               parentFunc);
+  llvm::BasicBlock *afterBB =
+      llvm::BasicBlock::Create(Builder->getContext(), "loop.iter.end",
+                               parentFunc);
+
+  llvm::Type *indexType = Builder->getInt64Ty();
+  auto *indexSlot = Builder->CreateAlloca(indexType, nullptr, "loop.index");
+  llvm::Value *startValue = llvm::ConstantInt::get(indexType, 0);
+  llvm::Value *endValue = nullptr;
+  llvm::Value *iterStorage = nullptr;
+  llvm::Type *iterArrayType = nullptr;
+  llvm::Type *elementType = nullptr;
+
+  if (loopStmtAst.m_HasNumericRange) {
+    llvm::Type *previousType = m_LastType;
+    bool previousSigned = m_LastSigned;
+    m_LastType = indexType;
+    m_LastSigned = true;
+    startValue = loopStmtAst.m_Min->accept(*this);
+    startValue = CastValueToType(startValue, indexType, true);
+    endValue = loopStmtAst.m_Max->accept(*this);
+    endValue = CastValueToType(endValue, indexType, true);
+    m_LastType = previousType;
+    m_LastSigned = previousSigned;
+  } else {
+    auto *iterSymbol = static_cast<SymbolAST *>(loopStmtAst.m_IterSymbol.get());
+    iterStorage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                              iterSymbol->m_SymbolName);
+    if (iterStorage == nullptr) {
+      assert(false && "Iterable loop target was not found.");
+    }
+
+    auto arrayParamType = m_ArrayParamValueTypes.find(iterSymbol->m_SymbolName);
+    if (arrayParamType != m_ArrayParamValueTypes.end()) {
+      auto *slotType = GetPointeeType(iterStorage);
+      iterStorage =
+          CreateLoad(iterStorage, slotType, iterSymbol->m_SymbolName + ".array");
+      iterArrayType = arrayParamType->second;
+    } else {
+      iterArrayType = GetPointeeType(iterStorage);
+    }
+
+    if (!iterArrayType->isArrayTy()) {
+      assert(false && "Iterable loop target must be an array.");
+    }
+
+    endValue = llvm::ConstantInt::get(
+        indexType, iterArrayType->getArrayNumElements());
+    elementType = iterArrayType->getArrayElementType();
+  }
+
+  Builder->CreateStore(startValue, indexSlot);
+
+  std::map<std::string, llvm::AllocaInst *> shadowedLocals;
+  std::set<std::string> insertedLocals;
+  auto bindLoopLocal = [&](const std::string &name, llvm::Type *type,
+                           llvm::Value *initialValue) -> llvm::AllocaInst * {
+    auto existing = m_LocalVarsOnScope.find(name);
+    if (existing != m_LocalVarsOnScope.end()) {
+      shadowedLocals[name] = existing->second;
+    } else {
+      insertedLocals.insert(name);
+    }
+
+    auto *slot = Builder->CreateAlloca(type, nullptr, name);
+    Builder->CreateStore(initialValue, slot);
+    m_LocalVarsOnScope[name] = slot;
+    return slot;
+  };
+
+  auto *dataSymbol = static_cast<SymbolAST *>(loopStmtAst.m_DataSymbol.get());
+  llvm::AllocaInst *dataSlot = nullptr;
+  if (loopStmtAst.m_HasNumericRange) {
+    dataSlot = bindLoopLocal(dataSymbol->m_SymbolName, indexType, startValue);
+  } else {
+    dataSlot = bindLoopLocal(
+        dataSymbol->m_SymbolName, elementType,
+        llvm::Constant::getNullValue(elementType));
+  }
+
+  llvm::AllocaInst *visibleIndexSlot = nullptr;
+  if (loopStmtAst.m_Indexable) {
+    auto *indexSymbol =
+        static_cast<SymbolAST *>(loopStmtAst.m_IndexSymbol.get());
+    visibleIndexSlot = bindLoopLocal(indexSymbol->m_SymbolName, indexType,
+                                     startValue);
+  }
+
+  CreateBranchIfNeeded(conditionBB);
+  Builder->SetInsertPoint(conditionBB);
+  auto *currentIndex = Builder->CreateLoad(indexType, indexSlot, "loop.i");
+  auto *condition = Builder->CreateICmpSLT(currentIndex, endValue, "loop.cond");
+  Builder->CreateCondBr(condition, bodyBB, afterBB);
+
+  Builder->SetInsertPoint(bodyBB);
+  currentIndex = Builder->CreateLoad(indexType, indexSlot, "loop.i");
+  if (loopStmtAst.m_HasNumericRange) {
+    Builder->CreateStore(currentIndex, dataSlot);
+  } else {
+    std::vector<llvm::Value *> idxList = {
+        llvm::ConstantInt::get(indexType, 0), currentIndex};
+    auto *elementAddress = Builder->CreateInBoundsGEP(
+        iterArrayType, iterStorage, idxList, dataSymbol->m_SymbolName + ".addr");
+    auto *elementValue = Builder->CreateLoad(
+        elementType, elementAddress, dataSymbol->m_SymbolName);
+    Builder->CreateStore(elementValue, dataSlot);
+  }
+  if (visibleIndexSlot != nullptr) {
+    Builder->CreateStore(currentIndex, visibleIndexSlot);
+  }
+
+  m_LoopBreakTargets.push_back(afterBB);
+  m_LoopContinueTargets.push_back(latchBB);
+  EmitScope(*this, loopStmtAst.m_Scope);
+  m_LoopContinueTargets.pop_back();
+  m_LoopBreakTargets.pop_back();
+  CreateBranchIfNeeded(latchBB);
+
+  Builder->SetInsertPoint(latchBB);
+  currentIndex = Builder->CreateLoad(indexType, indexSlot, "loop.i");
+  auto *nextIndex = Builder->CreateAdd(
+      currentIndex, llvm::ConstantInt::get(indexType, 1), "loop.next");
+  Builder->CreateStore(nextIndex, indexSlot);
+  Builder->CreateBr(conditionBB);
+
+  Builder->SetInsertPoint(afterBB);
+  for (const auto &entry : shadowedLocals) {
+    m_LocalVarsOnScope[entry.first] = entry.second;
+  }
+  for (const auto &name : insertedLocals) {
+    m_LocalVarsOnScope.erase(name);
+  }
   return nullptr;
+}
+
+ValuePtr Visitor::visit(BreakStmtAST &breakStmtAst) {
+  if (m_LoopBreakTargets.empty()) {
+    return nullptr;
+  }
+
+  return Builder->CreateBr(m_LoopBreakTargets.back());
+}
+
+ValuePtr Visitor::visit(ContinueStmtAST &continueStmtAst) {
+  if (m_LoopContinueTargets.empty()) {
+    return nullptr;
+  }
+
+  return Builder->CreateBr(m_LoopContinueTargets.back());
 }
 
 ValuePtr Visitor::visit(ParamAST &paramAst) { return nullptr; }

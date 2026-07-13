@@ -92,7 +92,7 @@ VSCode F5/debug akışı için `.vscode` yapılandırmaları da eklendi.
 
 `expected-exit`, generated executable'ın process exit status değeridir. Yani `ret 7;` console'a `7` yazdırmaz; programın exit code'unu `7` yapar. Terminalde doğrudan `.exe` çalıştırıldığında Windows bu değeri ekrana basmaz, PowerShell tarafında `$LASTEXITCODE` ile görülür. Smoke runner bu değeri otomatik yakalar ve `[OK] ... (exit N)` şeklinde doğrular.
 
-Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu anda 63/63 başarılıdır:
+Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu anda 77/77 başarılıdır:
 
 - minimal program ve `ret expr`
 - `ret;` kullanan void fonksiyon çağrısı
@@ -123,7 +123,7 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu
 - primitive `readonly` parametre: callee içinde pointer adresi ve target salt-okunur
 - tek seviyeli pointer variable initializer: `int32* p = ref x`
 - shared pointer atomic strong-count: `int32* q = p`, `q = p`, `q := p`, `strong_count(q)`, by-value function arg retain
-- unique pointer move-only semantik: `int32^ p = ref x`, `int32^ q := p`, `q := p`, `take(move p)`, `ret move p`, `deref q = value`
+- unique pointer move-only semantik: `int32^ p = ref x`, `int32^ q := p`, `q := p`, `take(move p)`, `ret move p`, `nomove int32^ p`, `deref q = value`
 - `constptr` pointer initializer ve dereference read/write: `constptr int32* p = ref x`, `deref p = value`
 - `readonly` pointer initializer ve dereference read: `readonly int32* p = ref x`, `ret deref p`
 - pointer return: `identity(int32* p) :: int32*`
@@ -133,10 +133,16 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu
 - pointer'dan pointer okuma: `int32* q = deref pp`
 - geçici `print(...)` builtin
 - geçici `input_int()` builtin
+- geçici `input_string()` builtin
+- geçici `clear_screen()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()` ve `read_key()` konsol builtin'leri
 - `if`, `if/else`, `if/elif/else`, nested if ve branch fallthrough
 - `int`, `float` ve pointer condition conversion
+- while-style `loop (condition)`, nested `if` içinde loop ve pointer condition loop
+- `break` / `continue` statement'ları ve loop dışı kullanım diagnostic'i
+- range loop: `loop(i in [min, max])`
+- array iterable loop: `loop(value in arr)` ve `loop(index, value in arr)`
 
-`examples/type_checker/` seti şu anda 46/46 kontrollü diagnostic üretir; crash/assert beklenmez. `// expected-code: CSTNNNN` etiketi varsa runner beklenen diagnostic kodunu da doğrular. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, safe cast qualifier stripping reddini, user-defined cast controlled diagnostic'ini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` parametre/pointer adresi reassignment reddini, `readonly` parametre/pointer address/value assignment reddini, array parametreye scalar/farklı boyutlu array geçişi reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, function arg/return ownership transfer ihlallerini, `async`/`await` proposal diagnostic'ini, moved-after-use reddini ve `.=` protocol proposal diagnostic'ini kapsar.
+`examples/type_checker/` seti şu anda 52/52 kontrollü diagnostic üretir; crash/assert beklenmez. `// expected-code: CSTNNNN` etiketi varsa runner beklenen diagnostic kodunu da doğrular. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, safe cast qualifier stripping reddini, user-defined cast controlled diagnostic'ini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` parametre/pointer adresi reassignment reddini, `readonly` parametre/pointer address/value assignment reddini, array parametreye scalar/farklı boyutlu array geçişi reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, function arg/return ownership transfer ihlallerini, `nomove` ownership-flow ihlallerini, `async`/`await` proposal diagnostic'ini, moved-after-use reddini, `.=` protocol proposal diagnostic'ini, loop dışı `break`/`continue` reddini ve `option` proposal diagnostic'ini kapsar.
 
 `examples/functions/`, `examples/variables/` ve `examples/papers/` dizinleri hâlâ daha çok proposal/stres örnekleridir. Runner ile ayrı çalıştırılır; amaç hepsini bugün yeşil yapmak değil, dil geliştikçe buradan küçük MVP smoke'lar çıkarmaktır.
 
@@ -158,7 +164,7 @@ cast, unsafe_cast, sizeof, typeof, move, async, await,
 dynamic, protocol, state,
 with, struct, trait, macro, constructor, destructor, allocator,
 except, throw, defer, self, is,
-const, constptr, constref, readonly,
+const, constptr, constref, readonly, nomove,
 int8, int16, int32, int64, int,
 uint8, uint16, uint32, uint64, uint128, uint,
 isize, usize,
@@ -284,7 +290,7 @@ int^^^^ deepUnique;
 ```
 
 - `*`: shareable pointer. Codegen'de raw pointer ABI değildir; compiler-owned shared handle `{ data: ptr, strong: i64* }` olarak taşınır. Copy/assignment atomic strong-count artırır, overwrite release eder, `:=`/`move` ownership transfer yapar.
-- `^`: unique/ownership pointer. Doğrudan copy reddedilir; ownership transfer için `:=` veya `move` gerekir. By-value `^` function parametre ve return da aynı kuralı izler: `take(move p)` ve `ret move p;` açık transferdir. Move edilen `*` ve `^` source yeniden initialize edilmeden kullanılamaz.
+- `^`: unique/ownership pointer. Doğrudan copy reddedilir; ownership transfer için `:=` veya `move` gerekir. By-value `^` function parametre ve return da aynı kuralı izler: `take(move p)` ve `ret move p;` açık transferdir. `nomove` parametre modifier'ı by-value pointer parametrenin fonksiyon gövdesinde yeniden taşınmasını engeller. Move edilen `*` ve `^` source yeniden initialize edilmeden kullanılamaz.
 - Aynı type içinde `*` ve `^` karıştırılamıyor. Parser bunu hata sayıyor:
 
 ```cstar
@@ -307,7 +313,7 @@ Desteklenen biçimler:
 - Unary operator olarak `deref`.
 - `*` expression içinde dereference olarak da kullanılabiliyor.
 
-Güncel codegen notu: `ref x` shared pointer beklenen yerde `{ data=&x, strong=new atomic i64(1) }` handle'ı üretir. `int32* q = p` ve `q = p` atomic retain yapar; `q := p` ve `q = move p` transfer yapar ve source moved kabul edilir. Shared pointer by-value function argument plain symbol ile retain/copy yapar; `move` argument/return source'u null'a çekilir. `strong_count(p)` compiler builtin'i atomic strong-count değerini döndürür. Primitive pointer parametre/return ABI'si de bu shared handle'ı taşır; `read_ptr(ref x)`, `identity(int32* p) :: int32*`, `int32* q = deref pp`, `deref p = value`, `deref p += value`, `**pp` ve `**pp = value` smoke setinde çalışır. Primitive reference parametreler `int32& x` syntax'ı ile çağıranın storage'ına alias olur; çağrı tarafında açık `ref value` gerekir, fonksiyon gövdesinde `x` normal değer gibi okunur ve `x = value;` çağıranın değerini günceller. `const`/`constref`/`constptr`/`readonly` qualifier kontrolleri semantic pass'te korunur.
+Güncel codegen notu: `ref x` shared pointer beklenen yerde `{ data=&x, strong=new atomic i64(1) }` handle'ı üretir. `int32* q = p` ve `q = p` atomic retain yapar; `q := p` ve `q = move p` transfer yapar ve source moved kabul edilir. Shared pointer by-value function argument plain symbol ile retain/copy yapar; `move` argument/return source'u null'a çekilir. `strong_count(p)` compiler builtin'i atomic strong-count değerini döndürür. Primitive pointer parametre/return ABI'si de bu shared handle'ı taşır; `read_ptr(ref x)`, `identity(int32* p) :: int32*`, `int32* q = deref pp`, `deref p = value`, `deref p += value`, `nomove int32^ p`, `**pp` ve `**pp = value` smoke setinde çalışır. Primitive reference parametreler `int32& x` syntax'ı ile çağıranın storage'ına alias olur; çağrı tarafında açık `ref value` gerekir, fonksiyon gövdesinde `x` normal değer gibi okunur ve `x = value;` çağıranın değerini günceller. `const`/`constref`/`constptr`/`readonly` qualifier kontrolleri semantic pass'te korunur.
 
 ### 6.3 Qualifier'lar
 
@@ -424,15 +430,22 @@ Güncel çalışan MVP:
 
 - Tek boyutlu array initializer ve element read smoke ile doğrulanmıştır.
 - Tek boyutlu element assignment ve shortcut assignment çalışır:
+- Çok boyutlu array read/write ve parametre geçişi row-major flattening ile çalışır.
 
 ```cstar
 int32 arr[2] = (1, 2);
 arr[0] = 9;
 arr[1] += 5;
 ret arr[1];
+
+int32 matrix[2:3] = ((1, 2, 3), (4, 5, 6));
+matrix[1:1] = 9;
+ret matrix[1:2];
 ```
 
-Çok boyutlu array flatten/index semantics proposal tarafında durur; MVP'de ayrı aşama olarak ele alınacaktır.
+Çok boyutlu initializer kaynakta katmanlı yazılır; codegen bunu C benzeri row-major flat belleğe indirir. `[rows:cols]` için lineer index `row * cols + col`; daha yüksek boyutta soldan sağa `linear = linear * next_dim + index` kuralı uygulanır. Sabit out-of-range index compile-time warning üretir; dinamik index için runtime bounds check henüz üretilmez.
+
+Expression parser delimiter içinde veya operator/comma sonrasında gelen satır sonlarını expression devamı kabul eder. Bu yüzden çok boyutlu initializer, function argümanları, binary expression ve subscript indexleri okunabilir biçimde alt satıra taşınabilir.
 
 ## 8. Fonksiyonlar
 
@@ -538,7 +551,7 @@ arr[2] += 3;
 arr[a:b] = 3;
 ```
 
-Not: Scalar local assignment, dereference assignment ve tek boyutlu array element assignment artık smoke setinde doğrulanıyor. `arr[a:b]` gibi çok boyutlu/colon index assignment proposal tarafındadır.
+Not: Scalar local assignment, dereference assignment, tek boyutlu array element assignment ve `arr[a:b]` formundaki çok boyutlu/colon index assignment smoke setinde doğrulanıyor.
 
 ### 9.3 Increment/decrement
 
@@ -613,9 +626,13 @@ Semantic niyeti:
 
 Codegen:
 
-- Range/iterable loop için bazı alloca ve array boyutu hesaplama denemeleri var.
-- While-style conditional loop codegen'i tamamlanmış görünmüyor.
-- `break` / `continue` lexer'da var ama parser statement olarak işlemiyor.
+- While-style conditional loop `cond -> body -> cond -> after` basic block akışıyla çalışır.
+- Loop condition değerleri `if` ile aynı şekilde bool'a indirilir; scalar, bool ve pointer condition desteklenir.
+- `break` loop çıkış bloğuna, `continue` loop condition bloğuna branch üretir.
+- `break` / `continue` yalnızca loop içinde geçerlidir; loop dışı kullanım semantic diagnostic üretir.
+- Range loop `loop(i in [min, max])` min inclusive, max exclusive çalışır.
+- Array iterable loop `loop(value in arr)` ve indexed form `loop(index, value in arr)` local array ve array parametre için çalışır.
+- Daha genel sequence/trait tabanlı iterable, reverse/step range ve bounds politikası ayrı stdlib/trait aşamasıdır.
 
 ## 11. Expression Sistemi
 
@@ -721,7 +738,7 @@ Güncel durum:
 - Primitive `constref` parametresi için `read_ref(constref int32& x)` ve çağrı tarafında `read_ref(ref value)` smoke'u çalışıyor; gövde içi assignment diagnostic üretir.
 - Primitive `constptr` parametresi için `write_through(constptr int32* p)` callee içinde `deref p = value` yazabilir; `p = ref other` diagnostic üretir.
 - Primitive `readonly` parametresi için `read_through(readonly int32* p)` callee içinde target read yapabilir; `deref p = value` diagnostic üretir.
-- Tek boyutlu array parametreleri `int32[2] arr` syntax'ı ile ABI'de array storage adresi olarak taşınır; callee içinde `arr[i]` read/write caller array'ine erişir.
+- Tek ve çok boyutlu array parametreleri `int32[2] arr` / `int32[2:3] arr` syntax'ı ile ABI'de array storage adresi olarak taşınır; callee içinde `arr[i]` veya `arr[i:j]` read/write caller array'ine erişir.
 - Pointer variable initializer için `int32* p = ref x;` smoke'u çalışıyor.
 - Pointer return için `identity(int32* p) :: int32*` smoke'u çalışıyor.
 - Dereference assignment ve shortcut assignment için `deref p = value;`, `*p = value;`, `deref p += value;` smoke'ları çalışıyor.
@@ -739,7 +756,7 @@ print(42);
 int64 value = input_int();
 ```
 
-`print(...)` şu an dirty MVP olarak CRT `printf` çağrısına indiriliyor. `input_int()` de aynı şekilde CRT `scanf("%lld", ...)` çağrısına indiriliyor ve `int64` döndürüyor. String literal kaçışları için temel `\n`, `\t`, `\"`, `\\` decode ediliyor. Gerçek stdlib/native interop tasarımı gelince bu bölüm yeniden ele alınmalı.
+`print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()` ve `read_key()` şu an compiler içindeki `NativeRuntime` katmanı üzerinden CRT/POSIX çağrılarına indiriliyor. `print(...)` `printf` kullanır. `input_int()` önce `scanf("%255s", ...)` ile token okur, sonra `atoll` ile `int64` üretir; sayı olmayan token consume edilir ve `0` değerine dönüşür. `input_string()` `scanf("%255s", ...)` ile whitespace'e kadar kısa string okur ve doğrudan `print(input_string())` gibi kullanılabilir. `clear_screen()` ANSI terminal temizleme dizisini yazar; `sleep_ms(ms)` aktif konsol demoları için milisaniyeyi mikro saniyeye çevirip `usleep` çağırır. `enable_raw_input()` ve `disable_raw_input()` POSIX terminali non-canonical, non-blocking moda alıp geri toparlar; `read_key()` tuş yokken `-1`, tuş varken ASCII/escape byte değerini `int32` döndürür. String literal kaçışları için temel `\n`, `\t`, `\"`, `\\` decode ediliyor. Gerçek stdlib/native interop tasarımı büyüdükçe bu katman ABI bağlantı noktası olarak genişletilecek.
 
 Interactive örnek:
 
@@ -758,6 +775,7 @@ abc[a[10] + f(20)]
 ```
 
 Expression parser `[]` ve `:` ile çok boyutlu index ifadelerini parse etmeye çalışıyor. AST'de `B_ARRS` ve `B_MARRS` ayrımı var.
+Codegen bugün sabit boyutlu array'lerde `arr[i]` ve `arr[i:j:k]` formunu row-major lineer index'e indirir. Dinamik index expression'ları da desteklenir; runtime bounds check henüz yoktur.
 
 ## 12. Operator Önceliği
 
@@ -879,8 +897,13 @@ Codegen iki parçalı:
   - `*p = value;`
   - `**pp = value;`
   - `identity(int32* p) :: int32*`
-- Dirty builtin `print(...)` -> CRT `printf`.
-- Dirty builtin `input_int()` -> CRT `scanf`.
+- Native runtime builtin `print(...)` -> CRT `printf`.
+- Native runtime builtin `input_int()` -> CRT `scanf("%255s")` + `atoll`.
+- Native runtime builtin `input_string()` -> CRT `scanf("%255s")`.
+- Native runtime builtin `clear_screen()` -> ANSI clear/home escape.
+- Native runtime builtin `sleep_ms(ms)` -> POSIX `usleep(ms * 1000)`.
+- Native runtime builtin `enable_raw_input()` / `disable_raw_input()` -> POSIX `stty` non-canonical/sane köprüsü.
+- Native runtime builtin `read_key()` -> CRT `getchar()` ile non-blocking key polling.
 - Binary arithmetic:
   - add/sub/mul/div/mod
   - bitwise and/or/xor
@@ -889,8 +912,9 @@ Codegen iki parçalı:
   - comparison (`<`, `<=`, `>`, `>=`, `==`, `!=`) sonucu `bool/i1`
   - ternary için `select`
 - Array initializer için kısmi constant array / memcpy yaklaşımı.
-- Tek boyutlu local/global array element read/write.
+- Tek ve çok boyutlu local/global array element read/write.
 - `if/elif/else` basic block üretimi; nested/fallthrough senaryoları smoke ile doğrulanıyor.
+- While-style `loop`, `break` ve `continue` basic block üretimi smoke ile doğrulanıyor.
 - `cast<T>(expr)`, `expr as T` ve `unsafe_cast<T>(expr)` MVP IR üretimi.
 - Iterable array loop için kısmi basic block ve GEP denemesi.
 
@@ -908,7 +932,6 @@ MVP executable davranışı artık küçük smoke seti için vardır; fakat prop
 Özellikle:
 
 - User-defined type cast/conversion overload IR üretimi tamamlanmadı; bugün controlled diagnostic ile durdurulur.
-- Çok boyutlu array element assignment tamamlanmadı.
 - Pointer/ref/qualifier parametre codegen'i genişletilmeli; primitive pointer argüman, pointer variable initializer, pointer return ve dereference assignment smoke'ları çalışıyor.
 - `++` / `--` IR üretmiyor.
 
@@ -1097,14 +1120,16 @@ Mevcut lexer/parser bu sistemi uygulamıyor.
 ### 15.7 Option/match/case
 
 ```cstar
-option(k) {
-    0: { },
-    1: { },
-    _: { }
+option (k) {
+    0: { ret 0; },
+    1: { ret 1; },
+    _: { ret -1; }
 }
 ```
 
-`option` ve `_` token düzeyinde var, parser statement olarak işlemiyor.
+Karar: canonical yüzey `option` statement'ıdır; ayrı `match` keyword'ü şimdilik eklenmez. `_` default branch'tir. İlk MVP expression döndürmez, yalnızca statement scope'ları çalıştırır. Pattern tarafı önce scalar literal/char/bool ve `_` ile sınırlı tutulmalıdır; destructuring, range pattern ve exhaustiveness daha sonra `enum`/`struct` sistemiyle birlikte ele alınır.
+
+Mevcut compiler `option` keyword'ünü function body içinde görürse controlled `CST1001` proposal diagnostic üretir. Böylece parser takılmaz; gerçek AST/codegen henüz yoktur.
 
 ## 16. Mevcut Dil İçin Kısa Cheat Sheet
 
@@ -1143,7 +1168,7 @@ main(int argc, char** argv) :: int {
 }
 ```
 
-Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, scalar/dereference/tek boyutlu array assignment, `ret expr`, primitive function call, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()` ve temel `if/elif/else` akışıdır. Loop, çok boyutlu array ve qualifier-heavy bölümler hâlâ ayrı MVP adımı gerektirir.
+Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, scalar/dereference/tek ve çok boyutlu array assignment, `ret expr`, primitive function call, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()`, `read_key()`, temel `if/elif/else`, while-style `loop`, range loop, array iterable loop, `break` ve `continue` akışıdır. Genel sequence iterable ve qualifier-heavy bölümler hâlâ ayrı MVP adımı gerektirir.
 
 ## 17. Bilinen Sorunlar ve Teknik Riskler
 
@@ -1157,14 +1182,14 @@ Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güve
 ### 17.2 Semantic riskleri
 
 - User-defined type sistemi tamamlanmamış.
-- Array validation içinde FIXME var.
+- Array validation MVP'si sabit index warning'i üretir; runtime bounds check ve slice doğrulaması sonraki safety/stdlib aşamasındadır.
 - Scope ve symbol validation elle yönetilen id/level mekanizmasına bağlı.
-- `move`/ownership modeli semantic pass ve shared handle codegen içinde çalışır; by-value function argument/return transfer MVP'si ve async/task boundary tasarım kararı vardır. Kalan büyük eksik scope çıkışı/destructor lowering, gerçek async lowering ve allocator/new control-block entegrasyonudur.
+- `move`/ownership modeli semantic pass ve shared handle codegen içinde çalışır; by-value function argument/return transfer MVP'si, `nomove` parametre kısıtı ve async/task boundary tasarım kararı vardır. Kalan büyük eksik scope çıkışı/destructor lowering, gerçek async lowering ve allocator/new control-block entegrasyonudur.
 - `const`, `readonly`, primitive `constref` assignment reddi, primitive `constptr` pointer adresi reassignment reddi, primitive `readonly` pointer address/value assignment reddi, primitive `const` pointer target assignment reddi ve çok seviyeli qualifier pointer reddi type-checker negatif testleriyle doğrulanır. Ownership tarafı için davranış hâlâ ayrıntılı tasarım/uygulama ister.
 
 ### 17.3 Codegen riskleri
 
-- User-defined/qualifier-aware cast, fix/increment ve çok boyutlu array assignment yolları tamamlanmadı.
+- User-defined/qualifier-aware cast ve fix/increment yolları tamamlanmadı.
 - Pointer/ref/qualifier parametre codegen'i genişletilmeli; primitive pointer call, primitive reference parametresi, pointer initializer, pointer return ve dereference assignment MVP dışında genel model tamamlanmadı.
 - Generated program çalıştırma artık CLI moduna ayrıldı. Varsayılan `cstar file.cstar` executable üretip durur; `--run` verilirse generated program çalıştırılır. Pass süreleri, Total LoC, output path ve generated exit code normal modda gizlenir; `--stats` ile gösterilir. Backend/link komutları normal modda gizlenir, `--verbose` ile gösterilir.
 
@@ -1202,7 +1227,7 @@ Bu belge sadece inceleme amaçlıdır; yine de projeye devam edilecekse teknik o
 4. Cast ve array codegen boşluklarını kapat:
    - user-defined cast/conversion overload tasarımı
    - zengin qualifier-aware cast kuralları
-   - çok boyutlu array indexing/read/write
+   - runtime checked array/slice modeli
 
 5. Büyük vizyonu sonra ele al:
    - struct/trait/protocol

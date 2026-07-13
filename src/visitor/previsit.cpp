@@ -2,6 +2,7 @@
 #include <ast/ast.hpp>
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
+#include <ast/control_flow_ast.hpp>
 #include <ast/fix_ast.hpp>
 #include <ast/func_ast.hpp>
 #include <ast/func_call_ast.hpp>
@@ -480,14 +481,11 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   }
 
   if (symbolInfo.isSubscriptable) {
-    size_t dimension = 1;
     for (auto &v : varAst.m_ArrDim) {
       auto scalar = dynamic_cast<ScalarOrLiteralAST *>(v.get());
       symbolInfo.arrayDimensions.push_back(std::stoi(scalar->m_Value));
-      std::reverse(symbolInfo.arrayDimensions.begin(),
-                   symbolInfo.arrayDimensions.end());
-      m_LastArrayDims = symbolInfo.arrayDimensions;
     }
+    m_LastArrayDims = symbolInfo.arrayDimensions;
   }
 
   // Do not need to look up the symbol table
@@ -586,6 +584,10 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
         this->m_TypeErrorMessages.emplace_back(
             "':=' move initializer requires a pointer source",
             symbolInfo, DiagnosticCode::SemanticOwnership);
+      } else if (source.isNoMove) {
+        this->m_TypeErrorMessages.emplace_back(
+            "'nomove' pointer cannot be moved", symbolInfo,
+            DiagnosticCode::SemanticOwnership);
       } else if (symbolInfo.isUnique != source.isUnique) {
         this->m_TypeErrorMessages.emplace_back(
             "':=' move initializer requires matching pointer ownership kind",
@@ -676,8 +678,11 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
             for (int i = 0; i < matchedSymbol.arrayDimensions.size(); ++i) {
               auto index = dynamic_cast<ScalarOrLiteralAST *>(
                   assignmentAst.m_SubscriptIndexes[i].get());
+              if (index == nullptr) {
+                continue;
+              }
               auto indexVal = std::stoi(index->m_Value);
-              if (indexVal > matchedSymbol.arrayDimensions[i]) {
+              if (indexVal >= matchedSymbol.arrayDimensions[i]) {
                 m_TypeWarningMessages.emplace_back(
                     "Array index '" + index->m_Value +
                         "' is after the beginning of the array",
@@ -807,6 +812,10 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
             this->m_TypeErrorMessages.emplace_back(
                 "':=' move assignment requires a pointer source",
                 symbolInfo, DiagnosticCode::SemanticOwnership);
+          } else if (source.isNoMove) {
+            this->m_TypeErrorMessages.emplace_back(
+                "'nomove' pointer cannot be moved", symbolInfo,
+                DiagnosticCode::SemanticOwnership);
           } else if (matchedSymbol.isUnique != source.isUnique) {
             this->m_TypeErrorMessages.emplace_back(
                 "':=' move assignment requires matching pointer ownership kind",
@@ -1264,6 +1273,55 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
           if (matchedSymbol.isSubscriptable && indexCount <= arraySize) {
             m_LastArrayIndexCount = indexCount;
             m_LastSubscriptable = true;
+            std::vector<ScalarOrLiteralAST *> indexes;
+            auto collectArrayIndexLiterals =
+                [&](auto &self, IAST *expr,
+                    std::vector<ScalarOrLiteralAST *> &indexes) -> void {
+              if (expr == nullptr) {
+                return;
+              }
+
+              if (expr->m_ExprKind == ExprKind::ScalarExpr) {
+                indexes.push_back(static_cast<ScalarOrLiteralAST *>(expr));
+                return;
+              }
+
+              if (expr->m_ExprKind != ExprKind::BinOp) {
+                indexes.push_back(nullptr);
+                return;
+              }
+
+              auto *binaryExpr = static_cast<BinaryOpAST *>(expr);
+              if (binaryExpr->m_BinOpKind != B_MARRS) {
+                indexes.push_back(nullptr);
+                return;
+              }
+
+              self(self, binaryExpr->m_LHS.get(), indexes);
+              self(self, binaryExpr->m_RHS.get(), indexes);
+            };
+            collectArrayIndexLiterals(collectArrayIndexLiterals,
+                                      binaryOpAst.m_RHS.get(), indexes);
+            const size_t checkCount =
+                std::min(indexes.size(), matchedSymbol.arrayDimensions.size());
+            for (size_t i = 0; i < checkCount; ++i) {
+              if (indexes[i] == nullptr) {
+                continue;
+              }
+
+              auto indexVal = std::stoi(indexes[i]->m_Value);
+              if (indexVal >= matchedSymbol.arrayDimensions[i]) {
+                m_TypeWarningMessages.emplace_back(
+                    "Array index '" + indexes[i]->m_Value +
+                        "' is after the beginning of the array",
+                    rhsSymbol);
+              } else if (indexVal < 0) {
+                m_TypeWarningMessages.emplace_back(
+                    "Array index '" + indexes[i]->m_Value +
+                        "' is before the beginning of the array",
+                    rhsSymbol);
+              }
+            }
           } else {
             if (indexCount > matchedSymbol.arrayDimensions.size()) {
               if (m_LastVarDecl) {
@@ -1614,18 +1672,67 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
   SymbolInfo symbolInfo;
   enterScope(false);
 
+  const bool wasInsideLoop = this->m_LastLoop;
   this->m_LastLoop = true;
+  auto makeLoopSymbol = [&](SymbolAST *symbolAst, TypeSpecifier type,
+                            size_t indirectionLevel = 0) {
+    SymbolInfo loopSymbol;
+    loopSymbol.symbolName = symbolAst->m_SymbolName;
+    loopSymbol.begin = symbolAst->m_SemLoc.begin;
+    loopSymbol.end = symbolAst->m_SemLoc.end;
+    loopSymbol.line = symbolAst->m_SemLoc.line;
+    loopSymbol.type = type;
+    loopSymbol.indirectionLevel = indirectionLevel;
+    loopSymbol.isPrimitive = IsPrimitiveType(type);
+    loopSymbol.isCastable = true;
+    loopSymbol.symbolScope = SymbolScope::LoopSt;
+    loopSymbol.scopeId = m_ScopeId;
+    loopSymbol.scopeLevel = m_ScopeLevel;
+    loopSymbol.symbolId = 0;
+    if (!m_TypeChecking) {
+      this->m_SymbolInfos.push_back(loopSymbol);
+      this->m_LastScopeSymbols.emplace_back(loopSymbol.symbolName, loopSymbol);
+    }
+  };
+  auto findKnownSymbol = [&](const std::string &name,
+                             SymbolInfo &matchedSymbol) {
+    SymbolInfo lookupInfo;
+    auto lookupName = name;
+    if (symbolValidation(lookupName, lookupInfo, matchedSymbol, true)) {
+      return true;
+    }
+
+    for (auto it = m_SymbolInfos.rbegin(); it != m_SymbolInfos.rend(); ++it) {
+      if (it->symbolName == name) {
+        matchedSymbol = *it;
+        return true;
+      }
+    }
+
+    for (auto &entry : GlobalSymbolTable) {
+      if (entry.symbolName == name) {
+        matchedSymbol = entry.symbolInfo;
+        return true;
+      }
+    }
+
+    return false;
+  };
 
   if (m_TypeChecking) {
     if (loopStmtAst.m_RangeLoop) {
       if (loopStmtAst.m_Indexable) {
-        this->m_LastLoopIndexSymbol = true;
-        loopStmtAst.m_IndexSymbol->acceptBefore(*this);
-        this->m_LastLoopIndexSymbol = false;
+        auto *indexSymbol =
+            static_cast<SymbolAST *>(loopStmtAst.m_IndexSymbol.get());
+        makeLoopSymbol(indexSymbol, TypeSpecifier::SPEC_I64);
       }
 
       bool iterSymbolNotExist = false;
       if (loopStmtAst.m_HasNumericRange) {
+        auto *dataSymbol =
+            static_cast<SymbolAST *>(loopStmtAst.m_DataSymbol.get());
+        makeLoopSymbol(dataSymbol, TypeSpecifier::SPEC_I64);
+
         // To checking symbols are valid and exists..
         // if they are symbols...
         this->m_LastCondExpr = true;
@@ -1657,6 +1764,10 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
                   "(built-in trait)",
                   symbolInfo);
             }
+
+            auto *dataSymbol =
+                static_cast<SymbolAST *>(loopStmtAst.m_DataSymbol.get());
+            makeLoopSymbol(dataSymbol, matchedSymbol.type);
           } else {
             iterSymbolNotExist = true;
             this->m_TypeErrorMessages.emplace_back(
@@ -1670,15 +1781,33 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
         }
       }
 
-      if (!iterSymbolNotExist) {
-        this->m_LastLoopDataSymbol = true;
-        loopStmtAst.m_DataSymbol->acceptBefore(*this);
-        this->m_LastLoopDataSymbol = false;
-      }
+      (void)iterSymbolNotExist;
     } else {
       this->m_LastCondExpr = true;
       loopStmtAst.m_Cond->acceptBefore(*this);
       this->m_LastCondExpr = false;
+    }
+  } else if (loopStmtAst.m_RangeLoop) {
+    if (loopStmtAst.m_Indexable) {
+      auto *indexSymbol =
+          static_cast<SymbolAST *>(loopStmtAst.m_IndexSymbol.get());
+      makeLoopSymbol(indexSymbol, TypeSpecifier::SPEC_I64);
+    }
+
+    if (loopStmtAst.m_HasNumericRange) {
+      auto *dataSymbol =
+          static_cast<SymbolAST *>(loopStmtAst.m_DataSymbol.get());
+      makeLoopSymbol(dataSymbol, TypeSpecifier::SPEC_I64);
+      } else if (loopStmtAst.m_IterSymbol != nullptr &&
+               loopStmtAst.m_IterSymbol->m_ExprKind == SymbolExpr) {
+      auto *iterSymbol = static_cast<SymbolAST *>(loopStmtAst.m_IterSymbol.get());
+      auto iterName = iterSymbol->m_SymbolName;
+      SymbolInfo matchedSymbol;
+      if (findKnownSymbol(iterName, matchedSymbol)) {
+        auto *dataSymbol =
+            static_cast<SymbolAST *>(loopStmtAst.m_DataSymbol.get());
+        makeLoopSymbol(dataSymbol, matchedSymbol.type);
+      }
     }
   }
 
@@ -1686,8 +1815,36 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
     scopeHandler(node, SymbolScope::LoopSt);
   }
 
-  this->m_LastLoop = false;
+  this->m_LastLoop = wasInsideLoop;
   exitScope(false);
+
+  return symbolInfo;
+}
+
+SymbolInfo Visitor::preVisit(BreakStmtAST &breakStmtAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.begin = breakStmtAst.m_SemLoc.begin;
+  symbolInfo.end = breakStmtAst.m_SemLoc.end;
+  symbolInfo.line = breakStmtAst.m_SemLoc.line;
+
+  if (m_TypeChecking && !m_LastLoop) {
+    this->m_TypeErrorMessages.emplace_back(
+        "`break` can only be used inside a loop", symbolInfo);
+  }
+
+  return symbolInfo;
+}
+
+SymbolInfo Visitor::preVisit(ContinueStmtAST &continueStmtAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.begin = continueStmtAst.m_SemLoc.begin;
+  symbolInfo.end = continueStmtAst.m_SemLoc.end;
+  symbolInfo.line = continueStmtAst.m_SemLoc.line;
+
+  if (m_TypeChecking && !m_LastLoop) {
+    this->m_TypeErrorMessages.emplace_back(
+        "`continue` can only be used inside a loop", symbolInfo);
+  }
 
   return symbolInfo;
 }
@@ -1750,6 +1907,62 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
           "Builtin 'input_int' does not accept arguments", symbolInfo);
     }
     symbolInfo.type = TypeSpecifier::SPEC_I64;
+    symbolInfo.indirectionLevel = 0;
+    return symbolInfo;
+  }
+
+  if (funcSymbol->m_SymbolName == "input_string") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'input_string' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_CHAR;
+    symbolInfo.indirectionLevel = 1;
+    return symbolInfo;
+  }
+
+  if (funcSymbol->m_SymbolName == "clear_screen") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'clear_screen' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_VOID;
+    return symbolInfo;
+  }
+
+  if (funcSymbol->m_SymbolName == "sleep_ms") {
+    if (argNodes.size() != 1) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'sleep_ms' expects exactly 1 argument", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_VOID;
+    return symbolInfo;
+  }
+
+  if (funcSymbol->m_SymbolName == "enable_raw_input") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'enable_raw_input' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_VOID;
+    return symbolInfo;
+  }
+
+  if (funcSymbol->m_SymbolName == "disable_raw_input") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'disable_raw_input' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_VOID;
+    return symbolInfo;
+  }
+
+  if (funcSymbol->m_SymbolName == "read_key") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'read_key' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_I32;
     symbolInfo.indirectionLevel = 0;
     return symbolInfo;
   }
@@ -1844,7 +2057,15 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
       SymbolInfo movedSource;
       auto sourceName = argMoveSource->m_SymbolName;
       if (symbolValidation(sourceName, lookupInfo, movedSource, true)) {
-        if (movedSource.indirectionLevel == 0 ||
+        if (movedSource.isNoMove) {
+          SymbolInfo argInfo;
+          argInfo.begin = argMoveSource->m_SemLoc.begin;
+          argInfo.end = argMoveSource->m_SemLoc.end;
+          argInfo.line = argMoveSource->m_SemLoc.line;
+          this->m_TypeErrorMessages.emplace_back(
+              "'nomove' pointer cannot be moved", argInfo,
+              DiagnosticCode::SemanticOwnership);
+        } else if (movedSource.indirectionLevel == 0 ||
             movedSource.isUnique != signature.params[i].isUnique) {
           SymbolInfo argInfo;
           argInfo.begin = argMoveSource->m_SemLoc.begin;
@@ -2036,6 +2257,7 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
   symbolInfo.isReadOnly = paramAst.m_TypeQualifier == Q_READONLY;
   symbolInfo.isConstVal = paramAst.m_TypeQualifier == Q_CONST;
   symbolInfo.isCastable = paramAst.m_IsCastable;
+  symbolInfo.isNoMove = paramAst.m_IsNoMove;
 
   if (typeInfo != nullptr) {
     symbolInfo.isRef = typeInfo->m_IsRef;
@@ -2063,6 +2285,13 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
   symbolInfo.isParam = true;
 
   if (m_TypeChecking) {
+    if (symbolInfo.isNoMove &&
+        (symbolInfo.indirectionLevel == 0 || symbolInfo.isRef)) {
+      this->m_TypeErrorMessages.emplace_back(
+          "'nomove' requires a by-value pointer parameter", symbolInfo,
+          DiagnosticCode::SemanticOwnership);
+    }
+
     if (((symbolInfo.isConstPtr && !symbolInfo.isSubscriptable) &&
          (symbolInfo.indirectionLevel == 0 || symbolInfo.isRef)) ||
         (symbolInfo.isConstRef && !symbolInfo.isRef)) {
@@ -2115,6 +2344,10 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {
                 "unique pointer return cannot be copied; use 'move' to "
                 "transfer ownership",
                 symbolInfo, DiagnosticCode::SemanticOwnership);
+          } else if (returnIsMove && source.isNoMove) {
+            this->m_TypeErrorMessages.emplace_back(
+                "'nomove' pointer cannot be moved", symbolInfo,
+                DiagnosticCode::SemanticOwnership);
           } else if (returnIsMove &&
                      source.isUnique != m_LastFuncRetTypeInfo.isUnique) {
             this->m_TypeErrorMessages.emplace_back(
@@ -2249,6 +2482,9 @@ void Visitor::scopeHandler(std::unique_ptr<IAST> &node,
       node->acceptBefore(*this);
     } else if (node->m_StmtKind == StmtKind::IfStmt) {
       node->acceptBefore(*this);
+    } else if (node->m_StmtKind == StmtKind::BreakStmt ||
+               node->m_StmtKind == StmtKind::ContinueStmt) {
+      node->acceptBefore(*this);
     }
   } else if (node->m_ASTKind == ASTKind::Expr &&
              node->m_ExprKind == ExprKind::ParamExpr) {
@@ -2281,6 +2517,9 @@ void Visitor::typeCheckerScopeHandler(std::unique_ptr<IAST> &node) {
     if (node->m_StmtKind == StmtKind::LoopStmt) {
       node->acceptBefore(*this);
     } else if (node->m_StmtKind == StmtKind::IfStmt) {
+      node->acceptBefore(*this);
+    } else if (node->m_StmtKind == StmtKind::BreakStmt ||
+               node->m_StmtKind == StmtKind::ContinueStmt) {
       node->acceptBefore(*this);
     }
   } else if (node->m_ASTKind == ASTKind::Expr &&
@@ -2350,6 +2589,11 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
 
   for (auto &it : this->m_LastScopeSymbols) {
     if (it.symbolName == symbolName) {
+      if (it.symbolInfo.symbolScope == SymbolScope::LoopSt &&
+          it.symbolInfo.scopeLevel <= scopeLevel) {
+        goto done;
+      }
+
       if (it.symbolInfo.scopeLevel < scopeLevel) {
         // nothing
       } else {

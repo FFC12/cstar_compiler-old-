@@ -1,0 +1,19 @@
+// expected: pass
+// expected-exit: 19
+
+add(int32 a, int32 b, int32 c) :: int32 {
+  ret a + b + c;
+}
+
+main() :: int32 {
+  int32 matrix[2:3] = ((1, 2, 3),
+                       (4, 5, 6));
+  int32 arithmetic = 1 +
+                     2 *
+                     3;
+  int32 call_value = add(1,
+                         2,
+                         3);
+  ret arithmetic + call_value + matrix[1:
+                                       2];
+}

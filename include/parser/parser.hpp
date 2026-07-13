@@ -4,6 +4,7 @@
 #include <ast/ast.hpp>
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
+#include <ast/control_flow_ast.hpp>
 #include <ast/fix_ast.hpp>
 #include <ast/func_ast.hpp>
 #include <ast/func_call_ast.hpp>
@@ -135,6 +136,25 @@ class CStarParser {
 
   TokenKind prevTokenKind() const noexcept {
     return this->m_PrevToken.getTokenKind();
+  }
+
+  TokenInfo prevSignificantTokenInfo() const noexcept {
+    if (m_TokenIndex == 0) {
+      return this->m_PrevToken;
+    }
+
+    size_t index = m_TokenIndex - 1;
+    while (index > 0 &&
+           (m_TokenStream[index].getTokenKind() == TokenKind::LINEFEED ||
+            m_TokenStream[index].getTokenKind() == TokenKind::COMMENT)) {
+      index -= 1;
+    }
+
+    return m_TokenStream[index];
+  }
+
+  TokenKind prevSignificantTokenKind() const noexcept {
+    return prevSignificantTokenInfo().getTokenKind();
   }
 
   TokenKind prevOfPrevTokenKind() const noexcept {

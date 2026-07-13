@@ -1,0 +1,8 @@
+// expected: pass
+// expected-exit: 8
+
+main() :: int32 {
+  int32 matrix[2:3] = ((1, 2, 3), (4, 5, 6));
+  matrix[0:2] += 5;
+  ret matrix[0:2];
+}

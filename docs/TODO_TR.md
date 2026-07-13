@@ -78,11 +78,17 @@ Tamamlanan dil/codegen parçaları:
   - `int32* q = deref pp;`
   - `identity(ref x) :: int32*`
   - Qualifier/ownership kuralları ayrı TODO'dur.
-- Geçici dirty builtin:
+- Native runtime / CRT interop MVP:
+  - `include/codegen/native_runtime.hpp` ve `src/codegen/native_runtime.cpp` altında toplandı.
   - `print(...)` CRT `printf` çağrısına indiriliyor.
-  - `input_int()` CRT `scanf("%lld", ...)` çağrısına indiriliyor ve `int64` döndürür.
+  - `input_int()` token bazlı `scanf("%255s", ...)` + `atoll` ile `int64` döndürür; sayı olmayan token consume edilir ve `0` olur.
+  - `input_string()` CRT `scanf("%255s", ...)` çağrısına indiriliyor ve doğrudan `print(input_string())` gibi kullanılabilen kısa C string pointer döndürür.
+  - `clear_screen()` ANSI terminal temizleme escape'ine indiriliyor; aktif console demoları için MVP yüzey.
+  - `sleep_ms(ms)` POSIX `usleep(ms * 1000)` çağrısına indiriliyor; ileride platform-neutral stdlib/native interop altında standartlaştırılacak.
+  - `enable_raw_input()` / `disable_raw_input()` POSIX `stty` üzerinden non-canonical, non-blocking terminal modunu açıp kapatır.
+  - `read_key()` CRT `getchar()` ile tuş yokken `-1`, tuş varken `int32` byte değeri döndürür; WASD/ok tuşu oyunları için geçici native runtime yüzeyi.
   - String literal kaçışları için temel `\n`, `\t`, `\"`, `\\` decode ediliyor.
-  - Bu stdlib/native interop tasarımı gelince yeniden ele alınacak.
+  - Bu katman ileride stdlib/native interop ABI'sinin bağlanacağı giriş noktasıdır.
 
 Çalışan smoke seti:
 
@@ -125,6 +131,7 @@ examples/smoke/constptr_pointer.cstar
 examples/smoke/readonly_param.cstar
 examples/smoke/readonly_pointer.cstar
 examples/smoke/readonly_multi_level_pointer.cstar
+examples/smoke/nomove_unique_param_read.cstar
 examples/smoke/pointer_variable_initializer.cstar
 examples/smoke/shared_pointer_assignment_count.cstar
 examples/smoke/shared_pointer_copy_count.cstar
@@ -137,6 +144,7 @@ examples/smoke/unique_pointer_move_init.cstar
 examples/smoke/unique_pointer_return_move.cstar
 examples/smoke/dereference_assignment.cstar
 examples/smoke/dereference_assignment_shortcut.cstar
+examples/smoke/expression_newline_continuation.cstar
 examples/smoke/multi_level_dereference_assignment.cstar
 examples/smoke/multi_level_dereference_read.cstar
 examples/smoke/pointer_from_pointer_initializer.cstar
@@ -150,6 +158,19 @@ examples/smoke/if_else_statement.cstar
 examples/smoke/if_elif_else_statement.cstar
 examples/smoke/nested_if_statement.cstar
 examples/smoke/if_fallthrough_statement.cstar
+examples/smoke/loop_while_statement.cstar
+examples/smoke/loop_false_skip.cstar
+examples/smoke/loop_nested_if_statement.cstar
+examples/smoke/loop_pointer_condition.cstar
+examples/smoke/loop_break_statement.cstar
+examples/smoke/loop_continue_statement.cstar
+examples/smoke/loop_break_continue_nested_if.cstar
+examples/smoke/loop_nested_loop_continue.cstar
+examples/smoke/multidim_array_assignment.cstar
+examples/smoke/multidim_array_param_read.cstar
+examples/smoke/multidim_array_param_write.cstar
+examples/smoke/multidim_array_read.cstar
+examples/smoke/multidim_array_shortcut_assignment.cstar
 ```
 
 Interactive örnek:
@@ -183,7 +204,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Her zaman yeşil kalması gereken küçük çalışan compiler çekirdeği.
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
-- Güncel durumda 63/63 dosya başarılı.
+- Güncel durumda 83/83 dosya başarılı.
 
 `examples/type_checker/`:
 
@@ -191,7 +212,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Exit code `1` çoğu dosya için kabul edilebilir diagnostic olabilir.
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
-- Güncel durumda `-ExpectDiagnostics` ile 46/46 dosya kontrollü diagnostic üretiyor, crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 52/52 dosya kontrollü diagnostic üretiyor, crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -254,6 +275,9 @@ examples/type_checker/042.cstar
 examples/type_checker/043.cstar
 examples/type_checker/044.cstar
 examples/type_checker/045.cstar
+examples/type_checker/046.cstar
+examples/type_checker/047.cstar
+examples/type_checker/048.cstar
 ```
 
 Bu dosyalar parser/pass hattına giriyor ve semantic diagnostic üretebiliyor. Kritik semantic sınıflar `expected-code` etiketiyle doğrulanabilir.
@@ -705,7 +729,6 @@ Durum: unique `^` ve shared `*` pointer ayrımı compiler çekirdeğinde gerçek
 
 TODO:
 
-- `nomove`/policy proposal'ı ile uyumlandırma.
 - Scope çıkışı/destructor lowering ile final strong-count release.
 - Heap allocation/control-block layout `new`/allocator sistemi ile birleştirilecek.
 
@@ -732,6 +755,12 @@ Tamamlanan:
   - Gelecek `spawn`/task boundary kuralı: by-value `^` yalnızca `move` ile taşınır, plain unique copy yasaktır.
   - Shared `*` task boundary'de atomic retain/copy veya açık `move` transfer kullanır.
   - `Send`/`Sync` runtime vtable değil, trait/capability marker olarak tasarlanır; scheduler lowering bu marker'ları kontrol edecek.
+- `nomove`/policy proposal'ı ile uyumlandırma tamamlandı:
+  - `nomove` type qualifier değil, parametre seviyesinde ownership-flow modifier olarak tutulur.
+  - `nomove int32^ pointer` ve `nomove constptr int32^ pointer` parser tarafından kabul edilir.
+  - `nomove` yalnızca by-value pointer parametrelerde geçerlidir; scalar/reference kullanım `CST2105` üretir.
+  - `nomove` parametre okunabilir ve dereference edilebilir, fakat `move`, `:=`, function argument move veya return move kaynağı olamaz.
+  - Bu karar policy/protocol ile gizli hook oluşturmaz; protocol state güvenliği ayrı, `nomove` ownership-flow kısıtı ayrı kalır.
 - Aynı type içinde `*` ve `^` karışımı parser diagnostic üretir.
 - `CST2105`: ownership/move semantic diagnostic.
 - `examples/smoke/shared_pointer_copy_count.cstar`
@@ -743,6 +772,7 @@ Tamamlanan:
 - `examples/smoke/unique_pointer_move_init.cstar`
 - `examples/smoke/unique_pointer_move_assignment.cstar`
 - `examples/smoke/unique_pointer_return_move.cstar`
+- `examples/smoke/nomove_unique_param_read.cstar`
 - `examples/type_checker/028.cstar`
 - `examples/type_checker/029.cstar`
 - `examples/type_checker/030.cstar`
@@ -754,6 +784,9 @@ Tamamlanan:
 - `examples/type_checker/043.cstar`
 - `examples/type_checker/044.cstar`
 - `examples/type_checker/045.cstar`
+- `examples/type_checker/046.cstar`
+- `examples/type_checker/047.cstar`
+- `examples/type_checker/048.cstar`
 
 ### 3.3 Qualifier
 
@@ -819,7 +852,7 @@ Tamamlanan:
 
 ## Aşama 4 - Arrays ve Indexing
 
-Durum: tek boyutlu MVP çalışıyor; çok boyutlu/index semantics kırılgan.
+Durum: sabit boyutlu tek ve çok boyutlu array MVP tamamlandı.
 
 Tamamlanan:
 
@@ -831,12 +864,32 @@ Tamamlanan:
   - `arr[0] = 3;`
 - Array element shortcut assignment:
   - `arr[0] += 3;`
+- Çok boyutlu array syntax'ı C* proposal formuna sadıktır:
+  - declaration/parametre: `int32 matrix[2:3]`
+  - initializer: `((1, 2, 3), (4, 5, 6))`
+  - read: `matrix[1:2]`
+  - assignment: `matrix[1:2] = 9;`
+  - shortcut assignment: `matrix[1:2] += 1;`
+- Flattening kuralı row-major olarak netleşti:
+  - Kaynak syntax katmanlı initializer kullanır; codegen flat LLVM array storage üretir.
+  - `[rows:cols]` için linear index `row * cols + col`.
+  - Daha yüksek boyutta kural soldan sağa `linear = linear * next_dim + index`.
+- Çok boyutlu local array read/write smoke:
+  - `examples/smoke/multidim_array_read.cstar`
+  - `examples/smoke/multidim_array_assignment.cstar`
+  - `examples/smoke/multidim_array_shortcut_assignment.cstar`
+- Çok boyutlu array parametre read/write smoke:
+  - `examples/smoke/multidim_array_param_read.cstar`
+  - `examples/smoke/multidim_array_param_write.cstar`
+- Bounds politikası MVP:
+  - Sabit out-of-range index için compile-time warning üretilir.
+  - Dinamik index için runtime bounds check şimdilik üretilmez.
+  - Runtime checked array/slice modeli ileride stdlib/safety mode altında ele alınacak.
+- Expression parser newline dayanıklılığı:
+  - Delimiter içi veya operator/comma sonrası satır sonları expression devamı kabul edilir.
+  - `((1, 2, 3),\n (4, 5, 6))`, `1 +\n2`, `func(a,\nb)` ve `arr[1:\n2]` smoke ile korunur.
 
-TODO:
-
-- Çok boyutlu array flattening kuralını düzelt.
-- `arr[a:b]` gibi colon index assignment codegen.
-- Bounds warning/error politikasını netleştir.
+TODO: Bu aşamada açık MVP maddesi kalmadı. Slice/range indexing ve runtime bounds check ayrı ileri aşamaya taşındı.
 
 ## Aşama 5 - Kontrol Akışı
 
@@ -855,18 +908,48 @@ Proposal hedefleri:
 
 TODO:
 
-- Önce while-style MVP.
-- Sonra array iterable.
-- `break` / `continue` parser ve codegen.
+- While-style MVP tamamlandı:
+  - `examples/smoke/loop_while_statement.cstar`
+  - `examples/smoke/loop_false_skip.cstar`
+  - `examples/smoke/loop_nested_if_statement.cstar`
+  - `examples/smoke/loop_pointer_condition.cstar`
+- `break` / `continue` parser, semantic diagnostic ve codegen tamamlandı:
+  - `examples/smoke/loop_break_statement.cstar`
+  - `examples/smoke/loop_continue_statement.cstar`
+  - `examples/smoke/loop_break_continue_nested_if.cstar`
+  - `examples/smoke/loop_nested_loop_continue.cstar`
+  - `examples/type_checker/049.cstar`
+  - `examples/type_checker/050.cstar`
+- Range loop MVP tamamlandı:
+  - `examples/smoke/loop_range_statement.cstar`
+  - `examples/smoke/loop_range_break_continue.cstar`
+- Array iterable MVP tamamlandı:
+  - `examples/smoke/loop_array_iterable.cstar`
+  - `examples/smoke/loop_array_indexed_iterable.cstar`
+  - `examples/smoke/loop_array_param_iterable.cstar`
+
+TODO: Bu alt aşamada temel loop yüzeyi tamamlandı. Sequence/trait tabanlı genel iterable, reverse/step range ve bounds politikası ileride stdlib/trait aşamasına taşındı.
 
 ### 5.2 Option / Match Benzeri Yapı
 
 Proposal seviyesinde.
 
-TODO:
+Karar:
 
-- Syntax kararını netleştir.
-- Parser eklemeden önce küçük tasarım notu yaz.
+- Canonical keyword `option` kalır; ayrı `match` keyword'ü şimdilik eklenmez.
+- İlk yüzey statement odaklıdır, expression/value döndürmez:
+  - `option (value) { pattern: { ... }, _: { ... } }`
+- `_` default branch anlamına gelir.
+- Pattern MVP sadece literal scalar/char/bool ve `_` kabul eder; range/destructuring/guard sonra.
+- Branch gövdeleri normal statement scope'u olur; `ret`, `break`, `continue` kendi bağlam kurallarını korur.
+- Exhaustiveness kontrolü ilk MVP'de yalnızca `bool` için düşünülebilir; genel enum/struct pattern exhaustiveness `enum`/`struct` sonrası.
+
+Tamamlanan:
+
+- Function body içinde `option` artık parser'ı takmaz; controlled proposal diagnostic üretir.
+  - `examples/type_checker/051.cstar`
+
+TODO: Gerçek parser/AST/codegen `enum` ve temel user-defined type tasarımından sonra açılacak. Bu alt aşamada açık parser güvenlik/tasarım maddesi kalmadı.
 
 ## Aşama 6 - Import / Package / Native Interop
 

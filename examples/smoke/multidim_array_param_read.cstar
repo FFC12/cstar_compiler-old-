@@ -1,0 +1,11 @@
+// expected: pass
+// expected-exit: 5
+
+read_mid(int32[2:3] matrix) :: int32 {
+  ret matrix[1:1];
+}
+
+main() :: int32 {
+  int32 values[2:3] = ((1, 2, 3), (4, 5, 6));
+  ret read_mid(values);
+}

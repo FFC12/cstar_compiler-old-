@@ -5,7 +5,7 @@
 // or if it's the first operator in the expression
 // then [probably] it's an unary operator
 bool CStarParser::isUnaryOp() {
-  if (isOperator(this->prevTokenInfo()) && !this->isCastOp()) {
+  if (isOperator(this->prevSignificantTokenInfo()) && !this->isCastOp()) {
     return true;
   } else {
     return false;
@@ -27,6 +27,28 @@ bool CStarParser::isCastOp() {
 }
 
 static bool TypeFlag = false;
+
+static bool IsIgnorableExprToken(TokenKind kind) {
+  return kind == TokenKind::COMMENT || kind == TokenKind::LINEFEED;
+}
+
+static bool CanContinueExpressionAcrossLine(TokenKind previous) {
+  return previous == TokenKind::EQUAL || previous == TokenKind::RET ||
+         previous == TokenKind::COMMA || previous == TokenKind::LPAREN ||
+         previous == TokenKind::LSQPAR || previous == TokenKind::COLON ||
+         previous == TokenKind::QMARK || previous == TokenKind::TYPEINF ||
+         previous == TokenKind::PLUS || previous == TokenKind::MINUS ||
+         previous == TokenKind::STAR || previous == TokenKind::DIV ||
+         previous == TokenKind::MOD || previous == TokenKind::AND ||
+         previous == TokenKind::LAND || previous == TokenKind::OR ||
+         previous == TokenKind::LOR || previous == TokenKind::XOR ||
+         previous == TokenKind::LT || previous == TokenKind::LTEQ ||
+         previous == TokenKind::GT || previous == TokenKind::GTEQ ||
+         previous == TokenKind::EQUALEQUAL ||
+         previous == TokenKind::NOTEQUAL || previous == TokenKind::LSHIFT ||
+         previous == TokenKind::RSHIFT || previous == TokenKind::ARROW ||
+         previous == TokenKind::DOT || previous == TokenKind::COLONCOLON;
+}
 
 // parsing expressions
 // opFor means the subexpr will be
@@ -70,7 +92,58 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
   std::deque<size_t> ternaryPos;
   std::deque<size_t> sparenthesesPos;
 
+  auto nextSignificantTokenInfo = [&](bool &outOfSize,
+                                      size_t offset = 1) -> TokenInfo {
+    size_t index = m_TokenIndex + offset;
+    while (index < m_TokenStream.size() &&
+           IsIgnorableExprToken(m_TokenStream[index].getTokenKind())) {
+      index += 1;
+    }
+
+    if (index < m_TokenStream.size()) {
+      outOfSize = false;
+      return m_TokenStream[index];
+    }
+
+    outOfSize = true;
+    return {};
+  };
+
+  auto previousSignificantTokenKind = [&]() -> TokenKind {
+    if (m_TokenIndex == 0) {
+      return TokenKind::UNKNOWN;
+    }
+
+    size_t index = m_TokenIndex - 1;
+    while (index > 0 &&
+           IsIgnorableExprToken(m_TokenStream[index].getTokenKind())) {
+      index -= 1;
+    }
+
+    return m_TokenStream[index].getTokenKind();
+  };
+
+  auto isExpressionOperandStart = [&](const TokenInfo &token) {
+    const auto kind = token.getTokenKind();
+    return kind == TokenKind::IDENT || kind == TokenKind::SCALARD ||
+           kind == TokenKind::SCALARI || kind == TokenKind::LITERAL ||
+           kind == TokenKind::TRUE || kind == TokenKind::FALSE ||
+           isType(token);
+  };
+
   while (true) {
+    if (is(TokenKind::COMMENT)) {
+      this->advance();
+      continue;
+    }
+
+    if (is(TokenKind::LINEFEED) &&
+        (isSubExpr ||
+         CanContinueExpressionAcrossLine(previousSignificantTokenKind()))) {
+      this->advance();
+      continue;
+    }
+
     if (is(TokenKind::AWAIT)) {
       ParserHint(
           "`await` belongs to the C* async/task proposal. Await points are "
@@ -486,7 +559,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       // debuggin purpose
 
       bool isOutOfSize = false;
-      auto nextTokenInfo = this->nextTokenInfo(isOutOfSize);
+      auto nextTokenInfo = nextSignificantTokenInfo(isOutOfSize);
       auto nextToken = nextTokenInfo.getTokenKind();
       if (isOutOfSize)
         ParserError("')' mismatched parentheses.", currentTokenInfo());
@@ -496,10 +569,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
           (nextToken == TokenKind::RPAREN || nextToken == TokenKind::SEMICOLON);
       bool hasTypeAttrib = (nextToken == TokenKind::LT);
 
-      if (!isOperator(nextTokenInfo) && nextToken != IDENT &&
-          nextToken != SCALARD && nextToken != SCALARI &&
-          nextToken != LITERAL && nextToken != TRUE && nextToken != FALSE &&
-          !isType(nextTokenInfo)) {
+      if (!isOperator(nextTokenInfo) &&
+          !isExpressionOperandStart(nextTokenInfo)) {
         ParserError("Unexpected token '" + std::string(tokenToStr(nextToken)) +
                         "' after binary operator '" + opCharacter + "'",
                     nextTokenInfo);
