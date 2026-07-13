@@ -1,3 +1,4 @@
+// expected: diagnostic (proposal)
 //Auto importing with involved. this means all standard libraries which needed by this unit to be imported, will be imported by automatically
 include involved {
     'ML',
@@ -50,7 +51,7 @@ attribute Area<T> {
 }
 
 attribute Area<Circle> {
-    area($0) -> 2 * math.PI * $0;
+    area($0) -> 2 * math.PI * $0; 
 }
 
 //meta types for reflectivity

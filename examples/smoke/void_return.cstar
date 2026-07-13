@@ -1,0 +1,11 @@
+// expected: pass
+// expected-exit: 0
+
+do_nothing() :: void {
+  ret;
+}
+
+main() :: int32 {
+  do_nothing();
+  ret 0;
+}

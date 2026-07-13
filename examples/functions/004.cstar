@@ -1,3 +1,4 @@
+// expected: diagnostic
 // symbol scope-level example
 
 main(b Allocator*, int a, int c) :: void {

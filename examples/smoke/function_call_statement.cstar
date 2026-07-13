@@ -1,0 +1,10 @@
+// expected: pass
+// expected-exit: 0
+touch() :: void {
+    ret;
+}
+
+main() :: int32 {
+    touch();
+    ret 0;
+}

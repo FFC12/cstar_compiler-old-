@@ -386,6 +386,35 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
             std::move(symbol), std::move(expr), deref, dereferencedLevel,
             std::move(indexes), shortcutOp, shortcutOpStr, semanticLoc);
         scope.emplace_back(std::move(assignmentExpr));
+      } else if (is(TokenKind::IDENT) && nextToken == TokenKind::LPAREN) {
+        auto funcSymbol = std::move(this->advanceSymbol());
+
+        expected(TokenKind::LPAREN);
+        ASTNode args = nullptr;
+        bool callOutOfSize = false;
+        auto tokenAfterOpen = this->nextTokenInfo(callOutOfSize).getTokenKind();
+        if (callOutOfSize) {
+          ParserError("Incomplete function call expression",
+                      currentTokenInfo());
+        }
+
+        if (tokenAfterOpen == TokenKind::RPAREN) {
+          this->advance();
+          this->advance();
+        } else {
+          args = std::move(this->expression(true, 1));
+        }
+
+        size_t end = currentTokenInfo().getTokenPositionInfo().end;
+        SemanticLoc semanticLoc = SemanticLoc(begin, end, line);
+
+        auto expr = std::make_unique<FuncCallAST>(
+            std::move(funcSymbol), nullptr, std::move(args), semanticLoc);
+
+        expected(TokenKind::SEMICOLON);
+        this->advance();
+
+        scope.emplace_back(std::move(expr));
       } else if (is(TokenKind::IDENT) || is(TokenKind::MINUSMINUS) ||
                  is(TokenKind::PLUSPLUS)) {
         PositionInfo posInfo = currentTokenInfo().getTokenPositionInfo();

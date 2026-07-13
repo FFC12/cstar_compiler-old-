@@ -1,0 +1,12 @@
+// expected: pass
+// expected-exit: 7
+
+main() :: int32 {
+    int32* p = unsafe_cast<int32*>(1);
+
+    if (p) {
+        ret 7;
+    }
+
+    ret 1;
+}

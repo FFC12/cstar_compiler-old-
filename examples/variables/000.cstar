@@ -1,3 +1,4 @@
+// expected: diagnostic (proposal/stress)
 int r = a < s;
 int s = p < 3;
 int e = func<A****>();

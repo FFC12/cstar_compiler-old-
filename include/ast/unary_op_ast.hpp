@@ -28,7 +28,7 @@ class UnaryOpAST : public IAST {
   UnaryNotationSign m_UnaryNotationSign;
 
  public:
-  UnaryOpAST() = default;
+  UnaryOpAST() = delete;
   UnaryOpAST(ASTNode node, UnaryOpKind unaryOpKind,
              UnaryNotationSign unaryNotationSign, SemanticLoc& semanticLoc)
       : IAST(semanticLoc),

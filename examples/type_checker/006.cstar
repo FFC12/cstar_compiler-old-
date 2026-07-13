@@ -1,3 +1,4 @@
+// expected: diagnostic
 main() :: constptr int* {
     int a = 20;
     int* p = &a;

@@ -1,0 +1,8 @@
+// expected: diagnostic
+returns_bool() :: bool {
+    ret true;
+}
+
+main() :: int32 {
+    ret returns_bool();
+}

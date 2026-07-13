@@ -11,14 +11,17 @@ class CastOpAST : public IAST {
   bool m_HasTypeAttrib;
 
  public:
-  CastOpAST() = default;
+  CastOpAST() = delete;
   CastOpAST(ASTNode node, ASTNode typeNode, CastOpKind castOpKind,
             bool hasTypeAttrib, SemanticLoc& semanticLoc)
       : IAST(semanticLoc),
         m_Node(std::move(node)),
         m_TypeNode(std::move(typeNode)),
         m_CastOpKind(castOpKind),
-        m_HasTypeAttrib(hasTypeAttrib) {}
+        m_HasTypeAttrib(hasTypeAttrib) {
+    this->m_ASTKind = ASTKind::Expr;
+    this->m_ExprKind = ExprKind::CastExpr;
+  }
 
   void debugNode() override {
     switch (m_CastOpKind) {
@@ -53,7 +56,7 @@ class CastOpAST : public IAST {
 
 class CastNode : public CastOpAST {
  public:
-  CastNode() = default;
+  CastNode() = delete;
   CastNode(ASTNode node, ASTNode typeNode, CastOpKind castOpKind,
            bool hasTypeAttrib, SemanticLoc& semanticLoc)
       : CastOpAST(std::move(node), std::move(typeNode), castOpKind,
@@ -62,7 +65,7 @@ class CastNode : public CastOpAST {
 
 class UnsafeCastNode : public CastOpAST {
  public:
-  UnsafeCastNode() = default;
+  UnsafeCastNode() = delete;
   UnsafeCastNode(ASTNode node, ASTNode typeNode, CastOpKind castOpKind,
                  bool hasTypeAttrib, SemanticLoc& semanticLoc)
       : CastOpAST(std::move(node), std::move(typeNode), castOpKind,

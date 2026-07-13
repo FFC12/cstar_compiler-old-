@@ -1,0 +1,11 @@
+// expected: pass
+// expected-exit: 3
+main() :: int32 {
+    if (0) {
+        ret 1;
+    } elif (1) {
+        ret 3;
+    } else {
+        ret 2;
+    }
+}

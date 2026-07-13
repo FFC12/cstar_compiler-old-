@@ -2,6 +2,7 @@
 
 GlobalSymbolInfoList Visitor::GlobalSymbolTable{};
 LocalSymbolInfoList Visitor::LocalSymbolTable{};
+FunctionSignatureTable Visitor::FunctionTable{};
 
 // Type checking..
 // Every type can be checked from symbolLists
@@ -17,7 +18,9 @@ void CStarCodegen::pass1() {
 
   for (auto& ast : m_AST) {
     if (ast->getASTKind() == ASTKind::Decl) {
-      if (ast->getDeclKind() == DeclKind::FuncDecl) {
+      if (ast->getDeclKind() == DeclKind::FuncDecl ||
+          ast->getDeclKind() == DeclKind::ImportFuncDecl ||
+          ast->getDeclKind() == DeclKind::ExportFuncDecl) {
         auto tempSymbolInfo = ast->acceptBefore(preVisitor);
         funcName = tempSymbolInfo.assocFuncName;
 

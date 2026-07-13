@@ -12,7 +12,7 @@ class FixAST : public IAST {
   bool m_IsDecrement;
 
  public:
-  FixAST() = default;
+  FixAST() = delete;
   FixAST(ASTNode symbol, bool isPrefix, bool isPostfix, bool isIncremant,
          bool isDecrement, SemanticLoc& semanticLoc)
       : IAST(semanticLoc),

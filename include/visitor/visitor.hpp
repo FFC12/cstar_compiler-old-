@@ -173,6 +173,7 @@ class Visitor {
   // These are from pass0;
   static GlobalSymbolInfoList GlobalSymbolTable;
   static LocalSymbolInfoList LocalSymbolTable;
+  static FunctionSignatureTable FunctionTable;
   static size_t SymbolId, ScopeId;
   static std::unique_ptr<llvm::IRBuilder<>> Builder;
   static std::unique_ptr<llvm::Module> Module;
@@ -199,6 +200,7 @@ class Visitor {
   ValuePtr visit(ScalarOrLiteralAST& scalarAst);
   ValuePtr visit(SymbolAST& symbolAst);
   ValuePtr visit(FixAST& fixAst);
+  llvm::Function* declareFunction(FuncAST& funcAst);
 
   SymbolInfo preVisit(VarAST& varAst);
   SymbolInfo preVisit(AssignmentAST& assignmentAst);

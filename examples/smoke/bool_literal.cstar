@@ -1,0 +1,10 @@
+// expected: pass
+// expected-exit: 1
+main() :: int32 {
+    bool ok = true;
+    if (ok) {
+        ret 1;
+    }
+
+    ret 0;
+}

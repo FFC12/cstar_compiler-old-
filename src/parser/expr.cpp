@@ -336,7 +336,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
     } else if (is(TokenKind::LT) && this->isBinOp()) {
       // This is for binary '<'. But we have to be sure it's
       // a function type attrib or not
-      auto op = currentTokenInfo();
+      auto genericCandidateIndex = this->m_TokenIndex;
+      auto genericCandidatePrevToken = this->m_PrevToken;
       this->advance();
 
       bool clearType = false;
@@ -344,9 +345,10 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       if (isType(currentTokenInfo())) clearType = true;
       if (is(TokenKind::IDENT)) isIdent = true;
 
-      auto typeOrSymbol = clearType
-                              ? this->advanceType()
-                              : (isIdent ? this->advanceSymbol() : nullptr);
+      auto previousTypeFlag = TypeFlag;
+      TypeFlag = true;
+      auto typeOrSymbol = clearType || isIdent ? this->advanceType() : nullptr;
+      TypeFlag = previousTypeFlag;
 
       bool outOfSize = false;
       auto nextToken = nextTokenInfo(outOfSize).getTokenKind();
@@ -364,7 +366,9 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       } else {
         // well we're sure this is not binary op for the type attrib
         // so go to jump_operator and keep going from there
-        restoreToken(clearType ? 1 : (isIdent ? 2 : 1));
+        this->m_TokenIndex = genericCandidateIndex;
+        this->m_CurrToken = this->m_TokenStream[this->m_TokenIndex];
+        this->m_PrevToken = genericCandidatePrevToken;
         if (isOperator(this->currentTokenInfo())) goto jump_operator;
       }
     } else if (isOperator(this->currentTokenInfo())) {
@@ -557,7 +561,9 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
     this->advance();
 
     // this is for statements
-    prevTokenInfo().getTokenPositionInfo().setBegin(parenthesesPos[0]);
+    if (!parenthesesPos.empty()) {
+      prevTokenInfo().getTokenPositionInfo().setBegin(parenthesesPos.front());
+    }
     if (closedPar % 2 != 0) {
       // assert(false && ") mismatch");
       if (!parenthesesPos.empty()) {
@@ -602,7 +608,9 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
     this->advance();
 
     // this is for statements
-    prevTokenInfo().getTokenPositionInfo().setBegin(sparenthesesPos[0]);
+    if (!sparenthesesPos.empty()) {
+      prevTokenInfo().getTokenPositionInfo().setBegin(sparenthesesPos.front());
+    }
     if (closedSPar % 2 != 0) {
       // assert(false && ") mismatch");
       if (!sparenthesesPos.empty()) {
@@ -632,7 +640,9 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
     this->advance();
 
     // this is for statements
-    prevTokenInfo().getTokenPositionInfo().setBegin(ternaryPos[0]);
+    if (!ternaryPos.empty()) {
+      prevTokenInfo().getTokenPositionInfo().setBegin(ternaryPos.front());
+    }
     if (closedTernary % 2 != 0) {
       // assert(false && ") mismatch");
       if (!ternaryPos.empty()) {
@@ -662,7 +672,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
     assert(false && "Operator Prec: unreacheable 2!");
   }
 
-  // return this->advanceConstantOrLiteral();
+  return nullptr;
 }
 
 ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
@@ -822,6 +832,9 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
           break;
         case EQUALEQUAL:
           binOpKind = BinOpKind::B_EQ;
+          break;
+        case NOTEQUAL:
+          binOpKind = BinOpKind::B_NEQ;
           break;
         case DOT:
           binOpKind = BinOpKind::B_DOT;

@@ -1,0 +1,11 @@
+// expected: pass
+// expected-exit: 13
+identity(int32* p) :: int32* {
+    ret p;
+}
+
+main() :: int32 {
+    int32 x = 13;
+    int32* p = identity(ref x);
+    ret deref p;
+}

@@ -178,6 +178,7 @@ ASTNode CStarParser::initializerList() {
     el2 = std::move(this->expression(true));
   }
   expected(TokenKind::RBRACK);
+  return el;
 }
 
 size_t CStarParser::advancePointerType(bool isUniquePtr) {
@@ -298,5 +299,6 @@ TypeSpecifier CStarParser::typeSpecifierOf(const TokenInfo& token) {
       return TypeSpecifier::SPEC_DEFINED;
     default:
       assert(false && "Unreacheable");
+      return TypeSpecifier::SPEC_NIL;
   }
 }

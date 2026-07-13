@@ -1,0 +1,8 @@
+// expected: diagnostic
+add(int32 a, int32 b) :: int32 {
+    ret a + b;
+}
+
+main() :: int32 {
+    ret add(1, true);
+}

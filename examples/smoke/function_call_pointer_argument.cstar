@@ -1,0 +1,10 @@
+// expected: pass
+// expected-exit: 9
+read_ptr(int32* p) :: int32 {
+    ret deref p;
+}
+
+main() :: int32 {
+    int32 x = 9;
+    ret read_ptr(ref x);
+}

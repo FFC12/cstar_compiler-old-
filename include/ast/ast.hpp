@@ -19,6 +19,7 @@ enum ExprKind {
   ParamExpr,
   RetExpr,
   FuncCallExpr,
+  CastExpr,
   SymbolExpr,
   FixExpr,
 };
@@ -66,6 +67,7 @@ class IAST {
 
  public:
   explicit IAST(SemanticLoc semLoc) : m_SemLoc(semLoc){};
+  virtual ~IAST() = default;
 
   [[nodiscard]] SemanticLoc getSemLoc() const { return m_SemLoc; }
 

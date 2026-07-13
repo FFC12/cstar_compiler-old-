@@ -1,0 +1,10 @@
+// expected: pass
+// expected-exit: 9
+
+add(int32 a, int32 b) :: int32 {
+    ret a + b;
+}
+
+main() :: int32 {
+    ret add(cast<int32>(4.5), cast<int32>(5));
+}

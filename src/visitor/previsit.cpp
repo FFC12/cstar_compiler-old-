@@ -82,12 +82,15 @@ static size_t GetBitSize(TypeSpecifier typeSpecifier) {
     case SPEC_VEC3:
     case SPEC_VEC4:
       assert(false && "Not implemented yet!");
+      return 0;
     case SPEC_NIL:
       return 8;
     case SPEC_DEFINED:
       assert(false && "Not implemented yet!");
+      return 0;
     default:
       assert(false && "Unreacheable");
+      return 0;
   }
 }
 static std::string GetTypeStr(TypeSpecifier typeSpecifier) {
@@ -136,12 +139,15 @@ static std::string GetTypeStr(TypeSpecifier typeSpecifier) {
     case SPEC_VEC4:
     case SPEC_VEC3:
       assert(false && "Not implemented yet!");
+      return "<not-implemented>";
 
     case SPEC_NIL:
       assert(false && "!");
+      return "nil";
     case SPEC_DEFINED:
     default:
       assert(false && "Unreacheable");
+      return "<invalid>";
   }
 }
 static bool IsPrimitiveType(TypeSpecifier typeSpecifier) {
@@ -165,6 +171,38 @@ static bool IsPrimitiveType(TypeSpecifier typeSpecifier) {
     case SPEC_CHAR:
     case SPEC_UCHAR:
     case SPEC_BOOL:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static bool IsIntegerType(TypeSpecifier typeSpecifier) {
+  switch (typeSpecifier) {
+    case SPEC_I8:
+    case SPEC_I16:
+    case SPEC_I32:
+    case SPEC_I64:
+    case SPEC_INT:
+    case SPEC_U8:
+    case SPEC_U16:
+    case SPEC_U32:
+    case SPEC_U64:
+    case SPEC_U128:
+    case SPEC_UINT:
+    case SPEC_ISIZE:
+    case SPEC_USIZE:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static bool IsFloatingType(TypeSpecifier typeSpecifier) {
+  switch (typeSpecifier) {
+    case SPEC_F32:
+    case SPEC_F64:
+    case SPEC_FLOAT:
       return true;
     default:
       return false;
@@ -302,6 +340,8 @@ bool Visitor::validateArray(IAST &binaryExpr, size_t level, size_t &index) {
   invalid_binop:
     std::cout << std::endl;
   }
+
+  return true;
 }
 
 void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
@@ -498,9 +538,12 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
       symbolInfo.line = lhs->m_SemLoc.line;
 
       this->m_LastAssignment = true;
-      this->m_LastSymbolInfo.symbolId = m_SymbolId;
-      this->m_LastSymbolInfo.scopeId = m_ScopeId;
-      this->m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
+      const size_t assignmentSymbolId = m_SymbolId;
+      const size_t assignmentScopeId = m_ScopeId;
+      const size_t assignmentScopeLevel = m_ScopeLevel;
+      this->m_LastSymbolInfo.symbolId = assignmentSymbolId;
+      this->m_LastSymbolInfo.scopeId = assignmentScopeId;
+      this->m_LastSymbolInfo.scopeLevel = assignmentScopeLevel;
 
       bool indirectable = false;
       if (symbolValidation(lhs->m_SymbolName, symbolInfo, matchedSymbol)) {
@@ -614,6 +657,9 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
 
         this->m_LastBinOpHasAtLeastOnePtr = false;
         this->m_LastSymbolInfo = matchedSymbol;
+        this->m_LastSymbolInfo.symbolId = assignmentSymbolId;
+        this->m_LastSymbolInfo.scopeId = assignmentScopeId;
+        this->m_LastSymbolInfo.scopeLevel = assignmentScopeLevel;
 
         //      this->m_LastIde
         //        if(indirectable)
@@ -1084,6 +1130,113 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
 SymbolInfo Visitor::preVisit(CastOpAST &castOpAst) {
   SymbolInfo symbolInfo;
 
+  symbolInfo.begin = castOpAst.m_SemLoc.begin;
+  symbolInfo.end = castOpAst.m_SemLoc.end;
+  symbolInfo.line = castOpAst.m_SemLoc.line;
+
+  if (!m_TypeChecking) {
+    return symbolInfo;
+  }
+
+  if (!castOpAst.m_HasTypeAttrib || castOpAst.m_TypeNode == nullptr) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Cast expression requires an explicit target type", symbolInfo);
+    return symbolInfo;
+  }
+
+  auto *targetType = dynamic_cast<TypeAST *>(castOpAst.m_TypeNode.get());
+  if (targetType == nullptr) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Cast target must be a concrete type", symbolInfo);
+    return symbolInfo;
+  }
+
+  if (targetType->m_TypeSpec == TypeSpecifier::SPEC_VOID &&
+      targetType->m_IndirectLevel == 0) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Cannot cast to plain 'void'", symbolInfo);
+    return symbolInfo;
+  }
+
+  if (castOpAst.m_CastOpKind == CastOpKind::C_UNSAFE_CAST) {
+    symbolInfo.type = targetType->m_TypeSpec;
+    symbolInfo.indirectionLevel = targetType->m_IndirectLevel;
+    symbolInfo.isRef = targetType->m_IsRef;
+    symbolInfo.isUnique = targetType->m_IsUniquePtr;
+    return symbolInfo;
+  }
+
+  SymbolInfo sourceInfo;
+  if (castOpAst.m_Node == nullptr) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Cast expression requires a source expression", symbolInfo);
+    return symbolInfo;
+  }
+
+  if (castOpAst.m_Node->m_ExprKind == ExprKind::SymbolExpr) {
+    auto *sourceSymbol = static_cast<SymbolAST *>(castOpAst.m_Node.get());
+    SymbolInfo lookupInfo;
+    lookupInfo.symbolName = sourceSymbol->m_SymbolName;
+    lookupInfo.begin = sourceSymbol->m_SemLoc.begin;
+    lookupInfo.end = sourceSymbol->m_SemLoc.end;
+    lookupInfo.line = sourceSymbol->m_SemLoc.line;
+    symbolValidation(sourceSymbol->m_SymbolName, lookupInfo, sourceInfo);
+  } else if (castOpAst.m_Node->m_ExprKind == ExprKind::ScalarExpr) {
+    auto *scalar = static_cast<ScalarOrLiteralAST *>(castOpAst.m_Node.get());
+    sourceInfo.begin = scalar->m_SemLoc.begin;
+    sourceInfo.end = scalar->m_SemLoc.end;
+    sourceInfo.line = scalar->m_SemLoc.line;
+
+    if (scalar->m_IsLiteral) {
+      sourceInfo.type = TypeSpecifier::SPEC_CHAR;
+      sourceInfo.indirectionLevel = 1;
+    } else if (scalar->m_IsBoolean) {
+      sourceInfo.type = TypeSpecifier::SPEC_BOOL;
+    } else if (scalar->m_IsFloat) {
+      sourceInfo.type = TypeSpecifier::SPEC_F64;
+    } else if (scalar->m_IsLetter) {
+      sourceInfo.type = TypeSpecifier::SPEC_CHAR;
+    } else {
+      sourceInfo.type = TypeSpecifier::SPEC_I64;
+    }
+  } else {
+    const auto previousExpectedType = m_ExpectedType;
+    const auto previousLastSymbolInfo = m_LastSymbolInfo;
+    const auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+    const auto previousLastBinOpHasPtr = m_LastBinOpHasAtLeastOnePtr;
+
+    m_ExpectedType = TypeSpecifier::SPEC_I64;
+    m_LastSymbolInfo.type = TypeSpecifier::SPEC_I64;
+    m_LastSymbolInfo.indirectionLevel = 0;
+    m_LastSymbolInfo.isRef = false;
+    m_LastSymbolInfo.isUnique = false;
+    m_DefinedTypeFlag = false;
+    m_LastBinOpHasAtLeastOnePtr = false;
+
+    sourceInfo = castOpAst.m_Node->acceptBefore(*this);
+
+    m_ExpectedType = previousExpectedType;
+    m_LastSymbolInfo = previousLastSymbolInfo;
+    m_DefinedTypeFlag = previousDefinedTypeFlag;
+    m_LastBinOpHasAtLeastOnePtr = previousLastBinOpHasPtr;
+  }
+
+  if (castOpAst.m_CastOpKind == CastOpKind::C_CAST) {
+    const bool targetPointer = targetType->m_IndirectLevel > 0;
+    const bool sourcePointer =
+        sourceInfo.indirectionLevel > 0 || sourceInfo.isRef;
+
+    if (targetPointer != sourcePointer) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Safe cast cannot cross pointer and value categories", symbolInfo);
+    }
+  }
+
+  symbolInfo.type = targetType->m_TypeSpec;
+  symbolInfo.indirectionLevel = targetType->m_IndirectLevel;
+  symbolInfo.isRef = targetType->m_IsRef;
+  symbolInfo.isUnique = targetType->m_IsUniquePtr;
+
   return symbolInfo;
 }
 
@@ -1312,7 +1465,190 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
 
 SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
   SymbolInfo symbolInfo;
-  // TODO: return type checking...
+
+  symbolInfo.begin = funcCallAst.m_SemLoc.begin;
+  symbolInfo.end = funcCallAst.m_SemLoc.end;
+  symbolInfo.line = funcCallAst.m_SemLoc.line;
+
+  if (!m_TypeChecking) {
+    return symbolInfo;
+  }
+
+  if (funcCallAst.m_FuncSymbol == nullptr ||
+      funcCallAst.m_FuncSymbol->m_ExprKind != ExprKind::SymbolExpr) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Function call target must be a symbol", symbolInfo);
+    return symbolInfo;
+  }
+
+  auto *funcSymbol = static_cast<SymbolAST *>(funcCallAst.m_FuncSymbol.get());
+  symbolInfo.symbolName = funcSymbol->m_SymbolName;
+  symbolInfo.begin = funcSymbol->m_SemLoc.begin;
+  symbolInfo.end = funcSymbol->m_SemLoc.end;
+  symbolInfo.line = funcSymbol->m_SemLoc.line;
+
+  std::vector<IAST *> argNodes;
+  auto collectArgs = [&](auto &self, IAST *node) -> void {
+    if (node == nullptr) {
+      return;
+    }
+
+    if (node->m_ExprKind == ExprKind::BinOp) {
+      auto *binOp = static_cast<BinaryOpAST *>(node);
+      if (binOp->m_BinOpKind == BinOpKind::B_COMM) {
+        self(self, binOp->m_LHS.get());
+        self(self, binOp->m_RHS.get());
+        return;
+      }
+    }
+
+    argNodes.push_back(node);
+  };
+  collectArgs(collectArgs, funcCallAst.m_Args.get());
+
+  if (funcSymbol->m_SymbolName == "print") {
+    if (argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'print' expects at least 1 argument", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_VOID;
+    return symbolInfo;
+  }
+
+  if (funcSymbol->m_SymbolName == "input_int") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'input_int' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_I64;
+    symbolInfo.indirectionLevel = 0;
+    return symbolInfo;
+  }
+
+  auto signatureIt = FunctionTable.find(funcSymbol->m_SymbolName);
+  if (signatureIt == FunctionTable.end()) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Function '" + funcSymbol->m_SymbolName + "' was not declared",
+        symbolInfo);
+    return symbolInfo;
+  }
+
+  const auto &signature = signatureIt->second;
+  if (signature.params.size() != argNodes.size()) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Function '" + funcSymbol->m_SymbolName + "' expects " +
+            std::to_string(signature.params.size()) + " argument(s), but " +
+            std::to_string(argNodes.size()) + " provided",
+        symbolInfo);
+    return signature.returnType;
+  }
+
+  const bool callValueIsChecked =
+      m_LastVarDecl || m_LastAssignment || m_LastRetExpr || m_LastBinOp;
+  const auto expectedCallResultType =
+      m_LastRetExpr ? m_LastFuncRetTypeInfo.type : m_ExpectedType;
+  auto previousExpectedType = m_ExpectedType;
+  auto previousLastSymbolInfo = m_LastSymbolInfo;
+  auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+  auto previousLastBinOpHasPtr = m_LastBinOpHasAtLeastOnePtr;
+
+  for (size_t i = 0; i < argNodes.size(); ++i) {
+    m_LastSymbolInfo = signature.params[i];
+    m_LastSymbolInfo.symbolId = m_SymbolId;
+    m_LastSymbolInfo.scopeId = m_ScopeId;
+    m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
+    m_ExpectedType = signature.params[i].type;
+    m_DefinedTypeFlag = signature.params[i].type == TypeSpecifier::SPEC_DEFINED;
+    m_LastBinOpHasAtLeastOnePtr = false;
+
+    if (argNodes[i]->m_ExprKind == ExprKind::ScalarExpr) {
+      auto *scalar = static_cast<ScalarOrLiteralAST *>(argNodes[i]);
+      const auto expectedType = signature.params[i].type;
+      const bool expectedInteger = IsIntegerType(expectedType);
+
+      if ((expectedInteger && scalar->m_IsBoolean) ||
+          (expectedType == TypeSpecifier::SPEC_BOOL && !scalar->m_IsBoolean)) {
+        SymbolInfo argInfo;
+        argInfo.begin = scalar->m_SemLoc.begin;
+        argInfo.end = scalar->m_SemLoc.end;
+        argInfo.line = scalar->m_SemLoc.line;
+        this->m_TypeErrorMessages.emplace_back(
+            "Function argument " + std::to_string(i + 1) +
+                " is incompatible with parameter type '" +
+                GetTypeStr(expectedType) + "'",
+            argInfo);
+        continue;
+      }
+    } else if (argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
+      SymbolInfo argInfo;
+      SymbolInfo matchedSymbol;
+      argInfo.symbolName = argSymbol->m_SymbolName;
+      argInfo.begin = argSymbol->m_SemLoc.begin;
+      argInfo.end = argSymbol->m_SemLoc.end;
+      argInfo.line = argSymbol->m_SemLoc.line;
+
+      auto argSymbolName = argSymbol->m_SymbolName;
+      if (!symbolValidation(argSymbolName, argInfo, matchedSymbol)) {
+        continue;
+      }
+
+      const auto expectedType = signature.params[i].type;
+      const auto actualType = matchedSymbol.type;
+      const bool boolMismatch =
+          (IsIntegerType(expectedType) && actualType == TypeSpecifier::SPEC_BOOL) ||
+          (expectedType == TypeSpecifier::SPEC_BOOL && IsIntegerType(actualType));
+
+      if (boolMismatch) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Function argument " + std::to_string(i + 1) +
+                " is incompatible with parameter type '" +
+                GetTypeStr(expectedType) + "'",
+            argInfo);
+        continue;
+      }
+    }
+
+    argNodes[i]->acceptBefore(*this);
+  }
+
+  m_ExpectedType = previousExpectedType;
+  m_LastSymbolInfo = previousLastSymbolInfo;
+  m_DefinedTypeFlag = previousDefinedTypeFlag;
+  m_LastBinOpHasAtLeastOnePtr = previousLastBinOpHasPtr;
+
+  symbolInfo = signature.returnType;
+  symbolInfo.symbolName = funcSymbol->m_SymbolName;
+  symbolInfo.begin = funcSymbol->m_SemLoc.begin;
+  symbolInfo.end = funcSymbol->m_SemLoc.end;
+  symbolInfo.line = funcSymbol->m_SemLoc.line;
+
+  if (callValueIsChecked && IsPrimitiveType(expectedCallResultType) &&
+      IsPrimitiveType(symbolInfo.type) &&
+      expectedCallResultType != symbolInfo.type) {
+    const bool expectedInteger = IsIntegerType(expectedCallResultType);
+    const bool actualInteger = IsIntegerType(symbolInfo.type);
+    const bool boolMismatch =
+        expectedCallResultType == TypeSpecifier::SPEC_BOOL ||
+        symbolInfo.type == TypeSpecifier::SPEC_BOOL;
+
+    if (boolMismatch || expectedCallResultType == TypeSpecifier::SPEC_VOID ||
+        symbolInfo.type == TypeSpecifier::SPEC_VOID) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Function '" + funcSymbol->m_SymbolName + "' returns '" +
+              GetTypeStr(symbolInfo.type) + "', but '" +
+              GetTypeStr(expectedCallResultType) + "' is expected",
+          symbolInfo);
+    } else if (expectedInteger && actualInteger &&
+               LosslessCasting(expectedCallResultType, symbolInfo.type)) {
+      this->m_TypeWarningMessages.emplace_back(
+          "Function '" + funcSymbol->m_SymbolName + "' returns '" +
+              GetTypeStr(symbolInfo.type) + "', which is casting to '" +
+              GetTypeStr(expectedCallResultType) +
+              "'. Potential data loss might be occured!",
+          symbolInfo);
+    }
+  }
 
   return symbolInfo;
 }
@@ -1372,6 +1708,7 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
   } else {
     symbolInfo.type = TypeSpecifier::SPEC_DEFINED;
   }
+  symbolInfo.isParam = true;
 
   if (m_TypeChecking) {
     if (((symbolInfo.isConstPtr && !symbolInfo.isSubscriptable) &&
@@ -1526,6 +1863,12 @@ void Visitor::scopeHandler(std::unique_ptr<IAST> &node,
   } else if (node->m_ASTKind == ASTKind::Expr &&
              node->m_ExprKind == ExprKind::FixExpr) {
     node->acceptBefore(*this);
+  } else if (node->m_ASTKind == ASTKind::Expr &&
+             node->m_ExprKind == ExprKind::FuncCallExpr) {
+    node->acceptBefore(*this);
+  } else if (node->m_ASTKind == ASTKind::Expr &&
+             node->m_ExprKind == ExprKind::CastExpr) {
+    node->acceptBefore(*this);
   }
 }
 
@@ -1551,6 +1894,12 @@ void Visitor::typeCheckerScopeHandler(std::unique_ptr<IAST> &node) {
     node->acceptBefore(*this);
   } else if (node->m_ASTKind == ASTKind::Expr &&
              node->m_ExprKind == ExprKind::FixExpr) {
+    node->acceptBefore(*this);
+  } else if (node->m_ASTKind == ASTKind::Expr &&
+             node->m_ExprKind == ExprKind::FuncCallExpr) {
+    node->acceptBefore(*this);
+  } else if (node->m_ASTKind == ASTKind::Expr &&
+             node->m_ExprKind == ExprKind::CastExpr) {
     node->acceptBefore(*this);
   }
 }

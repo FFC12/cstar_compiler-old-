@@ -1,0 +1,9 @@
+// expected: diagnostic
+add(int32 value) :: int32 {
+    ret value;
+}
+
+main() :: int32 {
+    bool flag = true;
+    ret add(flag);
+}

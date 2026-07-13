@@ -242,22 +242,23 @@ class CStarLexer {
   void restoreLastChar() { this->m_Index--; }
 
   char nextCharLinefeed() {
-    if (m_Index < m_BufferView.size() + 1) {
+    if (m_Index < m_BufferView.size()) {
       if (m_Index == 0) m_Index = 1;
       auto c = m_BufferView[m_Index];
       m_CurrChar = c;
 
       m_Index++;
       return c;
-    } else if (m_Index == m_BufferView.size() + 1) {
+    } else if (m_Index == m_BufferView.size()) {
       this->m_LexerFlags = LexerFlags::DONE;
+      m_Index++;
 
       // Well, this may be moved to the function 'perform'. But for now, I don't
       // care.
       //      if(this->m_LexerFlags == LexerFlags::DONE){
       //	    std::exit(0);
       //      }
-      return ' ';  // for making the compiler silent
+      return '\0';
     } else {
       std::cerr << "Out of index in the buffer...Probably corrupted data\n\n";
       std::abort();
@@ -266,7 +267,7 @@ class CStarLexer {
   }
 
   char nextChar() {
-    if (m_Index < m_BufferView.size() + 1) {
+    if (m_Index < m_BufferView.size()) {
       auto c = m_BufferView[m_Index];
       m_CurrChar = c;
 
@@ -276,9 +277,10 @@ class CStarLexer {
 
       m_Index++;
       return c;
-    } else if (m_Index == m_BufferView.size() + 1) {
+    } else if (m_Index == m_BufferView.size()) {
       this->m_LexerFlags = LexerFlags::DONE;
-      return ' ';  // for making the compiler silent
+      m_Index++;
+      return '\0';
     } else {
       std::cerr << "Out of index in the buffer...Probably corrupted data\n\n";
       std::abort();
@@ -303,7 +305,7 @@ class CStarLexer {
     // since our ParserError function can
     // be worked correctly
     if (!m_Buffer.empty()) {
-      if (m_Buffer[m_Buffer.size()] != '\n') m_Buffer.push_back('\n');
+      if (m_Buffer.back() != '\n') m_Buffer.push_back('\n');
     }
 
     preprocess();
@@ -346,27 +348,17 @@ class CStarLexer {
     TokenKind _scalarType = TokenKind::SCALARI;
 
     while (isdigit(_c) || _c == '.') {
-      _keyword += _c;
-      _c = nextChar();
-
       if (_c == '.') {
-        // if there is not
-        if (lookAhead('0') || lookAhead('1') || lookAhead('2') ||
-            lookAhead('3') || lookAhead('4') || lookAhead('5') ||
-            lookAhead('6') || lookAhead('7') || lookAhead('8') ||
-            lookAhead('9')) {
-        } else {
-          m_Buffer.insert(m_Index, "0");
-        }
-
         if (_is_float) {
-          _is_float = false;
           break;
         }
 
         _is_float = true;
         _scalarType = TokenKind::SCALARD;
       }
+
+      _keyword += _c;
+      _c = nextChar();
     }
     restoreLastChar();
     this->m_LastKeyword = _keyword;
@@ -1038,7 +1030,7 @@ class CStarLexer {
 
   void lexerStats() const {
     time_t endTime = time(nullptr);
-    std::cout << GRN "======= Lexical Analysis =======" RES << std::endl;
+    std::cout << GRN << "======= Lexical Analysis =======" << RES << std::endl;
     double dif = difftime(endTime, this->m_StartTime);
     printf("-  Elapsed time : %.2lf seconds\n", dif);
     std::cout << "-  Total LoC    : " << this->m_Line + 1 << std::endl

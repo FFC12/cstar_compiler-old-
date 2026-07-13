@@ -1,0 +1,7 @@
+// expected: pass
+// expected-exit: 65
+
+main() :: int32 {
+  char c = 'A';
+  ret c;
+}

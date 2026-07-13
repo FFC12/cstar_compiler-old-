@@ -9,6 +9,7 @@ void CStarCodegen::pass0() {
   std::string funcName;
   Visitor::SymbolId = 0;
   Visitor::ScopeId = 0;
+  Visitor::FunctionTable.clear();
 
   // TODO: Will be revised
   // this->m_DefinedTypes["Type"] = 1;
@@ -17,14 +18,22 @@ void CStarCodegen::pass0() {
 
   for (auto& ast : m_AST) {
     if (ast->getASTKind() == ASTKind::Decl) {
-      if (ast->getDeclKind() == DeclKind::FuncDecl) {
+      if (ast->getDeclKind() == DeclKind::FuncDecl ||
+          ast->getDeclKind() == DeclKind::ImportFuncDecl ||
+          ast->getDeclKind() == DeclKind::ExportFuncDecl) {
         Visitor preVisitor(this->m_DefinedTypes);
 
         auto tempSymbolInfo = ast->acceptBefore(preVisitor);
         funcName = tempSymbolInfo.assocFuncName;
 
         SymbolInfoList symbolInfoList;
+        FunctionSignature signature;
+        signature.returnType = tempSymbolInfo;
         for (auto& symbolInfo : preVisitor.getSymbolInfoList()) {
+          if (symbolInfo.isParam) {
+            signature.params.push_back(symbolInfo);
+          }
+
           bool isGlobShadowing = false;
           if (redefinitionCheck(m_GlobalSymbols, symbolInfo)) {
             isGlobShadowing = true;
@@ -60,6 +69,7 @@ void CStarCodegen::pass0() {
           SemanticError("Redefinition of the function '" + funcName + '"',
                         tempSymbolInfo);
         }
+        Visitor::FunctionTable[funcName] = std::move(signature);
         this->m_LocalSymbols[funcName] = std::move(symbolInfoList);
       } else if (ast->getDeclKind() == DeclKind::VarDecl ||
                  ast->getDeclKind() == DeclKind::ImportVarDecl ||

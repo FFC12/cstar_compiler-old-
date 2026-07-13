@@ -1,0 +1,9 @@
+// expected: pass
+// expected-exit: 2
+main() :: int32 {
+    if (0) {
+        ret 1;
+    } else {
+        ret 2;
+    }
+}

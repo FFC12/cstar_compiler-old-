@@ -1,0 +1,5 @@
+// expected: pass
+// expected-exit: 1
+main() :: int32 {
+    ret 10 != 20;
+}

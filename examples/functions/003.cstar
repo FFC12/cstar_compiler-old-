@@ -1,3 +1,4 @@
+// expected: diagnostic
 int a = 30;
 
 anotherFunc()::int32 {

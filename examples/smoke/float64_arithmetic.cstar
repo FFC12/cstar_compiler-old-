@@ -1,0 +1,13 @@
+// expected: pass
+// expected-exit: 1
+
+main() :: int32 {
+  float64 x = 4.5;
+  float64 y = x / 1.5;
+
+  if (y > 2.0) {
+    ret 1;
+  }
+
+  ret 0;
+}

@@ -19,6 +19,7 @@
 #include <base.hpp>
 #include <cassert>
 #include <deque>
+#include <diagnostics/diagnostic.hpp>
 #include <lexer/lexer.hpp>
 #include <memory>
 #include <parser/hint_qualifier.hpp>
@@ -40,6 +41,7 @@ class CStarParser {
   bool m_ParsingEndingFlag;
   time_t m_StartTime;
   bool m_LocalScopeFlag;
+  bool m_StatsEnabled;
 
   const char* tokenToStr(TokenKind kind) noexcept {
     return m_Lexer.tokenAsStr(kind);
@@ -209,6 +211,10 @@ class CStarParser {
   void ParserHint(std::string mesg, TokenInfo tokenInfo);
   void ParserHint(std::string mesg, TokenInfo tokenInfo, size_t new_begin);
   void ParserError(const std::string& mesg, TokenInfo tokenInfo);
+  void emitDiagnostic(cstar::diagnostics::Severity severity,
+                      cstar::diagnostics::DiagnosticCode code,
+                      std::string mesg, size_t begin, size_t end,
+                      size_t line, bool exitAfter);
 
   void ParserError(std::string mesg, TokenInfo tokenInfo, size_t new_begin);
   std::string_view::iterator viewLine(size_t line, size_t& rlbegin,
@@ -251,19 +257,24 @@ class CStarParser {
   TypeSpecifier typeResolver(TokenInfo token);
 
   void parserStats() const {
+    if (!m_StatsEnabled) {
+      return;
+    }
+
     time_t endTime = time(nullptr);
-    std::cout << GRN "======= Syntantic Analysis =======" RES << std::endl;
+    std::cout << GRN << "======= Syntactic Analysis =======" << RES << std::endl;
     double dif = difftime(endTime, this->m_StartTime);
     printf("-  Elapsed time : %.2lf seconds\n\n", dif);
   }
 
  public:
-  explicit CStarParser(CStarLexer&& pLexer)
+  explicit CStarParser(CStarLexer&& pLexer, bool statsEnabled = false)
       : m_Lexer(pLexer),
         m_TokenIndex(0),
         m_ErrorFlag(false),
         m_ParsingEndingFlag(false),
-        m_LocalScopeFlag(false) {
+        m_LocalScopeFlag(false),
+        m_StatsEnabled(statsEnabled) {
     addToPrecTable(OpType::OP_BINARY, COLONCOLON, 16, true);
     addToPrecTable(OpType::OP_BINARY, LPAREN, 15, true);
     addToPrecTable(OpType::OP_BINARY, LSQPAR, 15, true);

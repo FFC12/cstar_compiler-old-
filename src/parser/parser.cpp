@@ -2,7 +2,9 @@
 
 void CStarParser::parse() {
   m_TokenStream = this->m_Lexer.perform();
-  this->m_Lexer.lexerStats();
+  if (m_StatsEnabled) {
+    this->m_Lexer.lexerStats();
+  }
   this->m_StartTime = time(nullptr);
 
   if (!this->m_TokenStream.empty()) {
@@ -40,7 +42,12 @@ void CStarParser::translationUnit() {
     }
 
     if (isPackageMark(this->m_CurrToken)) {
-      // package | package involved
+      ParserHint("Package/include syntax is part of the C* proposal, but it "
+                 "is not implemented in the compiler yet.",
+                 currentTokenInfo());
+      ParserError("Unexpected token '" + currentTokenInfo().getTokenAsStr() +
+                      "'",
+                  currentTokenInfo());
     } else {
       VisibilitySpecifier visibilitySpecifier =
           VisibilitySpecifier::VIS_DEFAULT;
@@ -389,389 +396,68 @@ TypeQualifier CStarParser::typeQualifierOf(const TokenInfo& tokenInfo) {
   }
 }
 
+void CStarParser::emitDiagnostic(cstar::diagnostics::Severity severity,
+                                 cstar::diagnostics::DiagnosticCode code,
+                                 std::string mesg, size_t begin, size_t end,
+                                 size_t line, bool exitAfter) {
+  cstar::diagnostics::DiagnosticRenderer renderer(std::cout);
+  renderer.print({
+      code,
+      severity,
+      std::move(mesg),
+      this->m_Lexer.getFilepath().get(),
+      this->m_Lexer.getBufferView(),
+      {begin, end, line},
+  });
+
+  if (exitAfter) {
+    exit(1);
+  }
+}
+
 void CStarParser::ParserHint(std::string mesg, TokenInfo tokenInfo) {
   auto posInfo = tokenInfo.getTokenPositionInfo();
-
-  // copy one time for each translation unit
-  static std::string messageHeader(this->m_Lexer.getFilepath().get());
-  const size_t CHAR_LIMIT = 256;
-  const size_t MARGIN_LEFT = 5;
-
-  // token pos
-  size_t tok_begin = posInfo.begin;
-  size_t tok_end = posInfo.end;
-  size_t line = posInfo.line;
-
-  // line
-  size_t offset = 0;
-
-  // tok_begin will be relative begin according to the line.
-  auto buffer_it = this->viewLine(line, tok_begin, tok_end, offset);
-
-  // message header
-  messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + BWHT "\x20 hint: " RES +
-                   mesg + "\n";
-
-  std::cout << BLU + messageHeader + RES;
-
-  // line beginning
-  std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
-
-  // linw
-  for (int i = 0; i < offset; i++) {
-    if (i < CHAR_LIMIT) {
-      std::cout << buffer_it[i];
-    } else {
-      std::cout << "...";
-      break;
-    }
-  }
-
-  std::cout << std::endl;
-
-  auto lineNumberLen = std::to_string(line).size();
-
-  // for margin
-  for (int i = 0; i < MARGIN_LEFT + lineNumberLen - 1; i++)
-    if (i == 3 + lineNumberLen - 1)
-      putchar('|');
-    else
-      putchar('\x20');
-
-  // indicator
-  std::cout << BLU;
-  for (int i = 0; i < offset; i++) {
-    if (i >= tok_begin && i < tok_end) {
-      putchar('~');
-    } else {
-      putchar('\x20');
-    }
-  }
-  std::cout << RES;
-  std::cout << std::endl << std::endl;
+  emitDiagnostic(cstar::diagnostics::Severity::Hint,
+                 cstar::diagnostics::DiagnosticCode::ParserHint,
+                 std::move(mesg), posInfo.begin, posInfo.end, posInfo.line,
+                 false);
 }
+
 void CStarParser::ParserWarning(std::string mesg, size_t newBegin,
                                 size_t newEnd, size_t newLine) {
-  // copy one time for each translation unit
-  std::string messageHeader(this->m_Lexer.getFilepath().get());
-  const size_t CHAR_LIMIT = 256;
-  const size_t MARGIN_LEFT = 5;
-
-  // token pos
-  size_t tok_begin = newBegin;
-  size_t tok_end = newEnd;
-  size_t line = newLine;
-
-  // line
-  size_t offset = 0;
-
-  // tok_begin will be relative begin according to the line.
-  auto buffer_it = this->viewLine(line, tok_begin, tok_end, offset);
-
-  // message header
-  messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + YEL "\x20 warning: " RES +
-                   mesg + "\n";
-
-  std::cout << BLU + messageHeader + RES;
-
-  // line beginning
-  std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
-
-  // linw
-  for (int i = 0; i < offset; i++) {
-    if (i < CHAR_LIMIT) {
-      std::cout << buffer_it[i];
-    } else {
-      std::cout << "...";
-      break;
-    }
-  }
-
-  std::cout << std::endl;
-
-  auto lineNumberLen = std::to_string(line).size();
-
-  // for margin
-  for (int i = 0; i < MARGIN_LEFT + lineNumberLen - 1; i++)
-    if (i == 3 + lineNumberLen - 1)
-      putchar('|');
-    else
-      putchar('\x20');
-
-  // indicator
-  std::cout << BLU;
-  for (int i = 0; i < offset; i++) {
-    if (i >= tok_begin && i < tok_end) {
-      putchar('~');
-    } else {
-      putchar('\x20');
-    }
-  }
-  std::cout << RES;
-  std::cout << std::endl << std::endl;
+  emitDiagnostic(cstar::diagnostics::Severity::Warning,
+                 cstar::diagnostics::DiagnosticCode::SemanticWarning,
+                 std::move(mesg), newBegin, newEnd, newLine, false);
 }
 
 void CStarParser::ParserHint(std::string mesg, TokenInfo tokenInfo,
                              size_t new_begin) {
   auto posInfo = tokenInfo.getTokenPositionInfo();
-
-  // copy one time for each translation unit
-  static std::string messageHeader(this->m_Lexer.getFilepath().get());
-  const size_t CHAR_LIMIT = 256;
-  const size_t MARGIN_LEFT = 5;
-
-  // token pos
-  size_t tok_begin = new_begin;
-  size_t tok_end = posInfo.end;
-  size_t line = posInfo.line;
-
-  // line
-  size_t offset = 0;
-
-  // tok_begin will be relative begin according to the line.
-  auto buffer_it = this->viewLine(line, tok_begin, tok_end, offset);
-
-  // message header
-  messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + BWHT "\x20 hint: " RES +
-                   mesg + "\n";
-
-  std::cout << BLU + messageHeader + RES;
-
-  // line beginning
-  std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
-
-  // linw
-  for (int i = 0; i < offset; i++) {
-    if (i < CHAR_LIMIT) {
-      std::cout << buffer_it[i];
-    } else {
-      std::cout << "...";
-      break;
-    }
-  }
-
-  std::cout << std::endl;
-
-  auto lineNumberLen = std::to_string(line).size();
-
-  // for margin
-  for (int i = 0; i < MARGIN_LEFT + lineNumberLen - 1; i++)
-    if (i == 3 + lineNumberLen - 1)
-      putchar('|');
-    else
-      putchar('\x20');
-
-  // indicator
-  std::cout << BLU;
-  for (int i = 0; i < offset; i++) {
-    if (i >= tok_begin && i < tok_end) {
-      putchar('~');
-    } else {
-      putchar('\x20');
-    }
-  }
-  std::cout << RES;
-  std::cout << std::endl << std::endl;
+  emitDiagnostic(cstar::diagnostics::Severity::Hint,
+                 cstar::diagnostics::DiagnosticCode::ParserHint,
+                 std::move(mesg), new_begin, posInfo.end, posInfo.line, false);
 }
 
-// Parsing errors doesn't let you accumulate error and warning messages.
-// This means when a parser error occured it will be exited (1) unlike
-// semantic analyzer does
 void CStarParser::ParserError(const std::string& mesg, TokenInfo tokenInfo) {
   auto posInfo = tokenInfo.getTokenPositionInfo();
-
-  // copy one time for each translation unit
-  static std::string messageHeader(this->m_Lexer.getFilepath().get());
-  const size_t CHAR_LIMIT = 256;
-  const size_t MARGIN_LEFT = 5;
-
-  // token pos
-  size_t tok_begin = posInfo.begin;
-  size_t tok_end = posInfo.end;
-  size_t line = posInfo.line;
-
-  // line
-  size_t offset = 0;
-
-  // tok_begin will be relative begin according to the line.
-  auto buffer_it = this->viewLine(line, tok_begin, tok_end, offset);
-
-  // message header
-  messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + REDISH "\x20 error: " RES +
-                   mesg + "\n";
-
-  std::cout << BLU + messageHeader + RES;
-
-  // line beginning
-  std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
-
-  // linw
-  for (int i = 0; i < offset; i++) {
-    if (i < CHAR_LIMIT) {
-      std::cout << buffer_it[i];
-    } else {
-      std::cout << "...";
-      break;
-    }
-  }
-
-  std::cout << std::endl;
-
-  auto lineNumberLen = std::to_string(line).size();
-
-  // for margin
-  for (int i = 0; i < MARGIN_LEFT + lineNumberLen - 1; i++)
-    if (i == 3 + lineNumberLen - 1)
-      putchar('|');
-    else
-      putchar('\x20');
-
-  // indicator
-  std::cout << BLU;
-  for (int i = 0; i < offset; i++) {
-    if (i >= tok_begin && i < tok_end) {
-      putchar('~');
-    } else {
-      putchar('\x20');
-    }
-  }
-  std::cout << RES;
-  std::cout << std::endl << std::endl;
-
-  exit(1);
+  emitDiagnostic(cstar::diagnostics::Severity::Error,
+                 cstar::diagnostics::DiagnosticCode::ParserSyntax, mesg,
+                 posInfo.begin, posInfo.end, posInfo.line, true);
 }
 
 void CStarParser::ParserError(std::string mesg, size_t begin, size_t end,
                               size_t line_) {
-  // copy one time for each translation unit
-  std::string messageHeader(this->m_Lexer.getFilepath().get());
-  const size_t CHAR_LIMIT = 256;
-  const size_t MARGIN_LEFT = 5;
-
-  // token pos
-  size_t tok_begin = begin;
-  size_t tok_end = end;
-  size_t line = line_;
-
-  // line
-  size_t offset = 0;
-
-  // tok_begin will be relative begin according to the line.
-  auto buffer_it = this->viewLine(line, tok_begin, tok_end, offset);
-
-  // message header
-  messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + REDISH "\x20 error: " RES +
-                   mesg + "\n";
-
-  std::cout << BLU + messageHeader + RES;
-
-  // line beginning
-  std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
-
-  // linw
-  for (int i = 0; i < offset; i++) {
-    if (i < CHAR_LIMIT) {
-      std::cout << buffer_it[i];
-    } else {
-      std::cout << "...";
-      break;
-    }
-  }
-
-  std::cout << std::endl;
-
-  auto lineNumberLen = std::to_string(line).size();
-
-  // for margin
-  for (int i = 0; i < MARGIN_LEFT + lineNumberLen - 1; i++)
-    if (i == 3 + lineNumberLen - 1)
-      putchar('|');
-    else
-      putchar('\x20');
-
-  // indicator
-  std::cout << BLU;
-  for (int i = 0; i < offset; i++) {
-    if (i >= tok_begin && i < tok_end) {
-      putchar('~');
-    } else {
-      putchar('\x20');
-    }
-  }
-  std::cout << RES;
-  std::cout << std::endl << std::endl;
+  emitDiagnostic(cstar::diagnostics::Severity::Error,
+                 cstar::diagnostics::DiagnosticCode::SemanticError,
+                 std::move(mesg), begin, end, line_, false);
 }
 
-// This is for indicating to the long expressions/buffers.
 void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo,
                               size_t new_begin) {
   auto posInfo = tokenInfo.getTokenPositionInfo();
-
-  // copy one time for each translation unit
-  static std::string messageHeader(this->m_Lexer.getFilepath().get());
-  const size_t CHAR_LIMIT = 256;
-  const size_t MARGIN_LEFT = 5;
-
-  // token pos
-  size_t tok_begin = new_begin;
-  size_t tok_end = posInfo.end;
-  size_t line = posInfo.line;
-
-  // line
-  size_t offset = 0;
-
-  // tok_begin will be relative begin according to the line.
-  auto buffer_it = this->viewLine(line, tok_begin, tok_end, offset);
-
-  // message header
-  messageHeader += ":" + std::to_string(line + 1) + ":" +
-                   std::to_string(tok_begin + 1) + REDISH "\x20 error: " RES +
-                   mesg + "\n";
-
-  std::cout << BLU + messageHeader + RES;
-
-  // line beginning
-  std::cout << std::endl << "\x20" << line + 1 << "\x20|\x20";
-
-  // linw
-  for (int i = 0; i < offset; i++) {
-    if (i < CHAR_LIMIT) {
-      std::cout << buffer_it[i];
-    } else {
-      std::cout << "...";
-      break;
-    }
-  }
-
-  std::cout << std::endl;
-
-  auto lineNumberLen = std::to_string(line).size();
-
-  // for margin
-  for (int i = 0; i < MARGIN_LEFT + lineNumberLen - 1; i++)
-    if (i == 3 + lineNumberLen - 1)
-      putchar('|');
-    else
-      putchar('\x20');
-
-  // indicator
-  std::cout << BLU;
-  for (int i = 0; i < offset; i++) {
-    if (i >= tok_begin && i < tok_end) {
-      putchar('~');
-    } else {
-      putchar('\x20');
-    }
-  }
-  std::cout << RES;
-  std::cout << std::endl << std::endl;
-
-  exit(1);
+  emitDiagnostic(cstar::diagnostics::Severity::Error,
+                 cstar::diagnostics::DiagnosticCode::ParserSyntax,
+                 std::move(mesg), new_begin, posInfo.end, posInfo.line, true);
 }
 
 std::string_view::iterator CStarParser::viewLine(size_t line, size_t& rlbegin,

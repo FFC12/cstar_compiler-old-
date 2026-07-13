@@ -1,0 +1,7 @@
+// expected: diagnostic
+
+main() :: int32 {
+  readonly int32 x = 1;
+  x = 2;
+  ret x;
+}

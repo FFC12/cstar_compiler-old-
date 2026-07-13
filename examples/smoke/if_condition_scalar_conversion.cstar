@@ -1,0 +1,18 @@
+// expected: pass
+// expected-exit: 3
+
+main() :: int32 {
+  int32 x = 1;
+  float64 y = 0.5;
+  int32 result = 0;
+
+  if (x) {
+    result += 1;
+  }
+
+  if (y) {
+    result += 2;
+  }
+
+  ret result;
+}

@@ -1,3 +1,4 @@
+// expected: diagnostic
 main() :: void {
     int32 arr[2:2] = ((0,1),(2,3));
 

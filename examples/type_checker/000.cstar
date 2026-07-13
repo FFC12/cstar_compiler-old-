@@ -1,3 +1,4 @@
+// expected: diagnostic
 main() :: void {
   int a = 10;
   float b = 12.24;

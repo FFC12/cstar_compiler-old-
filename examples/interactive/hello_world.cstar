@@ -1,0 +1,5 @@
+
+main() :: int {
+    print("Hello world\n");
+    ret 0;
+}

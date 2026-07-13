@@ -1,0 +1,7 @@
+// expected: pass
+// expected-exit: 5
+
+main() :: int32 {
+  int32 arr[2] = (4, 5);
+  ret arr[1];
+}

@@ -1,5 +1,50 @@
-#!/usr/bin/bash
-cd build/
-cmake ..
-make -j8
-./CSTAR ../examples/tests/var00.cstar
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_DIR="${BUILD_DIR:-"$ROOT/build"}"
+BUILD_TYPE="${CMAKE_BUILD_TYPE:-Debug}"
+
+configure_args=(
+  -S "$ROOT"
+  -B "$BUILD_DIR"
+  -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+)
+
+if [[ -n "${CMAKE_GENERATOR:-}" ]]; then
+  configure_args+=(-G "$CMAKE_GENERATOR")
+fi
+
+if [[ -n "${LLVM_DIR:-}" ]]; then
+  configure_args+=(-DLLVM_DIR="$LLVM_DIR")
+elif [[ -f /ucrt64/lib/cmake/llvm/LLVMConfig.cmake ]]; then
+  configure_args+=(-DLLVM_DIR=/ucrt64/lib/cmake/llvm)
+fi
+
+if [[ -n "${CC:-}" ]]; then
+  configure_args+=(-DCMAKE_C_COMPILER="$CC")
+fi
+
+if [[ -n "${CXX:-}" ]]; then
+  configure_args+=(-DCMAKE_CXX_COMPILER="$CXX")
+fi
+
+if [[ -n "${CMAKE_MAKE_PROGRAM:-}" ]]; then
+  configure_args+=(-DCMAKE_MAKE_PROGRAM="$CMAKE_MAKE_PROGRAM")
+fi
+
+cmake "${configure_args[@]}"
+cmake --build "$BUILD_DIR" --config "$BUILD_TYPE"
+
+if [[ "${1:-}" == "--run" ]]; then
+  CSTAR="$BUILD_DIR/cstar"
+  if [[ -x "$BUILD_DIR/$BUILD_TYPE/cstar" ]]; then
+    CSTAR="$BUILD_DIR/$BUILD_TYPE/cstar"
+  elif [[ -x "$BUILD_DIR/cstar.exe" ]]; then
+    CSTAR="$BUILD_DIR/cstar.exe"
+  elif [[ -x "$BUILD_DIR/$BUILD_TYPE/cstar.exe" ]]; then
+    CSTAR="$BUILD_DIR/$BUILD_TYPE/cstar.exe"
+  fi
+
+  "$CSTAR" "$ROOT/examples/smoke/minimal.cstar"
+fi

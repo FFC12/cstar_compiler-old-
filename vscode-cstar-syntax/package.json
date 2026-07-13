@@ -1,0 +1,43 @@
+{
+  "name": "cstar-syntax",
+  "displayName": "C* Syntax",
+  "description": "Syntax highlighting and editor basics for C* (.cstar) source files.",
+  "version": "0.1.0",
+  "publisher": "cstar-project",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "cstar",
+    "c*",
+    "syntax",
+    "highlighting"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "cstar",
+        "aliases": [
+          "C*",
+          "CStar",
+          "cstar"
+        ],
+        "extensions": [
+          ".cstar"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "cstar",
+        "scopeName": "source.cstar",
+        "path": "./syntaxes/cstar.tmLanguage.json"
+      }
+    ]
+  }
+}

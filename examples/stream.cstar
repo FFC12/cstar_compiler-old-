@@ -1,3 +1,4 @@
+// expected: diagnostic
  int k;
  int b;
 		int b;

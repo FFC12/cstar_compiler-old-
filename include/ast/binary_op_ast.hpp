@@ -21,6 +21,7 @@ enum BinOpKind {
   B_SHL,
   B_SHR,
   B_EQ,    // "=="
+  B_NEQ,   // "!="
   B_TER,   // Ternary cond op
   B_ARRS,  // Array subscript
   B_COMM,  // ','
@@ -37,7 +38,7 @@ class BinaryOpAST : public IAST {
   std::string m_Op;
 
  public:
-  BinaryOpAST() = default;
+  BinaryOpAST() = delete;
   BinaryOpAST(ASTNode lhs, ASTNode rhs, ASTNode extra, BinOpKind binOpKind,
               std::string& op, SemanticLoc& semanticLoc)
       : IAST(semanticLoc),

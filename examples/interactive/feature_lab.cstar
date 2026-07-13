@@ -1,0 +1,109 @@
+// expected: interactive
+
+score_bonus(int32 base, int32 modifier) :: int32 {
+    ret base + modifier;
+}
+
+abs32(int32 value) :: int32 {
+    if (value < 0) {
+        ret 0 - value;
+    }
+
+    ret value;
+}
+
+choose_op(int32 left, int32 right, int32 op) :: int32 {
+    if (op == 1) {
+        ret left + right;
+    } elif (op == 2) {
+        ret left - right;
+    } elif (op == 3) {
+        ret left * right;
+    } elif (op == 4) {
+        if (right == 0) {
+            ret 0;
+        }
+
+        ret left / right;
+    }
+
+    ret left + right;
+}
+
+classify(int32 value) :: int32 {
+    if (value < 0) {
+        print("Result class: negative\n");
+        ret 1;
+    } elif (value == 0) {
+        print("Result class: zero\n");
+        ret 2;
+    } elif (value < 10) {
+        print("Result class: small positive\n");
+        ret 3;
+    }
+
+    print("Result class: large positive\n");
+    ret 4;
+}
+
+main() :: int32 {
+    print("C* interactive feature lab\n");
+    print("--------------------------\n");
+    print("Operation: 1:+ 2:- 3:* 4:/\n");
+
+    print("Left value: ");
+    int64 leftInput = input_int();
+
+    print("Right value: ");
+    int64 rightInput = input_int();
+
+    print("Operation: ");
+    int64 opInput = input_int();
+
+    int32 left = cast<int32>(leftInput);
+    int32 right = cast<int32>(rightInput);
+    int32 op = cast<int32>(opInput);
+
+    int32 result = choose_op(left, right, op);
+    int32 rawResult = result;
+    int32 magnitude = abs32(result);
+
+    int32 scores[4] = (0, 0, 0, 0);
+    scores[0] = left;
+    scores[1] = right;
+    scores[2] = result;
+    scores[3] = score_bonus(magnitude, 5);
+
+    int32* resultSlot = ref result;
+
+    int32 bonus = scores[3];
+    deref resultSlot = result;
+    deref resultSlot += bonus;
+    int32 boosted = result;
+    int32 first = scores[0];
+
+    int32* sentinel = unsafe_cast<int32*>(1);
+    int32 sentinelFlag = 0;
+    if (sentinel) {
+        sentinelFlag = 1;
+    }
+
+    print("Raw result: ");
+    print(rawResult);
+    print("\n");
+
+    print("Boosted result: ");
+    print(boosted);
+    print("\n");
+
+    print("First stored score: ");
+    print(first);
+    print("\n");
+
+    print("Sentinel pointer flag: ");
+    print(sentinelFlag);
+    print("\n");
+
+    int32 classCode = classify(rawResult);
+    ret classCode;
+}

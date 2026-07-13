@@ -2,6 +2,7 @@
 #define SYMBOLS_HPP
 #include <map>
 #include <string>
+#include <vector>
 #include <parser/type_specifiers.hpp>
 
 enum SymbolScope { Func, LoopSt, IfSt };
@@ -51,5 +52,12 @@ struct SymbolInfo {
 
 //  SymbolInfo() : typeCheckerInfo() {}
 };
+
+struct FunctionSignature {
+  SymbolInfo returnType;
+  std::vector<SymbolInfo> params;
+};
+
+using FunctionSignatureTable = std::map<std::string, FunctionSignature>;
 
 #endif  // SYMBOLS_HPP

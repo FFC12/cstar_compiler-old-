@@ -1,0 +1,5 @@
+// expected: diagnostic
+main() :: int32 {
+    int64 value = input_int(1);
+    ret 0;
+}

@@ -1,0 +1,28 @@
+// expected: interactive
+main() :: int32 {
+    print("C* calculator\n");
+    print("First number: ");
+    int64 left = input_int();
+
+    print("Second number: ");
+    int64 right = input_int();
+
+    print("Operation 1:+ 2:- 3:* 4:/: ");
+    int64 op = input_int();
+
+    int64 result = 0;
+    if (op == 1) {
+        result = left + right;
+    } elif (op == 2) {
+        result = left - right;
+    } elif (op == 3) {
+        result = left * right;
+    } else {
+        result = left / right;
+    }
+
+    print("Result: ");
+    print(result);
+    print("\n");
+    ret 0;
+}

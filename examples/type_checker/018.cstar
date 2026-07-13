@@ -1,0 +1,8 @@
+// expected: diagnostic
+
+main() :: int32 {
+    int32 x = 1;
+    int32* p = ref x;
+    int64 raw = cast<int64>(p);
+    ret cast<int32>(raw);
+}

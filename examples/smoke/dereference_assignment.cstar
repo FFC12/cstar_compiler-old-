@@ -1,0 +1,8 @@
+// expected: pass
+// expected-exit: 21
+main() :: int32 {
+    int32 x = 5;
+    int32* p = ref x;
+    deref p = 21;
+    ret x;
+}

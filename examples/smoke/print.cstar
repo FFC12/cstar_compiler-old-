@@ -1,0 +1,8 @@
+// expected: pass
+// expected-exit: 0
+main() :: int32 {
+    print("Hello world, from C*\n");
+    print(42);
+    print("\n");
+    ret 0;
+}

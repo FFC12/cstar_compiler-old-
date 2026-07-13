@@ -1,3 +1,4 @@
+// expected: diagnostic (proposal)
 // How does it work?
 // -Well, that might make you thoughtful about what about the checking is it null or it would not be have a cost?
 // +No, actually it just needs a memory to register references and update (to a book -simple hashmap).

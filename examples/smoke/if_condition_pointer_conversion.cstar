@@ -1,0 +1,13 @@
+// expected: pass
+// expected-exit: 1
+
+main() :: int32 {
+  int32 x = 7;
+  int32* p = ref x;
+
+  if (p) {
+    ret 1;
+  }
+
+  ret 0;
+}

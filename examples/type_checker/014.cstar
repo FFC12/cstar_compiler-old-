@@ -1,0 +1,6 @@
+// expected: diagnostic
+main() :: int32 {
+    int32 x = 1;
+    deref x = 2;
+    ret x;
+}

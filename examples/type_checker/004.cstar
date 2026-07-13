@@ -1,3 +1,4 @@
+// expected: diagnostic
 
 //constptr int* t = 20;
 

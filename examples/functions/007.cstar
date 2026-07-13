@@ -1,3 +1,4 @@
+// expected: pass
 main(int argc, char** argv) :: int {
     int f;
 }

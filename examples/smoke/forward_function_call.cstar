@@ -1,0 +1,9 @@
+// expected: pass
+// expected-exit: 3
+main() :: int32 {
+    ret add(1, 2);
+}
+
+add(int32 a, int32 b) :: int32 {
+    ret a + b;
+}

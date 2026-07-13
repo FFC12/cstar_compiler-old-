@@ -1,3 +1,4 @@
+// expected: diagnostic
 main() :: void {
   int s = t; // error
   int z = &t; // error

@@ -1,3 +1,4 @@
+// expected: diagnostic
 
 main(int argc, char** argv) :: int {
 	float32 f = 12.2345345;

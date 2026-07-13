@@ -1,16 +1,18 @@
 #ifndef BASE_HPP
 #define BASE_HPP
+#include <diagnostics/console.hpp>
+#include <filesystem>
 #include <iostream>
 
-#define REDISH "\x1B[31m"
-#define GRN "\x1B[32m"
-#define YEL "\x1B[33m"
-#define BLU "\x1B[34m"
-#define MAG "\x1B[35m"
-#define CYN "\x1B[36m"
-#define WHT "\x1B[37m"
-#define BWHT "\u001b[37;1m"
-#define RES "\x1B[0m"
+#define REDISH cstar::console::paint(cstar::console::Style::Red)
+#define GRN cstar::console::paint(cstar::console::Style::Green)
+#define YEL cstar::console::paint(cstar::console::Style::Yellow)
+#define BLU cstar::console::paint(cstar::console::Style::Blue)
+#define MAG cstar::console::paint(cstar::console::Style::Magenta)
+#define CYN cstar::console::paint(cstar::console::Style::Cyan)
+#define WHT cstar::console::paint(cstar::console::Style::White)
+#define BWHT cstar::console::paint(cstar::console::Style::BrightWhite)
+#define RES cstar::console::paint(cstar::console::Style::Reset)
 
 static void LogError(const char* mesg) {
   std::cout << REDISH << mesg << RES << std::endl;
@@ -18,9 +20,12 @@ static void LogError(const char* mesg) {
 
 static std::string ExtractFilenameFromPath(std::string& s,
                                            std::string delimiter) {
+  auto filename = std::filesystem::path(s).filename().string();
+  if (!filename.empty()) return filename;
+
   size_t pos = 0;
   std::string token;
-  s += "/";
+  s += delimiter;
   while ((pos = s.find(delimiter)) != std::string::npos) {
     token = s.substr(0, pos);
     s.erase(0, pos + delimiter.length());
