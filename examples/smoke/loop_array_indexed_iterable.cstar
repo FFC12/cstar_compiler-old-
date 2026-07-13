@@ -1,0 +1,14 @@
+// expected: pass
+// expected-exit: 24
+
+main() :: int32 {
+  int32 values[3] = (5, 7, 9);
+  int32 total = 0;
+
+  loop (index, value in values) {
+    total += value;
+    total += cast<int32>(index);
+  }
+
+  ret total;
+}

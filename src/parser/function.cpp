@@ -90,10 +90,21 @@ void CStarParser::advanceParams(std::vector<ASTNode>& params,
 param_again:
   ASTNode typeNode;
   TypeQualifier typeQualifier = TypeQualifier::Q_NONE;
+  bool isNoMove = false;
   ASTNode symbol0, symbol1;
+
+  if (is(TokenKind::NOMOVE)) {
+    isNoMove = true;
+    this->advance();
+  }
 
   if (isTypeQualifier(currentTokenInfo())) {
     typeQualifier = typeQualifierOf(currentTokenInfo());
+    this->advance();
+  }
+
+  if (is(TokenKind::NOMOVE)) {
+    isNoMove = true;
     this->advance();
   }
 
@@ -124,7 +135,8 @@ param_again:
     auto param =
         std::make_unique<ParamAST>(std::move(symbol0), nullptr, std::move(type),
                                    std::move(arrayDimensions), arrayFlag, true,
-                                   false, false, true, typeQualifier, semLoc);
+                                   false, false, true, typeQualifier, semLoc,
+                                   isNoMove);
     params.emplace_back(std::move(param));
   } else if (is(TokenKind::IDENT)) {
     bool outOfSize = false;
@@ -159,7 +171,7 @@ param_again:
       auto param = std::make_unique<ParamAST>(
           std::move(symbol0), nullptr, std::move(type),
           std::move(arrayDimensions), arrayFlag, true, false, false, false,
-          typeQualifier, semLoc);
+          typeQualifier, semLoc, isNoMove);
       params.emplace_back(std::move(param));
     } else {
       // if the next token is primitive type...
@@ -186,7 +198,7 @@ param_again:
         auto param = std::make_unique<ParamAST>(
             std::move(symbol0), nullptr, std::move(type),
             std::move(arrayDimensions), arrayFlag, false, false, false, true,
-            typeQualifier, semLoc);
+            typeQualifier, semLoc, isNoMove);
         params.emplace_back(std::move(param));
       } else {
         auto prevNextTokenInfo = nextTokenInfo;
@@ -221,7 +233,7 @@ param_again:
           auto param = std::make_unique<ParamAST>(
               std::move(symbol0), nullptr, std::move(type),
               std::move(arrayDimensions), arrayFlag, false, false, true, false,
-              typeQualifier, semLoc);
+              typeQualifier, semLoc, isNoMove);
           params.emplace_back(std::move(param));
         } else {
           if (!isForwardDecl) {  // not clear that is cast allowed or not
@@ -235,7 +247,7 @@ param_again:
             auto param = std::make_unique<ParamAST>(
                 std::move(symbol0), std::move(symbol1), nullptr,
                 std::vector<ASTNode>(), false, false, true, true, false,
-                typeQualifier, semLoc);
+                typeQualifier, semLoc, isNoMove);
             params.emplace_back(std::move(param));
           }
         }
@@ -525,6 +537,31 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         this->advanceIfStmt(scope);
       } else if (is(TokenKind::LOOP)) {
         this->advanceLoopStmt(scope);
+      } else if (is(TokenKind::OPTION)) {
+        ParserHint(
+            "`option` is the C* value-match statement proposal. Planned "
+            "syntax is `option (value) { pattern: { ... }, _: { ... } }`; "
+            "it is not lowered by this compiler yet.",
+            currentTokenInfo());
+        ParserError(
+            "`option`/match statements are part of the C* proposal, but "
+            "parser AST and codegen are not implemented yet.",
+            currentTokenInfo());
+      } else if (is(TokenKind::BREAK) || is(TokenKind::CONTINUE)) {
+        const bool isBreak = is(TokenKind::BREAK);
+        PositionInfo posInfo = currentTokenInfo().getTokenPositionInfo();
+        SemanticLoc semLoc =
+            SemanticLoc(posInfo.begin, posInfo.end, posInfo.line);
+
+        this->advance();
+        expected(TokenKind::SEMICOLON);
+        this->advance();
+
+        if (isBreak) {
+          scope.emplace_back(std::make_unique<BreakStmtAST>(semLoc));
+        } else {
+          scope.emplace_back(std::make_unique<ContinueStmtAST>(semLoc));
+        }
       } else {
         // ParserError("Unexpected token", currentTokenInfo());
       }

@@ -1,0 +1,14 @@
+// expected: diagnostic
+// expected-code: CST2105
+
+consume(nomove int32^ pointer) :: int32 {
+  int32^ moved := pointer;
+  ret deref moved;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  int32^ pointer = ref value;
+
+  ret consume(move pointer);
+}

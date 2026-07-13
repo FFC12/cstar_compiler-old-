@@ -45,7 +45,7 @@ void CStarParser::advanceLoopStmt(std::vector<ASTNode> &scope) {
     expected({TokenKind::IDENT, TokenKind::LSQPAR});
 
     if (is(TokenKind::IDENT)) {
-      iterSymbol = std::move(this->advanceConstantOrLiteral());
+      iterSymbol = std::move(this->advanceSymbol());
       expected(TokenKind::RPAREN);
       this->advance();
     } else if (is(TokenKind::LSQPAR) && !indexable) {
@@ -54,14 +54,16 @@ void CStarParser::advanceLoopStmt(std::vector<ASTNode> &scope) {
 
       expected({IDENT, SCALARI});
 
-      auto lower = std::move(this->advanceConstantOrLiteral());
+      auto lower = is(TokenKind::IDENT) ? std::move(this->advanceSymbol())
+                                        : std::move(this->advanceConstantOrLiteral());
 
       expected(TokenKind::COMMA);
 
       // advance ','
       this->advance();
 
-      auto higher = std::move(this->advanceConstantOrLiteral());
+      auto higher = is(TokenKind::IDENT) ? std::move(this->advanceSymbol())
+                                         : std::move(this->advanceConstantOrLiteral());
 
       expected(TokenKind::RSQPAR);
 

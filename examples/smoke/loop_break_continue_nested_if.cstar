@@ -1,0 +1,21 @@
+// expected: pass
+// expected-exit: 8
+
+main() :: int32 {
+  int32 i = 0;
+  int32 total = 0;
+
+  loop (true) {
+    i += 1;
+
+    if (i == 2) {
+      continue;
+    } elif (i == 5) {
+      break;
+    } else {
+      total += i;
+    }
+  }
+
+  ret total;
+}

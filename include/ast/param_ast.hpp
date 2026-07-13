@@ -14,12 +14,13 @@ class ParamAST : public IAST {
   bool m_IsCastable;
   bool m_TypeAmbiguous;
   bool m_IsNotClear;
+  bool m_IsNoMove;
 
  public:
   ParamAST(ASTNode symbol0, ASTNode symbol1, ASTNode typeNode,
            std::vector<ASTNode> arrDim, bool isSubscriptable, bool isCastable,
            bool isNotClear, bool isAmbiguous, bool isPrimitive, TypeQualifier typeQualifier,
-           SemanticLoc& semanticLoc)
+           SemanticLoc& semanticLoc, bool isNoMove = false)
       : IAST(semanticLoc),
         m_Symbol0(std::move(symbol0)),
         m_Symbol1(std::move(symbol1)),
@@ -29,6 +30,7 @@ class ParamAST : public IAST {
         m_IsCastable(isCastable),
         m_IsNotClear(isNotClear),
         m_TypeAmbiguous(isAmbiguous),
+        m_IsNoMove(isNoMove),
         m_TypeQualifier(typeQualifier),
         m_TypeNode(std::move(typeNode)) {
     this->m_ASTKind = ASTKind::Expr;

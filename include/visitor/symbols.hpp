@@ -38,6 +38,7 @@ struct SymbolInfo {
   bool isUnique = false;
   bool isParam = false;
   bool isCastable = false;
+  bool isNoMove = false;
 
   std::string value;
   std::vector<size_t> arrayDimensions;

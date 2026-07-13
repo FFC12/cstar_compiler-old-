@@ -1,0 +1,109 @@
+// expected: interactive
+
+fold3(int32 first, int32 second, int32 third) :: int32 {
+    int32 total = first + second;
+    total += third;
+    ret total;
+}
+
+spread_write(int32** slot, int32 value, int32 delta) :: int32 {
+    **slot = value;
+    **slot += delta;
+    ret **slot;
+}
+
+readonly_pick(readonly int32* value) :: int32 {
+    ret deref value;
+}
+
+constptr_mark(constptr int32* value, int32 guard) :: int32 {
+    if (guard > 0) {
+        deref value = 9;
+    } else {
+        deref value = 1;
+    }
+
+    ret deref value;
+}
+
+score_gate(int32 score, int32 guard) :: int32 {
+    if (score == guard) {
+        print("gate: exact\n");
+        ret 1;
+    } elif (score > guard) {
+        print("gate: above\n");
+        ret 2;
+    }
+
+    print("gate: below\n");
+    ret 3;
+}
+
+main() :: int32 {
+    print("C* pointer matrix stress\n");
+    print("matrix name: ");
+    print(input_string());
+    print("\n");
+    print("cell 0: ");
+    int64 aInput = input_int();
+    print("cell 1: ");
+    int64 bInput = input_int();
+    print("cell 2: ");
+    int64 cInput = input_int();
+    print("delta: ");
+    int64 deltaInput = input_int();
+    print("guard: ");
+    int64 guardInput = input_int();
+
+    int32 a = cast<int32>(aInput);
+    int32 b = cast<int32>(bInput);
+    int32 c = cast<int32>(cInput);
+    int32 delta = cast<int32>(deltaInput);
+    int32 guard = cast<int32>(guardInput);
+
+    int32 cells[5] = (0, 0, 0, 0, 0);
+    cells[0] = a;
+    cells[1] = b;
+    cells[2] = c;
+    cells[3] = fold3(cells[0], cells[1], cells[2]);
+    cells[4] = delta;
+
+    int32 target = cells[3];
+    int32* targetPtr = ref target;
+    int32** targetSlot = ref targetPtr;
+
+    int32 spread = spread_write(targetSlot, cells[3], cells[4]);
+    int32 readonlyValue = readonly_pick(targetPtr);
+    constptr int32* stableTarget = ref target;
+    int32 constptrValue = constptr_mark(stableTarget, guard);
+
+    int32* sharedA = ref target;
+    int32* sharedB = sharedA;
+    int32* sharedC;
+    sharedC := sharedB;
+    int32 count = strong_count(sharedA) as int32;
+
+    int32 unsafeFlag = 0;
+    int32* raw = unsafe_cast<int32*>(1);
+    if (raw) {
+        unsafeFlag = 1;
+    }
+
+    print("spread: ");
+    print(spread);
+    print("\n");
+    print("readonly: ");
+    print(readonlyValue);
+    print("\n");
+    print("constptr: ");
+    print(constptrValue);
+    print("\n");
+    print("shared count: ");
+    print(count);
+    print("\n");
+    print("unsafe flag: ");
+    print(unsafeFlag);
+    print("\n");
+
+    ret score_gate(target, guard);
+}

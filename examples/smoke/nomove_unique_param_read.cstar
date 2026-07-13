@@ -1,0 +1,12 @@
+// expected-exit: 7
+
+read_nomove(nomove int32^ pointer) :: int32 {
+  ret deref pointer;
+}
+
+main() :: int32 {
+  int32 value = 7;
+  int32^ pointer = ref value;
+
+  ret read_nomove(move pointer);
+}

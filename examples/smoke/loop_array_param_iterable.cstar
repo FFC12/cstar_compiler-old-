@@ -1,0 +1,17 @@
+// expected: pass
+// expected-exit: 18
+
+sum_values(int32[3] values) :: int32 {
+  int32 total = 0;
+
+  loop (value in values) {
+    total += value;
+  }
+
+  ret total;
+}
+
+main() :: int32 {
+  int32 values[3] = (4, 6, 8);
+  ret sum_values(values);
+}

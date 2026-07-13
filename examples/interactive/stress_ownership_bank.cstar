@@ -1,0 +1,124 @@
+// expected: interactive
+
+normalize_amount(int32 value) :: int32 {
+    if (value < 0) {
+        ret 0 - value;
+    }
+
+    ret value;
+}
+
+apply_transfer(int32* fromBalance, int32* toBalance, int32 amount) :: int32 {
+    if (amount <= 0) {
+        ret 0;
+    }
+
+    if (deref fromBalance < amount) {
+        ret 0;
+    }
+
+    deref fromBalance -= amount;
+    deref toBalance += amount;
+    ret amount;
+}
+
+audit_shared(int32* account) :: int32 {
+    int32* readView = account;
+    int32* movedView;
+    movedView := readView;
+
+    ret strong_count(account) as int32;
+}
+
+consume_receipt(int32^ receipt) :: int32 {
+    ret deref receipt;
+}
+
+inspect_receipt(nomove int32^ receipt) :: int32 {
+    ret deref receipt;
+}
+
+risk_band(int32 total, int32 pressure) :: int32 {
+    if (total < 50) {
+        print("risk: low liquidity\n");
+        ret 1 + pressure;
+    } elif (total < 200) {
+        print("risk: balanced\n");
+        ret 2 + pressure;
+    }
+
+    print("risk: high liquidity\n");
+    ret 3 + pressure;
+}
+
+main() :: int32 {
+    print("C* ownership bank stress\n");
+    print("ledger name: ");
+    print(input_string());
+    print("\n");
+    print("account A: ");
+    int64 aInput = input_int();
+    print("account B: ");
+    int64 bInput = input_int();
+    print("account C: ");
+    int64 cInput = input_int();
+    print("transfer A->B: ");
+    int64 firstInput = input_int();
+    print("transfer B->C: ");
+    int64 secondInput = input_int();
+
+    int32 accountA = cast<int32>(aInput);
+    int32 accountB = cast<int32>(bInput);
+    int32 accountC = cast<int32>(cInput);
+    int32 first = normalize_amount(cast<int32>(firstInput));
+    int32 second = normalize_amount(cast<int32>(secondInput));
+
+    int32* aRef = ref accountA;
+    int32* bRef = ref accountB;
+    int32* cRef = ref accountC;
+
+    int32 movedAB = apply_transfer(aRef, bRef, first);
+    int32 movedBC = apply_transfer(bRef, cRef, second);
+
+    int32 snapshot[6] = (0, 0, 0, 0, 0, 0);
+    snapshot[0] = accountA;
+    snapshot[1] = accountB;
+    snapshot[2] = accountC;
+    snapshot[3] = movedAB;
+    snapshot[4] = movedBC;
+    snapshot[5] = accountA + accountB + accountC;
+
+    int32 pressureA = audit_shared(aRef);
+    int32 pressureB = audit_shared(bRef);
+    int32 pressureC = audit_shared(cRef);
+    int32 pressure = pressureA + pressureB + pressureC;
+
+    int32 receiptValue = snapshot[3] + snapshot[4] + pressure;
+    int32^ receipt = ref receiptValue;
+    int32 checkedReceipt = inspect_receipt(move receipt);
+
+    int32 finalReceiptValue = checkedReceipt;
+    int32^ finalReceipt = ref finalReceiptValue;
+    int32 consumed = consume_receipt(move finalReceipt);
+
+    print("A: ");
+    print(accountA);
+    print("\n");
+    print("B: ");
+    print(accountB);
+    print("\n");
+    print("C: ");
+    print(accountC);
+    print("\n");
+    print("moved total: ");
+    print(movedAB + movedBC);
+    print("\n");
+    print("shared pressure: ");
+    print(pressure);
+    print("\n");
+    print("receipt: ");
+    print(consumed);
+    print("\n");
+
+    ret risk_band(snapshot[5], pressure);
+}

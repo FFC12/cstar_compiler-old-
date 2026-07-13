@@ -1,0 +1,10 @@
+// expected: diagnostic
+// expected-code: CST2105
+
+invalid(nomove int32 value) :: int32 {
+  ret value;
+}
+
+main() :: int32 {
+  ret invalid(1);
+}

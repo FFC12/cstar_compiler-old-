@@ -81,6 +81,7 @@ enum TokenKind {
   CONSTPTR,
   CONSTREF,
   READONLY,
+  NOMOVE,
   RET,
   IN,
   AS,
@@ -568,6 +569,8 @@ class CStarLexer {
       return CONSTREF;
     else if (ident == "readonly")
       return READONLY;
+    else if (ident == "nomove")
+      return NOMOVE;
     else if (ident == "int8")
       return I8;
     else if (ident == "int16")
@@ -976,6 +979,8 @@ class CStarLexer {
         return "constptr";
       case CONSTREF:
         return "constref";
+      case NOMOVE:
+        return "nomove";
       case REF:
         return "ref";
       case DEREF:

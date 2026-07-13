@@ -1,0 +1,12 @@
+// expected: pass
+// expected-exit: 7
+
+main() :: int32 {
+  int32 value = 7;
+
+  loop (false) {
+    value = 99;
+  }
+
+  ret value;
+}

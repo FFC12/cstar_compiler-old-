@@ -73,6 +73,8 @@ class FuncCallAST;
 class FuncAST;
 class IfStmtAST;
 class LoopStmtAST;
+class BreakStmtAST;
+class ContinueStmtAST;
 class ParamAST;
 class RetAST;
 class ScalarOrLiteralAST;
@@ -151,6 +153,8 @@ class Visitor {
   std::map<std::string, llvm::Type*> m_ArrayParamValueTypes;
   std::map<std::string, llvm::GlobalVariable*> m_GlobalVars;
   std::map<std::string, llvm::Value*> m_SharedPointerRefCounts;
+  std::vector<llvm::BasicBlock*> m_LoopBreakTargets;
+  std::vector<llvm::BasicBlock*> m_LoopContinueTargets;
   std::vector<llvm::StringRef> m_GlobaInitVarFunc;
   static llvm::BasicBlock* MainFuncBB;
   static llvm::GlobalVariable* LastGlobVarRef;
@@ -219,6 +223,8 @@ class Visitor {
   ValuePtr visit(FuncCallAST& funcCallAst);
   ValuePtr visit(IfStmtAST& ifStmtAst);
   ValuePtr visit(LoopStmtAST& loopStmtAst);
+  ValuePtr visit(BreakStmtAST& breakStmtAst);
+  ValuePtr visit(ContinueStmtAST& continueStmtAst);
   ValuePtr visit(ParamAST& paramAst);
   ValuePtr visit(RetAST& retAst);
   ValuePtr visit(UnaryOpAST& unaryOpAst);
@@ -236,6 +242,8 @@ class Visitor {
   SymbolInfo preVisit(FuncCallAST& funcCallAst);
   SymbolInfo preVisit(IfStmtAST& ifStmtAst);
   SymbolInfo preVisit(LoopStmtAST& loopStmtAst);
+  SymbolInfo preVisit(BreakStmtAST& breakStmtAst);
+  SymbolInfo preVisit(ContinueStmtAST& continueStmtAst);
   SymbolInfo preVisit(ParamAST& paramAst);
   SymbolInfo preVisit(RetAST& retAst);
   SymbolInfo preVisit(UnaryOpAST& unaryOpAst);

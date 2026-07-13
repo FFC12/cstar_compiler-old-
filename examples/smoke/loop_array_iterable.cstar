@@ -1,0 +1,13 @@
+// expected: pass
+// expected-exit: 12
+
+main() :: int32 {
+  int32 values[3] = (3, 4, 5);
+  int32 total = 0;
+
+  loop (value in values) {
+    total += value;
+  }
+
+  ret total;
+}

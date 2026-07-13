@@ -1,0 +1,144 @@
+// expected: interactive
+
+abs32(int32 value) :: int32 {
+    if (value < 0) {
+        ret 0 - value;
+    }
+
+    ret value;
+}
+
+clamp_score(int32 value) :: int32 {
+    if (value < 0) {
+        ret 0;
+    } elif (value > 100) {
+        ret 100;
+    }
+
+    ret value;
+}
+
+mix_pair(int32 left, int32 right, int32 mode) :: int32 {
+    if (mode == 1) {
+        ret left + right;
+    } elif (mode == 2) {
+        ret left - right;
+    } elif (mode == 3) {
+        ret left * right;
+    } elif (mode == 4) {
+        if (right == 0) {
+            ret left;
+        }
+
+        ret left / right;
+    }
+
+    ret left + right + mode;
+}
+
+write_metric(int32* target, int32 value, int32 weight) :: void {
+    deref target = value;
+    deref target += weight;
+    ret;
+}
+
+read_nomove_metric(nomove int32^ metric) :: int32 {
+    ret deref metric;
+}
+
+shared_pressure(int32* metric) :: int32 {
+    int32* local = metric;
+    int32* moved;
+    moved := local;
+
+    ret strong_count(metric) as int32;
+}
+
+classify_score(int32 score) :: int32 {
+    if (score < 20) {
+        print("class: cold\n");
+        ret 1;
+    } elif (score < 50) {
+        print("class: warm\n");
+        ret 2;
+    } elif (score < 80) {
+        print("class: hot\n");
+        ret 3;
+    }
+
+    print("class: critical\n");
+    ret 4;
+}
+
+main() :: int32 {
+    print("C* stress decision engine\n");
+    print("scenario name: ");
+    print(input_string());
+    print("\n");
+    print("seed: ");
+    int64 seedInput = input_int();
+    print("left: ");
+    int64 leftInput = input_int();
+    print("right: ");
+    int64 rightInput = input_int();
+    print("mode 1:+ 2:- 3:* 4:/: ");
+    int64 modeInput = input_int();
+    print("weight: ");
+    int64 weightInput = input_int();
+
+    int32 seed = cast<int32>(seedInput);
+    int32 left = cast<int32>(leftInput);
+    int32 right = cast<int32>(rightInput);
+    int32 mode = cast<int32>(modeInput);
+    int32 weight = cast<int32>(weightInput);
+
+    int32 raw = mix_pair(left, right, mode);
+    int32 magnitude = abs32(raw);
+    int32 bounded = clamp_score(magnitude + seed);
+
+    int32 metrics[6] = (0, 0, 0, 0, 0, 0);
+    metrics[0] = left;
+    metrics[1] = right;
+    metrics[2] = raw;
+    metrics[3] = magnitude;
+    metrics[4] = bounded;
+    metrics[5] = weight;
+
+    int32 finalScore = 0;
+    int32* finalSlot = ref finalScore;
+    write_metric(finalSlot, metrics[4], metrics[5]);
+
+    int32* sharedScore = ref finalScore;
+    int32 pressure = shared_pressure(sharedScore);
+
+    int32 uniqueValue = finalScore;
+    int32^ uniqueMetric = ref uniqueValue;
+    int32 nomoveRead = read_nomove_metric(move uniqueMetric);
+
+    int32 sentinelFlag = 0;
+    int32* sentinel = unsafe_cast<int32*>(1);
+    if (sentinel) {
+        sentinelFlag = 1;
+    }
+
+    print("raw: ");
+    print(raw);
+    print("\n");
+    print("bounded: ");
+    print(bounded);
+    print("\n");
+    print("final: ");
+    print(finalScore);
+    print("\n");
+    print("shared pressure: ");
+    print(pressure);
+    print("\n");
+    print("nomove read: ");
+    print(nomoveRead);
+    print("\n");
+    print("sentinel: ");
+    print(sentinelFlag);
+    print("\n");
+
+    ret classify_score(finalScore);
+}

@@ -250,6 +250,8 @@ read_all(opened FileHandle^ file) except IoError :: constptr char* {
 // - `Send` and `Sync` are trait/capability markers, not runtime vtables.
 // - `T^` may cross a task boundary only with explicit `move`.
 // - `T*` may cross by atomic retain/copy, or by explicit `move`.
+// - `nomove` is a parameter-level ownership-flow modifier.
+// - `nomove` is not a protocol state and not a hidden policy hook.
 // - Plain unique copy across the boundary is illegal.
 //
 // Parser status:
@@ -265,6 +267,18 @@ consume_on_worker(int32^ owned) async :: int32 {
 
 observe_on_worker(readonly int32* shared) async :: int32 {
     ret deref shared;
+}
+
+inspect_without_relay(nomove int32^ owned) :: int32 {
+    // Legal: read through the owned pointer.
+    int32 value = deref owned;
+
+    // Rejected:
+    //
+    // int32^ relayed := owned;
+    // ret consume_on_worker(move owned);
+
+    ret value;
 }
 
 thread_boundary_example() :: int32 {

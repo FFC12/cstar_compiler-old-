@@ -11,6 +11,7 @@ void CStarCodegen::pass1() {
   std::string funcName;
   std::vector<SemanticErrorMessage> localSymbolMessages;
   Visitor::SymbolId = 0;
+  Visitor::ScopeId = 0;
 
   Visitor::GlobalSymbolTable = this->m_GlobalSymbols;
   Visitor::LocalSymbolTable = this->m_LocalSymbols;

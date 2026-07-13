@@ -1,0 +1,179 @@
+// expected: interactive
+
+main() :: int32 {
+  int32 head_x = 3;
+  int32 head_y = 3;
+  int32 body1_x = 2;
+  int32 body1_y = 3;
+  int32 body2_x = 1;
+  int32 body2_y = 3;
+  int32 body3_x = 0;
+  int32 body3_y = 0;
+  int32 body4_x = 0;
+  int32 body4_y = 0;
+
+  int32 length = 3;
+  int32 score = 0;
+  int32 turn = 0;
+  int32 alive = 1;
+  int32 dx = 1;
+  int32 dy = 0;
+  int32 food_x = 5;
+  int32 food_y = 3;
+  int32 speed = 180;
+  int32 quit = 0;
+
+  print("Welcome to C* ASCII Snake\n");
+  print("Name your snake: ");
+  print(input_string());
+  print("\n");
+  print("Speed in milliseconds, 60-1000 recommended: ");
+  speed = cast<int32>(input_int());
+  if (speed < 60) {
+    speed = 60;
+  } elif (speed > 1000) {
+    speed = 1000;
+  }
+  print("Eat '*', avoid walls and your body.\n");
+  print("Controls: WASD or arrow keys, q to quit.\n");
+  print("Press enter after the speed, then steer while it moves.\n");
+  sleep_ms(900);
+
+  enable_raw_input();
+
+  loop (alive == 1 && turn < 40) {
+    clear_screen();
+    print("C* ASCII Snake\n");
+    print("turn: ");
+    print(turn);
+    print("  score: ");
+    print(score);
+    print("  length: ");
+    print(length);
+    print("\n");
+    print("Controls: WASD / arrows, q quits.\n");
+    print("########\n");
+
+    loop (row in [0, 6]) {
+      print("#");
+      loop (col in [0, 6]) {
+        int32 x = cast<int32>(col);
+        int32 y = cast<int32>(row);
+
+        if (x == head_x && y == head_y) {
+          print("@");
+        } elif (x == food_x && y == food_y) {
+          print("*");
+        } elif (length > 1 && x == body1_x && y == body1_y) {
+          print("o");
+        } elif (length > 2 && x == body2_x && y == body2_y) {
+          print("o");
+        } elif (length > 3 && x == body3_x && y == body3_y) {
+          print("o");
+        } elif (length > 4 && x == body4_x && y == body4_y) {
+          print("o");
+        } else {
+          print(".");
+        }
+      }
+      print("#\n");
+    }
+
+    print("########\n");
+    sleep_ms(speed);
+
+    int32 key = read_key();
+    if (key == 27) {
+      int32 bracket = read_key();
+      int32 arrow = read_key();
+      if (bracket == 91) {
+        if (arrow == 65 && dy != 1) {
+          dx = 0;
+          dy = 0 - 1;
+        } elif (arrow == 66 && dy != 0 - 1) {
+          dx = 0;
+          dy = 1;
+        } elif (arrow == 67 && dx != 0 - 1) {
+          dx = 1;
+          dy = 0;
+        } elif (arrow == 68 && dx != 1) {
+          dx = 0 - 1;
+          dy = 0;
+        }
+      }
+    } elif ((key == 119 || key == 87) && dy != 1) {
+      dx = 0;
+      dy = 0 - 1;
+    } elif ((key == 115 || key == 83) && dy != 0 - 1) {
+      dx = 0;
+      dy = 1;
+    } elif ((key == 100 || key == 68) && dx != 0 - 1) {
+      dx = 1;
+      dy = 0;
+    } elif ((key == 97 || key == 65) && dx != 1) {
+      dx = 0 - 1;
+      dy = 0;
+    } elif (key == 113 || key == 81) {
+      quit = 1;
+      alive = 0;
+    }
+
+    if (alive == 1) {
+      int32 next_x = head_x + dx;
+      int32 next_y = head_y + dy;
+
+      if (next_x < 0 || next_x > 5 || next_y < 0 || next_y > 5) {
+        alive = 0;
+      } elif (length > 1 && next_x == body1_x && next_y == body1_y) {
+        alive = 0;
+      } elif (length > 2 && next_x == body2_x && next_y == body2_y) {
+        alive = 0;
+      } elif (length > 3 && next_x == body3_x && next_y == body3_y) {
+        alive = 0;
+      } elif (length > 4 && next_x == body4_x && next_y == body4_y) {
+        alive = 0;
+      } else {
+        int32 ate = 0;
+        if (next_x == food_x && next_y == food_y) {
+          ate = 1;
+        }
+
+        body4_x = body3_x;
+        body4_y = body3_y;
+        body3_x = body2_x;
+        body3_y = body2_y;
+        body2_x = body1_x;
+        body2_y = body1_y;
+        body1_x = head_x;
+        body1_y = head_y;
+        head_x = next_x;
+        head_y = next_y;
+
+        if (ate == 1) {
+          score += 1;
+          if (length < 5) {
+            length += 1;
+          }
+          food_x = ((score * 2) + (turn * 3) + 1) % 6;
+          food_y = ((score * 3) + (turn * 2) + 4) % 6;
+        }
+
+        turn += 1;
+      }
+    }
+  }
+
+  disable_raw_input();
+  print("\nFinal board above.\n");
+  if (quit == 1) {
+    print("Quit. Score: ");
+  } elif (alive == 0) {
+    print("Game over. Score: ");
+  } else {
+    print("Turn limit reached. Score: ");
+  }
+  print(score);
+  print("\n");
+
+  ret 0;
+}

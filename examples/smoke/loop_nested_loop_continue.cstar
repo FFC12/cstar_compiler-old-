@@ -1,0 +1,24 @@
+// expected: pass
+// expected-exit: 4
+
+main() :: int32 {
+  int32 outer = 0;
+  int32 total = 0;
+
+  loop (outer < 3) {
+    outer += 1;
+
+    int32 inner = 0;
+    loop (inner < 2) {
+      inner += 1;
+    }
+
+    if (outer == 2) {
+      continue;
+    }
+
+    total += outer;
+  }
+
+  ret total;
+}

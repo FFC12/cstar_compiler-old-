@@ -1,0 +1,16 @@
+// expected: pass
+// expected-exit: 3
+
+main() :: int32 {
+  int32 value = 3;
+  int32* pointer = ref value;
+  int32 result = 0;
+  int32 i = 0;
+
+  loop (pointer && i < 1) {
+    result = deref pointer;
+    i += 1;
+  }
+
+  ret result;
+}
