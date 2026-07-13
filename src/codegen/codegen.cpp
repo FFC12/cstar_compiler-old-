@@ -7,6 +7,9 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/TargetParser/Triple.h>
 #include <sstream>
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
 
 std::unique_ptr<llvm::IRBuilder<>> Visitor::Builder;
 std::unique_ptr<llvm::Module> Visitor::Module;
@@ -49,6 +52,25 @@ std::string CStarCodegen::resolveBackendClangPath() {
   return "clang";
 }
 
+std::string CStarCodegen::resolveTargetTriple() {
+  if (const char* envTriple = std::getenv("CSTAR_TARGET_TRIPLE")) {
+    if (envTriple[0] != '\0') {
+      return envTriple;
+    }
+  }
+
+  return CSTAR_TARGET_TRIPLE;
+}
+
+std::vector<std::string> CStarCodegen::backendTargetArgs() const {
+  std::string targetTriple = resolveTargetTriple();
+  if (targetTriple.empty()) {
+    return {};
+  }
+
+  return {"-target", targetTriple};
+}
+
 int CStarCodegen::runCommand(const std::vector<std::string>& args,
                              bool reportBackendFailure) const {
   std::ostringstream command;
@@ -66,11 +88,21 @@ int CStarCodegen::runCommand(const std::vector<std::string>& args,
   std::cout.flush();
   std::cerr.flush();
   int result = std::system(commandString.c_str());
-  if (result != 0 && reportBackendFailure) {
-    std::cerr << REDISH << "Backend command failed with code " << result << RES
+  int exitCode = result;
+#ifndef _WIN32
+  if (result != -1) {
+    if (WIFEXITED(result)) {
+      exitCode = WEXITSTATUS(result);
+    } else if (WIFSIGNALED(result)) {
+      exitCode = 128 + WTERMSIG(result);
+    }
+  }
+#endif
+  if (exitCode != 0 && reportBackendFailure) {
+    std::cerr << REDISH << "Backend command failed with code " << exitCode << RES
               << std::endl;
   }
-  return result;
+  return exitCode;
 }
 
 CStarCodegen::CStarCodegen(CStarParser&& parser, std::string& filepath,
@@ -95,8 +127,11 @@ CStarCodegen::CStarCodegen(CStarParser&& parser, std::string& filepath,
   std::filesystem::create_directories(m_OutputDir);
 
   m_MainModule = std::make_unique<llvm::Module>(m_Filename, *m_MainContext);
-  if (std::string targetTriple = CSTAR_TARGET_TRIPLE; !targetTriple.empty()) {
+  if (std::string targetTriple = resolveTargetTriple(); !targetTriple.empty()) {
     m_MainModule->setTargetTriple(llvm::Triple(targetTriple));
+  }
+  if (std::string dataLayout = CSTAR_TARGET_DATA_LAYOUT; !dataLayout.empty()) {
+    m_MainModule->setDataLayout(dataLayout);
   }
   m_IRBuilder = std::make_unique<llvm::IRBuilder<>>(*m_MainContext);
 
@@ -164,6 +199,7 @@ void CStarCodegen::build() {
   const auto asmFilename = asmPath.string();
   const auto objFilename = objPath.string();
   const auto exeFilename = exePath.string();
+  auto targetArgs = backendTargetArgs();
 
   if (m_Options.emitKind == CStarEmitKind::IR) {
     if (m_Options.stats || !m_Options.runAfterBuild) {
@@ -173,8 +209,12 @@ void CStarCodegen::build() {
     return;
   }
 
-  if (runCommand({clangPath, "-S", "-x", "ir", irFilename, "-o",
-                  asmFilename}) != 0) {
+  std::vector<std::string> emitAssemblyArgs{clangPath};
+  emitAssemblyArgs.insert(emitAssemblyArgs.end(), targetArgs.begin(),
+                          targetArgs.end());
+  emitAssemblyArgs.insert(emitAssemblyArgs.end(),
+                          {"-S", "-x", "ir", irFilename, "-o", asmFilename});
+  if (runCommand(emitAssemblyArgs) != 0) {
     exit(1);
   }
 
@@ -187,8 +227,12 @@ void CStarCodegen::build() {
   }
 
   if (m_Options.emitKind == CStarEmitKind::Object) {
-    if (runCommand({clangPath, "-c", "-x", "ir", irFilename, "-o",
-                    objFilename}) != 0) {
+    std::vector<std::string> emitObjectArgs{clangPath};
+    emitObjectArgs.insert(emitObjectArgs.end(), targetArgs.begin(),
+                          targetArgs.end());
+    emitObjectArgs.insert(emitObjectArgs.end(),
+                          {"-c", "-x", "ir", irFilename, "-o", objFilename});
+    if (runCommand(emitObjectArgs) != 0) {
       exit(1);
     }
 
@@ -199,7 +243,10 @@ void CStarCodegen::build() {
     return;
   }
 
-  if (runCommand({clangPath, irFilename, "-o", exeFilename}) != 0) {
+  std::vector<std::string> linkArgs{clangPath};
+  linkArgs.insert(linkArgs.end(), targetArgs.begin(), targetArgs.end());
+  linkArgs.insert(linkArgs.end(), {irFilename, "-o", exeFilename});
+  if (runCommand(linkArgs) != 0) {
     exit(1);
   }
 

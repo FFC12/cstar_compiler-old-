@@ -14,15 +14,48 @@ find_program(CSTAR_BACKEND_CLANG
 
 if(CSTAR_BACKEND_CLANG)
   message(STATUS "Using backend clang: ${CSTAR_BACKEND_CLANG}")
+  set(CSTAR_TARGET_PROBE_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/cstar_target_probe.c")
+  file(WRITE "${CSTAR_TARGET_PROBE_SOURCE}" "int main(void) { return 0; }\n")
+  execute_process(
+    COMMAND "${CSTAR_BACKEND_CLANG}" "-###" -x c "${CSTAR_TARGET_PROBE_SOURCE}" -c
+    ERROR_VARIABLE CSTAR_CLANG_DRIVER_TRACE
+    OUTPUT_QUIET
+    ERROR_STRIP_TRAILING_WHITESPACE
+  )
+  string(REGEX MATCH "\\\"-triple\\\"[ \t]+\\\"([^\\\"]+)\\\"" CSTAR_TRIPLE_MATCH "${CSTAR_CLANG_DRIVER_TRACE}")
+  if(CSTAR_TRIPLE_MATCH)
+    set(CSTAR_TARGET_TRIPLE "${CMAKE_MATCH_1}")
+  endif()
+
   execute_process(
     COMMAND "${CSTAR_BACKEND_CLANG}" -dumpmachine
-    OUTPUT_VARIABLE CSTAR_TARGET_TRIPLE
+    OUTPUT_VARIABLE CSTAR_DUMPMACHINE_TRIPLE
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET
   )
+  if(NOT CSTAR_TARGET_TRIPLE)
+    set(CSTAR_TARGET_TRIPLE "${CSTAR_DUMPMACHINE_TRIPLE}")
+  endif()
+
+  set(CSTAR_DATALAYOUT_ARGS -S -emit-llvm -x c "${CSTAR_TARGET_PROBE_SOURCE}" -o -)
+  if(CSTAR_TARGET_TRIPLE)
+    list(PREPEND CSTAR_DATALAYOUT_ARGS -target "${CSTAR_TARGET_TRIPLE}")
+  endif()
+  execute_process(
+    COMMAND "${CSTAR_BACKEND_CLANG}" ${CSTAR_DATALAYOUT_ARGS}
+    OUTPUT_VARIABLE CSTAR_TARGET_IR
+    ERROR_QUIET
+  )
+  string(REGEX MATCH "target datalayout = \"([^\"]+)\"" CSTAR_DATALAYOUT_MATCH "${CSTAR_TARGET_IR}")
+  if(CSTAR_DATALAYOUT_MATCH)
+    set(CSTAR_TARGET_DATA_LAYOUT "${CMAKE_MATCH_1}")
+  else()
+    set(CSTAR_TARGET_DATA_LAYOUT "")
+  endif()
 else()
   message(STATUS "Backend clang was not found at configure time; runtime will use CSTAR_CLANG or PATH")
   set(CSTAR_BACKEND_CLANG "")
+  set(CSTAR_TARGET_DATA_LAYOUT "")
 endif()
 
 if(CSTAR_TARGET_TRIPLE)
@@ -30,6 +63,12 @@ if(CSTAR_TARGET_TRIPLE)
 else()
   message(STATUS "Target triple was not detected; backend clang may choose a default")
   set(CSTAR_TARGET_TRIPLE "")
+endif()
+
+if(CSTAR_TARGET_DATA_LAYOUT)
+  message(STATUS "Using target data layout: ${CSTAR_TARGET_DATA_LAYOUT}")
+else()
+  message(STATUS "Target data layout was not detected; LLVM will use its default")
 endif()
 
 configure_file(
@@ -75,8 +114,10 @@ if(WIN32 AND MINGW)
   endforeach()
 endif()
 
-llvm_map_components_to_libnames(llvm_libs support core irreader)
-target_link_libraries(${PROJECT_NAME} ${llvm_libs})
-
-
-
+if(TARGET LLVM)
+  target_link_libraries(${PROJECT_NAME} PRIVATE LLVM)
+else()
+  llvm_map_components_to_libnames(llvm_libs support core irreader)
+  list(REMOVE_DUPLICATES llvm_libs)
+  target_link_libraries(${PROJECT_NAME} PRIVATE ${llvm_libs})
+endif()

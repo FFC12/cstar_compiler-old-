@@ -1,0 +1,9 @@
+// expected: diagnostic
+read_ref(int32& x) :: int32 {
+    ret x;
+}
+
+main() :: int32 {
+    int32 value = 4;
+    ret read_ref(value);
+}

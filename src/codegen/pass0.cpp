@@ -57,7 +57,7 @@ void CStarCodegen::pass0() {
 
         auto messages = preVisitor.getUnknownTypeErrorMessages();
         for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
-          SemanticError(it->message, it->symbolInfo);
+          SemanticError(it->message, it->symbolInfo, it->code);
         }
 
         for (auto it = localSymbolMessages.rbegin();
@@ -114,9 +114,10 @@ bool CStarCodegen::redefinitionCheck(SymbolInfoList& symbols,
   return redefinationFlag;
 }
 
-void CStarCodegen::SemanticError(std::string message, SymbolInfo& symbolInfo) {
+void CStarCodegen::SemanticError(std::string message, SymbolInfo& symbolInfo,
+                                 cstar::diagnostics::DiagnosticCode code) {
   this->m_Parser.ParserError(std::move(message), symbolInfo.begin,
-                             symbolInfo.end, symbolInfo.line);
+                             symbolInfo.end, symbolInfo.line, code);
   this->m_SemAnalysisFailure = true;
   this->m_ErrorCount += 1;
 }

@@ -1,0 +1,6 @@
+main() :: int32 {
+    int32 source = 1;
+    int32 target := source;
+
+    ret target;
+}

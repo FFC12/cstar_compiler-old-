@@ -103,7 +103,7 @@ enum TokenKind {
   SIZEOF,
   TYPEOF,
   MOVE,
-  MOVEQ,
+  POLICY_ASSIGN,
   I8,
   I16,
   I32,
@@ -737,7 +737,7 @@ class CStarLexer {
           }
           return RANGE;
         } else if (lookAhead('=')) {
-          return MOVEQ;
+          return POLICY_ASSIGN;
         }
         return DOT;
       case ',':
@@ -991,7 +991,7 @@ class CStarLexer {
         return "!=";
       case TILDE:
         return "~";
-      case MOVEQ:
+      case POLICY_ASSIGN:
         return ".=";
       case LAND:
         return "&&";

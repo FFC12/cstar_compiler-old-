@@ -1,0 +1,12 @@
+// expected: diagnostic
+
+write_ref(constref int32& value) :: void {
+  value = 3;
+  ret;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  write_ref(ref value);
+  ret value;
+}

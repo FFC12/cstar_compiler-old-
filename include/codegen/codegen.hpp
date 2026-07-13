@@ -56,6 +56,8 @@ class CStarCodegen {
 
   static std::string quoteCommandArg(const std::string& arg);
   static std::string resolveBackendClangPath();
+  static std::string resolveTargetTriple();
+  std::vector<std::string> backendTargetArgs() const;
   int runCommand(const std::vector<std::string>& args,
                  bool reportBackendFailure = true) const;
 
@@ -66,7 +68,10 @@ class CStarCodegen {
   bool redefinitionCheck(SymbolInfoList& symbols, SymbolInfo& symbol,
                          size_t arr[3]);
   bool redefinitionCheck(SymbolInfo& symbol);
-  void SemanticError(std::string message, SymbolInfo& symbolInfo);
+  void SemanticError(
+      std::string message, SymbolInfo& symbolInfo,
+      cstar::diagnostics::DiagnosticCode code =
+          cstar::diagnostics::DiagnosticCode::SemanticError);
   void SemanticHint(std::string message, SymbolInfo& symbolInfo);
 
   // pass1 is for type checking

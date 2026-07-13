@@ -3,6 +3,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <parser/type_qualifier.hpp>
 #include <parser/type_specifiers.hpp>
 
 enum SymbolScope { Func, LoopSt, IfSt };
@@ -40,6 +41,11 @@ struct SymbolInfo {
 
   std::string value;
   std::vector<size_t> arrayDimensions;
+  // Per-level qualifier metadata. Index 0 is the final target value, and
+  // index N is the pointer object at indirection level N. Existing prefix
+  // qualifier syntax populates this conservatively until per-level syntax
+  // exists in the parser.
+  std::vector<TypeQualifier> qualifierLevels;
   std::pair<std::string, std::string>
       definedTypenamePair;  // left one is for symbol0 and right one is for
                             // symbol1

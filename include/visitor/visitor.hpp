@@ -3,6 +3,8 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Value.h>
 
+#include <diagnostics/diagnostic.hpp>
+#include <set>
 #include <stack>
 #include <utility>
 #include <visitor/symbols.hpp>
@@ -10,9 +12,16 @@
 struct SemanticErrorMessage {
   std::string message;
   SymbolInfo symbolInfo;
+  cstar::diagnostics::DiagnosticCode code =
+      cstar::diagnostics::DiagnosticCode::SemanticError;
 
   SemanticErrorMessage(std::string mesg, SymbolInfo symInf)
       : message(std::move(mesg)), symbolInfo(std::move(symInf)) {}
+  SemanticErrorMessage(std::string mesg, SymbolInfo symInf,
+                       cstar::diagnostics::DiagnosticCode diagnosticCode)
+      : message(std::move(mesg)),
+        symbolInfo(std::move(symInf)),
+        code(diagnosticCode) {}
 };
 
 struct SemanticWarningMessage {
@@ -121,6 +130,7 @@ class Visitor {
   bool m_LastCondExpr = false;
   bool m_LastRetExpr = false;
   bool m_LastFixExpr = false;
+  std::set<std::string> m_MovedUniqueSymbols;
   std::vector<size_t> m_LastArrayDims;
   size_t m_BinOpTermCount = 0;
 
@@ -137,11 +147,24 @@ class Visitor {
   std::vector<std::pair<std::string,bool>> m_IndicesAsStr{};
   llvm::Type* m_LastType = nullptr;
   std::map<std::string, llvm::AllocaInst*> m_LocalVarsOnScope;
+  std::map<std::string, llvm::Type*> m_ReferenceParamValueTypes;
   std::map<std::string, llvm::GlobalVariable*> m_GlobalVars;
+  std::map<std::string, llvm::Value*> m_SharedPointerRefCounts;
   std::vector<llvm::StringRef> m_GlobaInitVarFunc;
   static llvm::BasicBlock* MainFuncBB;
   static llvm::GlobalVariable* LastGlobVarRef;
   //--
+
+  struct FunctionParamLayout {
+    std::vector<llvm::Type*> irTypes;
+    std::vector<llvm::Type*> valueTypes;
+    std::vector<std::string> names;
+    std::vector<bool> isReference;
+
+    bool hasParams() const { return !irTypes.empty(); }
+  };
+
+  FunctionParamLayout buildFunctionParamLayout(FuncAST& funcAst);
 
   std::stack<size_t> m_SymbolIds;
 
@@ -168,6 +191,7 @@ class Visitor {
                     size_t scopeLevel, size_t scopeId);
 
   void typeCheckerScopeHandler(std::unique_ptr<IAST>& node);
+  SymbolAST* symbolFromMoveSource(IAST* node) const;
 
  public:
   // These are from pass0;

@@ -22,13 +22,14 @@ class VarAST : public IAST {
   bool m_IsUniquePtr;
   bool m_IsRef;
   bool m_IsInitializerList;
+  bool m_IsMoveInit;
 
  public:
   VarAST(std::string name, ASTNode typeName, std::unique_ptr<IAST> RHS, TypeSpecifier type_spec,
          TypeQualifier typeQualifier, VisibilitySpecifier visibility_spec,
          size_t indirectLevel, bool isRef, bool isUnique, bool isLocal,
          bool isInitializerList, std::vector<ASTNode> arrayDim,
-         SemanticLoc& semanticLoc)
+         SemanticLoc& semanticLoc, bool isMoveInit = false)
       : IAST(semanticLoc),
         m_Name(std::move(name)),
         m_Typename(std::move(typeName)),
@@ -41,6 +42,7 @@ class VarAST : public IAST {
         m_IsUniquePtr(isUnique),
         m_IsLocal(isLocal),
         m_IsInitializerList(isInitializerList),
+        m_IsMoveInit(isMoveInit),
         m_ArrDim(std::move(arrayDim)) {
     this->m_ASTKind = ASTKind::Decl;
     setDeclKind(DeclKind::VarDecl);
@@ -69,7 +71,7 @@ class VarAST : public IAST {
 
     std::cout << " " << m_Name;
     if (m_RHS) {
-      std::cout << " = ";
+      std::cout << (m_IsMoveInit ? " := " : " = ");
       m_RHS->debugNode();
     }
   }

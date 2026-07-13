@@ -19,6 +19,11 @@ if [[ -n "${LLVM_DIR:-}" ]]; then
   configure_args+=(-DLLVM_DIR="$LLVM_DIR")
 elif [[ -f /ucrt64/lib/cmake/llvm/LLVMConfig.cmake ]]; then
   configure_args+=(-DLLVM_DIR=/ucrt64/lib/cmake/llvm)
+elif command -v brew >/dev/null 2>&1; then
+  BREW_LLVM_PREFIX="$(brew --prefix llvm 2>/dev/null || true)"
+  if [[ -n "$BREW_LLVM_PREFIX" && -f "$BREW_LLVM_PREFIX/lib/cmake/llvm/LLVMConfig.cmake" ]]; then
+    configure_args+=(-DLLVM_DIR="$BREW_LLVM_PREFIX/lib/cmake/llvm")
+  fi
 fi
 
 if [[ -n "${CC:-}" ]]; then

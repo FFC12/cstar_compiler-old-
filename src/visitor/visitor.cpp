@@ -24,8 +24,58 @@
 llvm::BasicBlock *Visitor::MainFuncBB = nullptr;
 llvm::GlobalVariable *Visitor::LastGlobVarRef = nullptr;
 
+SymbolAST *Visitor::symbolFromMoveSource(IAST *node) const {
+  if (node == nullptr) {
+    return nullptr;
+  }
+
+  if (node->m_ExprKind == ExprKind::SymbolExpr) {
+    return static_cast<SymbolAST *>(node);
+  }
+
+  if (node->m_ExprKind == ExprKind::UnaryOp) {
+    auto *unary = static_cast<UnaryOpAST *>(node);
+    if (unary->m_UnaryOpKind == U_MOVE &&
+        unary->m_Node->m_ExprKind == ExprKind::SymbolExpr) {
+      return static_cast<SymbolAST *>(unary->m_Node.get());
+    }
+  }
+
+  return nullptr;
+}
+
 static llvm::PointerType *GetI8PtrTy() {
   return llvm::PointerType::get(Visitor::Builder->getContext(), 0);
+}
+
+static llvm::Type *GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
+                           bool isRef = false);
+
+static llvm::StructType *GetSharedPointerTy() {
+  auto &ctx = Visitor::Builder->getContext();
+  return llvm::StructType::get(ctx, {GetI8PtrTy(), GetI8PtrTy()});
+}
+
+static llvm::Value *ExtractSharedPointerData(llvm::Value *handle);
+static llvm::Value *ExtractSharedPointerCount(llvm::Value *handle);
+
+static bool IsSharedPointerTy(llvm::Type *type) {
+  return type == GetSharedPointerTy();
+}
+
+static bool IsSharedPointerSymbol(const SymbolInfo &symbolInfo) {
+  return symbolInfo.indirectionLevel > 0 && !symbolInfo.isUnique &&
+         !symbolInfo.isRef;
+}
+
+static llvm::Type *GetStorageType(TypeSpecifier typeSpecifier,
+                                  size_t indirectLevel, bool isUnique,
+                                  bool isRef = false) {
+  if (indirectLevel > 0 && !isUnique && !isRef) {
+    return GetSharedPointerTy();
+  }
+
+  return GetType(typeSpecifier, indirectLevel, isRef);
 }
 
 static llvm::Type *GetPointeeType(llvm::Value *value) {
@@ -93,6 +143,15 @@ static std::string DecodeCStringEscapes(const std::string &value) {
   }
 
   return decoded;
+}
+
+static llvm::Constant *CreateGlobalStringPointer(llvm::StringRef value,
+                                                 const llvm::Twine &name = "") {
+  auto *globalString = Visitor::Builder->CreateGlobalString(value, name);
+  auto *zero = llvm::ConstantInt::get(Visitor::Builder->getInt32Ty(), 0);
+  llvm::Constant *indices[] = {zero, zero};
+  return llvm::ConstantExpr::getInBoundsGetElementPtr(
+      globalString->getValueType(), globalString, indices);
 }
 
 static llvm::Value *CastValueToType(llvm::Value *value, llvm::Type *targetType,
@@ -176,6 +235,12 @@ static llvm::Value *CastValueToBranchCondition(llvm::Value *value,
     auto *nullPtr = llvm::ConstantPointerNull::get(
         llvm::cast<llvm::PointerType>(value->getType()));
     return Visitor::Builder->CreateICmpNE(value, nullPtr, "ifcond");
+  }
+
+  if (IsSharedPointerTy(value->getType())) {
+    auto *data = ExtractSharedPointerData(value);
+    auto *nullPtr = llvm::ConstantPointerNull::get(GetI8PtrTy());
+    return Visitor::Builder->CreateICmpNE(data, nullPtr, "ifcond");
   }
 
   return value;
@@ -318,7 +383,7 @@ static bool IsAnyBinOpOrSymbolInvolved(std::vector<BinOpOrVal> &v) {
 }
 
 static llvm::Type *GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
-                           bool isRef = false) {
+                           bool isRef) {
   llvm::Type *type = nullptr;
   switch (typeSpecifier) {
     case SPEC_VOID:
@@ -500,6 +565,45 @@ static llvm::Type *GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
   return type;
 }
 
+Visitor::FunctionParamLayout Visitor::buildFunctionParamLayout(FuncAST &funcAst) {
+  FunctionParamLayout layout;
+  layout.irTypes.reserve(funcAst.m_Params.size());
+  layout.valueTypes.reserve(funcAst.m_Params.size());
+  layout.names.reserve(funcAst.m_Params.size());
+  layout.isReference.reserve(funcAst.m_Params.size());
+
+  for (auto &param : funcAst.m_Params) {
+    auto *paramAst = static_cast<ParamAST *>(param.get());
+    if (paramAst->m_TypeAmbiguous) {
+      continue;
+    }
+
+    auto *typeAst = static_cast<TypeAST *>(paramAst->m_TypeNode.get());
+    auto *valueType = GetStorageType(typeAst->m_TypeSpec,
+                                     typeAst->m_IndirectLevel,
+                                     typeAst->m_IsUniquePtr,
+                                     typeAst->m_IsRef);
+    auto *irType = typeAst->m_IsRef
+                       ? GetType(typeAst->m_TypeSpec,
+                                 typeAst->m_IndirectLevel + 1,
+                                 typeAst->m_IsRef)
+                       : valueType;
+
+    layout.valueTypes.push_back(valueType);
+    layout.irTypes.push_back(irType);
+    layout.isReference.push_back(typeAst->m_IsRef);
+
+    if (paramAst->m_Symbol0 != nullptr) {
+      auto *symbolAst = static_cast<SymbolAST *>(paramAst->m_Symbol0.get());
+      layout.names.push_back(symbolAst->m_SymbolName);
+    } else {
+      layout.names.emplace_back();
+    }
+  }
+
+  return layout;
+}
+
 struct AssignmentTarget {
   llvm::Value *address = nullptr;
   llvm::Type *valueType = nullptr;
@@ -518,6 +622,29 @@ static AssignmentTarget ResolveAssignmentTarget(llvm::Value *storage,
 
   if (derefLevel > symbolInfo.indirectionLevel) {
     assert(false && "Invalid dereference level for assignment target.");
+  }
+
+  if (IsSharedPointerSymbol(symbolInfo)) {
+    llvm::Value *handle = Visitor::Builder->CreateLoad(GetSharedPointerTy(),
+                                                       storage,
+                                                       "deref.assign.sp");
+    for (size_t level = 1; level <= derefLevel; ++level) {
+      auto *data = ExtractSharedPointerData(handle);
+      const size_t remaining = symbolInfo.indirectionLevel - level;
+      if (remaining > 0) {
+        if (level == derefLevel) {
+          target.address = data;
+          target.valueType = GetSharedPointerTy();
+          return target;
+        }
+        handle = Visitor::Builder->CreateLoad(GetSharedPointerTy(), data,
+                                              "deref.assign.sp");
+      } else {
+        target.address = data;
+        target.valueType = GetType(symbolInfo.type, 0);
+        return target;
+      }
+    }
   }
 
   auto *pointerType = GetType(symbolInfo.type, symbolInfo.indirectionLevel);
@@ -754,6 +881,134 @@ static llvm::Value *CreateLocalVariable(const std::string &name,
   Visitor::Builder->CreateStore(value, var);
 
   return var;
+}
+
+static llvm::Value *CreateLoad(llvm::Value *address, llvm::Type *type,
+                               const llvm::Twine &name = "") {
+  return Visitor::Builder->CreateLoad(type, address, name);
+}
+
+static llvm::Value *CreateAtomicLoad(llvm::Value *address, llvm::Type *type,
+                                     const llvm::Twine &name = "") {
+  auto *load = Visitor::Builder->CreateLoad(type, address, name);
+  auto dl = Visitor::Module->getDataLayout();
+  load->setAtomic(llvm::AtomicOrdering::Acquire);
+  load->setAlignment(dl.getPrefTypeAlign(type));
+  return load;
+}
+
+static llvm::Value *CreateSharedPointerHandle(llvm::Value *data,
+                                              llvm::Value *refCount) {
+  auto *handleType = GetSharedPointerTy();
+  llvm::Value *handle = llvm::UndefValue::get(handleType);
+  data = Visitor::Builder->CreatePointerCast(data, GetI8PtrTy());
+  refCount = Visitor::Builder->CreatePointerCast(refCount, GetI8PtrTy());
+  handle = Visitor::Builder->CreateInsertValue(handle, data, {0}, "sp.data");
+  handle = Visitor::Builder->CreateInsertValue(handle, refCount, {1}, "sp.count");
+  return handle;
+}
+
+static llvm::Value *CreateNullSharedPointerHandle() {
+  auto *nullPtr = llvm::ConstantPointerNull::get(GetI8PtrTy());
+  return CreateSharedPointerHandle(nullPtr, nullPtr);
+}
+
+static llvm::Value *ExtractSharedPointerData(llvm::Value *handle) {
+  return Visitor::Builder->CreateExtractValue(handle, {0}, "sp.data");
+}
+
+static llvm::Value *ExtractSharedPointerCount(llvm::Value *handle) {
+  return Visitor::Builder->CreateExtractValue(handle, {1}, "sp.count");
+}
+
+static llvm::Value *CreateSharedPointerCounter(const std::string &name,
+                                               uint64_t initialValue) {
+  auto *counterType = Visitor::Builder->getInt64Ty();
+  auto *counter = Visitor::Builder->CreateAlloca(
+      counterType, nullptr, llvm::Twine(name + ".strong"));
+  Visitor::Builder->CreateStore(
+      llvm::ConstantInt::get(counterType, initialValue), counter);
+  return counter;
+}
+
+static void AtomicBumpSharedPointer(llvm::Value *handle, int64_t delta) {
+  auto *countAsI8 = ExtractSharedPointerCount(handle);
+  auto *isLive = Visitor::Builder->CreateICmpNE(
+      countAsI8, llvm::ConstantPointerNull::get(GetI8PtrTy()),
+      "sp.count.live");
+  auto *function = Visitor::Builder->GetInsertBlock()->getParent();
+  auto *bumpBB = llvm::BasicBlock::Create(Visitor::Builder->getContext(),
+                                          "sp.bump", function);
+  auto *contBB = llvm::BasicBlock::Create(Visitor::Builder->getContext(),
+                                          "sp.bump.cont", function);
+  Visitor::Builder->CreateCondBr(isLive, bumpBB, contBB);
+  Visitor::Builder->SetInsertPoint(bumpBB);
+
+  auto *count = Visitor::Builder->CreatePointerCast(
+      countAsI8, llvm::PointerType::get(Visitor::Builder->getContext(), 0));
+  auto *amount = llvm::ConstantInt::get(Visitor::Builder->getInt64Ty(),
+                                        static_cast<uint64_t>(delta), true);
+  Visitor::Builder->CreateAtomicRMW(
+      delta >= 0 ? llvm::AtomicRMWInst::Add : llvm::AtomicRMWInst::Sub, count,
+      amount, llvm::MaybeAlign(), llvm::AtomicOrdering::AcquireRelease);
+  Visitor::Builder->CreateBr(contBB);
+  Visitor::Builder->SetInsertPoint(contBB);
+}
+
+static void RetainSharedPointer(llvm::Value *handle) {
+  AtomicBumpSharedPointer(handle, 1);
+}
+
+static void ReleaseSharedPointer(llvm::Value *handle) {
+  AtomicBumpSharedPointer(handle, -1);
+}
+
+static llvm::Value *LoadSharedPointerStrongCount(llvm::Value *handle) {
+  auto *countAsI8 = ExtractSharedPointerCount(handle);
+  auto *isLive = Visitor::Builder->CreateICmpNE(
+      countAsI8, llvm::ConstantPointerNull::get(GetI8PtrTy()),
+      "sp.count.live");
+  auto *function = Visitor::Builder->GetInsertBlock()->getParent();
+  auto *loadBB = llvm::BasicBlock::Create(Visitor::Builder->getContext(),
+                                          "sp.count.load", function);
+  auto *zeroBB = llvm::BasicBlock::Create(Visitor::Builder->getContext(),
+                                          "sp.count.zero", function);
+  auto *contBB = llvm::BasicBlock::Create(Visitor::Builder->getContext(),
+                                          "sp.count.cont", function);
+  Visitor::Builder->CreateCondBr(isLive, loadBB, zeroBB);
+
+  Visitor::Builder->SetInsertPoint(loadBB);
+  auto *count = Visitor::Builder->CreatePointerCast(
+      countAsI8, llvm::PointerType::get(Visitor::Builder->getContext(), 0));
+  auto *loaded = CreateAtomicLoad(count, Visitor::Builder->getInt64Ty(),
+                                  "sp.strong");
+  Visitor::Builder->CreateBr(contBB);
+  loadBB = Visitor::Builder->GetInsertBlock();
+
+  Visitor::Builder->SetInsertPoint(zeroBB);
+  auto *zero = llvm::ConstantInt::get(Visitor::Builder->getInt64Ty(), 0);
+  Visitor::Builder->CreateBr(contBB);
+  zeroBB = Visitor::Builder->GetInsertBlock();
+
+  Visitor::Builder->SetInsertPoint(contBB);
+  auto *phi =
+      Visitor::Builder->CreatePHI(Visitor::Builder->getInt64Ty(), 2,
+                                  "sp.strong.result");
+  phi->addIncoming(loaded, loadBB);
+  phi->addIncoming(zero, zeroBB);
+  return phi;
+}
+
+static llvm::Value *FindStorage(std::map<std::string, llvm::AllocaInst*> &locals,
+                                std::map<std::string, llvm::GlobalVariable*> &globals,
+                                const std::string &name) {
+  if (locals.count(name) > 0) {
+    return locals[name];
+  }
+  if (globals.count(name) > 0) {
+    return globals[name];
+  }
+  return nullptr;
 }
 
 ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
@@ -994,6 +1249,26 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
   }
 
   llvm::Type *valueType = m_LastType;
+  auto referenceParam = m_ReferenceParamValueTypes.find(symbolAst.m_SymbolName);
+  if (referenceParam != m_ReferenceParamValueTypes.end() && !m_LastArrayIndex) {
+    auto *referenceSlotType = GetPointeeType(value);
+    auto *referencedAddress = CreateLoad(
+        value, referenceSlotType, symbolAst.m_SymbolName + ".ref.addr");
+    auto *referencedType = referenceParam->second;
+    auto *loadedValue = CreateLoad(referencedAddress, referencedType,
+                                   symbolAst.m_SymbolName + ".ref");
+
+    isSigned = IsSigned(getSymbolInfo(symbolAst.m_SymbolName).type);
+    if (m_LastType == nullptr) {
+      m_LastType = referencedType;
+      m_LastSigned = isSigned;
+      return loadedValue;
+    }
+
+    value = CastValueToType(loadedValue, m_LastType, isSigned);
+    m_LastSigned = isSigned;
+    return value;
+  }
 
   if (this->m_LastVarDecl && !this->m_LastArrayIndex) {
     valueType = GetPointeeType(value);
@@ -1096,8 +1371,7 @@ ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {
     } else {
       if (scalarAst.m_IsLiteral) {
         auto literalValue = DecodeCStringEscapes(scalarAst.m_Value);
-        value = Visitor::Builder->CreateGlobalStringPtr(
-            llvm::StringRef(literalValue));
+        value = CreateGlobalStringPointer(llvm::StringRef(literalValue));
       } else if (scalarAst.m_IsBoolean) {
         value = llvm::ConstantInt::get(
             m_LastType, scalarAst.m_Value == "true" ? 1 : 0);
@@ -1148,7 +1422,8 @@ ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {
 ValuePtr Visitor::visit(VarAST &varAst) {
   llvm::Value *value;
   this->m_LastVarDecl = true;
-  auto type = GetType(varAst.m_TypeSpec, varAst.m_IndirectLevel);
+  auto type = GetStorageType(varAst.m_TypeSpec, varAst.m_IndirectLevel,
+                             varAst.m_IsUniquePtr, varAst.m_IsRef);
   this->m_LastType = type;
   this->m_LastGlobVar = !varAst.m_IsLocal;
   this->m_LastSigned = IsSigned(varAst.m_TypeSpec);
@@ -1203,8 +1478,18 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       }
     }
 
+    const bool targetIsShared =
+        varAst.m_IndirectLevel > 0 && !varAst.m_IsUniquePtr && !varAst.m_IsRef;
+    auto *rhsSymbol = symbolFromMoveSource(varAst.m_RHS.get());
+    auto *rhsUnary = dynamic_cast<UnaryOpAST *>(varAst.m_RHS.get());
+    const bool rhsIsMove =
+        rhsUnary != nullptr && rhsUnary->m_UnaryOpKind == U_MOVE;
+
     value = varAst.m_RHS->accept(*this);
     value = CastValueToType(value, type, this->m_LastSigned);
+    if (targetIsShared && rhsSymbol != nullptr && !rhsIsMove) {
+      RetainSharedPointer(value);
+    }
 
     if (varAst.m_RHS->m_ExprKind != BinOp) {
       if (varAst.m_IsLocal) {
@@ -1213,6 +1498,12 @@ ValuePtr Visitor::visit(VarAST &varAst) {
         } else {
           m_LocalVarsOnScope[varAst.m_Name] = llvm::dyn_cast<llvm::AllocaInst>(
               CreateLocalVariable(varAst.m_Name, type, value));
+          if (targetIsShared && rhsSymbol != nullptr && rhsIsMove) {
+            auto *sourceStorage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                              rhsSymbol->m_SymbolName);
+            Builder->CreateStore(CreateNullSharedPointerHandle(),
+                                 sourceStorage);
+          }
         }
       } else {
         globVar = CreateConstantGlobalVar(varAst.m_Name,
@@ -1242,7 +1533,9 @@ ValuePtr Visitor::visit(VarAST &varAst) {
         globVar = CreateZeroInitConstantGlobalVar(
             varAst.m_Name, varAst.m_VisibilitySpec, arrayType);
       } else {
-        if (type->isFloatTy() || type->isDoubleTy()) {
+        if (IsSharedPointerTy(type)) {
+          value = llvm::ConstantAggregateZero::get(type);
+        } else if (type->isFloatTy() || type->isDoubleTy()) {
           value = llvm::ConstantFP::get(type, 0.0f);
         } else {
           value = llvm::ConstantInt::get(type, 0);
@@ -1257,7 +1550,9 @@ ValuePtr Visitor::visit(VarAST &varAst) {
         m_LocalVarsOnScope[varAst.m_Name] = llvm::dyn_cast<llvm::AllocaInst>(
             CreateLocalVariable(varAst.m_Name, arrayType, value));
       } else {
-        if (type->isFloatTy() || type->isDoubleTy()) {
+        if (IsSharedPointerTy(type)) {
+          value = CreateNullSharedPointerHandle();
+        } else if (type->isFloatTy() || type->isDoubleTy()) {
           value = llvm::ConstantFP::get(type, 0.0f);
         } else {
           value = llvm::ConstantInt::get(type, 0);
@@ -1291,9 +1586,19 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
   }
 
   auto symbolInfo = getSymbolInfo(lhs->m_SymbolName);
-  auto target = ResolveAssignmentTarget(
-      storage, symbolInfo,
-      assignmentAst.m_IsDereferenced ? assignmentAst.m_DerefLevel : 0);
+  AssignmentTarget target;
+  auto referenceParam = m_ReferenceParamValueTypes.find(lhs->m_SymbolName);
+  if (referenceParam != m_ReferenceParamValueTypes.end() &&
+      !assignmentAst.m_IsDereferenced) {
+    auto *referenceSlotType = GetPointeeType(storage);
+    target.address = CreateLoad(storage, referenceSlotType,
+                                lhs->m_SymbolName + ".ref.addr");
+    target.valueType = referenceParam->second;
+  } else {
+    target = ResolveAssignmentTarget(
+        storage, symbolInfo,
+        assignmentAst.m_IsDereferenced ? assignmentAst.m_DerefLevel : 0);
+  }
 
   llvm::Type *previousType = m_LastType;
   bool previousSigned = m_LastSigned;
@@ -1328,8 +1633,24 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
   m_LastSigned = IsSigned(symbolInfo.type);
   m_LastVarDecl = false;
 
+  const bool targetIsShared = IsSharedPointerTy(target.valueType);
+  auto *rhsSymbol = symbolFromMoveSource(assignmentAst.m_RHS.get());
+  auto *rhsUnary = dynamic_cast<UnaryOpAST *>(assignmentAst.m_RHS.get());
+  const bool rhsIsMove =
+      rhsUnary != nullptr && rhsUnary->m_UnaryOpKind == U_MOVE;
+  if (targetIsShared) {
+    auto *oldHandle =
+        Visitor::Builder->CreateLoad(GetSharedPointerTy(), target.address,
+                                     lhs->m_SymbolName + ".old.sp");
+    ReleaseSharedPointer(oldHandle);
+  }
+
   llvm::Value *rhs = assignmentAst.m_RHS->accept(*this);
   rhs = CastValueToType(rhs, target.valueType, m_LastSigned);
+  if (targetIsShared && rhsSymbol != nullptr &&
+      assignmentAst.m_ShortcutOp != ShortcutOp::S_MOV && !rhsIsMove) {
+    RetainSharedPointer(rhs);
+  }
 
   llvm::Value *result = rhs;
   if (assignmentAst.m_ShortcutOp != ShortcutOp::S_NONE &&
@@ -1344,6 +1665,12 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
   }
 
   Visitor::Builder->CreateStore(result, target.address);
+  if (targetIsShared && rhsSymbol != nullptr &&
+      (assignmentAst.m_ShortcutOp == ShortcutOp::S_MOV || rhsIsMove)) {
+    auto *sourceStorage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                      rhsSymbol->m_SymbolName);
+    Builder->CreateStore(CreateNullSharedPointerHandle(), sourceStorage);
+  }
 
   m_LastType = previousType;
   m_LastSigned = previousSigned;
@@ -1529,7 +1856,11 @@ ValuePtr Visitor::visit(CastOpAST &castOpAst) {
     assert(false && "Cast target must be a type expression.");
   }
 
-  auto *targetType =
+  auto *targetType = GetStorageType(targetTypeAst->m_TypeSpec,
+                                    targetTypeAst->m_IndirectLevel,
+                                    targetTypeAst->m_IsUniquePtr,
+                                    targetTypeAst->m_IsRef);
+  auto *targetDataType =
       GetType(targetTypeAst->m_TypeSpec, targetTypeAst->m_IndirectLevel);
   const bool targetSigned = IsSigned(targetTypeAst->m_TypeSpec);
 
@@ -1541,7 +1872,13 @@ ValuePtr Visitor::visit(CastOpAST &castOpAst) {
   llvm::Value *value = castOpAst.m_Node->accept(*this);
 
   if (castOpAst.m_CastOpKind == CastOpKind::C_UNSAFE_CAST) {
-    value = UnsafeCastValueToType(value, targetType, targetSigned);
+    if (IsSharedPointerTy(targetType)) {
+      auto *data = UnsafeCastValueToType(value, targetDataType, targetSigned);
+      auto *counter = CreateSharedPointerCounter("sp.cast", 1);
+      value = CreateSharedPointerHandle(data, counter);
+    } else {
+      value = UnsafeCastValueToType(value, targetType, targetSigned);
+    }
   } else {
     value = CastValueToType(value, targetType, targetSigned);
   }
@@ -1563,43 +1900,14 @@ llvm::Function *Visitor::declareFunction(FuncAST &funcAst) {
     return function;
   }
 
-  auto retType = (TypeAST *)funcAst.m_RetType.get();
-
-  std::vector<llvm::Type *> paramTypes;
-  bool hasParam = false;
-  for (auto &param : funcAst.m_Params) {
-    auto paramAst = (ParamAST *)param.get();
-
-    if (!paramAst->m_TypeAmbiguous) {
-      auto typeAst = (TypeAST *)paramAst->m_TypeNode.get();
-      auto paramType =
-          GetType(typeAst->m_TypeSpec,
-                  typeAst->m_IndirectLevel + (typeAst->m_IsRef ? 1 : 0),
-                  typeAst->m_IsRef);
-      paramTypes.push_back(paramType);
-    } else {
-      bool isLeftOne = false, isRightOne = false;
-      for (auto &type : this->m_TypeTable) {
-        auto symbol0 = (SymbolAST *)paramAst->m_Symbol0.get();
-        auto symbol1 = (SymbolAST *)paramAst->m_Symbol1.get();
-
-        if (type.first == symbol0->m_SymbolName) {
-          isLeftOne = true;
-        }
-
-        if (type.first == symbol1->m_SymbolName) {
-          isRightOne = true;
-        }
-        // For user-defined types...
-      }
-    }
-
-    hasParam = true;
-  }
+  auto *retType = static_cast<TypeAST *>(funcAst.m_RetType.get());
+  auto paramLayout = buildFunctionParamLayout(funcAst);
 
   auto *functionType = llvm::FunctionType::get(
-      GetType(retType->m_TypeSpec, retType->m_IndirectLevel),
-      hasParam ? paramTypes : std::vector<llvm::Type *>(), false);
+      GetStorageType(retType->m_TypeSpec, retType->m_IndirectLevel,
+                     retType->m_IsUniquePtr, retType->m_IsRef),
+      paramLayout.hasParams() ? paramLayout.irTypes : std::vector<llvm::Type *>(),
+      false);
 
   auto *function =
       llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
@@ -1610,34 +1918,17 @@ llvm::Function *Visitor::declareFunction(FuncAST &funcAst) {
 
 ValuePtr Visitor::visit(FuncAST &funcAst) {
   auto *function = declareFunction(funcAst);
-  auto retType = (TypeAST *)funcAst.m_RetType.get();
 
   this->m_LastFuncName = funcAst.m_FuncName;
-  std::vector<llvm::Type *> paramTypes;
-  std::vector<std::string> paramNames;
-  bool hasParam = false;
-  for (auto &param : funcAst.m_Params) {
-    auto paramAst = (ParamAST *)param.get();
-
-    if (!paramAst->m_TypeAmbiguous) {
-      auto typeAst = (TypeAST *)paramAst->m_TypeNode.get();
-      auto paramType =
-          GetType(typeAst->m_TypeSpec,
-                  typeAst->m_IndirectLevel + (typeAst->m_IsRef ? 1 : 0),
-                  typeAst->m_IsRef);
-      paramTypes.push_back(paramType);
-
-      auto symbolAst = (SymbolAST *)paramAst->m_Symbol0.get();
-      paramNames.push_back(symbolAst->m_SymbolName);
-    }
-
-    hasParam = true;
-  }
+  auto paramLayout = buildFunctionParamLayout(funcAst);
 
   if (!funcAst.m_IsForwardDecl) {
     if (!function->empty()) {
       return function;
     }
+
+    m_LocalVarsOnScope.clear();
+    m_ReferenceParamValueTypes.clear();
 
     llvm::BasicBlock *funcBlock = llvm::BasicBlock::Create(
         Visitor::Builder->getContext(), "entry", function);
@@ -1649,28 +1940,28 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
     }
 
     auto datalayout = Visitor::Module->getDataLayout();
-    if (hasParam) {
+    if (paramLayout.hasParams()) {
       for (auto &param : function->args()) {
         size_t paramNo = param.getArgNo();
-        std::string paramName = paramNames[paramNo];
-        llvm::Type *paramType = paramTypes[paramNo];
-        auto paramAst = (ParamAST *)funcAst.m_Params[paramNo].get();
-        auto typeAst = (TypeAST *)paramAst->m_TypeNode.get();
+        const std::string &paramName = paramLayout.names[paramNo];
+        llvm::Type *paramType = paramLayout.irTypes[paramNo];
+        llvm::Type *valueType = paramLayout.valueTypes[paramNo];
+        uint64_t typeByte = datalayout.getPrefTypeAlign(valueType).value();
 
-        auto type = GetType(typeAst->m_TypeSpec, typeAst->m_IndirectLevel);
-        uint64_t typeByte = datalayout.getPrefTypeAlign(type).value();
-
-        if (typeAst->m_IsRef) {
+        if (paramLayout.isReference[paramNo]) {
           function->addParamAttr(paramNo, llvm::Attribute::NonNull);
           function->addDereferenceableParamAttr(paramNo, typeByte);
         }
 
-        if (typeAst->m_IsRef || typeAst->m_IndirectLevel > 0) {
+        if (paramType->isPointerTy()) {
           llvm::Attribute attribute = llvm::Attribute::getWithAlignment(
               Visitor::Module->getContext(), llvm::Align(typeByte));
           function->addParamAttr(paramNo, attribute);
         }
 
+        if (paramLayout.isReference[paramNo]) {
+          m_ReferenceParamValueTypes[paramName] = valueType;
+        }
         m_LocalVarsOnScope[paramName] = Visitor::Builder->CreateAlloca(
             paramType, nullptr, llvm::Twine(paramName));
         Visitor::Builder->CreateStore(&param, m_LocalVarsOnScope[paramName]);
@@ -1756,7 +2047,7 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
         format = "%f";
       }
 
-      auto *formatValue = Builder->CreateGlobalStringPtr(format);
+      auto *formatValue = CreateGlobalStringPointer(format);
       lastCall = Builder->CreateCall(printfFunction, {formatValue, argValue});
     }
 
@@ -1784,13 +2075,34 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     auto *slot = Builder->CreateAlloca(valueType, nullptr, "input.int.slot");
     Builder->CreateStore(llvm::ConstantInt::get(valueType, 0), slot);
 
-    auto *formatValue = Builder->CreateGlobalStringPtr("%lld");
+    auto *formatValue = CreateGlobalStringPointer("%lld");
     Builder->CreateCall(scanfFunction, {formatValue, slot});
 
     auto *value = Builder->CreateLoad(valueType, slot, "input.int");
     m_LastType = valueType;
     m_LastSigned = true;
     return value;
+  }
+
+  if (funcSymbol->m_SymbolName == "strong_count") {
+    if (argNodes.size() != 1 ||
+        argNodes[0]->m_ExprKind != ExprKind::SymbolExpr) {
+      assert(false && "Builtin 'strong_count' expects one symbol argument.");
+    }
+
+    auto *symbol = static_cast<SymbolAST *>(argNodes[0]);
+    auto *storage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                symbol->m_SymbolName);
+    if (storage == nullptr) {
+      assert(false && "strong_count target was not found.");
+    }
+
+    auto *handle = Builder->CreateLoad(GetSharedPointerTy(), storage,
+                                       symbol->m_SymbolName + ".sp");
+    auto *count = LoadSharedPointerStrongCount(handle);
+    m_LastType = Builder->getInt64Ty();
+    m_LastSigned = true;
+    return count;
   }
 
   auto *function = Visitor::Module->getFunction(funcSymbol->m_SymbolName);
@@ -2195,6 +2507,10 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
     this->m_LastNegConstant = false;
   }
 
+  if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_MOVE) {
+    return unaryOpAst.m_Node->accept(*this);
+  }
+
   if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_REF) {
     if (unaryOpAst.m_Node == nullptr ||
         unaryOpAst.m_Node->m_ExprKind != ExprKind::SymbolExpr) {
@@ -2204,16 +2520,89 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
     auto *symbol = static_cast<SymbolAST *>(unaryOpAst.m_Node.get());
     if (m_LocalVarsOnScope.count(symbol->m_SymbolName) > 0) {
       value = m_LocalVarsOnScope[symbol->m_SymbolName];
+      auto referenceParam = m_ReferenceParamValueTypes.find(symbol->m_SymbolName);
+      if (referenceParam != m_ReferenceParamValueTypes.end()) {
+        auto *referenceSlotType = GetPointeeType(value);
+        value = CreateLoad(value, referenceSlotType,
+                           symbol->m_SymbolName + ".ref.addr");
+      }
     } else if (m_GlobalVars.count(symbol->m_SymbolName) > 0) {
       value = m_GlobalVars[symbol->m_SymbolName];
     } else {
       assert(false && "'ref' operand was not found in codegen symbol tables.");
     }
 
-    m_LastType = value->getType();
+    if (IsSharedPointerTy(m_LastType)) {
+      auto *counter = CreateSharedPointerCounter("sp.ref", 1);
+      value = CreateSharedPointerHandle(value, counter);
+    } else {
+      m_LastType = value->getType();
+    }
   }
 
   if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_DEREF) {
+    size_t derefLevel = 0;
+    IAST *operand = &unaryOpAst;
+    while (operand != nullptr && operand->getASTKind() == ASTKind::Expr &&
+           operand->getExprKind() == ExprKind::UnaryOp) {
+      auto *unaryOperand = static_cast<UnaryOpAST *>(operand);
+      if (unaryOperand->m_UnaryOpKind != UnaryOpKind::U_DEREF) {
+        break;
+      }
+
+      derefLevel += 1;
+      operand = unaryOperand->m_Node.get();
+    }
+
+    if (operand != nullptr && operand->getASTKind() == ASTKind::Expr &&
+        operand->getExprKind() == ExprKind::SymbolExpr) {
+      auto *symbol = static_cast<SymbolAST *>(operand);
+      llvm::Value *storage = nullptr;
+      if (m_LocalVarsOnScope.count(symbol->m_SymbolName) > 0) {
+        storage = m_LocalVarsOnScope[symbol->m_SymbolName];
+      } else if (m_GlobalVars.count(symbol->m_SymbolName) > 0) {
+        storage = m_GlobalVars[symbol->m_SymbolName];
+      } else {
+        assert(false && "'deref' operand was not found in codegen tables.");
+      }
+
+      const auto symbolInfo = getSymbolInfo(symbol->m_SymbolName);
+      if (derefLevel == 0 || derefLevel > symbolInfo.indirectionLevel) {
+        assert(false && "Invalid dereference level.");
+      }
+
+      if (IsSharedPointerSymbol(symbolInfo)) {
+        value = Builder->CreateLoad(GetSharedPointerTy(), storage, "deref.sp");
+        for (size_t level = 1; level <= derefLevel; ++level) {
+          auto *data = ExtractSharedPointerData(value);
+          const size_t remaining = symbolInfo.indirectionLevel - level;
+          if (remaining > 0) {
+            value = Builder->CreateLoad(GetSharedPointerTy(), data, "deref.sp");
+          } else {
+            m_LastType = GetType(symbolInfo.type, 0);
+            value = Builder->CreateLoad(m_LastType, data, "deref.value");
+            return value;
+          }
+        }
+        m_LastType = GetSharedPointerTy();
+        return value;
+      }
+
+      value = Builder->CreateLoad(
+          GetType(symbolInfo.type, symbolInfo.indirectionLevel), storage,
+          "deref");
+      for (size_t level = 1; level < derefLevel; ++level) {
+        value = Builder->CreateLoad(
+            GetType(symbolInfo.type, symbolInfo.indirectionLevel - level),
+            value, "deref");
+      }
+
+      m_LastType =
+          GetType(symbolInfo.type, symbolInfo.indirectionLevel - derefLevel);
+      value = Builder->CreateLoad(m_LastType, value, "deref.value");
+      return value;
+    }
+
     llvm::Type *loadType = m_LastType;
     value = unaryOpAst.m_Node->accept(*this);
 

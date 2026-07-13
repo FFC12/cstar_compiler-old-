@@ -1,0 +1,7 @@
+// expected: pass
+// expected-exit: 5
+
+main() :: int32 {
+  const int32 value = 5;
+  ret value;
+}

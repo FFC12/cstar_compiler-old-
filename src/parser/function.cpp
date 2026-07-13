@@ -320,6 +320,11 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
           (isTypeQualifier(prevTokenInfo()) && hasConstness)) {
         varDecl(typeQualifier, VisibilitySpecifier::VIS_LOCAL,
                 is(TokenKind::IDENT), true, &scope);
+      } else if (nextToken == TokenKind::POLICY_ASSIGN) {
+        ParserError(
+            "'.=' policy/member-safe assignment is part of the C* proposal "
+            "and requires the policy runtime semantics first",
+            nextTokenInfo);
       } else if (isShortcutOp(nextTokenInfo)) {
         auto symbol = std::move(advanceSymbol());
         auto shortcutOp = typeOfShortcutOp(currentTokenInfo());
@@ -366,6 +371,13 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
 
         expected(TokenKind::RSQPAR);
         this->advance();
+
+        if (is(TokenKind::POLICY_ASSIGN)) {
+          ParserError(
+              "'.=' policy/member-safe assignment is part of the C* proposal "
+              "and requires the policy runtime semantics first",
+              currentTokenInfo());
+        }
 
         if (!isShortcutOp(currentTokenInfo())) {
           ParserError("Unexpected token for assignment expression.",

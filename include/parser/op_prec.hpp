@@ -24,22 +24,22 @@ class PrecedenceInfo {
   PrecedenceInfo(size_t prec, bool isLeftToRight)
       : m_Precedence(prec), m_IsLeftToRight(isLeftToRight) {}
 
-  bool operator>(PrecedenceInfo &p) {
+  bool operator>(const PrecedenceInfo &p) const {
     return this->m_Precedence > p.m_Precedence;
   }
 
-  bool operator<(PrecedenceInfo &p) {
+  bool operator<(const PrecedenceInfo &p) const {
     return this->m_Precedence < p.m_Precedence;
   }
 
-  bool operator==(PrecedenceInfo &p) {
+  bool operator==(const PrecedenceInfo &p) const {
     return this->m_Precedence == p.m_Precedence;
   }
 
-  bool isLtr() { return this->m_IsLeftToRight; }
+  bool isLtr() const { return this->m_IsLeftToRight; }
 
   // Debuggin purpose
-  int getPrec() { return this->m_Precedence; }
+  int getPrec() const { return this->m_Precedence; }
 
   void setLtr(bool s) { this->m_IsLeftToRight = s; }
 
@@ -69,12 +69,12 @@ class PrecedenceEntry {
         m_IsLast(isLast),
         m_HasTypeAttrib(hasTypeAttrib) {}
 
-  bool operator>(PrecedenceEntry &e) {
+  bool operator>(const PrecedenceEntry &e) const {
     return this->m_PrecedenceInfo > e.m_PrecedenceInfo;
   }
 
   // std::sort calls this one
-  bool operator<(PrecedenceEntry &e) {
+  bool operator<(const PrecedenceEntry &e) const {
     bool sameOperatorFlag = false;
     bool isLtrOp = this->m_PrecedenceInfo.isLtr();
 
@@ -91,21 +91,21 @@ class PrecedenceEntry {
     }
   }
 
-  bool operator==(PrecedenceEntry &e) {
+  bool operator==(const PrecedenceEntry &e) const {
     return this->m_PrecedenceInfo == e.m_PrecedenceInfo;
   }
 
   TokenKind entryTokenKind() const noexcept { return this->m_Token.getTokenKind(); }
   TokenInfo entryTokenInfo() const noexcept { return this->m_Token; }
   OpType entryOpType() const noexcept { return this->m_OpType; }
-  PrecedenceInfo entryPrecInfo() { return this->m_PrecedenceInfo; }
+  PrecedenceInfo entryPrecInfo() const { return this->m_PrecedenceInfo; }
   bool entryHasTypeAttrib() const noexcept { return this->m_HasTypeAttrib; }
   size_t entryId() const noexcept { return this->m_Id; }
   size_t entryStride() const noexcept { return this->m_Stride; }
   void decreaseStride() noexcept { this->m_Stride -= 1; }
 
   // Debuggin purpose
-  size_t getPrec() { return this->m_PrecedenceInfo.getPrec(); }
+  size_t getPrec() const { return this->m_PrecedenceInfo.getPrec(); }
 
   void print() {
     std::cout << "Op Type: " << std::to_string(m_OpType) << std::endl;

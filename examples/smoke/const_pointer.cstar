@@ -1,0 +1,10 @@
+// expected: pass
+// expected-exit: 2
+
+main() :: int32 {
+  int32 first = 1;
+  int32 second = 2;
+  const int32* pointer = ref first;
+  pointer = ref second;
+  ret deref pointer;
+}

@@ -1,0 +1,6 @@
+// expected: diagnostic
+
+main() :: int32 {
+  int32*^ pointer;
+  ret 0;
+}

@@ -1,0 +1,10 @@
+// expected-exit: 1
+main() :: int32 {
+    int32 value = 7;
+    int32* source = ref value;
+    int32* target;
+
+    target := source;
+
+    ret strong_count(target);
+}

@@ -359,6 +359,8 @@ class CStarParser {
 
   // for semantics analysis
   void ParserError(std::string mesg, size_t begin, size_t end, size_t line);
+  void ParserError(std::string mesg, size_t begin, size_t end, size_t line,
+                   cstar::diagnostics::DiagnosticCode code);
   void ParserWarning(std::string mesg, size_t newBegin, size_t newEnd,
                      size_t newLine);
 

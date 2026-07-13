@@ -91,7 +91,7 @@ VSCode F5/debug akışı için `.vscode` yapılandırmaları da eklendi.
 
 `expected-exit`, generated executable'ın process exit status değeridir. Yani `ret 7;` console'a `7` yazdırmaz; programın exit code'unu `7` yapar. Terminalde doğrudan `.exe` çalıştırıldığında Windows bu değeri ekrana basmaz, PowerShell tarafında `$LASTEXITCODE` ile görülür. Smoke runner bu değeri otomatik yakalar ve `[OK] ... (exit N)` şeklinde doğrular.
 
-Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu anda 41/41 başarılıdır:
+Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu anda 55/55 başarılıdır:
 
 - minimal program ve `ret expr`
 - `ret;` kullanan void fonksiyon çağrısı
@@ -105,6 +105,7 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu
 - comparison expression: `<`, `<=`, `>`, `>=`, `==`, `!=`
 - logical expression: `&&`, `||`
 - scalar assignment
+- `const` scalar read ve `const int32*` target/value ayrımı
 - assignment type cast ve data-loss warning
 - explicit `cast<T>(expr)` numerik dönüşüm
 - explicit cast edilmiş function argument
@@ -113,18 +114,24 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu
 - function call, forward function call, call statement
 - symbol argümanlı function call
 - tek seviyeli pointer argümanlı function call: `read_ptr(ref x)` ve callee içinde `deref p`
+- primitive reference parametre: `write_ref(ref value)`
+- primitive `constref` parametre: `read_ref(ref value)` ve callee içinde salt-okunur değer okuma
 - tek seviyeli pointer variable initializer: `int32* p = ref x`
+- shared pointer atomic strong-count: `int32* q = p`, `q = p`, `q := p`, `strong_count(q)`
+- unique pointer move-only semantik: `int32^ p = ref x`, `int32^ q := p`, `q := p`, `deref q = value`
+- `constptr` pointer initializer ve dereference read/write: `constptr int32* p = ref x`, `deref p = value`
+- `readonly` pointer initializer ve dereference read: `readonly int32* p = ref x`, `ret deref p`
 - pointer return: `identity(int32* p) :: int32*`
 - dereference assignment: `deref p = value`, `*p = value`
 - dereference shortcut assignment: `deref p += value`
-- çok seviyeli dereference assignment: `**pp = value`
+- çok seviyeli dereference read/write: `**pp`, `**pp = value`
 - pointer'dan pointer okuma: `int32* q = deref pp`
 - geçici `print(...)` builtin
 - geçici `input_int()` builtin
 - `if`, `if/else`, `if/elif/else`, nested if ve branch fallthrough
 - `int`, `float` ve pointer condition conversion
 
-`examples/type_checker/` seti şu anda 19/19 kontrollü diagnostic üretir; crash/assert beklenmez. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini ve safe cast pointer/value kategori reddini kapsar.
+`examples/type_checker/` seti şu anda 34/34 kontrollü diagnostic üretir; crash/assert beklenmez. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` pointer adresi reassignment reddini, `readonly` pointer address/value assignment reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, moved-after-use reddini ve `.=` policy proposal diagnostic'ini kapsar.
 
 `examples/functions/`, `examples/variables/` ve `examples/papers/` dizinleri hâlâ daha çok proposal/stres örnekleridir. Runner ile ayrı çalıştırılır; amaç hepsini bugün yeşil yapmak değil, dil geliştikçe buradan küçük MVP smoke'lar çıkarmaktır.
 
@@ -189,7 +196,7 @@ Lexer yorum token'larını üretse de `perform()` içinde yorumları token strea
 Lexer düzeyinde tanınanlar:
 
 ```text
-.  ..  ...
+.  ..  ...  .=
 ,  ;  :  ::  :=
 $  #  _  ?  =>  ->
 +  +=  ++
@@ -208,7 +215,7 @@ $  #  _  ?  =>  ->
 { } ( ) [ ]
 ```
 
-`:=` token olarak `TYPEINF`, `.=` token olarak `MOVEQ` şeklinde tanınıyor.
+`:=` token olarak `TYPEINF`, `.=` token olarak `POLICY_ASSIGN` şeklinde tanınıyor. C* tasarımında `:=` type inference değildir; unique ownership transfer intent'i için kullanılır. `.=` policy/member-safe assignment proposal'ıdır ve policy runtime semantics gelene kadar kontrollü parser diagnostic üretir.
 
 ## 5. Tip Sistemi
 
@@ -266,8 +273,8 @@ int^ uniquePtr;
 int^^^^ deepUnique;
 ```
 
-- `*`: normal/shareable pointer.
-- `^`: unique pointer fikri.
+- `*`: shareable pointer. Codegen'de raw pointer ABI değildir; compiler-owned shared handle `{ data: ptr, strong: i64* }` olarak taşınır. Copy/assignment atomic strong-count artırır, overwrite release eder, `:=`/`move` ownership transfer yapar.
+- `^`: unique/ownership pointer. Doğrudan copy reddedilir; ownership transfer için `:=` veya `move` gerekir. Move edilen `*` ve `^` source yeniden initialize edilmeden kullanılamaz.
 - Aynı type içinde `*` ve `^` karıştırılamıyor. Parser bunu hata sayıyor:
 
 ```cstar
@@ -290,7 +297,7 @@ Desteklenen biçimler:
 - Unary operator olarak `deref`.
 - `*` expression içinde dereference olarak da kullanılabiliyor.
 
-Güncel codegen notu: `ref x` ve `deref p` için memory MVP çalışıyor. Primitive pointer parametreye `ref x` geçirme ve fonksiyon içinde `ret deref p;` ile okuma `examples/smoke/function_call_pointer_argument.cstar` içinde doğrulanıyor. `int32* p = ref x;`, `int32* q = deref pp;`, `deref p = value;`, `deref p += value;`, `**pp = value;` ve pointer return senaryoları smoke setinde çalışıyor. Qualifier davranışları, reference type olarak `int32& r` ve ownership pointer `^` hâlâ ayrı geliştirme adımıdır.
+Güncel codegen notu: `ref x` shared pointer beklenen yerde `{ data=&x, strong=new atomic i64(1) }` handle'ı üretir. `int32* q = p` ve `q = p` atomic retain yapar; `q := p` ve `q = move p` transfer yapar ve source moved kabul edilir. `strong_count(p)` compiler builtin'i atomic strong-count değerini döndürür. Primitive pointer parametre/return ABI'si de bu shared handle'ı taşır; `read_ptr(ref x)`, `identity(int32* p) :: int32*`, `int32* q = deref pp`, `deref p = value`, `deref p += value`, `**pp` ve `**pp = value` smoke setinde çalışır. Primitive reference parametreler `int32& x` syntax'ı ile çağıranın storage'ına alias olur; çağrı tarafında açık `ref value` gerekir, fonksiyon gövdesinde `x` normal değer gibi okunur ve `x = value;` çağıranın değerini günceller. `const`/`constref`/`constptr`/`readonly` qualifier kontrolleri semantic pass'te korunur.
 
 ### 6.3 Qualifier'lar
 
@@ -310,10 +317,25 @@ Niyet:
 
 Semantic pass bu qualifier'lar için bazı kontroller yapıyor:
 
-- `constptr` pointer olmayan değerle uyumsuz.
-- `constref` reference olmayan değerle uyumsuz.
-- `readonly` atama yapılamaz kabul ediliyor.
-- `const` değer tekrar assign edilemez.
+- `constptr` pointer olmayan değerle uyumsuz; pointer adresi sonradan değiştirilemez.
+- `constptr` pointer'ın hedef değeri `deref` ile okunup yazılabilir.
+- `constref` reference olmayan değerle uyumsuz; mutable storage'a read-only reference olarak bağlanabilir.
+- `constref` parametre okunabilir fakat assignment target olamaz.
+- `readonly` pointer adresi ve hedef değeri salt-okunur kabul ediliyor.
+- `const` scalar değer tekrar assign edilemez.
+- `const int32*` pointer'ın hedef değeri salt-okunurdur; pointer adresi değiştirilebilir.
+- `readonly int32**` çok seviyeli pointer read desteklenir; hedef yazma reddedilir.
+- `const int32**` mutable pointer zincirine bağlanmaz.
+
+Qualifier diagnostic kodları:
+
+- `CST2100`: qualifier mismatch.
+- `CST2101`: invalid qualifier/type combination.
+- `CST2102`: const assignment.
+- `CST2103`: constptr pointer reassignment.
+- `CST2104`: readonly assignment.
+
+Compiler iç temsili per-level qualifier metadata taşır. `SymbolInfo::qualifierLevels` içinde index `0` final target value, index `N` ise pointer object level `N` anlamına gelir. Bugünkü prefix syntax bu yapıya conservative biçimde map edilir: `const` target value, `constptr` en dış pointer object, `constref` reference target value, `readonly` ise tüm mevcut seviyeler olarak işlenir. Pointer seviyesine özel yeni surface syntax henüz proposal aşamasındadır.
 
 ## 7. Değişken Deklarasyonu
 
@@ -468,7 +490,7 @@ Semantic tarafında return expression tipi, fonksiyonun dönüş tipiyle karşı
 Desteklenen operator seti:
 
 ```text
-= -= *= /= %= >>= <<= &= |= ^= =
+= := -= *= /= %= >>= <<= &= |= ^= =
 .=
 ```
 
@@ -478,7 +500,8 @@ Desteklenen operator seti:
 x = 20;
 r += 1;
 r >>= 1;
-r .= a;
+r := otherUnique;
+r .= a;  // proposal: policy/member-safe assignment, henüz codegen yok
 ```
 
 Dereference assignment:
@@ -674,6 +697,8 @@ Güncel durum:
 - Call sonucu `ret add(1, 2);` ve `int32 x = add(1, 2);` içinde kullanılabiliyor.
 - Parametresiz call statement (`foo();`) destekleniyor.
 - Primitive pointer argümanı için `read_ptr(ref x)` ve callee içinde `deref p` smoke'u çalışıyor.
+- Primitive reference parametresi için `write_ref(int32& x)` ve çağrı tarafında `write_ref(ref value)` smoke'u çalışıyor.
+- Primitive `constref` parametresi için `read_ref(constref int32& x)` ve çağrı tarafında `read_ref(ref value)` smoke'u çalışıyor; gövde içi assignment diagnostic üretir.
 - Pointer variable initializer için `int32* p = ref x;` smoke'u çalışıyor.
 - Pointer return için `identity(int32* p) :: int32*` smoke'u çalışıyor.
 - Dereference assignment ve shortcut assignment için `deref p = value;`, `*p = value;`, `deref p += value;` smoke'ları çalışıyor.
@@ -933,7 +958,7 @@ struct String : Allocator with CustomAlloc {
 }
 ```
 
-Bunlar tasarım/proposal seviyesinde. Mevcut parser `policy`, `trait`, `struct` keyword'lerini bile gerçek grammar olarak işlemiyor.
+Bunlar tasarım/proposal seviyesinde. Mevcut parser `policy`, `trait`, `struct` keyword'lerini bile gerçek grammar olarak işlemiyor. `.=` policy/member-safe assignment token'ı tanınır, fakat policy runtime ve thread-safe hook modeli netleşene kadar kontrollü proposal diagnostic üretir.
 
 ### 15.5 Directive/macro sistemi
 
@@ -1017,7 +1042,7 @@ main(int argc, char** argv) :: int {
 }
 ```
 
-Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, scalar/dereference/tek boyutlu array assignment, `ret expr`, primitive function call, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()` ve temel `if/elif/else` akışıdır. Loop, çok boyutlu array ve qualifier-heavy bölümler hâlâ ayrı MVP adımı gerektirir.
+Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, scalar/dereference/tek boyutlu array assignment, `ret expr`, primitive function call, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()` ve temel `if/elif/else` akışıdır. Loop, çok boyutlu array ve qualifier-heavy bölümler hâlâ ayrı MVP adımı gerektirir.
 
 ## 17. Bilinen Sorunlar ve Teknik Riskler
 
@@ -1033,13 +1058,13 @@ Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güve
 - User-defined type sistemi tamamlanmamış.
 - Array validation içinde FIXME var.
 - Scope ve symbol validation elle yönetilen id/level mekanizmasına bağlı.
-- `move`, ownership ve aliasing modeli kavramsal olarak var ama tam semantik garanti yok.
-- `const` ve `readonly` assignment reddi type-checker negatif testleriyle doğrulanır. `constptr`, `constref` ve ownership tarafı için davranış hâlâ ayrıntılı tasarım/uygulama ister.
+- `move`/ownership modeli semantic pass ve shared handle codegen içinde çalışır; kalan büyük eksik scope çıkışı/destructor lowering ve allocator/new control-block entegrasyonudur.
+- `const`, `readonly`, primitive `constref` assignment reddi, primitive `constptr` pointer adresi reassignment reddi, primitive `readonly` pointer address/value assignment reddi, primitive `const` pointer target assignment reddi ve çok seviyeli qualifier pointer reddi type-checker negatif testleriyle doğrulanır. Ownership tarafı için davranış hâlâ ayrıntılı tasarım/uygulama ister.
 
 ### 17.3 Codegen riskleri
 
 - User-defined/qualifier-aware cast, fix/increment ve çok boyutlu array assignment yolları tamamlanmadı.
-- Pointer/ref/qualifier parametre codegen'i genişletilmeli; primitive pointer call, pointer initializer, pointer return ve dereference assignment MVP dışında genel model tamamlanmadı.
+- Pointer/ref/qualifier parametre codegen'i genişletilmeli; primitive pointer call, primitive reference parametresi, pointer initializer, pointer return ve dereference assignment MVP dışında genel model tamamlanmadı.
 - Generated program çalıştırma artık CLI moduna ayrıldı. Varsayılan `cstar file.cstar` executable üretip durur; `--run` verilirse generated program çalıştırılır. Pass süreleri, Total LoC, output path ve generated exit code normal modda gizlenir; `--stats` ile gösterilir. Backend/link komutları normal modda gizlenir, `--verbose` ile gösterilir.
 
 ### 17.4 Build/taşınabilirlik riskleri

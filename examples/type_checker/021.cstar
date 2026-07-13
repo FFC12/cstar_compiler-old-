@@ -1,0 +1,9 @@
+// expected: diagnostic
+
+main() :: int32 {
+  int32 first = 1;
+  int32 second = 2;
+  constptr int32* pointer = ref first;
+  pointer = ref second;
+  ret 0;
+}

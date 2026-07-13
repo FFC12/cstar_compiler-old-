@@ -16,6 +16,43 @@
 #include <ast/var_ast.hpp>
 #include <visitor/visitor.hpp>
 
+#include <algorithm>
+
+using DiagnosticCode = cstar::diagnostics::DiagnosticCode;
+
+static std::string SymbolStateKey(const SymbolInfo &symbolInfo) {
+  return std::to_string(symbolInfo.scopeId) + "#" +
+         std::to_string(symbolInfo.scopeLevel) + "#" + symbolInfo.symbolName;
+}
+
+static std::vector<TypeQualifier> BuildQualifierLevels(
+    TypeQualifier qualifier, size_t indirectionLevel, bool isRef) {
+  std::vector<TypeQualifier> levels(indirectionLevel + 1, Q_NONE);
+
+  switch (qualifier) {
+    case Q_CONST:
+      levels[0] = Q_CONST;
+      break;
+    case Q_CONSTREF:
+      if (isRef) {
+        levels[0] = Q_CONSTREF;
+      }
+      break;
+    case Q_CONSTPTR:
+      if (indirectionLevel > 0 && !isRef) {
+        levels[indirectionLevel] = Q_CONSTPTR;
+      }
+      break;
+    case Q_READONLY:
+      std::fill(levels.begin(), levels.end(), Q_READONLY);
+      break;
+    case Q_NONE:
+      break;
+  }
+
+  return levels;
+}
+
 static size_t GetBitSize(TypeSpecifier typeSpecifier) {
   switch (typeSpecifier) {
     case SPEC_VOID:
@@ -357,7 +394,9 @@ void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
   std::string indirection;
   if (this->m_LastSymbolInfo.isConstRef) indirection += "&";
 
-  if (!this->m_LastSymbolInfo.isConstRef) {
+  if (this->m_LastSymbolInfo.isRef) {
+    indirection += "&";
+  } else if (!this->m_LastSymbolInfo.isConstRef) {
     for (int i = 0; i < this->m_LastSymbolInfo.indirectionLevel; i++) {
       if (this->m_LastSymbolInfo.isUnique) {
         indirection += "^";
@@ -377,7 +416,9 @@ void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
         "Incompatible type. Expected a suitable value with '" +
             (typeQualifier.empty() ? "" : (typeQualifier + " ")) +
             GetTypeStr(this->m_ExpectedType) + indirection + "'. " + extra,
-        symbolInfo);
+        symbolInfo,
+        extra[0] == '\0' ? DiagnosticCode::SemanticError
+                         : DiagnosticCode::SemanticQualifierMismatch);
   } else {
     this->m_TypeErrorMessages.emplace_back(
         s + " '" + (typeQualifier.empty() ? "" : (typeQualifier + " ")) +
@@ -427,6 +468,9 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   symbolInfo.isRef = varAst.m_IsRef;
   symbolInfo.isUnique = varAst.m_IsUniquePtr;
   symbolInfo.isCastable = true;
+  symbolInfo.qualifierLevels =
+      BuildQualifierLevels(varAst.m_TypeQualifier, symbolInfo.indirectionLevel,
+                           symbolInfo.isRef);
 
   symbolInfo.isNeededEval = true;
 
@@ -490,7 +534,7 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
       // error
       this->m_TypeErrorMessages.emplace_back(
           "The type qualifier and the type of the variable does not meet",
-          symbolInfo);
+          symbolInfo, DiagnosticCode::SemanticInvalidQualifier);
     }
 
     if (varAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED) {
@@ -506,7 +550,67 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
     this->m_LastBinOpHasAtLeastOnePtr = false;
 
     this->m_LastSymbolInfo = symbolInfo;
+    auto rhsAsSymbol = dynamic_cast<SymbolAST *>(varAst.m_RHS.get());
+    auto rhsAsUnary = dynamic_cast<UnaryOpAST *>(varAst.m_RHS.get());
+    const bool rhsIsMoveExpr =
+        rhsAsUnary != nullptr && rhsAsUnary->m_UnaryOpKind == U_MOVE;
+
+    auto getPointerSource = [&](SymbolInfo &source) -> bool {
+      SymbolAST *sourceSymbol = rhsAsSymbol;
+      if (rhsIsMoveExpr) {
+        sourceSymbol = dynamic_cast<SymbolAST *>(rhsAsUnary->m_Node.get());
+      }
+
+      if (sourceSymbol == nullptr) {
+        return false;
+      }
+
+      SymbolInfo lookup;
+      auto sourceName = sourceSymbol->m_SymbolName;
+      if (!symbolValidation(sourceName, lookup, source, true)) {
+        return false;
+      }
+
+      return source.indirectionLevel > 0;
+    };
+
+    SymbolInfo uniqueMoveSource;
+    bool markUniqueMoveSource = false;
+    if (varAst.m_IsMoveInit) {
+      SymbolInfo source;
+      if (symbolInfo.indirectionLevel == 0) {
+        this->m_TypeErrorMessages.emplace_back(
+            "':=' move initializer requires a pointer target",
+            symbolInfo, DiagnosticCode::SemanticOwnership);
+      } else if (!getPointerSource(source)) {
+        this->m_TypeErrorMessages.emplace_back(
+            "':=' move initializer requires a pointer source",
+            symbolInfo, DiagnosticCode::SemanticOwnership);
+      } else if (symbolInfo.isUnique != source.isUnique) {
+        this->m_TypeErrorMessages.emplace_back(
+            "':=' move initializer requires matching pointer ownership kind",
+            symbolInfo, DiagnosticCode::SemanticOwnership);
+      } else {
+        uniqueMoveSource = source;
+        markUniqueMoveSource = true;
+      }
+    } else if (symbolInfo.isUnique && rhsAsSymbol != nullptr) {
+      SymbolInfo source;
+      if (getPointerSource(source) && source.isUnique) {
+        this->m_TypeErrorMessages.emplace_back(
+            "unique pointer cannot be copied; use ':=' or 'move' to transfer "
+            "ownership",
+            symbolInfo, DiagnosticCode::SemanticOwnership);
+      }
+    }
+
     auto tempSymbolInfo = varAst.m_RHS->acceptBefore(*this);
+    if (markUniqueMoveSource) {
+      m_MovedUniqueSymbols.insert(SymbolStateKey(uniqueMoveSource));
+      m_MovedUniqueSymbols.erase(SymbolStateKey(symbolInfo));
+    } else if (symbolInfo.indirectionLevel > 0) {
+      m_MovedUniqueSymbols.erase(SymbolStateKey(symbolInfo));
+    }
   } else {
     if (varAst.m_RHS != nullptr) {
       this->m_LastSymbolInfo = symbolInfo;
@@ -594,19 +698,21 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
         if (matchedSymbol.indirectionLevel == 0 &&
             (matchedSymbol.isConstRef || matchedSymbol.isConstVal)) {
           m_TypeErrorMessages.emplace_back(
-              "const-qualified value is not assignable", symbolInfo);
+              "const-qualified value is not assignable", symbolInfo,
+              DiagnosticCode::SemanticConstAssignment);
         }
 
         if (matchedSymbol.isReadOnly) {
           m_TypeErrorMessages.emplace_back(
               "readonly-qualified symbol is neither assignable with a value "
               "nor pointer with a reference",
-              symbolInfo);
+              symbolInfo, DiagnosticCode::SemanticReadonlyAssignment);
         }
 
         if (matchedSymbol.indirectionLevel > 0 && matchedSymbol.isConstPtr) {
           m_TypeErrorMessages.emplace_back(
-              "constptr-qualified pointer is not assignable", symbolInfo);
+              "constptr-qualified pointer is not assignable", symbolInfo,
+              DiagnosticCode::SemanticConstPtrAssignment);
         } else {
           if (matchedSymbol.ptrAliases.count(assignmentAst.m_DerefLevel) > 0) {
             SymbolInfo indirectedSymbol;
@@ -627,7 +733,8 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
             if (currentSymbol.indirectionLevel == 0 &&
                 (currentSymbol.isConstRef || currentSymbol.isConstVal)) {
               m_TypeErrorMessages.emplace_back(
-                  "const-qualified value is not assignable", symbolInfo);
+                  "const-qualified value is not assignable", symbolInfo,
+                  DiagnosticCode::SemanticConstAssignment);
             }
 
             if (currentSymbol.isReadOnly) {
@@ -635,13 +742,14 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
                   "readonly-qualified symbol is neither assignable with a "
                   "value "
                   "nor pointer with a reference",
-                  symbolInfo);
+                  symbolInfo, DiagnosticCode::SemanticReadonlyAssignment);
             }
 
             if (currentSymbol.indirectionLevel > 0 &&
                 currentSymbol.isConstPtr) {
               m_TypeErrorMessages.emplace_back(
-                  "constptr-qualified pointer is not assignable", symbolInfo);
+                  "constptr-qualified pointer is not assignable", symbolInfo,
+                  DiagnosticCode::SemanticConstPtrAssignment);
             }
           }
         }
@@ -661,14 +769,78 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
         this->m_LastSymbolInfo.scopeId = assignmentScopeId;
         this->m_LastSymbolInfo.scopeLevel = assignmentScopeLevel;
 
+        auto rhsAsSymbol = dynamic_cast<SymbolAST *>(assignmentAst.m_RHS.get());
+        auto rhsAsUnary =
+            dynamic_cast<UnaryOpAST *>(assignmentAst.m_RHS.get());
+        const bool rhsIsMoveExpr =
+            rhsAsUnary != nullptr && rhsAsUnary->m_UnaryOpKind == U_MOVE;
+
+        auto getPointerSource = [&](SymbolInfo &source) -> bool {
+          SymbolAST *sourceSymbol = rhsAsSymbol;
+          if (rhsIsMoveExpr) {
+            sourceSymbol = dynamic_cast<SymbolAST *>(rhsAsUnary->m_Node.get());
+          }
+
+          if (sourceSymbol == nullptr) {
+            return false;
+          }
+
+          SymbolInfo lookup;
+          auto sourceName = sourceSymbol->m_SymbolName;
+          if (!symbolValidation(sourceName, lookup, source, true)) {
+            return false;
+          }
+
+          return source.indirectionLevel > 0;
+        };
+
+        SymbolInfo uniqueMoveSource;
+        bool markUniqueMoveSource = false;
+        if (assignmentAst.m_ShortcutOp == ShortcutOp::S_MOV) {
+          SymbolInfo source;
+          if (matchedSymbol.indirectionLevel == 0 ||
+              assignmentAst.m_IsDereferenced || assignmentAst.m_Subscriptable) {
+            this->m_TypeErrorMessages.emplace_back(
+                "':=' move assignment requires a direct pointer target",
+                symbolInfo, DiagnosticCode::SemanticOwnership);
+          } else if (!getPointerSource(source)) {
+            this->m_TypeErrorMessages.emplace_back(
+                "':=' move assignment requires a pointer source",
+                symbolInfo, DiagnosticCode::SemanticOwnership);
+          } else if (matchedSymbol.isUnique != source.isUnique) {
+            this->m_TypeErrorMessages.emplace_back(
+                "':=' move assignment requires matching pointer ownership kind",
+                symbolInfo, DiagnosticCode::SemanticOwnership);
+          } else {
+            uniqueMoveSource = source;
+            markUniqueMoveSource = true;
+          }
+        } else if (matchedSymbol.isUnique && rhsAsSymbol != nullptr) {
+          SymbolInfo source;
+          if (getPointerSource(source) && source.isUnique) {
+            this->m_TypeErrorMessages.emplace_back(
+                "unique pointer cannot be copied; use ':=' or 'move' to "
+                "transfer ownership",
+                symbolInfo, DiagnosticCode::SemanticOwnership);
+          }
+        }
+
         //      this->m_LastIde
         //        if(indirectable)
         auto rhs = assignmentAst.m_RHS->acceptBefore(*this);
+        if (markUniqueMoveSource) {
+          m_MovedUniqueSymbols.insert(SymbolStateKey(uniqueMoveSource));
+          m_MovedUniqueSymbols.erase(SymbolStateKey(matchedSymbol));
+        } else if (matchedSymbol.indirectionLevel > 0 &&
+                   !assignmentAst.m_IsDereferenced &&
+                   !assignmentAst.m_Subscriptable) {
+          m_MovedUniqueSymbols.erase(SymbolStateKey(matchedSymbol));
+        }
 
         // rhs symbol need to check
 
         this->m_LastReferenced = false;
-        this->m_DereferenceLevel = 0;
+        this->m_DereferenceLevel = 1;
       }
 
       this->m_LastAssignment = false;
@@ -702,6 +874,13 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
         !this->m_LastParamSymbol) {
       if (symbolValidation(symbolName, symbolInfo, matchedSymbol)) {
         this->m_MatchedSymbolType = matchedSymbol.type;
+        if (matchedSymbol.indirectionLevel > 0 &&
+            m_MovedUniqueSymbols.count(SymbolStateKey(matchedSymbol)) > 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "pointer '" + matchedSymbol.symbolName +
+                  "' was moved and cannot be used before being reinitialized",
+              symbolInfo, DiagnosticCode::SemanticOwnership);
+        }
 
         if (!this->m_LastCondExpr && !this->m_LastFixExpr) {
           if (!matchedSymbol.isCastable &&
@@ -763,7 +942,8 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
               }
               if (matchedSymbol.indirectionLevel == 0 &&
                   m_LastSymbolInfo.indirectionLevel == 1 &&
-                  m_LastSymbolInfo.isRef && !this->m_LastBinOp) {
+                  m_LastSymbolInfo.isRef && m_LastReferenced &&
+                  !this->m_LastBinOp) {
               } else {
                 if (matchedSymbol.indirectionLevel +
                             (this->m_LastReferenced ? 1 : 0) -
@@ -814,47 +994,62 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
             }
 
             // type qualifier of the variable decl
+            const bool readingConstValueThroughPointer =
+                matchedSymbol.isConstVal && m_LastDereferenced;
             if ((matchedSymbol.isConstVal != m_LastSymbolInfo.isConstVal) &&
-                matchedSymbol.indirectionLevel != 0) {
+                matchedSymbol.indirectionLevel != 0 &&
+                !readingConstValueThroughPointer) {
               if (this->m_LastRetExpr) {
                 this->m_TypeErrorMessages.emplace_back(
                     "Cannot return a variable with the different type of "
                     "qualifier",
-                    symbolInfo);
+                    symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
               } else {
                 this->m_TypeErrorMessages.emplace_back(
                     "Cannot initialize a variable with the different type of "
                     "qualifier",
-                    symbolInfo);
+                    symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
               }
             }
 
-            if (matchedSymbol.isConstRef != m_LastSymbolInfo.isConstRef) {
+            const bool bindingToConstRef =
+                m_LastSymbolInfo.isConstRef && m_LastSymbolInfo.isRef;
+            const bool readingConstRefAsValue =
+                matchedSymbol.isConstRef && !m_LastSymbolInfo.isRef &&
+                m_LastSymbolInfo.indirectionLevel == 0;
+            if (matchedSymbol.isConstRef != m_LastSymbolInfo.isConstRef &&
+                !bindingToConstRef && !readingConstRefAsValue) {
               if (this->m_LastRetExpr) {
                 this->m_TypeErrorMessages.emplace_back(
                     "Cannot return a variable with the different type of "
                     "qualifier",
-                    symbolInfo);
+                    symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
               } else {
                 this->m_TypeErrorMessages.emplace_back(
                     "Cannot initialize a variable with the different type of "
                     "qualifier",
-                    symbolInfo);
+                    symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
               }
             }
 
+            const bool bindingToConstPtr =
+                m_LastSymbolInfo.isConstPtr &&
+                m_LastSymbolInfo.indirectionLevel > 0 && m_LastReferenced;
+            const bool readingThroughConstPtr =
+                matchedSymbol.isConstPtr && m_LastDereferenced;
             if (matchedSymbol.isConstPtr != m_LastSymbolInfo.isConstPtr &&
+                !bindingToConstPtr && !readingThroughConstPtr &&
                 !matchedSymbol.isConstRef && !matchedSymbol.isConstVal) {
               if (this->m_LastRetExpr) {
                 this->m_TypeErrorMessages.emplace_back(
                     "Cannot return a variable with the different type of "
                     "qualifier",
-                    symbolInfo);
+                    symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
               } else {
                 this->m_TypeErrorMessages.emplace_back(
                     "Cannot initialize a variable with the different type of "
                     "qualifier",
-                    symbolInfo);
+                    symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
               }
             }
           }
@@ -1254,6 +1449,9 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
     symbolInfo.isConstVal = funcAst.m_RetTypeQualifier == Q_CONST;
     symbolInfo.isRef = retType->m_IsRef;
     symbolInfo.isUnique = retType->m_IsUniquePtr;
+    symbolInfo.qualifierLevels = BuildQualifierLevels(
+        funcAst.m_RetTypeQualifier, symbolInfo.indirectionLevel,
+        symbolInfo.isRef);
 
     m_LastFuncRetTypeInfo = symbolInfo;
   }
@@ -1525,6 +1723,32 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
+  if (funcSymbol->m_SymbolName == "strong_count") {
+    if (argNodes.size() != 1) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'strong_count' expects exactly 1 argument", symbolInfo);
+    } else if (argNodes[0]->m_ExprKind != ExprKind::SymbolExpr) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'strong_count' expects a shared pointer symbol",
+          symbolInfo);
+    } else {
+      auto *argSymbol = static_cast<SymbolAST *>(argNodes[0]);
+      SymbolInfo lookupInfo;
+      SymbolInfo matchedSymbol;
+      auto argName = argSymbol->m_SymbolName;
+      if (symbolValidation(argName, lookupInfo, matchedSymbol)) {
+        if (matchedSymbol.indirectionLevel == 0 || matchedSymbol.isUnique) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Builtin 'strong_count' expects a shared pointer symbol",
+              symbolInfo, DiagnosticCode::SemanticOwnership);
+        }
+      }
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_I64;
+    symbolInfo.indirectionLevel = 0;
+    return symbolInfo;
+  }
+
   auto signatureIt = FunctionTable.find(funcSymbol->m_SymbolName);
   if (signatureIt == FunctionTable.end()) {
     this->m_TypeErrorMessages.emplace_back(
@@ -1554,6 +1778,9 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
 
   for (size_t i = 0; i < argNodes.size(); ++i) {
     m_LastSymbolInfo = signature.params[i];
+    if (m_LastSymbolInfo.isRef) {
+      m_LastSymbolInfo.indirectionLevel += 1;
+    }
     m_LastSymbolInfo.symbolId = m_SymbolId;
     m_LastSymbolInfo.scopeId = m_ScopeId;
     m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
@@ -1693,6 +1920,9 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
     symbolInfo.isUnique = typeInfo->m_IsUniquePtr;
     symbolInfo.indirectionLevel = typeInfo->m_IndirectLevel;
   }
+  symbolInfo.qualifierLevels =
+      BuildQualifierLevels(paramAst.m_TypeQualifier, symbolInfo.indirectionLevel,
+                           symbolInfo.isRef);
 
   if (paramAst.m_IsSubscriptable) {
     for (auto &v : paramAst.m_ArrDim) {
@@ -1717,7 +1947,7 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
       // error
       this->m_TypeErrorMessages.emplace_back(
           "The type qualifier and the type of the variable does not meet",
-          symbolInfo);
+          symbolInfo, DiagnosticCode::SemanticInvalidQualifier);
     }
   }
 
@@ -1763,13 +1993,17 @@ SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
         break;
       }
       case U_DEREF: {
+        const bool wasDereferenced = this->m_LastDereferenced;
         this->m_LastDereferenced = true;
+        if (wasDereferenced) {
+          this->m_DereferenceLevel += 1;
+        } else {
+          this->m_DereferenceLevel = 1;
+        }
         symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
-        if (unaryOpAst.m_Node->m_ExprKind == ExprKind::SymbolExpr) {
+        if (!wasDereferenced) {
           this->m_LastDereferenced = false;
           this->m_DereferenceLevel = 1;
-        } else {
-          this->m_DereferenceLevel += 1;
         }
         break;
       }
@@ -1792,13 +2026,13 @@ SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
         }
         break;
       case U_MOVE:
-        // wrong
         if (m_LastBinOp) {
           this->m_TypeErrorMessages.emplace_back(
               "'move' operator cannot be used as an operand of the binary "
               "operation",
               symbolInfo);
         }
+        symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
         break;
       default:
         assert(false && "Unreacheable!");

@@ -1,0 +1,9 @@
+// expected: pass
+// expected-exit: 7
+
+main() :: int32 {
+  int32 value = 6;
+  int32^ pointer = ref value;
+  deref pointer = 7;
+  ret value;
+}

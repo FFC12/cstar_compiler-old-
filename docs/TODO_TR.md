@@ -26,11 +26,15 @@ Tamamlanan altyapı:
 - Renkli console çıktısı tek helper üzerinden yönetiliyor; `NO_COLOR` ortam değişkeni destekleniyor.
 - Lexer EOF / out-of-bounds hataları düzeltildi.
 - LLVM 22 opaque pointer API uyumluluğu için ilk geçiş düzeltmeleri yapıldı.
+- LLVM 22 deprecated `CreateGlobalStringPtr` API kullanımı kaldırıldı.
 - Backend `.ll -> .s -> .exe -> run` hattı Clang'a taşındı.
 - Backend Clang yolu CMake'den geliyor; gerekirse runtime'da `CSTAR_CLANG` ile override ediliyor.
-- Generated `.ll`, `.s` ve executable çıktıları artık çalışma klasörünün root'una yazılmıyor; varsayılan olarak `.cstar-out/` altına alınır.
-- LLVM module target triple configure zamanında `clang -dumpmachine` ile set ediliyor.
+- Backend target triple configure zamanında Clang driver'ın efektif cc1 triple'ından alınır; gerekirse runtime'da `CSTAR_TARGET_TRIPLE` ile override edilebilir.
+- LLVM module target data layout configure zamanında backend Clang'den alınır ve module'a yazılır.
+- Backend `.ll -> .s/.o/.exe` komutları module ile aynı target triple'ı kullanır.
+- Generated `.ll`, `.s`, object ve executable çıktıları artık çalışma klasörünün root'una yazılmıyor; varsayılan olarak `.cstar-out/` altına alınır.
 - Generated programın non-zero exit code'u artık compiler hatası sayılmıyor.
+- Generated program exit code'u POSIX'te `system()` wait status'ünden gerçek process exit code'a normalize edilir.
 
 Tamamlanan dil/codegen parçaları:
 
@@ -108,10 +112,24 @@ examples/smoke/function_call_cast_argument.cstar
 examples/smoke/forward_function_call.cstar
 examples/smoke/function_call_symbol_argument.cstar
 examples/smoke/function_call_pointer_argument.cstar
+examples/smoke/const_value.cstar
+examples/smoke/const_pointer.cstar
+examples/smoke/reference_param.cstar
+examples/smoke/constref_param.cstar
+examples/smoke/constptr_pointer.cstar
+examples/smoke/readonly_pointer.cstar
+examples/smoke/readonly_multi_level_pointer.cstar
 examples/smoke/pointer_variable_initializer.cstar
+examples/smoke/shared_pointer_assignment_count.cstar
+examples/smoke/shared_pointer_copy_count.cstar
+examples/smoke/shared_pointer_move_assignment.cstar
+examples/smoke/unique_pointer.cstar
+examples/smoke/unique_pointer_move_assignment.cstar
+examples/smoke/unique_pointer_move_init.cstar
 examples/smoke/dereference_assignment.cstar
 examples/smoke/dereference_assignment_shortcut.cstar
 examples/smoke/multi_level_dereference_assignment.cstar
+examples/smoke/multi_level_dereference_read.cstar
 examples/smoke/pointer_from_pointer_initializer.cstar
 examples/smoke/pointer_return.cstar
 examples/smoke/unsafe_cast_int_to_pointer.cstar
@@ -156,14 +174,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Her zaman yeşil kalması gereken küçük çalışan compiler çekirdeği.
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
-- Güncel durumda 41/41 dosya başarılı.
+- Güncel durumda 55/55 dosya başarılı.
 
 `examples/type_checker/`:
 
 - Büyük kısmı bilerek hata üretmesi beklenen semantic/type-check örnekleridir.
 - Exit code `1` çoğu dosya için kabul edilebilir diagnostic olabilir.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
-- Güncel durumda `-ExpectDiagnostics` ile 19/19 dosya kontrollü diagnostic üretiyor, crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 34/34 dosya kontrollü diagnostic üretiyor, crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -199,6 +217,21 @@ examples/type_checker/015.cstar
 examples/type_checker/016.cstar
 examples/type_checker/017.cstar
 examples/type_checker/018.cstar
+examples/type_checker/019.cstar
+examples/type_checker/020.cstar
+examples/type_checker/021.cstar
+examples/type_checker/022.cstar
+examples/type_checker/023.cstar
+examples/type_checker/024.cstar
+examples/type_checker/025.cstar
+examples/type_checker/026.cstar
+examples/type_checker/027.cstar
+examples/type_checker/028.cstar
+examples/type_checker/029.cstar
+examples/type_checker/030.cstar
+examples/type_checker/031.cstar
+examples/type_checker/032.cstar
+examples/type_checker/033.cstar
 ```
 
 Bu dosyalar parser/pass hattına giriyor ve semantic diagnostic üretebiliyor. Mesajların doğruluğu ayrıca test edilmeli.
@@ -240,6 +273,26 @@ Tamamlananlar:
   - Visual Studio/MSVC: `build`
 - MSYS2 LLVM ile Visual Studio generator'ını yanlışlıkla karıştıran build yolu engellendi.
 - Target triple override uyarısı giderildi.
+- macOS/Homebrew LLVM akışında `arm64-apple-darwin*` vs `arm64-apple-macosx*` target ayrışması giderildi.
+- LLVM shared CMake target'ı varsa link'te component arşivleri yerine shared `LLVM` target'ı kullanılır; yoksa component fallback korunur.
+- CLI driver modları tamamlandı:
+  - `--emit=<ir|asm|obj|exe>`
+  - `--emit-llvm`
+  - `--emit-asm`
+  - `--build-exe`
+  - `--run`
+  - `--no-run`
+  - `--output-dir <path>`
+  - `--verbose`
+  - `--stats`
+  - Varsayılan davranış executable üretip çalıştırmadan durur; test runner açıkça `--run` kullanır.
+  - Pass süreleri, output path ve generated exit code kontrollü biçimde raporlanır.
+- Data layout açıkça set edildi.
+- Build uyarıları sınıflandırıldı ve bu aşamadaki gerçek build uyarıları temizlendi:
+  - Target triple override: gerçek target modelleme bug'ıydı, düzeltildi.
+  - LLVM deprecation: `CreateGlobalStringPtr` kullanımı kaldırıldı.
+  - Duplicate LLVM static library link warning: shared LLVM target tercih edilerek giderildi.
+  - Eski AST tasarım borçları çalışma zamanı davranışını bozmayan ayrı dil aşamalarına taşındı.
 
 Kalanlar:
 
@@ -254,23 +307,6 @@ Kalanlar:
   - Her semantic hata call-site'ı generic `CST2001` yerine özel hata kodlarına ayrılacak.
   - Diagnostic mesaj metinleri Türkçe/İngilizce terminoloji açısından standartlaştırılacak.
   - Parser/semantic recovery stratejisi belirlenecek; tek hatada çıkılan ve devam edilebilen modlar ayrılacak.
-- CLI driver modları tamamlandı:
-  - `--emit=<ir|asm|obj|exe>`
-  - `--emit-llvm`
-  - `--emit-asm`
-  - `--build-exe`
-  - `--run`
-  - `--no-run`
-  - `--output-dir <path>`
-  - `--verbose`
-  - `--stats`
-  - Varsayılan davranış executable üretip çalıştırmadan durur; test runner açıkça `--run` kullanır.
-  - Pass süreleri, Total LoC, output path ve generated exit code yalnızca `--stats` ile görünür.
-- Data layout açıkça set edilmeli.
-- Build uyarıları sınıflandırılmalı:
-  - gerçek bug
-  - LLVM deprecation
-  - eski AST tasarım borcu
 
 ## Aşama 1 - Minimum Çalışan Dil Çekirdeği
 
@@ -392,6 +428,8 @@ Tamamlanan:
   - `examples/type_checker/016.cstar`
   - `examples/type_checker/017.cstar`
 - Assignment RHS symbol lookup artık sol tarafın eski `symbolId`'siyle değil, statement'ın bulunduğu scope konumuyla yapılır.
+- `:=` token'ı assignment grammar'ına eklendi; C* içinde type inference değil unique ownership transfer intent'i olarak kullanılır.
+- `.=` lexer/parser düzeyinde ayrı token olarak tanınır; policy/member-safe assignment runtime modeli gelene kadar kontrollü proposal diagnostic üretir.
 
 ### 1.5 If / Elif / Else
 
@@ -471,6 +509,7 @@ Tamamlanan:
   - `examples/smoke/forward_function_call.cstar`
   - `examples/smoke/function_call_symbol_argument.cstar`
   - `examples/smoke/function_call_pointer_argument.cstar`
+  - `examples/smoke/reference_param.cstar`
   - `examples/smoke/pointer_variable_initializer.cstar`
   - `examples/smoke/pointer_return.cstar`
 - Negative diagnostic:
@@ -510,6 +549,8 @@ Tamamlanan:
   - `examples/type_checker/013.cstar`
 - Tek seviyeli primitive pointer/ref parametre codegen smoke:
   - `examples/smoke/function_call_pointer_argument.cstar`
+- Primitive reference parametre codegen smoke:
+  - `examples/smoke/reference_param.cstar`
 
 TODO:
 
@@ -562,11 +603,42 @@ Tamamlanan:
 - `examples/smoke/dereference_assignment.cstar`
 - `examples/smoke/dereference_assignment_shortcut.cstar`
 - `examples/smoke/multi_level_dereference_assignment.cstar`
+- `examples/smoke/multi_level_dereference_read.cstar`
 - `examples/smoke/pointer_from_pointer_initializer.cstar`
 - `examples/smoke/pointer_return.cstar`
+- `examples/smoke/const_value.cstar`
+- `examples/smoke/const_pointer.cstar`
+- `examples/smoke/reference_param.cstar`
+- `examples/smoke/constref_param.cstar`
+- `examples/smoke/constptr_pointer.cstar`
+- `examples/smoke/readonly_pointer.cstar`
+- `examples/smoke/readonly_multi_level_pointer.cstar`
 - `examples/type_checker/014.cstar`
+- `examples/type_checker/019.cstar`
+- `examples/type_checker/020.cstar`
+- `examples/type_checker/021.cstar`
+- `examples/type_checker/022.cstar`
+- `examples/type_checker/023.cstar`
+- `examples/type_checker/024.cstar`
+- `examples/type_checker/025.cstar`
+- `examples/type_checker/026.cstar`
 - `ref x` codegen'i yerel/global sembolün adresini üretir.
 - `deref p` codegen'i beklenen tipe göre pointer'dan load üretir; pointer sonuçlar da desteklenir.
+- `int32& x` primitive reference parametreler çağıranın storage'ına alias olur.
+- Reference parametre çağrısı açık `ref value` ister; çıplak value geçişi diagnostic üretir.
+- Reference parametre gövde içinde normal sembol gibi okunur ve assignment çağıranın değerini günceller.
+- `const int32 value` okunabilir, yeniden assignment kontrollü diagnostic üretir.
+- `const int32* p` pointer hedef değerini salt-okunur yapar; `p = ref other;` serbesttir.
+- `const int32* p` için `deref p = value;` kontrollü diagnostic üretir.
+- `constref int32& x` primitive reference parametreler mutable storage'a read-only alias olarak bağlanır.
+- `constref` parametre gövde içinde değer olarak okunabilir; assignment kontrollü diagnostic üretir.
+- `constptr int32* p = ref value;` pointer adresini sabitler, `deref p` ile hedef değer okunup yazılabilir.
+- `constptr` pointer'a yeniden adres assignment kontrollü diagnostic üretir.
+- `readonly int32* p = ref value;` pointer adresini ve hedef değeri salt-okunur kabul eder.
+- `readonly` pointer'da `p = ref other;` ve `deref p = value;` kontrollü diagnostic üretir.
+- `**pp` gibi çok seviyeli dereference read doğrudan expression içinde çalışır.
+- `readonly int32**` çok seviyeli pointer read desteklenir; `**pp = value;` diagnostic üretir.
+- `const int32** p = ref mutable_pointer;` MVP'de const-hole riski nedeniyle diagnostic üretir.
 - `int32* p = ref x;` ile tek seviyeli primitive pointer variable initializer çalışır.
 - `deref p = value;` ve `*p = value;` assignment target olarak çalışır.
 - `deref p += value;` gibi shortcut assignment'lar pointer hedefte çalışır.
@@ -577,34 +649,102 @@ Tamamlanan:
 
 TODO:
 
-- `int32& r`
 - Pointer/ref/qualifier semantic diagnostics:
-  - `constptr`
-  - `constref`
-  - `readonly`
+  - daha ayrıntılı qualifier hata kodları ve mesaj standardizasyonu
 
 ### 3.2 Ownership Pointer `^`
 
-Durum: parser/type info içinde niyet var, runtime/semantic garanti yok.
+Durum: unique `^` ve shared `*` pointer ayrımı compiler çekirdeğinde gerçek semantik taşır.
 
 TODO:
 
-- `^` için net MVP kuralı yaz:
-  - sadece type-level syntax mı?
-  - move-only semantik mi?
-  - alias yasağı mı?
-- MVP uygulanmadan önce proposal karar belgesi oluştur.
+- Function argument/return ownership transfer kuralları.
+- Thread boundary transferleri, async/task ownership ve `Send`/`Sync` benzeri marker tasarımı.
+- `nomove`/policy proposal'ı ile uyumlandırma.
+- Scope çıkışı/destructor lowering ile final strong-count release.
+- Heap allocation/control-block layout `new`/allocator sistemi ile birleştirilecek.
+
+Tamamlanan:
+
+- `*` shareable pointer artık raw pointer ABI değildir; LLVM IR'da compiler-owned shared handle `{ data: ptr, strong: i64* }` olarak taşınır.
+- Shared pointer copy, assignment ve move lowering'i compiler çekirdeğinde yapılır.
+- Shared pointer strong-count işlemleri atomic `rmw`/atomic load ile thread-safe üretilir.
+- `strong_count(ptr)` compiler builtin'i atomic strong-count değerini döndürür.
+- `:=` deklarasyon ve assignment tarafında pointer ownership transfer intent'i olarak parse edilir.
+- Shared pointer `:=`/`move` source'u moved kabul edilir; tekrar kullanım `CST2105` üretir.
+- `int32^ target := source;` ve `target := source;` smoke ile çalışır.
+- Unique pointer doğrudan kopyalanamaz; `int32^ target = source;` `CST2105` diagnostic üretir.
+- Moved-after-use takibi hem `^` hem shared `*` pointer için semantic pass'te yapılır.
+- Aynı type içinde `*` ve `^` karışımı parser diagnostic üretir.
+- `CST2105`: ownership/move semantic diagnostic.
+- `examples/smoke/shared_pointer_copy_count.cstar`
+- `examples/smoke/shared_pointer_assignment_count.cstar`
+- `examples/smoke/shared_pointer_move_assignment.cstar`
+- `examples/smoke/unique_pointer.cstar`
+- `examples/smoke/unique_pointer_move_init.cstar`
+- `examples/smoke/unique_pointer_move_assignment.cstar`
+- `examples/type_checker/028.cstar`
+- `examples/type_checker/029.cstar`
+- `examples/type_checker/030.cstar`
+- `examples/type_checker/031.cstar`
+- `examples/type_checker/032.cstar`
+- `examples/type_checker/033.cstar`
 
 ### 3.3 Qualifier
 
 TODO:
 
-- `const`
-- `constptr`
-- `constref`
-- `readonly`
-- Positive/negative assignment testleri.
-- Pointer target/value const ayrımını netleştir.
+- Per-level qualifier syntax tasarımı:
+  - `const int32*` mevcut prefix syntax olarak korunur.
+  - Pointer seviyesine özel qualifier yazımı için proposal netleştirilecek.
+
+Tamamlanan:
+
+- Qualifier diagnostic kodları ayrıldı:
+  - `CST2100`: qualifier mismatch.
+  - `CST2101`: invalid qualifier/type combination.
+  - `CST2102`: const assignment.
+  - `CST2103`: constptr pointer reassignment.
+  - `CST2104`: readonly assignment.
+  - `examples/type_checker/027.cstar`
+- Per-level qualifier metadata temeli eklendi:
+  - `SymbolInfo::qualifierLevels` index `0` final target value, index `N` pointer object level `N` olacak şekilde tutulur.
+  - Mevcut prefix syntax bu metadata'ya conservative biçimde map edilir.
+  - `const` depth `0` target value olarak işaretlenir.
+  - `constptr` en dış pointer object seviyesine işlenir.
+  - `constref` reference target value seviyesine işlenir.
+  - `readonly` tüm mevcut seviyelere işlenir.
+  - Henüz yeni surface syntax eklenmedi; bu sonraki proposal adımıdır.
+- `const int32` scalar okuma ve assignment reddi:
+  - `examples/smoke/const_value.cstar`
+  - `examples/type_checker/016.cstar`
+- `const int32*` target/value ayrımı:
+  - pointer adresi değiştirilebilir.
+  - hedef değer `deref` ile okunabilir.
+  - hedef değere `deref` ile yazma reddedilir.
+  - `examples/smoke/const_pointer.cstar`
+  - `examples/type_checker/024.cstar`
+- `constref int32&` parametreye `ref value` ile mutable storage bağlama.
+- `constref` parametreyi değer olarak okuma.
+- `constref` parametreye assignment reddi:
+  - `examples/smoke/constref_param.cstar`
+  - `examples/type_checker/020.cstar`
+- `constptr int32*` initializer, dereference read/write ve pointer address reassignment reddi:
+  - `examples/smoke/constptr_pointer.cstar`
+  - `examples/type_checker/021.cstar`
+- `readonly int32*` initializer, dereference read ve address/value assignment reddi:
+  - `examples/smoke/readonly_pointer.cstar`
+  - `examples/type_checker/022.cstar`
+  - `examples/type_checker/023.cstar`
+- Çok seviyeli pointer qualifier MVP:
+  - `**pp` doğrudan read expression olarak çalışır.
+  - `readonly int32**` doğrudan read expression olarak çalışır.
+  - `readonly int32**` üzerinden hedef yazma reddedilir.
+  - `const int32**` mutable pointer zincirine bağlanmaz.
+  - `examples/smoke/multi_level_dereference_read.cstar`
+  - `examples/smoke/readonly_multi_level_pointer.cstar`
+  - `examples/type_checker/025.cstar`
+  - `examples/type_checker/026.cstar`
 
 ## Aşama 4 - Arrays ve Indexing
 
@@ -693,12 +833,16 @@ Durum:
 - `SPEC_DEFINED` var.
 - Gerçek struct/trait/policy parser yok.
 - Defined type table dolmuyor.
+- `.=` policy/member-safe assignment token'ı parser'da tanınır, fakat gerçek policy runtime semantics gelene kadar proposal diagnostic üretir.
 
 TODO:
 
 - Önce `struct` MVP tasarla.
 - Field layout + LLVM struct type.
 - Constructor/function call ayrımını çöz.
+- Policy sistemi için önce null/reference safety hook tasarımı yazılmalı:
+  - sistem dili hedefi gereği hook'lar thread-safe, düşük overhead'li ve async boundary'lerde belirgin olmalı.
+  - `.=` ancak policy handler/member assignment lowering netleşince codegen'e alınmalı.
 - Trait/policy en sona bırakılmalı.
 
 ## Aşama 8 - Metaprogramming ve İleri Proposal

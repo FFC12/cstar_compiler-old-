@@ -20,6 +20,12 @@ constexpr DiagnosticCodeInfo kDiagnosticCodes[] = {
     {DiagnosticCode::ParserSyntax, "CST1001"},
     {DiagnosticCode::SemanticWarning, "CST2000"},
     {DiagnosticCode::SemanticError, "CST2001"},
+    {DiagnosticCode::SemanticQualifierMismatch, "CST2100"},
+    {DiagnosticCode::SemanticInvalidQualifier, "CST2101"},
+    {DiagnosticCode::SemanticConstAssignment, "CST2102"},
+    {DiagnosticCode::SemanticConstPtrAssignment, "CST2103"},
+    {DiagnosticCode::SemanticReadonlyAssignment, "CST2104"},
+    {DiagnosticCode::SemanticOwnership, "CST2105"},
     {DiagnosticCode::DriverUsage, "CST3000"},
     {DiagnosticCode::BackendFailure, "CST4000"},
 };

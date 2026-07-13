@@ -1,0 +1,8 @@
+// expected: diagnostic
+
+main() :: int32 {
+  int32 value = 1;
+  const int32* pointer = ref value;
+  deref pointer = 4;
+  ret 0;
+}

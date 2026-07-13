@@ -1,0 +1,8 @@
+// expected-exit: 2
+main() :: int32 {
+    int32 value = 5;
+    int32* first = ref value;
+    int32* second = first;
+
+    ret strong_count(first);
+}

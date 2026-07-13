@@ -6,6 +6,7 @@ Bu belge mevcut kod tabanını hızlı okuyabilmek için hazırlanmıştır. Ama
 
 ```text
 main.cpp
+  -> cstar::driver::parseArgs()
   -> CStarLexer
   -> CStarParser
   -> CStarCodegen::build()
@@ -43,12 +44,14 @@ main.cpp
 │   └── papers/
 ├── include/
 │   ├── base.hpp
+│   ├── driver/
 │   ├── lexer/
 │   ├── parser/
 │   ├── ast/
 │   ├── visitor/
 │   └── codegen/
 └── src/
+    ├── driver/
     ├── parser/
     ├── visitor/
     └── codegen/
@@ -58,9 +61,24 @@ main.cpp
 
 ### `main.cpp`
 
-CLI girişidir. Kaynak dosyayı okur, lexer/parser/codegen zincirini başlatır.
+CLI girişidir. Banner basar, driver argümanlarını parse eder, kaynak dosyayı okur ve lexer/parser/codegen zincirini başlatır. Argüman ayrıştırma artık `main.cpp` içinde değildir.
 
 Dosya yolu artık `std::filesystem::absolute` ile normalize ediliyor; eski POSIX `realpath` bağımlılığı kaldırıldı.
+
+### Driver
+
+Dosyalar:
+
+```text
+include/driver/driver.hpp
+src/driver/driver.cpp
+```
+
+Görevleri:
+
+- CLI kullanım metnini üretmek.
+- `--emit`, `--run`, `--output-dir`, `--verbose`, `--stats` gibi seçenekleri `CStarCodegenOptions` yapısına çevirmek.
+- `main.cpp`'i sadece compiler pipeline orkestrasyonuna odaklı tutmak.
 
 ### Lexer
 
@@ -157,19 +175,19 @@ src/visitor/visitor.cpp
 - Lokal primitive değişken üretimi.
 - Basit arithmetic expression üretimi.
 - Lokal scalar assignment üretimi.
+- Dereference assignment, tek boyutlu array element assignment ve shortcut assignment.
+- Primitive function call, forward declaration call, pointer parametre ve primitive reference parametre.
 - Fonksiyon sonunda default return üretimi.
 
 Eksik ana parçalar:
 
 ```cpp
-visit(CastOpAST&)
-visit(FuncCallAST&)
 visit(ParamAST&)
 visit(TypeAST&)
 visit(FixAST&)
 ```
 
-Not: `AssignmentAST` şu an scalar symbol assignment için çalışıyor. Dereference ve array element assignment ayrı TODO olarak duruyor.
+Not: `Visitor::buildFunctionParamLayout(...)` fonksiyon parametrelerinin LLVM IR tipi, value tipi, isim ve reference bilgisini tek yerden çıkarır. `declareFunction(...)` ve `visit(FuncAST&)` aynı layout bilgisini kullanır; bu, referans parametrelerde imza/body uyuşmazlığını önlemek için bilinçli olarak tekleştirilmiştir.
 
 ### Codegen Orchestrator
 
@@ -189,8 +207,8 @@ src/codegen/codegen.cpp
 5. Semantic failure kontrol edilir.
 6. LLVM module/codegen çalışır.
 7. `.ll` yazılır.
-8. `clang` ile `.s` ve `.exe` üretilir.
-9. Üretilen executable çalıştırılır.
+8. `clang` ile seçilen `--emit` hedefine göre `.s`, object veya executable üretilir.
+9. Sadece `--run` verilirse üretilen executable çalıştırılır.
 
 ## Build ve Çalıştırma
 

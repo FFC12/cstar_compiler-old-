@@ -1,0 +1,11 @@
+// expected-exit: 9
+main() :: int32 {
+    int32 first = 3;
+    int32 second = 9;
+    int32^ target = ref first;
+    int32^ source = ref second;
+
+    target := source;
+
+    ret deref target;
+}

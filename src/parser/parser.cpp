@@ -284,7 +284,7 @@ bool CStarParser::isShortcutOp(const TokenInfo& token) {
     case OREQ:
     case XOREQ:
     case EQUAL:
-    case MOVEQ:
+    case TYPEINF:
       return true;
     default:
       return false;
@@ -313,7 +313,7 @@ ShortcutOp CStarParser::typeOfShortcutOp(const TokenInfo& token) {
       return S_OR;
     case XOREQ:
       return S_XOR;
-    case MOVEQ:
+    case TYPEINF:
       return S_MOV;
     case EQUAL:
       return S_NONE;
@@ -447,9 +447,15 @@ void CStarParser::ParserError(const std::string& mesg, TokenInfo tokenInfo) {
 
 void CStarParser::ParserError(std::string mesg, size_t begin, size_t end,
                               size_t line_) {
+  ParserError(std::move(mesg), begin, end, line_,
+              cstar::diagnostics::DiagnosticCode::SemanticError);
+}
+
+void CStarParser::ParserError(std::string mesg, size_t begin, size_t end,
+                              size_t line_,
+                              cstar::diagnostics::DiagnosticCode code) {
   emitDiagnostic(cstar::diagnostics::Severity::Error,
-                 cstar::diagnostics::DiagnosticCode::SemanticError,
-                 std::move(mesg), begin, end, line_, false);
+                 code, std::move(mesg), begin, end, line_, false);
 }
 
 void CStarParser::ParserError(std::string mesg, TokenInfo tokenInfo,

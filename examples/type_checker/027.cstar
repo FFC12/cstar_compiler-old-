@@ -1,0 +1,6 @@
+// expected: diagnostic
+
+main() :: int32 {
+  constref int32 value = 1;
+  ret value;
+}

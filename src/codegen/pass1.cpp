@@ -43,12 +43,12 @@ void CStarCodegen::pass1() {
 
   auto messages = preVisitor.getUnknownTypeErrorMessages();
   for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
-    SemanticError(it->message, it->symbolInfo);
+    SemanticError(it->message, it->symbolInfo, it->code);
   }
 
   for (auto it = localSymbolMessages.rbegin(); it != localSymbolMessages.rend();
        ++it) {
-    SemanticError(it->message, it->symbolInfo);
+    SemanticError(it->message, it->symbolInfo, it->code);
   }
 
   return;

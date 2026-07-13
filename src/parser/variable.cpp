@@ -27,14 +27,16 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
   size_t indirectionLevel = 0;
   bool isUnique = false;
   bool isRef = false;
+  bool isMoveInit = false;
 
   //* | ^
   // TODO: while -> if
   while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
-    indirectionLevel =
-        advancePointerType(this->currentTokenKind() == TokenKind::XOR);
+    const bool currentPointerIsUnique =
+        this->currentTokenKind() == TokenKind::XOR;
+    indirectionLevel = advancePointerType(currentPointerIsUnique);
 
-    if (this->currentTokenKind() == TokenKind::XOR) isUnique = true;
+    if (currentPointerIsUnique) isUnique = true;
     // std::cout << "Indirection level: " << indirection_level << "\n";
   }
 
@@ -58,7 +60,8 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
 
   // This is an AssignmentExpr and then will take potentially a BinopExpr and
   // then will take any other expressions like ConstExpr or *Expr .
-  if (is(TokenKind::EQUAL)) {
+  if (is(TokenKind::EQUAL) || is(TokenKind::TYPEINF)) {
+    isMoveInit = is(TokenKind::TYPEINF);
     // advance the value or expression..
     rhs = std::move(this->initializer());
 
@@ -78,7 +81,7 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
     auto ast = std::make_unique<VarAST>(
         name, std::move(definedTypeSymbol), std::move(rhs), type, typeQualifier, visibilitySpecifier,
         indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
-        std::move(arrayDimensions), semLoc);
+        std::move(arrayDimensions), semLoc, isMoveInit);
 
     ast->setDeclKind(getDeclKind(visibilitySpecifier));
 
@@ -102,7 +105,7 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
     auto ast = std::make_unique<VarAST>(
         name, std::move(definedTypeSymbol),std::move(rhs), type, typeQualifier, visibilitySpecifier,
         indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
-        std::move(arrayDimensions), semLoc);
+        std::move(arrayDimensions), semLoc, isMoveInit);
 
     ast->setDeclKind(getDeclKind(visibilitySpecifier));
 

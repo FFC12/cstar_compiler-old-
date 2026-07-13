@@ -1,0 +1,8 @@
+// expected-exit: 7
+main() :: int32 {
+    int32 value = 7;
+    int32^ source = ref value;
+    int32^ target := source;
+
+    ret deref target;
+}

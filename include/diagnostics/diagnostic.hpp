@@ -19,6 +19,12 @@ enum class DiagnosticCode {
   ParserSyntax = 1001,
   SemanticWarning = 2000,
   SemanticError = 2001,
+  SemanticQualifierMismatch = 2100,
+  SemanticInvalidQualifier = 2101,
+  SemanticConstAssignment = 2102,
+  SemanticConstPtrAssignment = 2103,
+  SemanticReadonlyAssignment = 2104,
+  SemanticOwnership = 2105,
   DriverUsage = 3000,
   BackendFailure = 4000,
 };
