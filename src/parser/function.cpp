@@ -25,6 +25,19 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
   // ')'
   this->advance();
 
+  if (is(TokenKind::ASYNC)) {
+    ParserHint(
+        "`async` marks a task/thread boundary in the C* proposal. Its "
+        "ownership rules are reserved for the Send/Sync-capability phase and "
+        "are not lowered by this compiler yet.",
+        currentTokenInfo());
+    ParserError(
+        "`async` function effects are part of the C* proposal, but async/task "
+        "ownership lowering is not implemented yet.",
+        currentTokenInfo());
+    this->advance();
+  }
+
   ASTNode returnType;
   TypeQualifier retTypeQualifier = TypeQualifier::Q_NONE;
   if (is(TokenKind::COLONCOLON)) {

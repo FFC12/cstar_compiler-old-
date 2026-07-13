@@ -1,0 +1,12 @@
+// expected: diagnostic
+// expected-code: CST1001
+
+run(int32^ task) async :: int32 {
+  ret deref task;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  int32^ task = ref value;
+  ret run(move task);
+}

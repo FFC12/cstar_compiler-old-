@@ -148,6 +148,7 @@ class Visitor {
   llvm::Type* m_LastType = nullptr;
   std::map<std::string, llvm::AllocaInst*> m_LocalVarsOnScope;
   std::map<std::string, llvm::Type*> m_ReferenceParamValueTypes;
+  std::map<std::string, llvm::Type*> m_ArrayParamValueTypes;
   std::map<std::string, llvm::GlobalVariable*> m_GlobalVars;
   std::map<std::string, llvm::Value*> m_SharedPointerRefCounts;
   std::vector<llvm::StringRef> m_GlobaInitVarFunc;
@@ -160,6 +161,7 @@ class Visitor {
     std::vector<llvm::Type*> valueTypes;
     std::vector<std::string> names;
     std::vector<bool> isReference;
+    std::vector<bool> isArray;
 
     bool hasParams() const { return !irTypes.empty(); }
   };

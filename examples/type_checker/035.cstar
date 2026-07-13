@@ -1,0 +1,13 @@
+// expected: diagnostic
+// expected-code: CST2104
+
+write_readonly(readonly int32* pointer) :: void {
+  deref pointer = 2;
+  ret;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  write_readonly(ref value);
+  ret 0;
+}

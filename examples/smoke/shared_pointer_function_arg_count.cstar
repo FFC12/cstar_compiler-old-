@@ -1,0 +1,12 @@
+// expected-exit: 2
+
+observe(int32* pointer) :: int32 {
+  ret strong_count(pointer) as int32;
+}
+
+main() :: int32 {
+  int32 value = 4;
+  int32* source = ref value;
+
+  ret observe(source);
+}

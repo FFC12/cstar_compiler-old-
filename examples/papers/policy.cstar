@@ -1,85 +1,311 @@
 // expected: diagnostic (proposal)
-// How does it work?
-// -Well, that might make you thoughtful about what about the checking is it null or it would not be have a cost?
-// +No, actually it just needs a memory to register references and update (to a book -simple hashmap).
-// 
+//
+// C* PROTOCOL / ALLOCATOR PROPOSAL
+// --------------------------------
+// This file documents the direction after replacing the old hidden hook
+// idea with smaller, explicit systems.
+//
+// Decision:
+// - `protocol` owns typestate / state safety.
+// - `dynamic protocol` is the explicit runtime fallback.
+// - `allocator` / `Allocator` owns memory allocation strategy.
+// - constructor / destructor / defer own lifetime.
+// - `except` / `throw` / `Result`-like APIs own error handling.
+//
+// Legacy note:
+// The old hidden hook model mixed state validation, allocation, lifetime,
+// and error handling in one runtime mechanism. That model is superseded.
+// The useful ideas remain, but they move to the right layer.
 
-// as unary '.' means 'this'
-policy for String {
-    on_null_reference() :: void {
-        rterror("It's breaking our policy of the String!");
-        //signal handler (compiler will be handled that logic)
-    }
+// ---------------------------------------------------------------------
+// 1. Typestate: protocol
+// ---------------------------------------------------------------------
+// A protocol produces user-defined states. These states live
+// in the same type slot as `const`, `readonly`, and future protocol states.
+// The default is static/provable. Do not write `static protocol`;
+// static is the default. Use `dynamic protocol` only when runtime
+// state is explicitly needed.
 
-    on_null_reference_from_function() :: void {
-        rterror("It's breaking our policy of the String from another function call!");
-    }
+protocol StringState for String {
+    state valid, null;
 
-    on_catch() :: void {
-        
-    }
+    default null;
 
-    on_problematic_stuff_goes_here() :: void{
+    null  -> valid :: new();
+    valid -> null  :: make_null();
+    valid -> null  :: destructor();
 
-    }
+    append(const char* data) :: !null;
+    len() :: !null;
+    data() :: !null;
 
-    // well you have to manually delete
-    // to the allocated memory...
-    make_null() :: void {
-        deref self = nil;
-    }
+    scope_exit :: null;
+}
 
-    new(const char* data) :: void* {
-        ret malloc(ssizeof(data)); // ssizeof string sizeof 
+protocol FileState for FileHandle {
+    state closed, opened;
+
+    default closed;
+
+    closed -> opened :: open();
+    opened -> closed :: close();
+
+    read() :: !closed;
+    write(const char* data) :: !closed;
+    open(const char* path) :: !opened;
+
+    scope_exit :: closed;
+}
+
+// ---------------------------------------------------------------------
+// 2. Explicit runtime fallback: dynamic protocol
+// ---------------------------------------------------------------------
+// Dynamic protocols add one visible runtime discriminant to the
+// resource layout. `.=` is reserved for this explicit/provability-gap path.
+// It must desugar to inspectable code; no hidden hook table, no virtual
+// dispatch, no implicit hashmap.
+
+dynamic protocol ConnectionState for Connection {
+    state idle, sending, failed;
+
+    default idle;
+
+    idle    -> sending :: send();
+    sending -> idle    :: ack();
+    sending -> failed  :: timeout();
+
+    send(const char* packet) :: !failed;
+}
+
+handle_connection(idle Connection^ conn) :: void {
+    loop(true) {
+        conn .= try_send();     // dynamic, tag-checked, visible desugar
+
+        if (conn is failed) {
+            break;
+        }
     }
 }
 
-policy for Allocator {
-    new(const char* data) :: void* {
-    
+// ---------------------------------------------------------------------
+// 3. Allocation: allocator trait / allocator object
+// ---------------------------------------------------------------------
+// Allocation is not a protocol hook. It is a capability and a codegen contract.
+// The compiler can lower `new` through an allocator selected by the type,
+// by the scope, or explicitly by the call site.
+
+trait Allocator {
+    alloc(usize bytes, usize align) :: void*;
+    free(void* ptr, usize bytes, usize align) :: void;
+}
+
+struct SystemAllocator with Allocator {
+    alloc(usize bytes, usize align) :: void* {
+        ret os_alloc(bytes, align);
+    }
+
+    free(void* ptr, usize bytes, usize align) :: void {
+        os_free(ptr, bytes, align);
     }
 }
 
-struct Allocator {}
+struct ArenaAllocator with Allocator {
+    void* begin;
+    usize capacity;
+    usize offset;
 
-struct AnotherPrototype {}
+    alloc(usize bytes, usize align) :: void* {
+        ret arena_alloc(ref self, bytes, align);
+    }
 
-trait CustomAlloc {}
-
-trait AnotherTraits {}
-
-// String inherits from Allocator with using Custom alloc trait
-struct String : Allocator, AnotherPrototype with CustomAlloc, AnotherTraits {
-    // methods and variables here..
-    // <...>
+    free(void* ptr, usize bytes, usize align) :: void {
+        // Arena free is a no-op by design.
+        ret;
+    }
 }
 
-#try() {
-    $func::on_null_reference();
+// ---------------------------------------------------------------------
+// 4. Resource types: struct + constructor/destructor
+// ---------------------------------------------------------------------
+// Struct owns layout. Constructor/destructor own lifetime. Protocol
+// observes and validates state transitions, but does not allocate memory.
+
+struct String with Allocator {
+    char* buffer;
+    usize length;
+    usize capacity;
+
+    constructor() :: null String^ {
+        self.buffer = nil;
+        self.length = 0;
+        self.capacity = 0;
+        ret self;
+    }
+
+    new(const char* data, Allocator& allocator) :: valid String^ {
+        usize n = strlen(data);
+        self.buffer = allocator.alloc(n + 1, alignof(char));
+        memcpy(self.buffer, data, n + 1);
+        self.length = n;
+        self.capacity = n + 1;
+        ret self;
+    }
+
+    append(const char* data) :: valid String^ {
+        // Legal only when state is `valid`.
+        string_append(ref self, data);
+        ret self;
+    }
+
+    len() :: usize {
+        ret self.length;
+    }
+
+    data() :: constptr char* {
+        ret self.buffer;
+    }
+
+    make_null(Allocator& allocator) :: null String^ {
+        if (self.buffer) {
+            allocator.free(self.buffer, self.capacity, alignof(char));
+        }
+
+        self.buffer = nil;
+        self.length = 0;
+        self.capacity = 0;
+        ret self;
+    }
+
+    destructor(Allocator& allocator) :: null String^ {
+        ret self.make_null(ref allocator);
+    }
 }
 
-#try_recursive() {
-    @try
-    $func::on_null_reference_from_function();
+struct FileHandle {
+    void* native;
+
+    constructor() :: closed FileHandle^ {
+        self.native = nil;
+        ret self;
+    }
+
+    open(const char* path) :: opened FileHandle^ {
+        self.native = os_open(path);
+        ret self;
+    }
+
+    read() :: constptr char* {
+        ret os_read(self.native);
+    }
+
+    write(const char* data) :: opened FileHandle^ {
+        os_write(self.native, data);
+        ret self;
+    }
+
+    close() :: closed FileHandle^ {
+        os_close(self.native);
+        self.native = nil;
+        ret self;
+    }
 }
 
-main () :: int32 {
-    String* str = String::new("Current string data."); //constructor will be called
+// ---------------------------------------------------------------------
+// 5. Error handling is separate from protocol
+// ---------------------------------------------------------------------
+// Runtime errors are explicit effects, not hidden protocol hooks.
+// The exact final syntax is still open, but it should be visible in
+// signatures and call sites.
 
-    str::make_null();
+enum IoError {
+    NotFound,
+    PermissionDenied,
+    Interrupted,
+}
 
-    str.append("Another string will be added at the end of the current string data.")::on_null_reference();  // this is going to be fucked up here since it's null???
+open_file(const char* path) except IoError :: opened FileHandle^ {
+    closed FileHandle^ file;
 
+    if (!os_exists(path)) {
+        throw IoError.NotFound;
+    }
 
-    //or even you can use the directives for a particular policy handler
+    file.open(path);
+    ret file;
+}
 
-    @try
-    str.append("Another string will be added at the end of the current string data."):
+read_all(opened FileHandle^ file) except IoError :: constptr char* {
+    ret file.read();
+}
 
+// ---------------------------------------------------------------------
+// 6. Concurrency boundary: async/task ownership
+// ---------------------------------------------------------------------
+// Async/task boundaries reuse the same ownership rules as by-value
+// function boundaries, but they also need capability markers.
+//
+// Decision:
+// - `async` marks a task/thread boundary effect.
+// - `await` marks a suspension/ownership checkpoint.
+// - `Send` and `Sync` are trait/capability markers, not runtime vtables.
+// - `T^` may cross a task boundary only with explicit `move`.
+// - `T*` may cross by atomic retain/copy, or by explicit `move`.
+// - Plain unique copy across the boundary is illegal.
+//
+// Parser status:
+// `async` and `await` are reserved proposal keywords. The current compiler
+// emits controlled diagnostics until scheduler/coroutine lowering exists.
 
-    @try_recursive
-    str.getAnotherString().call();
+trait Send {}
+trait Sync {}
+
+consume_on_worker(int32^ owned) async :: int32 {
+    ret deref owned;
+}
+
+observe_on_worker(readonly int32* shared) async :: int32 {
+    ret deref shared;
+}
+
+thread_boundary_example() :: int32 {
+    int32 value = 7;
+    int32^ owned = ref value;
+    int32* shared = ref value;
+
+    int32 a = await consume_on_worker(move owned);
+    int32 b = await observe_on_worker(shared);
+
+    // Rejected:
+    //
+    // await consume_on_worker(owned);  // unique copy
+    // deref owned;                    // moved-after-use
+
+    ret a + b;
+}
+
+// ---------------------------------------------------------------------
+// 7. Usage
+// ---------------------------------------------------------------------
+
+main() :: int32 {
+    SystemAllocator allocator;
+
+    null String^ title;
+    valid String^ live_title := title.new("C* protocol", ref allocator);
+    live_title.append(" / allocator split");
+    print(live_title.data());
+    null String^ consumed := live_title.destructor(ref allocator);
+
+    closed FileHandle^ file;
+    opened FileHandle^ opened_file := file.open("notes.txt");
+    print(opened_file.read());
+    closed FileHandle^ closed_file := opened_file.close();
+
+    // The following should be rejected by pass1:
+    //
+    // live_title.append("use after destructor");
+    // closed_file.read();
+    // opened_file.open("double-open.txt");
 
     ret 0;
 }
-

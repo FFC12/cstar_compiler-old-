@@ -1,0 +1,12 @@
+// expected-exit: 7
+
+take(int32^ pointer) :: int32 {
+  ret deref pointer;
+}
+
+main() :: int32 {
+  int32 value = 7;
+  int32^ source = ref value;
+
+  ret take(move source);
+}

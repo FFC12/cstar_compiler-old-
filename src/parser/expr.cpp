@@ -71,6 +71,24 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
   std::deque<size_t> sparenthesesPos;
 
   while (true) {
+    if (is(TokenKind::AWAIT)) {
+      ParserHint(
+          "`await` belongs to the C* async/task proposal. Await points are "
+          "thread-boundary ownership checkpoints and require the future "
+          "Send/Sync-capability model.",
+          currentTokenInfo());
+      ParserError(
+          "`await` is part of the C* proposal, but async/task lowering is not "
+          "implemented yet.",
+          currentTokenInfo());
+
+      while (!is(TokenKind::SEMICOLON) && !is(TokenKind::RPAREN) &&
+             !is(TokenKind::_EOF)) {
+        this->advance();
+      }
+      return nullptr;
+    }
+
     // For subscripts
     if (is(COLON)) {
       bool outOfSize = false;
@@ -371,6 +389,25 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
         this->m_PrevToken = genericCandidatePrevToken;
         if (isOperator(this->currentTokenInfo())) goto jump_operator;
       }
+    } else if (is(TokenKind::AS)) {
+      auto prevCurrToken = this->currentTokenInfo();
+      auto opType = OpType::OP_CAST;
+      auto precTableType = this->m_PrecTable[opType];
+      if (precTableType.count(prevCurrToken.getTokenKind()) == 0) {
+        assert(false && "Operator Prec: critical unreacheable!");
+      }
+
+      auto precInfo = precTableType[prevCurrToken.getTokenKind()];
+      this->advance();
+
+      if (!isType(currentTokenInfo()) && !is(TokenKind::IDENT)) {
+        ParserError("'as' cast expects a target type", currentTokenInfo());
+      }
+
+      auto typeAst = this->advanceType();
+      exprBucket.push_back(std::move(typeAst));
+      opBucket.push_back(PrecedenceEntry(prevCurrToken, opType, precInfo,
+                                         i, i, false, false, true));
     } else if (isOperator(this->currentTokenInfo())) {
     jump_operator:
       PrecedenceInfo precInfo;
@@ -945,6 +982,7 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
           castOpKind = CastOpKind::C_CAST;
           break;
         case AS:
+          castOpKind = CastOpKind::C_AS;
           break;
         default:
           // unreacheable
@@ -954,7 +992,15 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
       // atom => [type, 10, int, 10, 30, 40 ]
       // op => [ (sizeof), (+,1), (+,2), (unsafe_cast,2)
 
-      if (op.entryHasTypeAttrib()) {
+      if (castOpKind == CastOpKind::C_AS) {
+        size_t pos = op.entryStride();
+        auto type = std::move(popAtom(op, pos));
+        auto expr = std::move(popAtom(op, pos - 1));
+
+        auto node = std::make_unique<CastNode>(std::move(expr), std::move(type),
+                                               castOpKind, true, semLoc);
+        insertNode(pos - 1, std::move(node));
+      } else if (op.entryHasTypeAttrib()) {
         size_t pos = op.entryStride();
         auto type = std::move(popAtom(op, pos));
         auto expr = std::move(popAtom(op, pos));

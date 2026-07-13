@@ -177,7 +177,7 @@
       "patterns": [
         {
           "name": "keyword.control.cstar",
-          "match": "\\b(?:if|elif|else|loop|for|break|continue|ret|throw|match|case|default|option)\\b"
+          "match": "\\b(?:if|elif|else|loop|for|break|continue|ret|throw|match|case|default|option|defer)\\b"
         },
         {
           "name": "keyword.operator.word.cstar",
@@ -185,11 +185,15 @@
         },
         {
           "name": "storage.modifier.cstar",
-          "match": "\\b(?:const|constptr|constref|readonly|nomove|async|except|noexcept|onexcept|static|import|export|extern|native|from|include|involved|with)\\b"
+          "match": "\\b(?:const|constptr|constref|readonly|nomove|async|except|noexcept|onexcept|static|dynamic|import|export|extern|native|from|include|involved|with|allocator)\\b"
         },
         {
           "name": "storage.type.declaration.cstar",
-          "match": "\\b(?:attribute|prototype|enum|struct|trait|policy|macro|constructor)\\b"
+          "match": "\\b(?:attribute|prototype|enum|struct|trait|protocol|macro|constructor|destructor)\\b"
+        },
+        {
+          "name": "keyword.operator.state.cstar",
+          "match": "\\b(?:state|is)\\b"
         }
       ]
     },

@@ -1,0 +1,10 @@
+// expected: diagnostic
+
+read_second(int32[2] arr) :: int32 {
+  ret arr[1];
+}
+
+main() :: int32 {
+  int32 values[3] = (1, 2, 3);
+  ret read_second(values);
+}

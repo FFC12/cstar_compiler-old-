@@ -1,0 +1,11 @@
+// expected: diagnostic
+// expected-code: CST1001
+
+task_value() :: int32 {
+  ret 1;
+}
+
+main() :: int32 {
+  int32 value = await task_value();
+  ret value;
+}

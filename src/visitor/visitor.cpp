@@ -78,6 +78,20 @@ static llvm::Type *GetStorageType(TypeSpecifier typeSpecifier,
   return GetType(typeSpecifier, indirectLevel, isRef);
 }
 
+static llvm::ArrayType *GetArrayType(llvm::Type *elementType,
+                                     const std::vector<ASTNode> &dimensions) {
+  size_t length = 1;
+  for (const auto &dim : dimensions) {
+    auto *scalar = dynamic_cast<ScalarOrLiteralAST *>(dim.get());
+    if (scalar == nullptr) {
+      assert(false && "Only constant array parameter dimensions are supported.");
+    }
+    length *= std::stoull(scalar->getValue());
+  }
+
+  return llvm::ArrayType::get(elementType, length);
+}
+
 static llvm::Type *GetPointeeType(llvm::Value *value) {
   if (auto *alloca = llvm::dyn_cast<llvm::AllocaInst>(value)) {
     return alloca->getAllocatedType();
@@ -571,6 +585,7 @@ Visitor::FunctionParamLayout Visitor::buildFunctionParamLayout(FuncAST &funcAst)
   layout.valueTypes.reserve(funcAst.m_Params.size());
   layout.names.reserve(funcAst.m_Params.size());
   layout.isReference.reserve(funcAst.m_Params.size());
+  layout.isArray.reserve(funcAst.m_Params.size());
 
   for (auto &param : funcAst.m_Params) {
     auto *paramAst = static_cast<ParamAST *>(param.get());
@@ -589,9 +604,15 @@ Visitor::FunctionParamLayout Visitor::buildFunctionParamLayout(FuncAST &funcAst)
                                  typeAst->m_IsRef)
                        : valueType;
 
+    if (paramAst->m_IsSubscriptable) {
+      valueType = GetArrayType(valueType, paramAst->m_ArrDim);
+      irType = llvm::PointerType::get(Visitor::Builder->getContext(), 0);
+    }
+
     layout.valueTypes.push_back(valueType);
     layout.irTypes.push_back(irType);
     layout.isReference.push_back(typeAst->m_IsRef);
+    layout.isArray.push_back(paramAst->m_IsSubscriptable);
 
     if (paramAst->m_Symbol0 != nullptr) {
       auto *symbolAst = static_cast<SymbolAST *>(paramAst->m_Symbol0.get());
@@ -1191,6 +1212,14 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
       }
 
       auto symbolType = GetPointeeType(symbol);
+      if (!symbolType->isArrayTy() &&
+          binaryOpAst.m_LHS->m_ExprKind == ExprKind::SymbolExpr) {
+        auto *arraySymbol = static_cast<SymbolAST *>(binaryOpAst.m_LHS.get());
+        auto arrayParamType = m_ArrayParamValueTypes.find(arraySymbol->m_SymbolName);
+        if (arrayParamType != m_ArrayParamValueTypes.end()) {
+          symbolType = arrayParamType->second;
+        }
+      }
       auto gep = Builder->CreateInBoundsGEP(symbolType, symbol, idxList);
       auto loaded = Visitor::Builder->CreateLoad(
           symbolType->getArrayElementType(), gep);
@@ -1268,6 +1297,16 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
     value = CastValueToType(loadedValue, m_LastType, isSigned);
     m_LastSigned = isSigned;
     return value;
+  }
+
+  auto arrayParam = m_ArrayParamValueTypes.find(symbolAst.m_SymbolName);
+  if (arrayParam != m_ArrayParamValueTypes.end() && m_LastArrayIndex) {
+    auto *slotType = GetPointeeType(value);
+    auto *arrayAddress =
+        CreateLoad(value, slotType, symbolAst.m_SymbolName + ".array.addr");
+    m_LastType = arrayParam->second;
+    m_LastSigned = IsSigned(getSymbolInfo(symbolAst.m_SymbolName).type);
+    return arrayAddress;
   }
 
   if (this->m_LastVarDecl && !this->m_LastArrayIndex) {
@@ -1610,6 +1649,13 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
     }
 
     llvm::Type *arrayType = GetPointeeType(target.address);
+    auto arrayParamType = m_ArrayParamValueTypes.find(lhs->m_SymbolName);
+    if (arrayParamType != m_ArrayParamValueTypes.end()) {
+      auto *slotType = GetPointeeType(target.address);
+      target.address =
+          CreateLoad(target.address, slotType, lhs->m_SymbolName + ".array.addr");
+      arrayType = arrayParamType->second;
+    }
     if (!arrayType->isArrayTy()) {
       assert(false && "Subscript assignment target must be an array.");
     }
@@ -1929,6 +1975,7 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
 
     m_LocalVarsOnScope.clear();
     m_ReferenceParamValueTypes.clear();
+    m_ArrayParamValueTypes.clear();
 
     llvm::BasicBlock *funcBlock = llvm::BasicBlock::Create(
         Visitor::Builder->getContext(), "entry", function);
@@ -1961,6 +2008,9 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
 
         if (paramLayout.isReference[paramNo]) {
           m_ReferenceParamValueTypes[paramName] = valueType;
+        }
+        if (paramLayout.isArray[paramNo]) {
+          m_ArrayParamValueTypes[paramName] = valueType;
         }
         m_LocalVarsOnScope[paramName] = Visitor::Builder->CreateAlloca(
             paramType, nullptr, llvm::Twine(paramName));
@@ -2117,15 +2167,71 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
   std::vector<llvm::Value *> args;
   llvm::Type *previousType = m_LastType;
   bool previousSigned = m_LastSigned;
+  auto signatureIt = FunctionTable.find(funcSymbol->m_SymbolName);
 
   for (size_t i = 0; i < argNodes.size(); ++i) {
     llvm::Type *paramType = function->getFunctionType()->getParamType(i);
+    const SymbolInfo *paramInfo =
+        signatureIt != FunctionTable.end() && i < signatureIt->second.params.size()
+            ? &signatureIt->second.params[i]
+            : nullptr;
+
+    const bool expectsArray =
+        signatureIt != FunctionTable.end() &&
+        i < signatureIt->second.params.size() &&
+        signatureIt->second.params[i].isSubscriptable;
+    if (expectsArray) {
+      if (argNodes[i]->m_ExprKind != ExprKind::SymbolExpr) {
+        assert(false && "Array parameter arguments must be symbols.");
+      }
+
+      auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
+      auto *storage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                  argSymbol->m_SymbolName);
+      if (storage == nullptr) {
+        assert(false && "Array argument storage was not found.");
+      }
+
+      if (m_ArrayParamValueTypes.count(argSymbol->m_SymbolName) > 0) {
+        auto *slotType = GetPointeeType(storage);
+        storage = CreateLoad(storage, slotType,
+                             argSymbol->m_SymbolName + ".array.arg");
+      }
+
+      args.push_back(storage);
+      continue;
+    }
+
     m_LastType = paramType;
     m_LastSigned = true;
 
+    auto *argSymbol = symbolFromMoveSource(argNodes[i]);
+    auto *argUnary = dynamic_cast<UnaryOpAST *>(argNodes[i]);
+    const bool argIsMove =
+        argUnary != nullptr && argUnary->m_UnaryOpKind == U_MOVE;
+    const bool paramIsShared =
+        paramInfo != nullptr && paramInfo->indirectionLevel > 0 &&
+        !paramInfo->isUnique && !paramInfo->isRef;
+
     llvm::Value *argValue = argNodes[i]->accept(*this);
     argValue = CastValueToType(argValue, paramType, m_LastSigned);
+    if (paramIsShared && argSymbol != nullptr && !argIsMove) {
+      RetainSharedPointer(argValue);
+    }
     args.push_back(argValue);
+
+    if (argIsMove && argSymbol != nullptr && paramInfo != nullptr &&
+        paramInfo->indirectionLevel > 0 && !paramInfo->isRef) {
+      auto *sourceStorage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                        argSymbol->m_SymbolName);
+      if (sourceStorage != nullptr) {
+        auto *sourceType = GetPointeeType(sourceStorage);
+        llvm::Value *nullValue = IsSharedPointerTy(sourceType)
+                                     ? CreateNullSharedPointerHandle()
+                                     : llvm::Constant::getNullValue(sourceType);
+        Builder->CreateStore(nullValue, sourceStorage);
+      }
+    }
   }
 
   m_LastType = previousType;
@@ -2473,6 +2579,10 @@ ValuePtr Visitor::visit(RetAST &retAst) {
   m_LastType = returnType;
   m_LastSigned = true;
 
+  auto *retSymbol = symbolFromMoveSource(retAst.m_RetExpr.get());
+  auto *retUnary = dynamic_cast<UnaryOpAST *>(retAst.m_RetExpr.get());
+  const bool retIsMove =
+      retUnary != nullptr && retUnary->m_UnaryOpKind == U_MOVE;
   llvm::Value *value = retAst.m_RetExpr->accept(*this);
   m_LastType = previousType;
   m_LastSigned = previousSigned;
@@ -2492,6 +2602,22 @@ ValuePtr Visitor::visit(RetAST &retAst) {
     } else if (value->getType()->isFloatingPointTy() &&
                returnType->isFloatingPointTy()) {
       value = Visitor::Builder->CreateFPCast(value, returnType);
+    }
+  }
+
+  if (IsSharedPointerTy(returnType) && retSymbol != nullptr && !retIsMove) {
+    RetainSharedPointer(value);
+  }
+
+  if (retIsMove && retSymbol != nullptr) {
+    auto *sourceStorage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                      retSymbol->m_SymbolName);
+    if (sourceStorage != nullptr) {
+      auto *sourceType = GetPointeeType(sourceStorage);
+      llvm::Value *nullValue = IsSharedPointerTy(sourceType)
+                                   ? CreateNullSharedPointerHandle()
+                                   : llvm::Constant::getNullValue(sourceType);
+      Builder->CreateStore(nullValue, sourceStorage);
     }
   }
 

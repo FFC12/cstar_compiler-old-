@@ -1,0 +1,11 @@
+// expected: pass
+// expected-exit: 5
+
+read_second(int32[2] arr) :: int32 {
+  ret arr[1];
+}
+
+main() :: int32 {
+  int32 values[2] = (4, 5);
+  ret read_second(values);
+}

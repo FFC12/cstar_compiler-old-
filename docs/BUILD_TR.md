@@ -107,6 +107,8 @@ Tüm suite'ler:
 .\tools\run_examples.ps1 --all --expect-diagnostics
 ```
 
+Diagnostic bekleyen örneklerde `// expected-code: CSTNNNN` etiketi varsa runner compiler çıktısında o hata kodunu da arar. Bu sayede type-checker suite'i yalnızca "hata verdi" durumunu değil, beklenen semantic sınıfını da korur.
+
 Yardım:
 
 ```powershell

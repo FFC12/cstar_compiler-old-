@@ -1,0 +1,8 @@
+// expected: diagnostic
+
+main() :: int32 {
+  int32 value = 1;
+  int32* pointer = ref value;
+  int64 raw = pointer as int64;
+  ret raw as int32;
+}

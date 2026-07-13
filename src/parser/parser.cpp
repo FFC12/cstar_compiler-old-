@@ -1,5 +1,33 @@
 #include <parser/parser.hpp>
 
+static bool IsProposalOnlyTopLevel(TokenKind kind) {
+  switch (kind) {
+    case DYNAMIC:
+    case PROTOCOL:
+    case STATE:
+    case WITH:
+    case STRUCT:
+    case TRAIT:
+    case MACRO:
+    case CONSTRUCTOR:
+    case DESTRUCTOR:
+    case ALLOCATOR:
+    case EXCEPT:
+    case THROW:
+    case DEFER:
+    case ASYNC:
+    case AWAIT:
+    case SELF:
+    case IS:
+    case ATTRIB:
+    case PROTO:
+    case ENUM:
+      return true;
+    default:
+      return false;
+  }
+}
+
 void CStarParser::parse() {
   m_TokenStream = this->m_Lexer.perform();
   if (m_StatsEnabled) {
@@ -47,6 +75,15 @@ void CStarParser::translationUnit() {
                  currentTokenInfo());
       ParserError("Unexpected token '" + currentTokenInfo().getTokenAsStr() +
                       "'",
+                  currentTokenInfo());
+    } else if (IsProposalOnlyTopLevel(currentTokenKind())) {
+      ParserHint(
+          "This keyword belongs to the C* proposal surface "
+          "(struct/trait/protocol/attribute/macro/effects), but its "
+          "grammar is not implemented in the compiler yet.",
+          currentTokenInfo());
+      ParserError("Unexpected proposal keyword '" +
+                      std::string(tokenToStr(currentTokenKind())) + "'",
                   currentTokenInfo());
     } else {
       VisibilitySpecifier visibilitySpecifier =

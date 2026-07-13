@@ -1,0 +1,9 @@
+// expected: diagnostic
+// expected-code: CST2100
+
+main() :: int32 {
+  int32 value = 1;
+  readonly int32* source = ref value;
+  int32* mutable = cast<int32*>(source);
+  ret deref mutable;
+}

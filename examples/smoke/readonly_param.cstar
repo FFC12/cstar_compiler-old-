@@ -1,0 +1,11 @@
+// expected: pass
+// expected-exit: 7
+
+read_through(readonly int32* pointer) :: int32 {
+  ret deref pointer;
+}
+
+main() :: int32 {
+  int32 value = 7;
+  ret read_through(ref value);
+}

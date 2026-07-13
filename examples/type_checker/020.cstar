@@ -1,4 +1,5 @@
 // expected: diagnostic
+// expected-code: CST2102
 
 write_ref(constref int32& value) :: void {
   value = 3;

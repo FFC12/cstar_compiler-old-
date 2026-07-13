@@ -1,0 +1,13 @@
+// expected-exit: 9
+
+forward(int32^ pointer) :: int32^ {
+  ret move pointer;
+}
+
+main() :: int32 {
+  int32 value = 9;
+  int32^ source = ref value;
+  int32^ target = forward(move source);
+
+  ret deref target;
+}

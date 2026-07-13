@@ -1,0 +1,13 @@
+// expected: pass
+// expected-exit: 9
+
+write_first(int32[2] arr) :: void {
+  arr[0] = 9;
+  ret;
+}
+
+main() :: int32 {
+  int32 values[2] = (4, 5);
+  write_first(values);
+  ret values[0];
+}

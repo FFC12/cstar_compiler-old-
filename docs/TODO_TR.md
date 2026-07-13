@@ -21,6 +21,7 @@ Tamamlanan altyapı:
 - `build.bat`, `build.sh`, `tools/run_examples.ps1` güncellendi.
 - `tools/run_examples.bat` eklendi; Windows execution policy'ye takılmadan suite parametreleri geçirilebiliyor.
 - Smoke runner `// expected-exit: N` etiketini okuyup generated executable'ın process exit status değerini doğruluyor.
+- Example runner `// expected-code: CSTNNNN` etiketini okuyup diagnostic suite'lerinde beklenen hata kodunu doğruluyor.
 - Compiler banner ve diagnostic çıktıları `include/diagnostics/*` altında toplandı.
 - Diagnostic formatı dosya yolu, satır, sütun, severity, hata kodu ve caret marker gösterecek hale getirildi.
 - Renkli console çıktısı tek helper üzerinden yönetiliyor; `NO_COLOR` ortam değişkeni destekleniyor.
@@ -102,9 +103,12 @@ examples/smoke/logical_expr.cstar
 examples/smoke/assignment.cstar
 examples/smoke/assignment_cast.cstar
 examples/smoke/cast_numeric.cstar
+examples/smoke/as_cast_numeric.cstar
 examples/smoke/array_element_read.cstar
 examples/smoke/array_element_assignment.cstar
 examples/smoke/array_element_shortcut_assignment.cstar
+examples/smoke/array_param_read.cstar
+examples/smoke/array_param_write.cstar
 examples/smoke/function_call.cstar
 examples/smoke/function_call_initializer.cstar
 examples/smoke/function_call_statement.cstar
@@ -116,16 +120,21 @@ examples/smoke/const_value.cstar
 examples/smoke/const_pointer.cstar
 examples/smoke/reference_param.cstar
 examples/smoke/constref_param.cstar
+examples/smoke/constptr_param.cstar
 examples/smoke/constptr_pointer.cstar
+examples/smoke/readonly_param.cstar
 examples/smoke/readonly_pointer.cstar
 examples/smoke/readonly_multi_level_pointer.cstar
 examples/smoke/pointer_variable_initializer.cstar
 examples/smoke/shared_pointer_assignment_count.cstar
 examples/smoke/shared_pointer_copy_count.cstar
+examples/smoke/shared_pointer_function_arg_count.cstar
 examples/smoke/shared_pointer_move_assignment.cstar
 examples/smoke/unique_pointer.cstar
+examples/smoke/unique_pointer_function_move_arg.cstar
 examples/smoke/unique_pointer_move_assignment.cstar
 examples/smoke/unique_pointer_move_init.cstar
+examples/smoke/unique_pointer_return_move.cstar
 examples/smoke/dereference_assignment.cstar
 examples/smoke/dereference_assignment_shortcut.cstar
 examples/smoke/multi_level_dereference_assignment.cstar
@@ -174,14 +183,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Her zaman yeşil kalması gereken küçük çalışan compiler çekirdeği.
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
-- Güncel durumda 55/55 dosya başarılı.
+- Güncel durumda 63/63 dosya başarılı.
 
 `examples/type_checker/`:
 
 - Büyük kısmı bilerek hata üretmesi beklenen semantic/type-check örnekleridir.
 - Exit code `1` çoğu dosya için kabul edilebilir diagnostic olabilir.
+- `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
-- Güncel durumda `-ExpectDiagnostics` ile 34/34 dosya kontrollü diagnostic üretiyor, crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 46/46 dosya kontrollü diagnostic üretiyor, crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -232,9 +242,21 @@ examples/type_checker/030.cstar
 examples/type_checker/031.cstar
 examples/type_checker/032.cstar
 examples/type_checker/033.cstar
+examples/type_checker/034.cstar
+examples/type_checker/035.cstar
+examples/type_checker/036.cstar
+examples/type_checker/037.cstar
+examples/type_checker/038.cstar
+examples/type_checker/039.cstar
+examples/type_checker/040.cstar
+examples/type_checker/041.cstar
+examples/type_checker/042.cstar
+examples/type_checker/043.cstar
+examples/type_checker/044.cstar
+examples/type_checker/045.cstar
 ```
 
-Bu dosyalar parser/pass hattına giriyor ve semantic diagnostic üretebiliyor. Mesajların doğruluğu ayrıca test edilmeli.
+Bu dosyalar parser/pass hattına giriyor ve semantic diagnostic üretebiliyor. Kritik semantic sınıflar `expected-code` etiketiyle doğrulanabilir.
 
 `examples/functions/`, `examples/variables/`, `examples/papers/`:
 
@@ -429,7 +451,7 @@ Tamamlanan:
   - `examples/type_checker/017.cstar`
 - Assignment RHS symbol lookup artık sol tarafın eski `symbolId`'siyle değil, statement'ın bulunduğu scope konumuyla yapılır.
 - `:=` token'ı assignment grammar'ına eklendi; C* içinde type inference değil unique ownership transfer intent'i olarak kullanılır.
-- `.=` lexer/parser düzeyinde ayrı token olarak tanınır; policy/member-safe assignment runtime modeli gelene kadar kontrollü proposal diagnostic üretir.
+- `.=` lexer/parser düzeyinde ayrı token olarak tanınır; dynamic protocol/provability-gap assignment lowering netleşene kadar kontrollü proposal diagnostic üretir.
 
 ### 1.5 If / Elif / Else
 
@@ -551,11 +573,22 @@ Tamamlanan:
   - `examples/smoke/function_call_pointer_argument.cstar`
 - Primitive reference parametre codegen smoke:
   - `examples/smoke/reference_param.cstar`
+- Qualifier parametre codegen smoke:
+  - `examples/smoke/constref_param.cstar`
+  - `examples/smoke/constptr_param.cstar`
+  - `examples/smoke/readonly_param.cstar`
+- Qualifier parametre negative diagnostic:
+  - `examples/type_checker/020.cstar`
+  - `examples/type_checker/034.cstar`
+  - `examples/type_checker/035.cstar`
+- Tek boyutlu array parametre codegen smoke:
+  - `examples/smoke/array_param_read.cstar`
+  - `examples/smoke/array_param_write.cstar`
+- Array parametre negative diagnostic:
+  - `examples/type_checker/036.cstar`
+  - `examples/type_checker/037.cstar`
 
-TODO:
-
-- Qualifier parametre codegen testleri.
-- Array parametreleri.
+TODO: Bu alt aşamada açık madde kalmadı. Çok boyutlu array ve colon indexing Aşama 4'te ele alınacak.
 
 ### 2.3 Cast
 
@@ -570,23 +603,30 @@ Tamamlanan:
   - primitive numerik dönüşümler.
   - pointer -> pointer dönüşümleri.
   - pointer/value kategori geçişi reddedilir.
+  - pointer qualifier stripping reddedilir.
+- `expr as T` safe cast syntax'ı:
+  - `4.5 as int32`
+  - parser/codegen yolu `CastOpAST::C_AS` ile çalışır.
 - `unsafe_cast<T>(expr)` looser cast MVP:
   - integer -> pointer.
   - pointer -> integer.
   - pointer -> pointer.
   - normal numerik dönüşümlerde safe cast helper'ını kullanır.
+- User-defined type cast MVP kuralı:
+  - `struct`/defined type sistemi gelene kadar controlled diagnostic üretir.
+  - codegen assert'e düşmez.
 - Smoke:
   - `examples/smoke/cast_numeric.cstar`
+  - `examples/smoke/as_cast_numeric.cstar`
   - `examples/smoke/function_call_cast_argument.cstar`
   - `examples/smoke/unsafe_cast_int_to_pointer.cstar`
 - Negative diagnostic:
   - `examples/type_checker/018.cstar`
+  - `examples/type_checker/038.cstar`
+  - `examples/type_checker/039.cstar`
+  - `examples/type_checker/040.cstar`
 
-TODO:
-
-- `expr as T` syntax kararı ve parser/codegen yolu.
-- User-defined type cast kuralları.
-- Qualifier-aware cast kuralları.
+TODO: Bu alt aşamada açık madde kalmadı. Gerçek user-defined cast/conversion overload kuralları `struct`/`trait` sistemi geldikten sonra Aşama 7 altında tasarlanacak.
 
 ## Aşama 3 - Memory Model: Pointer, Reference, Qualifier
 
@@ -646,11 +686,18 @@ Tamamlanan:
 - `int32* q = deref pp;` pointer'dan pointer okuma initializer içinde çalışır.
 - `identity(int32* p) :: int32* { ret p; }` gibi pointer return çalışır.
 - Pointer olmayan sembole `deref` assignment kontrollü diagnostic üretir.
+- Pointer/ref/qualifier semantic diagnostics standardize edildi:
+  - `CST2100`: qualifier mismatch.
+  - `CST2101`: invalid qualifier/type combination.
+  - `CST2102`: const assignment.
+  - `CST2103`: constptr pointer reassignment.
+  - `CST2104`: readonly assignment.
+  - Safe cast qualifier stripping artık `CST2100` üretir.
+  - Qualifier mismatch ve invalid qualifier mesajları standartlaştırıldı.
+  - `examples/type_checker/016.cstar`, `017.cstar`, `020.cstar`, `021.cstar`, `022.cstar`, `023.cstar`, `024.cstar`, `025.cstar`, `026.cstar`, `027.cstar`, `034.cstar`, `035.cstar`, `039.cstar` dosyaları `expected-code` ile doğrulanır.
+- `tools/run_examples.ps1` diagnostic suite'lerinde `expected-code` kontrolü yapar.
 
-TODO:
-
-- Pointer/ref/qualifier semantic diagnostics:
-  - daha ayrıntılı qualifier hata kodları ve mesaj standardizasyonu
+TODO: Bu alt aşamada açık madde kalmadı. Ownership transfer ve lifetime başlıkları Aşama 3.2 altında takip edilecek.
 
 ### 3.2 Ownership Pointer `^`
 
@@ -658,8 +705,6 @@ Durum: unique `^` ve shared `*` pointer ayrımı compiler çekirdeğinde gerçek
 
 TODO:
 
-- Function argument/return ownership transfer kuralları.
-- Thread boundary transferleri, async/task ownership ve `Send`/`Sync` benzeri marker tasarımı.
 - `nomove`/policy proposal'ı ile uyumlandırma.
 - Scope çıkışı/destructor lowering ile final strong-count release.
 - Heap allocation/control-block layout `new`/allocator sistemi ile birleştirilecek.
@@ -675,20 +720,40 @@ Tamamlanan:
 - `int32^ target := source;` ve `target := source;` smoke ile çalışır.
 - Unique pointer doğrudan kopyalanamaz; `int32^ target = source;` `CST2105` diagnostic üretir.
 - Moved-after-use takibi hem `^` hem shared `*` pointer için semantic pass'te yapılır.
+- Function argument/return ownership transfer kuralları tamamlandı:
+  - by-value `^` parametre plain unique pointer copy'sini `CST2105` ile reddeder.
+  - by-value `^` parametre `move pointer` ile açık transfer kabul eder.
+  - by-value `^` return için `ret move pointer;` gerekir; `ret pointer;` `CST2105` üretir.
+  - by-value shared `*` parametre plain symbol ile retain/copy yapar.
+  - function argument/return `move` source'u null'a çekilir ve semantic pass'te moved kabul edilir.
+- Thread boundary transferleri, async/task ownership ve `Send`/`Sync` benzeri marker tasarımı tamamlandı:
+  - `async` function effect ve `await` expression reserved proposal keyword olarak lexer'a eklendi.
+  - `async`/`await` henüz lowering üretmez; parser `CST1001` controlled diagnostic verir.
+  - Gelecek `spawn`/task boundary kuralı: by-value `^` yalnızca `move` ile taşınır, plain unique copy yasaktır.
+  - Shared `*` task boundary'de atomic retain/copy veya açık `move` transfer kullanır.
+  - `Send`/`Sync` runtime vtable değil, trait/capability marker olarak tasarlanır; scheduler lowering bu marker'ları kontrol edecek.
 - Aynı type içinde `*` ve `^` karışımı parser diagnostic üretir.
 - `CST2105`: ownership/move semantic diagnostic.
 - `examples/smoke/shared_pointer_copy_count.cstar`
 - `examples/smoke/shared_pointer_assignment_count.cstar`
+- `examples/smoke/shared_pointer_function_arg_count.cstar`
 - `examples/smoke/shared_pointer_move_assignment.cstar`
 - `examples/smoke/unique_pointer.cstar`
+- `examples/smoke/unique_pointer_function_move_arg.cstar`
 - `examples/smoke/unique_pointer_move_init.cstar`
 - `examples/smoke/unique_pointer_move_assignment.cstar`
+- `examples/smoke/unique_pointer_return_move.cstar`
 - `examples/type_checker/028.cstar`
 - `examples/type_checker/029.cstar`
 - `examples/type_checker/030.cstar`
 - `examples/type_checker/031.cstar`
 - `examples/type_checker/032.cstar`
 - `examples/type_checker/033.cstar`
+- `examples/type_checker/041.cstar`
+- `examples/type_checker/042.cstar`
+- `examples/type_checker/043.cstar`
+- `examples/type_checker/044.cstar`
+- `examples/type_checker/045.cstar`
 
 ### 3.3 Qualifier
 
@@ -729,6 +794,12 @@ Tamamlanan:
 - `constref` parametreye assignment reddi:
   - `examples/smoke/constref_param.cstar`
   - `examples/type_checker/020.cstar`
+- `constptr int32*` parametre callee içinde target write'a izin verir, pointer reassignment reddedilir:
+  - `examples/smoke/constptr_param.cstar`
+  - `examples/type_checker/034.cstar`
+- `readonly int32*` parametre callee içinde target read'e izin verir, target write reddedilir:
+  - `examples/smoke/readonly_param.cstar`
+  - `examples/type_checker/035.cstar`
 - `constptr int32*` initializer, dereference read/write ve pointer address reassignment reddi:
   - `examples/smoke/constptr_pointer.cstar`
   - `examples/type_checker/021.cstar`
@@ -825,25 +896,93 @@ Proposal hedefleri:
 
 - `struct`
 - `trait`
-- `policy`
+- `protocol`
+- `dynamic protocol`
 - custom allocator benzeri fikirler.
 
 Durum:
 
 - `SPEC_DEFINED` var.
-- Gerçek struct/trait/policy parser yok.
+- Lexer `struct`, `trait`, `protocol`, `dynamic`, `state`, `with`, `constructor`, `destructor`, `allocator`, `except`, `throw`, `defer`, `self`, `is`, `macro` keyword'lerini tanır.
+- Parser bu proposal keyword'leri için top-level controlled diagnostic üretir; gerçek grammar yok.
 - Defined type table dolmuyor.
-- `.=` policy/member-safe assignment token'ı parser'da tanınır, fakat gerçek policy runtime semantics gelene kadar proposal diagnostic üretir.
+- Eski `policy for T { ... }` runtime hook modeli ve `policy protocol` çift isimli form superseded kabul edildi.
+- Ana yön `protocol Name for Type { ... }`: compile-time typestate/state contract.
+- `static protocol` gereksizdir; static/provable davranış default kabul edilir.
+- `dynamic protocol` açık runtime maliyeti isteyen durumlar içindir.
+- `.=` token'ı parser'da tanınır, fakat yalnızca dynamic/provability-gap protocol lowering netleşince codegen'e alınacak; bugün proposal diagnostic üretir.
 
 TODO:
 
 - Önce `struct` MVP tasarla.
 - Field layout + LLVM struct type.
 - Constructor/function call ayrımını çöz.
-- Policy sistemi için önce null/reference safety hook tasarımı yazılmalı:
-  - sistem dili hedefi gereği hook'lar thread-safe, düşük overhead'li ve async boundary'lerde belirgin olmalı.
-  - `.=` ancak policy handler/member assignment lowering netleşince codegen'e alınmalı.
-- Trait/policy en sona bırakılmalı.
+- `protocol` parser tasarımı:
+  - `protocol FileState for FileHandle { ... }`
+  - `state closed, opened;`
+  - `default closed;`
+  - `closed -> opened :: open();`
+  - `read() :: !closed;`
+  - `scope_exit :: closed;`
+- Protocol state'lerini mevcut qualifier/state slot'una bağla:
+  - `opened FileHandle^`
+  - `closed FileHandle^`
+  - `const opened FileHandle^`
+- Pass0 symbol/type table:
+  - protocol adı, hedef type, state seti, default state.
+  - transition table ve forbidden-call table.
+- Pass1 flow analysis:
+  - method call sonrası state transition.
+  - return type state match.
+  - moved pointer ile state taşınması.
+  - `scope_exit` required state diagnostic.
+- `dynamic protocol`:
+  - explicit runtime tag field.
+  - `.=` için görünür/desugar edilebilir switch lowering.
+  - hidden hook/table/dispatch yok.
+- Eski `policy for T` örnekleri dokümanda “superseded legacy proposal” olarak tutulacak; compiler ana grammar'ına alınmayacak.
+
+### 7.1 Static
+
+Durum:
+
+- Lexer ve parser `static` token'ını global visibility/storage tarafında kısmen kabul eder.
+- Global `static` internal linkage benzeri davranır.
+- Local static, static member, init-order ve thread-safe static initialization yok.
+
+TODO:
+
+- `static` anlamlarını ayır:
+  - global internal linkage.
+  - local static storage duration.
+  - type/member static.
+- Local static için one-time thread-safe init planı.
+- Function-level static ve method static grammar kararları.
+
+### 7.2 Struct
+
+TODO:
+
+- `struct Name { field; ... }` parser/AST.
+- Field layout ve LLVM `StructType`.
+- Field access: `value.field`, pointer/shared handle için `ptr.field` veya `ptr::method` kararını netleştir.
+- Method syntax ve `self` lowering.
+- Constructor/new/allocator entegrasyonu.
+- Shared `*` handle ve unique `^` ile struct lifetime entegrasyonu.
+- `syntax.cstar` içindeki `struct Shape<T> from Area<T>` formunu ilk MVP'de parse etmeye çalışma; önce field/method struct çekirdeği, sonra attribute binding.
+- `constructor`/`destructor` scope-exit, shared retain/release ve custom allocator modeliyle aynı lifetime planına bağlanmalı.
+
+### 7.3 Trait
+
+TODO:
+
+- `trait Name { ... }` parser/AST.
+- Trait requirement table.
+- `struct T with TraitA, TraitB` grammar.
+- Compile-time conformance check.
+- Dynamic dispatch yok; monomorphized/static dispatch varsayılan.
+- Generic bound syntax proposal'ı.
+- Allocator capability için trait kullanılabilir; allocation failure eski policy hook yerine explicit `except`/`throw` veya result-like dönüş modeliyle tasarlanmalı.
 
 ## Aşama 8 - Metaprogramming ve İleri Proposal
 
@@ -857,6 +996,44 @@ Proposal'da görünen ama çok sonraya bırakılacak başlıklar:
 - compile-time error/runtime error hook'ları
 
 Bu başlıklar çekirdek dil stabil olmadan uygulanmamalı.
+
+### 8.1 Attribute
+
+Durum:
+
+- Lexer `attribute` keyword'ünü tanır.
+- Parser `attribute` için controlled proposal diagnostic üretir.
+- AST/semantic yok.
+
+TODO:
+
+- `attribute Name<T> { ... }` grammar'ını proposal olarak netleştir.
+- Attribute'ın trait'ten farkını yaz:
+  - trait: type capability/contract.
+  - attribute: compile-time transformation/reflection helper.
+- `$0`, `$1`, `match`, `cterror` gibi compile-time expression yüzeyini tasarla.
+- İlk MVP sadece parse + controlled diagnostic olmalı; expansion sonra.
+
+### 8.2 Macro / Directive
+
+Durum:
+
+- Lexer `#` ve `$` tanır.
+- Lexer `macro` keyword'ünü tanır.
+- `@` şu an unhandled.
+- Parser macro/directive AST yok.
+
+TODO:
+
+- `macro name(args) { ... }` ile `#directive` ayrımını netleştir.
+- Macro expansion zamanı:
+  - parse-time mı,
+  - semantic-time mı,
+  - IR-before-codegen mi?
+- Hijyen/hygiene kuralları.
+- Error reporting ve source span mapping.
+- `@directive` syntax'ı lexer'a alınacaksa token ve parser recovery tasarımı.
+- Protocol ile macro/directive karıştırılmamalı; protocol gizli hook sistemi olmayacak.
 
 ## Bir Sonraki En İyi Adım
 

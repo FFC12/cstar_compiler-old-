@@ -104,6 +104,23 @@ enum TokenKind {
   TYPEOF,
   MOVE,
   POLICY_ASSIGN,
+  DYNAMIC,
+  PROTOCOL,
+  STATE,
+  WITH,
+  STRUCT,
+  TRAIT,
+  MACRO,
+  CONSTRUCTOR,
+  DESTRUCTOR,
+  ALLOCATOR,
+  EXCEPT,
+  THROW,
+  DEFER,
+  ASYNC,
+  AWAIT,
+  SELF,
+  IS,
   I8,
   I16,
   I32,
@@ -509,6 +526,40 @@ class CStarLexer {
       return TYPEOF;
     else if (ident == "move")
       return MOVE;
+    else if (ident == "dynamic")
+      return DYNAMIC;
+    else if (ident == "protocol")
+      return PROTOCOL;
+    else if (ident == "state")
+      return STATE;
+    else if (ident == "with")
+      return WITH;
+    else if (ident == "struct")
+      return STRUCT;
+    else if (ident == "trait")
+      return TRAIT;
+    else if (ident == "macro")
+      return MACRO;
+    else if (ident == "constructor")
+      return CONSTRUCTOR;
+    else if (ident == "destructor")
+      return DESTRUCTOR;
+    else if (ident == "allocator")
+      return ALLOCATOR;
+    else if (ident == "except")
+      return EXCEPT;
+    else if (ident == "throw")
+      return THROW;
+    else if (ident == "defer")
+      return DEFER;
+    else if (ident == "async")
+      return ASYNC;
+    else if (ident == "await")
+      return AWAIT;
+    else if (ident == "self")
+      return SELF;
+    else if (ident == "is")
+      return IS;
     else if (ident == "const")
       return CONST;
     else if (ident == "constptr")
@@ -879,10 +930,46 @@ class CStarLexer {
         return "sizeof";
       case MOVE:
         return "move";
+      case DYNAMIC:
+        return "dynamic";
+      case PROTOCOL:
+        return "protocol";
+      case STATE:
+        return "state";
+      case WITH:
+        return "with";
+      case STRUCT:
+        return "struct";
+      case TRAIT:
+        return "trait";
+      case MACRO:
+        return "macro";
+      case CONSTRUCTOR:
+        return "constructor";
+      case DESTRUCTOR:
+        return "destructor";
+      case ALLOCATOR:
+        return "allocator";
+      case EXCEPT:
+        return "except";
+      case THROW:
+        return "throw";
+      case DEFER:
+        return "defer";
+      case ASYNC:
+        return "async";
+      case AWAIT:
+        return "await";
+      case SELF:
+        return "self";
+      case IS:
+        return "is";
       case CAST:
         return "cast";
       case UNSAFE_CAST:
         return "unsafe_cast";
+      case AS:
+        return "as";
       case CONST:
         return "const";
       case CONSTPTR:

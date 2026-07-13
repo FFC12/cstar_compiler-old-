@@ -137,11 +137,13 @@ $Failures = @()
 $Diagnostics = @()
 $Crashes = @()
 $ExitMismatches = @()
+$CodeMismatches = @()
 $Skipped = @()
 foreach ($File in $Files) {
   $RelativeName = Resolve-Path -Relative $File.FullName
   $ExpectedKind = $null
   $ExpectedExit = $null
+  $ExpectedCodes = @()
   foreach ($Line in (Get-Content -LiteralPath $File.FullName -TotalCount 8)) {
     if ($Line -match '^\s*//\s*expected:\s*(.+?)\s*$') {
       $ExpectedKind = $Matches[1].Trim()
@@ -149,6 +151,12 @@ foreach ($File in $Files) {
 
     if ($Line -match '^\s*//\s*expected-exit:\s*(-?\d+)\s*$') {
       $ExpectedExit = [int]$Matches[1]
+    }
+
+    if ($Line -match '^\s*//\s*expected-code:\s*(.+?)\s*$') {
+      $ExpectedCodes = $Matches[1].Split(",") |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_.Length -gt 0 }
     }
   }
 
@@ -186,8 +194,23 @@ foreach ($File in $Files) {
       Write-Host "[OK] $RelativeName$ExitSuffix" -ForegroundColor Green
     }
   } elseif ($ExpectDiagnostics -and $ExitCode -eq 1) {
-    Write-Host "[DIAG] $RelativeName" -ForegroundColor Yellow
-    $Diagnostics += $RelativeName
+    $JoinedOutput = $CompilerOutput -join "`n"
+    $MissingCodes = @()
+    foreach ($ExpectedCode in $ExpectedCodes) {
+      if ($JoinedOutput -notmatch "error\[$([regex]::Escape($ExpectedCode))\]") {
+        $MissingCodes += $ExpectedCode
+      }
+    }
+
+    if ($MissingCodes.Count -gt 0) {
+      Write-Host "[CODE] $RelativeName missing=$($MissingCodes -join ',')" -ForegroundColor Red
+      $Failures += $RelativeName
+      $CodeMismatches += $RelativeName
+    } else {
+      $CodeSuffix = if ($ExpectedCodes.Count -gt 0) { " [$($ExpectedCodes -join ',')]" } else { "" }
+      Write-Host "[DIAG] $RelativeName$CodeSuffix" -ForegroundColor Yellow
+      $Diagnostics += $RelativeName
+    }
   } else {
     Write-Host "[FAIL] $RelativeName ($ExitCode)" -ForegroundColor Red
     $Failures += $RelativeName
@@ -199,7 +222,7 @@ foreach ($File in $Files) {
 
 Write-Host ""
 Write-Host ("Suite: {0}" -f $Suite)
-Write-Host ("Toplam: {0}, Basarili: {1}, Diagnostic: {2}, Skipped: {3}, Hatali: {4}, ExitMismatch: {5}, Crash/Assert: {6}" -f $Files.Count, ($Files.Count - $Failures.Count - $Diagnostics.Count - $Skipped.Count), $Diagnostics.Count, $Skipped.Count, $Failures.Count, $ExitMismatches.Count, $Crashes.Count)
+Write-Host ("Toplam: {0}, Basarili: {1}, Diagnostic: {2}, Skipped: {3}, Hatali: {4}, ExitMismatch: {5}, CodeMismatch: {6}, Crash/Assert: {7}" -f $Files.Count, ($Files.Count - $Failures.Count - $Diagnostics.Count - $Skipped.Count), $Diagnostics.Count, $Skipped.Count, $Failures.Count, $ExitMismatches.Count, $CodeMismatches.Count, $Crashes.Count)
 
 if ($Failures.Count -gt 0) {
   $env:PATH = $OldPath

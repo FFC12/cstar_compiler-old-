@@ -1,4 +1,5 @@
 // expected: diagnostic
+// expected-code: CST2100
 
 main() :: int32 {
   int32 value = 8;

@@ -1,0 +1,7 @@
+// expected: diagnostic
+
+main() :: int32 {
+  int32 value = 1;
+  Shape converted = cast<Shape>(value);
+  ret value;
+}

@@ -1,0 +1,14 @@
+// expected: diagnostic
+// expected-code: CST2103
+
+rebind(constptr int32* pointer) :: void {
+  int32 other = 2;
+  pointer = ref other;
+  ret;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  rebind(ref value);
+  ret 0;
+}

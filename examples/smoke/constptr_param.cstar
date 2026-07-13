@@ -1,0 +1,13 @@
+// expected: pass
+// expected-exit: 9
+
+write_through(constptr int32* pointer) :: void {
+  deref pointer = 9;
+  ret;
+}
+
+main() :: int32 {
+  int32 value = 4;
+  write_through(ref value);
+  ret value;
+}

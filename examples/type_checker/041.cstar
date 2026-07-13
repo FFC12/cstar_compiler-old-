@@ -1,0 +1,13 @@
+// expected: diagnostic
+// expected-code: CST2105
+
+take(int32^ pointer) :: int32 {
+  ret deref pointer;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  int32^ source = ref value;
+
+  ret take(source);
+}
