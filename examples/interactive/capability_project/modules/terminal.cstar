@@ -1,0 +1,38 @@
+public banner() :: void {
+  print("C* capability project\n");
+  print("--------------------\n");
+  ret;
+}
+
+public prompt_name() :: void {
+  print("agent name: ");
+  ret;
+}
+
+public prompt_health() :: void {
+  print("health: ");
+  ret;
+}
+
+public prompt_energy() :: void {
+  print("energy: ");
+  ret;
+}
+
+public prompt_rank() :: void {
+  print("rank: ");
+  ret;
+}
+
+public prompt_delta() :: void {
+  print("delta: ");
+  ret;
+}
+
+public print_metric(const char* label, int32 value) :: void {
+  print(label);
+  print(": ");
+  print(value);
+  print("\n");
+  ret;
+}

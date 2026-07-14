@@ -1,0 +1,34 @@
+import from "std:crt" {
+  abs(int32 value) :: int32;
+}
+
+public normalize_delta(int32 value) :: int32 {
+  ret abs(value);
+}
+
+public clamp_stat(int32 value) :: int32 {
+  if (value < 0) {
+    ret 0;
+  } elif (value > 100) {
+    ret 100;
+  }
+
+  ret value;
+}
+
+public write_score(int32* target, int32 base, int32 bonus) :: void {
+  deref target = base;
+  deref target += bonus;
+  ret;
+}
+
+public write_abs(int32* target, int32 value) :: void {
+  deref target = abs(value);
+  ret;
+}
+
+public static int32 project_version = 1;
+
+public static version_bonus() :: int32 {
+  ret project_version + 2;
+}

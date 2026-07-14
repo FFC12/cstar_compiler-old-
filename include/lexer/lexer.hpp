@@ -106,6 +106,11 @@ enum TokenKind {
   SIZEOF,
   TYPEOF,
   MOVE,
+  DROP,
+  NEW,
+  SHARED,
+  OPERATOR,
+  DYN,
   POLICY_ASSIGN,
   DYNAMIC,
   PROTOCOL,
@@ -533,6 +538,16 @@ class CStarLexer {
       return TYPEOF;
     else if (ident == "move")
       return MOVE;
+    else if (ident == "drop")
+      return DROP;
+    else if (ident == "new")
+      return NEW;
+    else if (ident == "shared")
+      return SHARED;
+    else if (ident == "operator")
+      return OPERATOR;
+    else if (ident == "dyn")
+      return DYN;
     else if (ident == "dynamic")
       return DYNAMIC;
     else if (ident == "protocol")
@@ -939,6 +954,16 @@ class CStarLexer {
         return "sizeof";
       case MOVE:
         return "move";
+      case DROP:
+        return "drop";
+      case NEW:
+        return "new";
+      case SHARED:
+        return "shared";
+      case OPERATOR:
+        return "operator";
+      case DYN:
+        return "dyn";
       case DYNAMIC:
         return "dynamic";
       case PROTOCOL:

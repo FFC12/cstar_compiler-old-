@@ -1,18 +1,18 @@
-// expected: pass
-// expected-exit: 12
+// expected: fail
+// expected-code: CST1001
 
 struct Meter {
-  int32 value;
+  static new(int32 raw) :: Meter {
+    Meter meter = Meter(raw);
+    ret meter;
+  }
 
   constructor(int32 initial) {
     self.value = initial;
     ret;
   }
 
-  static new(int32 raw) :: Meter {
-    Meter meter = Meter(raw + 5);
-    ret meter;
-  }
+  int32 value;
 }
 
 main() :: int32 {

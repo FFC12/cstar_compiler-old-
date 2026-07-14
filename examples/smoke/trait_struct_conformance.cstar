@@ -1,0 +1,22 @@
+// expected-exit: 7
+
+trait Measurable {
+  value() :: int32;
+}
+
+struct Meter with Measurable {
+  int32 reading;
+
+  constructor(int32 value) {
+    self.reading = value;
+  }
+
+  value() :: int32 {
+    ret self.reading;
+  }
+}
+
+main() :: int32 {
+  Meter meter = Meter(7);
+  ret meter.value();
+}

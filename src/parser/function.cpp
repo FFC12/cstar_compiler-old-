@@ -1,5 +1,24 @@
 #include <parser/parser.hpp>
 
+static bool IsValueOperatorToken(TokenKind kind) {
+  switch (kind) {
+    case PLUS:
+    case MINUS:
+    case STAR:
+    case DIV:
+    case MOD:
+    case EQUALEQUAL:
+    case NOTEQUAL:
+    case LT:
+    case LTEQ:
+    case GT:
+    case GTEQ:
+      return true;
+    default:
+      return false;
+  }
+}
+
 ASTNode CStarParser::advanceDefinedType() {
   expected(TokenKind::IDENT);
 
@@ -64,10 +83,7 @@ ASTNode CStarParser::advanceFieldAccessChain(size_t begin, size_t line) {
 void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
                            bool forceForwardDecl,
                            const std::string &methodOwner) {
-  auto sourceFuncName = currentTokenStr();
-  auto funcName = methodOwner.empty()
-                      ? sourceFuncName
-                      : methodOwner + "." + sourceFuncName;
+  std::string sourceFuncName = currentTokenStr();
   bool isForwardDecl =
       forceForwardDecl ||
       declarationModifiers.linkage == VisibilitySpecifier::VIS_IMPORT;
@@ -78,8 +94,40 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
   size_t begin = posInfo.begin;
   size_t line = posInfo.line;
 
-  // advance the name
-  this->advance();
+  if (is(TokenKind::OPERATOR)) {
+    if (methodOwner.empty()) {
+      ParserError("operator overloads are only valid inside structs",
+                  currentTokenInfo());
+    }
+    this->advance();
+    if (is(TokenKind::NEW) || is(TokenKind::MOVE) || is(TokenKind::DROP) ||
+        (is(TokenKind::IDENT) &&
+         (currentTokenStr() == "delete" || currentTokenStr() == "copy" ||
+          currentTokenStr() == "shared_new" ||
+          currentTokenStr() == "shared_delete"))) {
+      ParserError(
+          "lifecycle/allocation operators are compiler-reserved; use "
+          "constructor, destructor, drop, and `new Type(args)`",
+          currentTokenInfo());
+    }
+    if (is(TokenKind::IDENT) && currentTokenStr() == "index") {
+      sourceFuncName = "operatorindex";
+      this->advance();
+    } else if (IsValueOperatorToken(currentTokenKind())) {
+      sourceFuncName = "operator" + std::string(currentTokenStr());
+      this->advance();
+    } else {
+      ParserError("Expected value operator after 'operator'",
+                  currentTokenInfo());
+    }
+  } else {
+    // advance the name
+    this->advance();
+  }
+
+  auto funcName = methodOwner.empty()
+                      ? sourceFuncName
+                      : methodOwner + "." + sourceFuncName;
 
   if (is(TokenKind::LT)) {
     this->advance();
@@ -115,6 +163,13 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
       (sourceFuncName == "constructor" || sourceFuncName == "destructor")) {
     ParserError("constructor/destructor methods cannot be static",
                 currentTokenInfo());
+  }
+
+  if (!methodOwner.empty() && sourceFuncName == "new") {
+    ParserError(
+        "`new` is an allocation operator, not a struct method; use "
+        "`new Type(args)` or `new(allocator) Type(args)`",
+        currentTokenInfo());
   }
 
   if (!methodOwner.empty() && !declarationModifiers.isStatic) {
@@ -273,7 +328,7 @@ param_again:
     if (nextToken == TokenKind::STAR || nextToken == TokenKind::XOR ||
         nextToken == TokenKind::LSQPAR) {  // cast allowed
       // %100 defined type
-      auto type = std::move(this->advanceSymbol());
+      auto type = this->advanceDefinedType();
 
       std::vector<ASTNode> arrayDimensions;
       bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
@@ -708,7 +763,23 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         advance();
       }
 
-      if (is(TokenKind::RET)) {
+      if (is(TokenKind::DROP)) {
+        PositionInfo posInfo = currentTokenInfo().getTokenPositionInfo();
+        size_t begin = posInfo.begin;
+        size_t line = posInfo.line;
+
+        this->advance();
+        expected(TokenKind::IDENT);
+        auto symbolName = currentTokenStr();
+        this->advance();
+
+        posInfo = currentTokenInfo().getTokenPositionInfo();
+        SemanticLoc semLoc = SemanticLoc(begin, posInfo.end, line);
+
+        expected(TokenKind::SEMICOLON);
+        this->advance();
+        scope.emplace_back(std::make_unique<DropStmtAST>(symbolName, semLoc));
+      } else if (is(TokenKind::RET)) {
         ASTNode retExpr;
         bool noReturn = false;
         bool outOfSize = false;

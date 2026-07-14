@@ -13,11 +13,13 @@
 #include <ast/func_call_ast.hpp>
 #include <ast/if_stmt.hpp>
 #include <ast/loop_stmt.hpp>
+#include <ast/new_ast.hpp>
 #include <ast/param_ast.hpp>
 #include <ast/ret_ast.hpp>
 #include <ast/scalar_ast.hpp>
 #include <ast/struct_ast.hpp>
 #include <ast/symbol_ast.hpp>
+#include <ast/trait_ast.hpp>
 #include <ast/type_ast.hpp>
 #include <ast/unary_op_ast.hpp>
 #include <ast/var_ast.hpp>
@@ -81,6 +83,35 @@ static std::string DefinedTypeNameFromVarAst(VarAST &varAst) {
   return symbol->name();
 }
 
+static std::string ValueOperatorMethodName(BinOpKind kind) {
+  switch (kind) {
+    case B_ADD:
+      return "operator+";
+    case B_SUB:
+      return "operator-";
+    case B_MUL:
+      return "operator*";
+    case B_DIV:
+      return "operator/";
+    case B_MOD:
+      return "operator%";
+    case B_EQ:
+      return "operator==";
+    case B_NEQ:
+      return "operator!=";
+    case B_LT:
+      return "operator<";
+    case B_LTEQ:
+      return "operator<=";
+    case B_GT:
+      return "operator>";
+    case B_GTEQ:
+      return "operator>=";
+    default:
+      return {};
+  }
+}
+
 static llvm::Type *GetStorageType(TypeSpecifier typeSpecifier,
                                   size_t indirectLevel, bool isUnique,
                                   bool isRef,
@@ -120,6 +151,10 @@ static bool IsSharedPointerTy(llvm::Type *type) {
 }
 
 static bool IsSharedPointerSymbol(const SymbolInfo &symbolInfo) {
+  if (symbolInfo.type == TypeSpecifier::SPEC_CHAR ||
+      symbolInfo.type == TypeSpecifier::SPEC_UCHAR) {
+    return false;
+  }
   return symbolInfo.indirectionLevel > 0 && !symbolInfo.isUnique &&
          !symbolInfo.isRef;
 }
@@ -127,6 +162,12 @@ static bool IsSharedPointerSymbol(const SymbolInfo &symbolInfo) {
 static llvm::Type *GetStorageType(TypeSpecifier typeSpecifier,
                                   size_t indirectLevel, bool isUnique,
                                   bool isRef = false) {
+  if ((typeSpecifier == TypeSpecifier::SPEC_CHAR ||
+       typeSpecifier == TypeSpecifier::SPEC_UCHAR) &&
+      indirectLevel > 0) {
+    return GetType(typeSpecifier, indirectLevel, isRef);
+  }
+
   if (indirectLevel > 0 && !isUnique && !isRef) {
     return GetSharedPointerTy();
   }
@@ -1024,6 +1065,33 @@ static llvm::Value *CreateLocalVariable(const std::string &name,
   return var;
 }
 
+static llvm::FunctionCallee GetMallocFunction() {
+  auto *intType = Visitor::Builder->getInt64Ty();
+  auto *ptrType = GetI8PtrTy();
+  auto *fnType = llvm::FunctionType::get(ptrType, {intType}, false);
+  return Visitor::Module->getOrInsertFunction("malloc", fnType);
+}
+
+static llvm::FunctionCallee GetFreeFunction() {
+  auto *ptrType = GetI8PtrTy();
+  auto *fnType = llvm::FunctionType::get(Visitor::Builder->getVoidTy(),
+                                         {ptrType}, false);
+  return Visitor::Module->getOrInsertFunction("free", fnType);
+}
+
+static llvm::Value *CreateDefaultHeapAlloc(llvm::Type *type,
+                                           const llvm::Twine &name) {
+  auto size = Visitor::Module->getDataLayout().getTypeAllocSize(type);
+  auto *sizeValue =
+      llvm::ConstantInt::get(Visitor::Builder->getInt64Ty(), size);
+  return Visitor::Builder->CreateCall(GetMallocFunction(), {sizeValue}, name);
+}
+
+static void CreateDefaultHeapFree(llvm::Value *ptr) {
+  auto *asI8 = Visitor::Builder->CreatePointerCast(ptr, GetI8PtrTy());
+  Visitor::Builder->CreateCall(GetFreeFunction(), {asI8});
+}
+
 static llvm::Value *CreateLoad(llvm::Value *address, llvm::Type *type,
                                const llvm::Twine &name = "") {
   return Visitor::Builder->CreateLoad(type, address, name);
@@ -1152,6 +1220,205 @@ static llvm::Value *FindStorage(std::map<std::string, llvm::AllocaInst*> &locals
   return nullptr;
 }
 
+void Visitor::registerScopeDestructor(const SymbolInfo &symbolInfo) {
+  if (symbolInfo.type != TypeSpecifier::SPEC_DEFINED ||
+      symbolInfo.indirectionLevel != 0 || symbolInfo.isRef || symbolInfo.isGlob) {
+    return;
+  }
+
+  if (FunctionTable.count(symbolInfo.definedTypeName + ".destructor") == 0) {
+    return;
+  }
+
+  m_CodegenDroppedSymbols.erase(symbolInfo.symbolName);
+  m_ScopeDestructors.push_back(symbolInfo);
+}
+
+ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
+                                    bool markDropped) {
+  auto *storage = FindStorage(m_LocalVarsOnScope, m_GlobalVars, symbolName);
+  if (storage == nullptr) {
+    assert(false && "drop target storage was not found.");
+  }
+
+  auto symbolInfo = getSymbolInfo(symbolName);
+  if (symbolInfo.type != TypeSpecifier::SPEC_DEFINED) {
+    return nullptr;
+  }
+
+  auto heapIt = m_HeapAllocations.find(symbolName);
+  if (heapIt != m_HeapAllocations.end()) {
+    const auto &heapInfo = heapIt->second;
+    auto *structType = GetDefinedStructTy(heapInfo.typeName);
+    auto allocationSize = Module->getDataLayout().getTypeAllocSize(structType);
+    auto allocationAlign = Module->getDataLayout().getPrefTypeAlign(structType)
+                               .value();
+    auto *sizeValue = llvm::ConstantInt::get(Builder->getInt64Ty(),
+                                             allocationSize);
+    auto *alignValue = llvm::ConstantInt::get(Builder->getInt64Ty(),
+                                              allocationAlign);
+    auto freeHeapData = [&](llvm::Value *data) {
+      if (!heapInfo.allocatorSymbol.empty() && !heapInfo.allocatorTypeName.empty()) {
+        auto *freeFunction = Module->getFunction(heapInfo.allocatorTypeName +
+                                                 ".free");
+        auto *allocatorStorage =
+            FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                        heapInfo.allocatorSymbol);
+        if (freeFunction != nullptr && allocatorStorage != nullptr) {
+          auto allocatorInfo = getSymbolInfo(heapInfo.allocatorSymbol);
+          if (allocatorInfo.isRef &&
+              m_ReferenceParamValueTypes.count(heapInfo.allocatorSymbol) > 0) {
+            auto *slotType = GetPointeeType(allocatorStorage);
+            allocatorStorage = CreateLoad(allocatorStorage, slotType,
+                                          heapInfo.allocatorSymbol +
+                                              ".allocator.free.ref");
+          }
+          Builder->CreateCall(freeFunction,
+                              {allocatorStorage, data, sizeValue, alignValue});
+          return;
+        }
+      }
+      CreateDefaultHeapFree(data);
+    };
+
+    auto *destructor = Module->getFunction(heapInfo.typeName + ".destructor");
+    llvm::Function *function = Builder->GetInsertBlock()->getParent();
+
+    if (heapInfo.isShared) {
+      auto *handle = Builder->CreateLoad(GetSharedPointerTy(), storage,
+                                         symbolName + ".drop.heap.sp");
+      auto *countAsI8 = ExtractSharedPointerCount(handle);
+      auto *isLive = Builder->CreateICmpNE(
+          countAsI8, llvm::ConstantPointerNull::get(GetI8PtrTy()),
+          symbolName + ".drop.heap.live");
+      auto *releaseBB = llvm::BasicBlock::Create(
+          Builder->getContext(), "heap.shared.release", function);
+      auto *contBB = llvm::BasicBlock::Create(
+          Builder->getContext(), "heap.shared.cont", function);
+      Builder->CreateCondBr(isLive, releaseBB, contBB);
+
+      Builder->SetInsertPoint(releaseBB);
+      auto *count = Builder->CreatePointerCast(
+          countAsI8, llvm::PointerType::get(Builder->getContext(), 0));
+      auto *one = llvm::ConstantInt::get(Builder->getInt64Ty(), 1);
+      auto *oldCount = Builder->CreateAtomicRMW(
+          llvm::AtomicRMWInst::Sub, count, one, llvm::MaybeAlign(),
+          llvm::AtomicOrdering::AcquireRelease);
+      auto *isLast = Builder->CreateICmpEQ(oldCount, one,
+                                           symbolName + ".drop.heap.last");
+      auto *destroyBB = llvm::BasicBlock::Create(
+          Builder->getContext(), "heap.shared.destroy", function);
+      auto *afterReleaseBB = llvm::BasicBlock::Create(
+          Builder->getContext(), "heap.shared.after", function);
+      Builder->CreateCondBr(isLast, destroyBB, afterReleaseBB);
+
+      Builder->SetInsertPoint(destroyBB);
+      auto *data = ExtractSharedPointerData(handle);
+      if (destructor != nullptr) {
+        Builder->CreateCall(destructor, {data});
+      }
+      freeHeapData(data);
+      CreateDefaultHeapFree(countAsI8);
+      Builder->CreateBr(afterReleaseBB);
+
+      Builder->SetInsertPoint(afterReleaseBB);
+      if (markDropped) {
+        Builder->CreateStore(CreateNullSharedPointerHandle(), storage);
+      }
+      Builder->CreateBr(contBB);
+
+      Builder->SetInsertPoint(contBB);
+      if (markDropped) {
+        m_CodegenDroppedSymbols.insert(symbolName);
+      }
+      return handle;
+    }
+
+    auto *pointerType = GetType(symbolInfo.type, symbolInfo.indirectionLevel);
+    auto *data = Builder->CreateLoad(pointerType, storage,
+                                     symbolName + ".drop.heap.ptr");
+    auto *isLive = Builder->CreateICmpNE(
+        data, llvm::ConstantPointerNull::get(
+                  llvm::cast<llvm::PointerType>(data->getType())),
+        symbolName + ".drop.heap.live");
+    auto *destroyBB = llvm::BasicBlock::Create(
+        Builder->getContext(), "heap.unique.destroy", function);
+    auto *contBB = llvm::BasicBlock::Create(
+        Builder->getContext(), "heap.unique.cont", function);
+    Builder->CreateCondBr(isLive, destroyBB, contBB);
+
+    Builder->SetInsertPoint(destroyBB);
+    if (destructor != nullptr) {
+      Builder->CreateCall(destructor, {data});
+    }
+    freeHeapData(data);
+    if (markDropped) {
+      Builder->CreateStore(llvm::Constant::getNullValue(pointerType), storage);
+    }
+    Builder->CreateBr(contBB);
+
+    Builder->SetInsertPoint(contBB);
+    if (markDropped) {
+      m_CodegenDroppedSymbols.insert(symbolName);
+    }
+    return data;
+  }
+
+  llvm::Value *self = storage;
+  if (symbolInfo.indirectionLevel > 0 && !symbolInfo.isRef) {
+    if (IsSharedPointerSymbol(symbolInfo)) {
+      auto *handle = Builder->CreateLoad(GetSharedPointerTy(), storage,
+                                         symbolName + ".drop.sp");
+      self = ExtractSharedPointerData(handle);
+      if (markDropped) {
+        ReleaseSharedPointer(handle);
+        Builder->CreateStore(CreateNullSharedPointerHandle(), storage);
+      }
+    } else {
+      auto *pointerType = GetType(symbolInfo.type, symbolInfo.indirectionLevel);
+      self = Builder->CreateLoad(pointerType, storage, symbolName + ".drop.ptr");
+      if (markDropped) {
+        Builder->CreateStore(llvm::Constant::getNullValue(pointerType),
+                             storage);
+      }
+    }
+  }
+
+  llvm::Value *result = nullptr;
+  auto *destructor = Module->getFunction(symbolInfo.definedTypeName +
+                                         ".destructor");
+  if (destructor != nullptr) {
+    result = Builder->CreateCall(destructor, {self});
+  }
+
+  if (markDropped) {
+    m_CodegenDroppedSymbols.insert(symbolName);
+  }
+  return result;
+}
+
+void Visitor::emitScopeExitDestructors() {
+  auto *insertBlock = Builder->GetInsertBlock();
+  if (insertBlock == nullptr || insertBlock->getTerminator() != nullptr) {
+    return;
+  }
+
+  for (auto it = m_ScopeDestructors.rbegin();
+       it != m_ScopeDestructors.rend(); ++it) {
+    if (m_CodegenDroppedSymbols.count(it->symbolName) != 0) {
+      continue;
+    }
+    emitDropForSymbol(it->symbolName, false);
+  }
+
+  for (const auto &entry : m_HeapAllocations) {
+    if (m_CodegenDroppedSymbols.count(entry.first) != 0) {
+      continue;
+    }
+    emitDropForSymbol(entry.first, false);
+  }
+}
+
 ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
   llvm::Value *value = nullptr, *rhs, *lhs;
 
@@ -1263,6 +1530,36 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
     m_LastType = previousType;
     m_LastSigned = previousSigned;
   } else {
+    const auto overloadMethod = ValueOperatorMethodName(binaryOpAst.m_BinOpKind);
+    if (!overloadMethod.empty() &&
+        binaryOpAst.m_LHS->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *lhsSymbol = static_cast<SymbolAST *>(binaryOpAst.m_LHS.get());
+      auto lhsInfo = getSymbolInfo(lhsSymbol->m_SymbolName);
+      if (lhsInfo.type == TypeSpecifier::SPEC_DEFINED &&
+          lhsInfo.indirectionLevel == 0) {
+        auto *function =
+            Module->getFunction(lhsInfo.definedTypeName + "." + overloadMethod);
+        auto *lhsStorage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                       lhsSymbol->m_SymbolName);
+        if (function != nullptr && lhsStorage != nullptr) {
+          if (lhsInfo.isRef &&
+              m_ReferenceParamValueTypes.count(lhsSymbol->m_SymbolName) > 0) {
+            auto *slotType = GetPointeeType(lhsStorage);
+            lhsStorage = CreateLoad(lhsStorage, slotType,
+                                    lhsSymbol->m_SymbolName + ".op.ref");
+          }
+          auto *paramType = function->getFunctionType()->getParamType(1);
+          rhs = binaryOpAst.m_RHS->accept(*this);
+          rhs = CastValueToType(rhs, paramType, m_LastSigned);
+          value = Builder->CreateCall(function, {lhsStorage, rhs},
+                                      "operator.call");
+          m_LastType = function->getReturnType();
+          m_LastSigned = true;
+          return value;
+        }
+      }
+    }
+
     lhs = binaryOpAst.m_LHS->accept(*this);
     rhs = binaryOpAst.m_RHS->accept(*this);
   }
@@ -1746,6 +2043,7 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       m_LastType = previousType;
       m_LastSigned = previousSigned;
       Builder->CreateCall(function, args);
+      registerScopeDestructor(getSymbolInfo(varAst.m_Name));
       this->m_LastVarDecl = false;
       this->m_LastType = nullptr;
       this->m_LastDefinedTypeName.clear();
@@ -1873,6 +2171,27 @@ ValuePtr Visitor::visit(VarAST &varAst) {
   this->m_LastType = nullptr;
   this->m_LastDefinedTypeName.clear();
   this->m_LastSigned = false;
+
+  if (varAst.m_IsLocal && varAst.m_RHS != nullptr &&
+      varAst.m_RHS->m_ExprKind == ExprKind::NewExpr) {
+    auto *newAst = static_cast<NewAST *>(varAst.m_RHS.get());
+    HeapAllocationInfo allocationInfo;
+    allocationInfo.typeName = newAst->m_TypeName;
+    allocationInfo.isShared = newAst->m_IsShared;
+    if (newAst->m_Allocator != nullptr &&
+        newAst->m_Allocator->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *allocatorSymbol =
+          static_cast<SymbolAST *>(newAst->m_Allocator.get());
+      allocationInfo.allocatorSymbol = allocatorSymbol->m_SymbolName;
+      auto allocatorInfo = getSymbolInfo(allocatorSymbol->m_SymbolName);
+      allocationInfo.allocatorTypeName = allocatorInfo.definedTypeName;
+    }
+    m_HeapAllocations[varAst.m_Name] = std::move(allocationInfo);
+  }
+
+  if (varAst.m_IsLocal && varAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED) {
+    registerScopeDestructor(getSymbolInfo(varAst.m_Name));
+  }
 
   return value;
 }
@@ -2350,6 +2669,9 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
     m_LocalVarsOnScope.clear();
     m_ReferenceParamValueTypes.clear();
     m_ArrayParamValueTypes.clear();
+    m_ScopeDestructors.clear();
+    m_CodegenDroppedSymbols.clear();
+    m_HeapAllocations.clear();
 
     llvm::BasicBlock *funcBlock = llvm::BasicBlock::Create(
         Visitor::Builder->getContext(), "entry", function);
@@ -2398,6 +2720,7 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
 
     auto insertBlock = Visitor::Builder->GetInsertBlock();
     if (insertBlock != nullptr && insertBlock->getTerminator() == nullptr) {
+      emitScopeExitDestructors();
       if (function->getReturnType()->isVoidTy()) {
         Visitor::Builder->CreateRetVoid();
       } else {
@@ -2692,6 +3015,133 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
   }
 
   return call;
+}
+
+ValuePtr Visitor::visit(NewAST &newAst) {
+  auto *structType = GetDefinedStructTy(newAst.m_TypeName);
+  if (structType == nullptr) {
+    assert(false && "`new` target struct type must exist.");
+  }
+
+  llvm::Value *storage = nullptr;
+  const auto allocationSize = Module->getDataLayout().getTypeAllocSize(
+      structType);
+  const auto allocationAlign = Module->getDataLayout().getPrefTypeAlign(
+      structType).value();
+  auto *sizeValue = llvm::ConstantInt::get(Builder->getInt64Ty(),
+                                           allocationSize);
+  auto *alignValue = llvm::ConstantInt::get(Builder->getInt64Ty(),
+                                            allocationAlign);
+
+  if (newAst.m_Allocator != nullptr &&
+      newAst.m_Allocator->m_ExprKind == ExprKind::SymbolExpr) {
+    auto *allocatorSymbol = static_cast<SymbolAST *>(newAst.m_Allocator.get());
+    auto allocatorInfo = getSymbolInfo(allocatorSymbol->m_SymbolName);
+    auto *allocatorStorage =
+        FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                    allocatorSymbol->m_SymbolName);
+    auto *allocFunction = Module->getFunction(allocatorInfo.definedTypeName +
+                                              ".alloc");
+    if (allocatorStorage != nullptr && allocFunction != nullptr) {
+      if (allocatorInfo.isRef &&
+          m_ReferenceParamValueTypes.count(allocatorSymbol->m_SymbolName) > 0) {
+        auto *slotType = GetPointeeType(allocatorStorage);
+        allocatorStorage = CreateLoad(
+            allocatorStorage, slotType,
+            allocatorSymbol->m_SymbolName + ".allocator.ref");
+      }
+      storage = Builder->CreateCall(
+          allocFunction, {allocatorStorage, sizeValue, alignValue},
+          "new.alloc");
+    }
+  }
+
+  if (storage == nullptr) {
+    storage = CreateDefaultHeapAlloc(structType, "new.malloc");
+  }
+
+  storage = Builder->CreatePointerCast(storage, GetType(TypeSpecifier::SPEC_DEFINED, 1));
+
+  auto *constructor = Module->getFunction(newAst.m_TypeName + ".constructor");
+  if (constructor != nullptr) {
+    std::vector<IAST *> argNodes;
+    auto collectArgs = [&](auto &self, IAST *node) -> void {
+      if (node == nullptr) {
+        return;
+      }
+      if (node->m_ExprKind == ExprKind::BinOp) {
+        auto *binOp = static_cast<BinaryOpAST *>(node);
+        if (binOp->m_BinOpKind == BinOpKind::B_COMM) {
+          self(self, binOp->m_LHS.get());
+          self(self, binOp->m_RHS.get());
+          return;
+        }
+      }
+      argNodes.push_back(node);
+    };
+    collectArgs(collectArgs, newAst.m_Args.get());
+
+    std::vector<llvm::Value *> args;
+    args.push_back(storage);
+    auto signatureIt = FunctionTable.find(newAst.m_TypeName + ".constructor");
+    llvm::Type *previousType = m_LastType;
+    bool previousSigned = m_LastSigned;
+
+    for (size_t i = 0; i < argNodes.size(); ++i) {
+      const size_t paramIndex = i + 1;
+      auto *paramType = constructor->getFunctionType()->getParamType(paramIndex);
+      const SymbolInfo *paramInfo =
+          signatureIt != FunctionTable.end() &&
+                  paramIndex < signatureIt->second.params.size()
+              ? &signatureIt->second.params[paramIndex]
+              : nullptr;
+
+      m_LastType = paramType;
+      m_LastSigned = true;
+      if (paramInfo != nullptr && paramInfo->isRef &&
+          argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
+        auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
+        auto *argStorage =
+            FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                        argSymbol->m_SymbolName);
+        if (argStorage == nullptr) {
+          assert(false && "Reference argument storage was not found.");
+        }
+        auto referenceParam =
+            m_ReferenceParamValueTypes.find(argSymbol->m_SymbolName);
+        if (referenceParam != m_ReferenceParamValueTypes.end()) {
+          auto *slotType = GetPointeeType(argStorage);
+          argStorage = CreateLoad(argStorage, slotType,
+                                  argSymbol->m_SymbolName + ".ref.arg");
+        }
+        args.push_back(argStorage);
+        continue;
+      }
+
+      auto *argValue = argNodes[i]->accept(*this);
+      argValue = CastValueToType(argValue, paramType, m_LastSigned);
+      args.push_back(argValue);
+    }
+
+    m_LastType = previousType;
+    m_LastSigned = previousSigned;
+    Builder->CreateCall(constructor, args);
+  }
+
+  if (newAst.m_IsShared) {
+    auto *counterRaw = CreateDefaultHeapAlloc(Builder->getInt64Ty(),
+                                             "new.shared.count");
+    auto *one = llvm::ConstantInt::get(Builder->getInt64Ty(), 1);
+    Builder->CreateStore(one, counterRaw);
+    auto *handle = CreateSharedPointerHandle(storage, counterRaw);
+    m_LastType = GetSharedPointerTy();
+    m_LastSigned = false;
+    return handle;
+  }
+
+  m_LastType = GetType(TypeSpecifier::SPEC_DEFINED, 1);
+  m_LastSigned = false;
+  return storage;
 }
 
 llvm::BranchInst *Visitor::createBranch(IAST &ifCond, llvm::BasicBlock *thenBB,
@@ -3048,6 +3498,10 @@ ValuePtr Visitor::visit(ContinueStmtAST &continueStmtAst) {
   return Builder->CreateBr(m_LoopContinueTargets.back());
 }
 
+ValuePtr Visitor::visit(DropStmtAST &dropStmtAst) {
+  return emitDropForSymbol(dropStmtAst.m_SymbolName, true);
+}
+
 ValuePtr Visitor::visit(ParamAST &paramAst) { return nullptr; }
 
 ValuePtr Visitor::visit(RetAST &retAst) {
@@ -3055,6 +3509,7 @@ ValuePtr Visitor::visit(RetAST &retAst) {
   llvm::Type *returnType = function->getReturnType();
 
   if (retAst.m_NoReturn) {
+    emitScopeExitDestructors();
     if (returnType->isVoidTy()) {
       return Visitor::Builder->CreateRetVoid();
     }
@@ -3080,6 +3535,7 @@ ValuePtr Visitor::visit(RetAST &retAst) {
   }
 
   if (returnType->isVoidTy()) {
+    emitScopeExitDestructors();
     Visitor::Builder->CreateRetVoid();
     return value;
   }
@@ -3109,6 +3565,7 @@ ValuePtr Visitor::visit(RetAST &retAst) {
     }
   }
 
+  emitScopeExitDestructors();
   return Visitor::Builder->CreateRet(value);
 }
 
@@ -3242,6 +3699,8 @@ ValuePtr Visitor::visit(StructAST &structAst) {
   (void)GetDefinedStructTy(structAst.m_Name);
   return nullptr;
 }
+
+ValuePtr Visitor::visit(TraitAST &traitAst) { return nullptr; }
 
 void Visitor::finalizeCodegen() {
   if (this->m_GlobaInitVarFunc.size() > 0) {

@@ -73,13 +73,16 @@ class FuncCallAST;
 class FuncAST;
 class IfStmtAST;
 class LoopStmtAST;
+class NewAST;
 class BreakStmtAST;
 class ContinueStmtAST;
+class DropStmtAST;
 class ParamAST;
 class RetAST;
 class ScalarOrLiteralAST;
 class SymbolAST;
 class StructAST;
+class TraitAST;
 class TypeAST;
 class UnaryOpAST;
 class FixAST;
@@ -135,6 +138,7 @@ class Visitor {
   bool m_LastRetExpr = false;
   bool m_LastFixExpr = false;
   std::set<std::string> m_MovedUniqueSymbols;
+  std::set<std::string> m_DroppedSemanticSymbols;
   std::vector<size_t> m_LastArrayDims;
   size_t m_BinOpTermCount = 0;
 
@@ -156,6 +160,15 @@ class Visitor {
   std::map<std::string, llvm::Type*> m_ArrayParamValueTypes;
   std::map<std::string, llvm::GlobalVariable*> m_GlobalVars;
   std::map<std::string, llvm::Value*> m_SharedPointerRefCounts;
+  std::vector<SymbolInfo> m_ScopeDestructors;
+  std::set<std::string> m_CodegenDroppedSymbols;
+  struct HeapAllocationInfo {
+    std::string typeName;
+    std::string allocatorSymbol;
+    std::string allocatorTypeName;
+    bool isShared = false;
+  };
+  std::map<std::string, HeapAllocationInfo> m_HeapAllocations;
   std::vector<llvm::BasicBlock*> m_LoopBreakTargets;
   std::vector<llvm::BasicBlock*> m_LoopContinueTargets;
   std::vector<llvm::StringRef> m_GlobaInitVarFunc;
@@ -205,6 +218,10 @@ class Visitor {
   bool constructorInitializer(VarAST& varAst, std::string& constructorName);
   std::string resolveFunctionCallName(IAST* node, SymbolInfo& symbolInfo,
                                       bool emitDiagnostics);
+  void registerScopeDestructor(const SymbolInfo& symbolInfo);
+  ValuePtr emitDropForSymbol(const std::string& symbolName,
+                             bool markDropped);
+  void emitScopeExitDestructors();
 
  public:
   // These are from pass0;
@@ -212,6 +229,7 @@ class Visitor {
   static LocalSymbolInfoList LocalSymbolTable;
   static FunctionSignatureTable FunctionTable;
   static std::map<std::string, StructInfo> StructTable;
+  static std::map<std::string, TraitInfo> TraitTable;
   static std::map<std::string, llvm::StructType*> LLVMStructTypes;
   static std::set<std::string> ModuleAliases;
   static size_t SymbolId, ScopeId;
@@ -233,8 +251,10 @@ class Visitor {
   ValuePtr visit(FuncCallAST& funcCallAst);
   ValuePtr visit(IfStmtAST& ifStmtAst);
   ValuePtr visit(LoopStmtAST& loopStmtAst);
+  ValuePtr visit(NewAST& newAst);
   ValuePtr visit(BreakStmtAST& breakStmtAst);
   ValuePtr visit(ContinueStmtAST& continueStmtAst);
+  ValuePtr visit(DropStmtAST& dropStmtAst);
   ValuePtr visit(ParamAST& paramAst);
   ValuePtr visit(RetAST& retAst);
   ValuePtr visit(UnaryOpAST& unaryOpAst);
@@ -242,6 +262,7 @@ class Visitor {
   ValuePtr visit(ScalarOrLiteralAST& scalarAst);
   ValuePtr visit(SymbolAST& symbolAst);
   ValuePtr visit(StructAST& structAst);
+  ValuePtr visit(TraitAST& traitAst);
   ValuePtr visit(FixAST& fixAst);
   llvm::Function* declareFunction(FuncAST& funcAst);
 
@@ -253,8 +274,10 @@ class Visitor {
   SymbolInfo preVisit(FuncCallAST& funcCallAst);
   SymbolInfo preVisit(IfStmtAST& ifStmtAst);
   SymbolInfo preVisit(LoopStmtAST& loopStmtAst);
+  SymbolInfo preVisit(NewAST& newAst);
   SymbolInfo preVisit(BreakStmtAST& breakStmtAst);
   SymbolInfo preVisit(ContinueStmtAST& continueStmtAst);
+  SymbolInfo preVisit(DropStmtAST& dropStmtAst);
   SymbolInfo preVisit(ParamAST& paramAst);
   SymbolInfo preVisit(RetAST& retAst);
   SymbolInfo preVisit(UnaryOpAST& unaryOpAst);
@@ -262,6 +285,7 @@ class Visitor {
   SymbolInfo preVisit(ScalarOrLiteralAST& scalarAst);
   SymbolInfo preVisit(SymbolAST& symbolAst);
   SymbolInfo preVisit(StructAST& structAst);
+  SymbolInfo preVisit(TraitAST& traitAst);
   SymbolInfo preVisit(FixAST& fixAst);
 
   void finalizeCodegen();

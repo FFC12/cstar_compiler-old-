@@ -10,11 +10,13 @@
 #include <ast/func_call_ast.hpp>
 #include <ast/if_stmt.hpp>
 #include <ast/loop_stmt.hpp>
+#include <ast/new_ast.hpp>
 #include <ast/param_ast.hpp>
 #include <ast/ret_ast.hpp>
 #include <ast/scalar_ast.hpp>
 #include <ast/struct_ast.hpp>
 #include <ast/symbol_ast.hpp>
+#include <ast/trait_ast.hpp>
 #include <ast/type_ast.hpp>
 #include <ast/unary_op_ast.hpp>
 #include <ast/var_ast.hpp>
@@ -62,6 +64,7 @@ class CStarParser {
   bool isDeclarationModifier(const TokenInfo& token);
   DeclarationModifiers parseDeclarationModifiers(bool localScope);
   StructFieldInfo parseStructField(DeclarationModifiers modifiers);
+  TraitRequirementInfo parseTraitRequirement();
 
   // INCLUDE, INCLUDE INVOLVED
   bool isPackageMark(const TokenInfo& token);
@@ -237,6 +240,7 @@ class CStarParser {
   void parseIncludeDirective();
   void parseLinkageBlock(VisibilitySpecifier visibilitySpecifier);
   void parseStructDecl(DeclarationModifiers declarationModifiers);
+  void parseTraitDecl(DeclarationModifiers declarationModifiers);
   std::string parseLinkSource();
   void registerNativeLinkLibrary(const std::string& library);
   void skipTopLevelTrivia();
@@ -292,6 +296,7 @@ class CStarParser {
   ASTNode expression(bool isSubExpr, int opFor = 0, bool isRet = false,
                      bool typeFlag = false, bool isAssignment = false);
   ASTNode advanceConstantOrLiteral();
+  ASTNode advanceNewExpression(bool isShared);
   ASTNode advanceType();
   ASTNode advanceSymbol();
 

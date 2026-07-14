@@ -1,0 +1,9 @@
+// expected-fail: CST1001
+
+struct Counter {
+  static int32 value;
+}
+
+main() :: int32 {
+  ret 0;
+}

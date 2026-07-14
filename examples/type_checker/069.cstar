@@ -1,0 +1,24 @@
+// expected-fail: CST2001
+
+struct NotAllocator {
+  int32 tag;
+
+  constructor(int32 value) {
+    self.tag = value;
+  }
+}
+
+struct Meter {
+  int32 value;
+
+  constructor(int32 value) {
+    self.value = value;
+  }
+}
+
+main() :: int32 {
+  NotAllocator arena = NotAllocator(1);
+  Meter^ meter = new(arena) Meter(3);
+  drop meter;
+  ret 0;
+}

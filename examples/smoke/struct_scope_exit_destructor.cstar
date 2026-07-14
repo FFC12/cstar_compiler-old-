@@ -6,19 +6,18 @@ int32 cleaned = 0;
 struct Resource {
   int32 value;
 
-  constructor(int32 initial) {
-    self.value = initial;
-    ret;
-  }
-
   destructor() {
     cleaned = 7;
     ret;
   }
 }
 
+run() :: int32 {
+  Resource resource;
+  ret 1;
+}
+
 main() :: int32 {
-  Resource resource = Resource(9);
-  drop resource;
+  int32 ignored = run();
   ret cleaned;
 }

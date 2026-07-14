@@ -1,0 +1,6 @@
+// expected-fail: CST1001
+
+main() :: int32 {
+  static int32 counter = 0;
+  ret counter;
+}

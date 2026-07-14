@@ -88,8 +88,8 @@ macro unique_vec(expr){
 }
 
 
-//Attributing functions from Area (this is like an interface but not exactly interface...)
-struct Shape<T> from Area<T> { 
+//Attributing functions from Area (this is a compile-time trait/capability contract)
+struct Shape<T> with Area<T> { 
     float32 x;
     float32 y;
     float32 _z; // private

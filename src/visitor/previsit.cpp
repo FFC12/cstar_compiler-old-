@@ -8,17 +8,20 @@
 #include <ast/func_call_ast.hpp>
 #include <ast/if_stmt.hpp>
 #include <ast/loop_stmt.hpp>
+#include <ast/new_ast.hpp>
 #include <ast/param_ast.hpp>
 #include <ast/ret_ast.hpp>
 #include <ast/scalar_ast.hpp>
 #include <ast/struct_ast.hpp>
 #include <ast/symbol_ast.hpp>
+#include <ast/trait_ast.hpp>
 #include <ast/type_ast.hpp>
 #include <ast/unary_op_ast.hpp>
 #include <ast/var_ast.hpp>
 #include <visitor/visitor.hpp>
 
 #include <algorithm>
+#include <set>
 
 using DiagnosticCode = cstar::diagnostics::DiagnosticCode;
 
@@ -38,6 +41,35 @@ static bool SplitStructMethodName(const std::string &name,
   owner = name.substr(0, dot);
   method = name.substr(dot + 1);
   return true;
+}
+
+static std::string ValueOperatorMethodName(BinOpKind kind) {
+  switch (kind) {
+    case B_ADD:
+      return "operator+";
+    case B_SUB:
+      return "operator-";
+    case B_MUL:
+      return "operator*";
+    case B_DIV:
+      return "operator/";
+    case B_MOD:
+      return "operator%";
+    case B_EQ:
+      return "operator==";
+    case B_NEQ:
+      return "operator!=";
+    case B_LT:
+      return "operator<";
+    case B_LTEQ:
+      return "operator<=";
+    case B_GT:
+      return "operator>";
+    case B_GTEQ:
+      return "operator>=";
+    default:
+      return {};
+  }
 }
 
 IAST *Visitor::methodCallReceiver(IAST *node) const {
@@ -470,8 +502,9 @@ void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
   }
 
   auto extra = !this->m_LastSymbolInfo.isConstPtr &&
+                       !this->m_LastSymbolInfo.isConstVal &&
                        this->m_ExpectedType == TypeSpecifier::SPEC_CHAR
-                   ? "String must have a 'constptr' or 'readonly' qualifier"
+                   ? "String must have a 'const', 'constptr' or 'readonly' qualifier"
                    : "";
 
   if (s.empty()) {
@@ -492,6 +525,12 @@ void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
 
 SymbolInfo Visitor::preVisit(VarAST &varAst) {
   SymbolInfo symbolInfo;
+  const auto previousExpectedType = m_ExpectedType;
+  const auto previousLastSymbolInfo = m_LastSymbolInfo;
+  const auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+  const auto previousDefinedTypeName = m_DefinedTypeName;
+  const auto previousLastBinOpHasPtr = m_LastBinOpHasAtLeastOnePtr;
+  const auto previousLastVarDecl = m_LastVarDecl;
 
   symbolInfo.symbolName = varAst.m_Name;
   symbolInfo.begin = varAst.m_SemLoc.begin;
@@ -767,13 +806,23 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
     }
   }
 
-  this->m_LastVarDecl = false;
+  this->m_LastVarDecl = previousLastVarDecl;
+  this->m_ExpectedType = previousExpectedType;
+  this->m_LastSymbolInfo = previousLastSymbolInfo;
+  this->m_DefinedTypeFlag = previousDefinedTypeFlag;
+  this->m_DefinedTypeName = previousDefinedTypeName;
+  this->m_LastBinOpHasAtLeastOnePtr = previousLastBinOpHasPtr;
 
   return symbolInfo;
 }
 
 SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
   SymbolInfo symbolInfo;
+  const auto previousExpectedType = m_ExpectedType;
+  const auto previousLastSymbolInfo = m_LastSymbolInfo;
+  const auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+  const auto previousLastBinOpHasPtr = m_LastBinOpHasAtLeastOnePtr;
+  const auto previousLastAssignment = m_LastAssignment;
 
   if (m_TypeChecking) {
     if (assignmentAst.m_LHS->m_ASTKind != ASTKind::Expr) {
@@ -1099,9 +1148,15 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
         this->m_DereferenceLevel = 1;
       }
 
-      this->m_LastAssignment = false;
+      this->m_LastAssignment = previousLastAssignment;
     }
   }
+
+  this->m_ExpectedType = previousExpectedType;
+  this->m_LastSymbolInfo = previousLastSymbolInfo;
+  this->m_DefinedTypeFlag = previousDefinedTypeFlag;
+  this->m_LastBinOpHasAtLeastOnePtr = previousLastBinOpHasPtr;
+  this->m_LastAssignment = previousLastAssignment;
 
   return symbolInfo;
 }
@@ -1389,6 +1444,7 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
                    scalarAst.m_IsLiteral &&
                    this->m_LastSymbolInfo.indirectionLevel > 0 &&
                    (this->m_LastSymbolInfo.isConstPtr ||
+                    this->m_LastSymbolInfo.isConstVal ||
                     this->m_LastSymbolInfo.isReadOnly)) {
         } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_U8 ||
                     this->m_ExpectedType == TypeSpecifier::SPEC_U16 ||
@@ -1560,6 +1616,48 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
       };
 
       return resolveFieldAccess(resolveFieldAccess, &binaryOpAst);
+    }
+
+    const auto overloadMethod = ValueOperatorMethodName(binaryOpAst.m_BinOpKind);
+    if (!overloadMethod.empty()) {
+      auto previousExpectedType = m_ExpectedType;
+      auto previousLastSymbolInfo = m_LastSymbolInfo;
+      auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+      auto previousLastBinOpHasPtr = m_LastBinOpHasAtLeastOnePtr;
+
+      auto lhsSymbol = lhs->acceptBefore(*this);
+      auto rhsSymbol = rhs->acceptBefore(*this);
+
+      m_ExpectedType = previousExpectedType;
+      m_LastSymbolInfo = previousLastSymbolInfo;
+      m_DefinedTypeFlag = previousDefinedTypeFlag;
+      m_LastBinOpHasAtLeastOnePtr = previousLastBinOpHasPtr;
+
+      if (lhsSymbol.type == TypeSpecifier::SPEC_DEFINED &&
+          lhsSymbol.indirectionLevel == 0) {
+        const auto functionName =
+            lhsSymbol.definedTypeName + "." + overloadMethod;
+        auto signatureIt = FunctionTable.find(functionName);
+        if (signatureIt != FunctionTable.end()) {
+          const auto &signature = signatureIt->second;
+          if (signature.params.size() != 2) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Value operator '" + functionName +
+                    "' must have exactly one explicit parameter",
+                lhsSymbol);
+          } else {
+            const auto &rhsParam = signature.params[1];
+            if (rhsParam.type != rhsSymbol.type ||
+                rhsParam.definedTypeName != rhsSymbol.definedTypeName ||
+                rhsParam.indirectionLevel != rhsSymbol.indirectionLevel) {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Right operand does not match value operator parameter",
+                  rhsSymbol);
+            }
+          }
+          return signature.returnType;
+        }
+      }
     }
 
     bool isPtrType = false;
@@ -1908,7 +2006,7 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
       methodName == "new") {
     if (!funcAst.m_IsStatic) {
       this->m_TypeErrorMessages.emplace_back(
-          "struct 'new' factory must be static and called as '" +
+          "struct 'new' allocation entry must be static and called as '" +
               methodOwner + "::new(...)'",
           symbolInfo);
     }
@@ -1916,13 +2014,25 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
     if (symbolInfo.type != TypeSpecifier::SPEC_DEFINED ||
         symbolInfo.definedTypeName != methodOwner) {
       this->m_TypeErrorMessages.emplace_back(
-          "struct 'new' factory must return '" + methodOwner + "'",
+          "struct 'new' allocation entry must return '" + methodOwner + "^' "
+          "or '" + methodOwner + "*'",
+          symbolInfo);
+    } else if (symbolInfo.indirectionLevel == 0) {
+      this->m_TypeErrorMessages.emplace_back(
+          "by-value construction uses the constructor syntax '" + methodOwner +
+              "(...)'; 'new' is reserved for allocation entries",
+          symbolInfo);
+    } else {
+      this->m_TypeErrorMessages.emplace_back(
+          "struct 'new' allocation lowering requires allocator/control-block "
+          "support and is not implemented yet",
           symbolInfo);
     }
   }
 
   if (m_TypeChecking) {
     const bool previousStaticFunction = m_CurrentFunctionIsStatic;
+    m_DroppedSemanticSymbols.clear();
     m_CurrentFunctionIsStatic = funcAst.m_IsStatic;
     this->m_LastScopeSymbols = LocalSymbolTable[funcAst.m_FuncName];
     for (auto &param : funcAst.m_Params) {
@@ -2223,6 +2333,171 @@ SymbolInfo Visitor::preVisit(ContinueStmtAST &continueStmtAst) {
   return symbolInfo;
 }
 
+SymbolInfo Visitor::preVisit(NewAST &newAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.begin = newAst.m_SemLoc.begin;
+  symbolInfo.end = newAst.m_SemLoc.end;
+  symbolInfo.line = newAst.m_SemLoc.line;
+  symbolInfo.symbolName = "new " + newAst.m_TypeName;
+  symbolInfo.type = TypeSpecifier::SPEC_DEFINED;
+  symbolInfo.definedTypeName = newAst.m_TypeName;
+  symbolInfo.indirectionLevel = 1;
+  symbolInfo.isUnique = !newAst.m_IsShared;
+
+  if (!m_TypeChecking) {
+    return symbolInfo;
+  }
+
+  if (m_TypeTable.count(newAst.m_TypeName) == 0 ||
+      StructTable.count(newAst.m_TypeName) == 0) {
+    this->m_TypeErrorMessages.emplace_back(
+        "`new` expects a known struct type", symbolInfo);
+    return symbolInfo;
+  }
+
+  if (newAst.m_Allocator != nullptr) {
+    if (newAst.m_Allocator->m_ExprKind != ExprKind::SymbolExpr) {
+      this->m_TypeErrorMessages.emplace_back(
+          "`new(allocator)` expects a named allocator value", symbolInfo);
+    }
+
+    SymbolInfo allocatorInfo;
+    if (newAst.m_Allocator->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *allocatorSymbol =
+          static_cast<SymbolAST *>(newAst.m_Allocator.get());
+      SymbolInfo lookupInfo;
+      lookupInfo.symbolName = allocatorSymbol->m_SymbolName;
+      lookupInfo.begin = allocatorSymbol->m_SemLoc.begin;
+      lookupInfo.end = allocatorSymbol->m_SemLoc.end;
+      lookupInfo.line = allocatorSymbol->m_SemLoc.line;
+      symbolValidation(allocatorSymbol->m_SymbolName, lookupInfo,
+                       allocatorInfo, true);
+    } else {
+      allocatorInfo = newAst.m_Allocator->acceptBefore(*this);
+    }
+    if (allocatorInfo.type != TypeSpecifier::SPEC_DEFINED) {
+      this->m_TypeErrorMessages.emplace_back(
+          "`new(allocator)` expects a struct value implementing Allocator",
+          symbolInfo);
+    } else {
+      const auto allocName = allocatorInfo.definedTypeName + ".alloc";
+      const auto freeName = allocatorInfo.definedTypeName + ".free";
+      bool satisfiesAllocator = false;
+      auto structIt = StructTable.find(allocatorInfo.definedTypeName);
+      if (TraitTable.count("Allocator") != 0 && structIt != StructTable.end()) {
+        satisfiesAllocator =
+            std::find(structIt->second.traits.begin(),
+                      structIt->second.traits.end(), "Allocator") !=
+            structIt->second.traits.end();
+      } else {
+        satisfiesAllocator =
+            FunctionTable.count(allocName) != 0 &&
+            FunctionTable.count(freeName) != 0;
+      }
+
+      if (!satisfiesAllocator) {
+        this->m_TypeErrorMessages.emplace_back(
+            "allocator type '" + allocatorInfo.definedTypeName +
+                "' must implement Allocator with alloc(bytes, align) and "
+                "free(ptr, bytes, align)",
+            symbolInfo);
+      }
+    }
+  }
+
+  std::vector<IAST *> argNodes;
+  auto collectArgs = [&](auto &self, IAST *node) -> void {
+    if (node == nullptr) {
+      return;
+    }
+    if (node->m_ExprKind == ExprKind::BinOp) {
+      auto *binOp = static_cast<BinaryOpAST *>(node);
+      if (binOp->m_BinOpKind == BinOpKind::B_COMM) {
+        self(self, binOp->m_LHS.get());
+        self(self, binOp->m_RHS.get());
+        return;
+      }
+    }
+    argNodes.push_back(node);
+  };
+  collectArgs(collectArgs, newAst.m_Args.get());
+
+  const auto constructorName = newAst.m_TypeName + ".constructor";
+  auto signatureIt = FunctionTable.find(constructorName);
+  if (signatureIt == FunctionTable.end()) {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Struct '" + newAst.m_TypeName +
+              "' does not declare a constructor for `new` arguments",
+          symbolInfo);
+    }
+    return symbolInfo;
+  }
+
+  const auto expectedArgs =
+      signatureIt->second.params.empty() ? 0 : signatureIt->second.params.size() - 1;
+  if (argNodes.size() != expectedArgs) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Constructor for '" + newAst.m_TypeName + "' expects " +
+            std::to_string(expectedArgs) + " argument(s), but " +
+            std::to_string(argNodes.size()) + " provided",
+        symbolInfo);
+    return symbolInfo;
+  }
+
+  for (size_t i = 0; i < argNodes.size(); ++i) {
+    const auto &param = signatureIt->second.params[i + 1];
+    m_LastSymbolInfo = param;
+    if (m_LastSymbolInfo.isRef) {
+      m_LastSymbolInfo.indirectionLevel += 1;
+    }
+    m_LastSymbolInfo.symbolId = m_SymbolId;
+    m_LastSymbolInfo.scopeId = m_ScopeId;
+    m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
+    m_ExpectedType = param.type;
+    m_DefinedTypeFlag = param.type == TypeSpecifier::SPEC_DEFINED;
+    argNodes[i]->acceptBefore(*this);
+  }
+
+  return symbolInfo;
+}
+
+SymbolInfo Visitor::preVisit(DropStmtAST &dropStmtAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.symbolName = dropStmtAst.m_SymbolName;
+  symbolInfo.begin = dropStmtAst.m_SemLoc.begin;
+  symbolInfo.end = dropStmtAst.m_SemLoc.end;
+  symbolInfo.line = dropStmtAst.m_SemLoc.line;
+
+  if (!m_TypeChecking) {
+    return symbolInfo;
+  }
+
+  m_LastSymbolInfo.symbolId = m_SymbolId;
+  m_LastSymbolInfo.scopeId = m_ScopeId;
+  m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
+
+  SymbolInfo matchedSymbol;
+  auto symbolName = dropStmtAst.m_SymbolName;
+  if (!symbolValidation(symbolName, symbolInfo, matchedSymbol)) {
+    return symbolInfo;
+  }
+
+  if (matchedSymbol.type != TypeSpecifier::SPEC_DEFINED) {
+    this->m_TypeErrorMessages.emplace_back(
+        "`drop` expects a struct value or struct ownership pointer",
+        symbolInfo, DiagnosticCode::SemanticOwnership);
+    return symbolInfo;
+  }
+
+  m_DroppedSemanticSymbols.insert(SymbolStateKey(matchedSymbol));
+  if (matchedSymbol.indirectionLevel > 0) {
+    m_MovedUniqueSymbols.insert(SymbolStateKey(matchedSymbol));
+  }
+
+  return symbolInfo;
+}
+
 std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
                                              bool emitDiagnostics) {
   if (node == nullptr) {
@@ -2313,6 +2588,14 @@ std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
               "Struct '" + matchedReceiver.definedTypeName +
                   "' has no method '" + member->m_SymbolName + "'",
               symbolInfo);
+          return {};
+        }
+
+        if (member->m_SymbolName == "destructor") {
+          this->m_TypeErrorMessages.emplace_back(
+              "destructor cannot be called directly; use `drop " +
+                  alias->m_SymbolName + ";` for explicit early release",
+              symbolInfo, DiagnosticCode::SemanticOwnership);
           return {};
         }
 
@@ -2825,6 +3108,10 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
 }
 SymbolInfo Visitor::preVisit(RetAST &retAst) {
   SymbolInfo symbolInfo;
+  const auto previousExpectedType = m_ExpectedType;
+  const auto previousLastSymbolInfo = m_LastSymbolInfo;
+  const auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+  const auto previousLastRetExpr = m_LastRetExpr;
   symbolInfo.begin = retAst.m_SemLoc.begin;
   symbolInfo.end = retAst.m_SemLoc.end;
   symbolInfo.line = retAst.m_SemLoc.line;
@@ -2882,8 +3169,13 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {
         m_MovedUniqueSymbols.insert(SymbolStateKey(movedReturnSource));
       }
     }
-    this->m_LastRetExpr = false;
+    this->m_LastRetExpr = previousLastRetExpr;
   }
+
+  this->m_ExpectedType = previousExpectedType;
+  this->m_LastSymbolInfo = previousLastSymbolInfo;
+  this->m_DefinedTypeFlag = previousDefinedTypeFlag;
+  this->m_LastRetExpr = previousLastRetExpr;
 
   return symbolInfo;
 }
@@ -3004,6 +3296,7 @@ SymbolInfo Visitor::preVisit(StructAST &structAst) {
 
   StructInfo info;
   info.name = structAst.m_Name;
+  info.traits = structAst.m_Traits;
   for (const auto &field : structAst.m_Fields) {
     if (info.fieldIndexes.count(field.name) != 0) {
       SymbolInfo fieldSymbol = symbolInfo;
@@ -3034,6 +3327,62 @@ SymbolInfo Visitor::preVisit(StructAST &structAst) {
   }
 
   StructTable[info.name] = std::move(info);
+
+  if (m_TypeChecking) {
+    const auto &registered = StructTable[structAst.m_Name];
+    for (const auto &traitName : registered.traits) {
+      auto traitIt = TraitTable.find(traitName);
+      if (traitIt == TraitTable.end()) {
+        SymbolInfo traitSymbol = symbolInfo;
+        traitSymbol.symbolName = traitName;
+        this->m_TypeErrorMessages.emplace_back(
+            "Unknown trait '" + traitName + "'", traitSymbol);
+        continue;
+      }
+
+      for (const auto &requirement : traitIt->second.requirements) {
+        const auto methodName = structAst.m_Name + "." + requirement.name;
+        if (FunctionTable.count(methodName) == 0) {
+          SymbolInfo requirementSymbol = symbolInfo;
+          requirementSymbol.symbolName = requirement.name;
+          this->m_TypeErrorMessages.emplace_back(
+              "Struct '" + structAst.m_Name + "' does not satisfy trait '" +
+                  traitName + "': missing method '" + requirement.name + "'",
+              requirementSymbol);
+        }
+      }
+    }
+  }
+
+  return symbolInfo;
+}
+
+SymbolInfo Visitor::preVisit(TraitAST &traitAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.symbolName = traitAst.m_Name;
+  symbolInfo.definedTypeName = traitAst.m_Name;
+  symbolInfo.begin = traitAst.m_SemLoc.begin;
+  symbolInfo.end = traitAst.m_SemLoc.end;
+  symbolInfo.line = traitAst.m_SemLoc.line;
+  symbolInfo.type = TypeSpecifier::SPEC_DEFINED;
+
+  TraitInfo info;
+  info.name = traitAst.m_Name;
+  std::set<std::string> names;
+  for (const auto &requirement : traitAst.m_Requirements) {
+    if (names.count(requirement.name) != 0) {
+      SymbolInfo requirementSymbol = symbolInfo;
+      requirementSymbol.symbolName = requirement.name;
+      this->m_TypeErrorMessages.emplace_back(
+          "Redefinition of trait requirement '" + requirement.name + "'",
+          requirementSymbol);
+      continue;
+    }
+    names.insert(requirement.name);
+    info.requirements.push_back(requirement);
+  }
+
+  TraitTable[info.name] = std::move(info);
   return symbolInfo;
 }
 
@@ -3050,7 +3399,8 @@ void Visitor::scopeHandler(std::unique_ptr<IAST> &node,
     } else if (node->m_StmtKind == StmtKind::IfStmt) {
       node->acceptBefore(*this);
     } else if (node->m_StmtKind == StmtKind::BreakStmt ||
-               node->m_StmtKind == StmtKind::ContinueStmt) {
+               node->m_StmtKind == StmtKind::ContinueStmt ||
+               node->m_StmtKind == StmtKind::DropStmt) {
       node->acceptBefore(*this);
     }
   } else if (node->m_ASTKind == ASTKind::Expr &&
@@ -3086,7 +3436,8 @@ void Visitor::typeCheckerScopeHandler(std::unique_ptr<IAST> &node) {
     } else if (node->m_StmtKind == StmtKind::IfStmt) {
       node->acceptBefore(*this);
     } else if (node->m_StmtKind == StmtKind::BreakStmt ||
-               node->m_StmtKind == StmtKind::ContinueStmt) {
+               node->m_StmtKind == StmtKind::ContinueStmt ||
+               node->m_StmtKind == StmtKind::DropStmt) {
       node->acceptBefore(*this);
     }
   } else if (node->m_ASTKind == ASTKind::Expr &&
@@ -3228,6 +3579,15 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
         "static function cannot access non-static global symbol '" +
             symbolName + "'",
         symbolInfo);
+  }
+
+  if (m_TypeChecking &&
+      m_DroppedSemanticSymbols.count(SymbolStateKey(matchedSymbol)) > 0 &&
+      !noError) {
+    this->m_TypeErrorMessages.emplace_back(
+        "value '" + matchedSymbol.symbolName +
+            "' was dropped and cannot be used before being reinitialized",
+        symbolInfo, DiagnosticCode::SemanticOwnership);
   }
 
   return true;

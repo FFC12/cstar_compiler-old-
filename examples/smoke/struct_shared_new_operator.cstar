@@ -1,7 +1,7 @@
 // expected: pass
-// expected-exit: 0
+// expected-exit: 2
 
-struct Resource {
+struct Meter {
   int32 value;
 
   constructor(int32 initial) {
@@ -16,8 +16,10 @@ struct Resource {
 }
 
 main() :: int32 {
-  Resource resource = Resource(7);
-  Resource^ owned = ref resource;
-  drop owned;
-  ret resource.value;
+  Meter* first = shared new Meter(5);
+  Meter* second = first;
+  int32 count = strong_count(first);
+  drop second;
+  drop first;
+  ret count;
 }

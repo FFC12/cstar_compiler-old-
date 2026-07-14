@@ -816,7 +816,7 @@ y <<= <span class="nu">1</span>;</code></pre>
 
         <section id="struct">
           <h2>Struct, Trait ve Enum</h2>
-          <p class="lead">C* user-defined type sistemini `struct`, `trait`, `enum` ve `with` ile kurar. Bu bölüm dilin tamamlanmış tasarımını anlatır.</p>
+          <p class="lead">C* user-defined type sistemini `struct`, `trait`, `enum` ve `with` ile kurar. Struct layout taşır, trait ise compile-time capability contract üretir.</p>
           <pre data-title="struct core"><code><span class="kw">struct</span> Point {
     <span class="ty">int32</span> x;
     <span class="ty">int32</span> y;
@@ -839,6 +839,20 @@ y <<= <span class="nu">1</span>;</code></pre>
     line.end.y += 1;
     <span class="kw">ret</span> <span class="fn">sum</span>(line.start) + line.end.x + line.end.y;
 }</code></pre>
+          <pre data-title="value operator"><code><span class="kw">struct</span> Vec2 {
+    <span class="ty">int32</span> x;
+    <span class="ty">int32</span> y;
+
+    <span class="fn">constructor</span>(<span class="ty">int32</span> x, <span class="ty">int32</span> y) {
+        self.x = x;
+        self.y = y;
+    }
+
+    <span class="kw">operator</span> +(Vec2 rhs) <span class="op">::</span> Vec2 {
+        Vec2 result = Vec2(self.x + rhs.x, self.y + rhs.y);
+        <span class="kw">ret</span> result;
+    }
+}</code></pre>
           <pre data-title="struct and trait"><code><span class="kw">trait</span> Allocator {
     <span class="fn">alloc</span>(<span class="ty">usize</span> bytes, <span class="ty">usize</span> align) <span class="op">::</span> <span class="ty">void</span>*;
     <span class="fn">free</span>(<span class="ty">void</span>* ptr, <span class="ty">usize</span> bytes, <span class="ty">usize</span> align) <span class="op">::</span> <span class="ty">void</span>;
@@ -849,7 +863,7 @@ y <<= <span class="nu">1</span>;</code></pre>
     <span class="ty">usize</span> capacity;
     <span class="ty">usize</span> offset;
 }</code></pre>
-          <p>Trait runtime interface değildir; varsayılan yön compile-time capability contract ve static dispatch'tir. Runtime dispatch gerekiyorsa bu açık bir modelle seçilir.</p>
+          <p>Trait runtime interface değildir; varsayılan yön compile-time capability contract ve static dispatch'tir. `struct T with Trait` eksik methodları compile-time diagnostic yapar. Runtime dispatch gerekiyorsa bu açık bir `dyn Trait` modeliyle seçilir.</p>
         </section>
 
         <section id="protocol">
@@ -881,22 +895,36 @@ conn <span class="op">.=</span> <span class="fn">try_send</span>();
 
         <section id="allocator">
           <h2>Allocator, Constructor ve Destructor</h2>
-          <p>Allocation bir protocol hook değildir. Explicit allocator trait/object ve constructor/destructor sözleşmesiyle yönetilir.</p>
-          <pre data-title="resource type"><code><span class="kw">struct</span> String <span class="kw">with</span> Allocator {
-    <span class="ty">char</span>* buffer;
-    <span class="ty">usize</span> length;
-    <span class="ty">usize</span> capacity;
+          <p>Allocation bir protocol hook değildir. Constructor var olan storage'ı initialize eder; `new` compiler-recognized allocation operator'dır. Normal kullanımda destructor scope-exit ile çalışır; erken release gerektiğinde `drop value;` değeri kapatır ve tekrar kullanımı compile-time diagnostic yapar.</p>
+          <pre data-title="resource type"><code><span class="kw">struct</span> Meter {
+    <span class="ty">int32</span> value;
 
-    <span class="fn">new</span>(<span class="kw">const</span> <span class="ty">char</span>* data, Allocator& allocator) <span class="op">::</span> valid String^ {
-        <span class="ty">usize</span> n = <span class="fn">strlen</span>(data);
-        self.buffer = allocator.<span class="fn">alloc</span>(n + <span class="nu">1</span>, <span class="fn">alignof</span>(<span class="ty">char</span>));
-        <span class="kw">ret</span> self;
+    <span class="fn">constructor</span>(<span class="ty">int32</span> initial) {
+        self.value = initial;
     }
 
-    <span class="fn">destructor</span>(Allocator& allocator) <span class="op">::</span> null String^ {
-        allocator.<span class="fn">free</span>(self.buffer, self.capacity, <span class="fn">alignof</span>(<span class="ty">char</span>));
-        <span class="kw">ret</span> self;
+    <span class="fn">destructor</span>() {
+        <span class="fn">print</span>(<span class="st">"drop meter\n"</span>);
     }
+}
+
+<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
+    Meter local = Meter(<span class="nu">7</span>);
+    Meter^ owned = <span class="kw">new</span> Meter(<span class="nu">9</span>);
+    Meter* shared = <span class="kw">shared</span> <span class="kw">new</span> Meter(<span class="nu">11</span>);
+
+    <span class="kw">drop</span> owned;
+    <span class="kw">drop</span> shared;
+    <span class="kw">ret</span> local.value;
+}</code></pre>
+          <pre data-title="allocator new"><code><span class="kw">trait</span> Allocator {
+    <span class="fn">alloc</span>(<span class="ty">usize</span> bytes, <span class="ty">usize</span> align) <span class="op">::</span> <span class="ty">void</span>*;
+    <span class="fn">free</span>(<span class="ty">void</span>* ptr, <span class="ty">usize</span> bytes, <span class="ty">usize</span> align) <span class="op">::</span> <span class="ty">void</span>;
+}
+
+<span class="fn">create_in_arena</span>(ArenaAllocator& arena) <span class="op">::</span> Meter^ {
+    Meter^ owned = <span class="kw">new</span>(arena) Meter(<span class="nu">42</span>);
+    <span class="kw">ret</span> <span class="kw">move</span> owned;
 }</code></pre>
           <div class="callout ok">Allocator, destructor ve protocol birlikte çalışır ama aynı şey değildir: layout struct'ta, allocation allocator'da, lifetime constructor/destructor'da, state safety protocol'dadır.</div>
         </section>

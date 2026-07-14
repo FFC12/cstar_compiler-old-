@@ -30,7 +30,7 @@ Projede öne çıkan fikirler:
 - `loop(...) { ... }` ile hem while benzeri hem iterable/range benzeri döngü fikri.
 - `cast<T>(expr)` ve `unsafe_cast<T>(expr)` ayrımı.
 - `move`, `typeof`, `sizeof` gibi unary operator fikirleri.
-- `struct` MVP'si başlamıştır; `attribute`, `protocol`, `trait`, directive/macro gibi daha ileri fikirler tasarlanmış, fakat mevcut compiler bunları henüz gerçek lowering olarak derleyemiyor.
+- `struct` ve compile-time `trait` MVP'si başlamıştır; `attribute`, `protocol`, `dynamic protocol`, directive/macro gibi daha ileri fikirler tasarlanmış, fakat mevcut compiler bunları henüz gerçek lowering olarak derleyemiyor.
 
 ## 2. Depo Yapısı
 
@@ -165,10 +165,12 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu
   - constructor initializer MVP: `constructor(args) { ... }`, `Point p = Point(args)`
   - unique/shared struct pointer receiver MVP: `owned.field`, `shared.field`, `owned.method(args)`, `shared.method(args)`
   - static struct method MVP: `static name :: int32 { ... }`, `Type::name()`
-  - static `new` factory MVP: `static new(...) :: Type { ... }`, `Type::new(...)`
-  - explicit destructor method MVP: `destructor(...) { ... }`, `value.destructor()`, `owned.destructor()`
+  - `new` allocation operator MVP: `new Type(args)`, `shared new Type(args)`, `new(allocator) Type(args)`
+  - lifecycle MVP: `destructor(...) { ... }`, `drop value;`, by-value local struct scope-exit destructor lowering
+  - trait MVP: `trait Name { ... }`, `struct T with Trait`, compile-time conformance check
+  - value operator MVP: struct içinde `operator +(T rhs) :: T` benzeri methodlar
 
-`examples/type_checker/` seti şu anda 64/64 kontrollü diagnostic üretir; crash/assert beklenmez. `// expected-code: CSTNNNN` etiketi varsa runner beklenen diagnostic kodunu da doğrular. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, safe cast qualifier stripping reddini, user-defined cast controlled diagnostic'ini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` parametre/pointer adresi reassignment reddini, `readonly` parametre/pointer address/value assignment reddini, array parametreye scalar/farklı boyutlu array geçişi reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, function arg/return ownership transfer ihlallerini, `nomove` ownership-flow ihlallerini, `async`/`await` proposal diagnostic'ini, moved-after-use reddini, `.=` protocol proposal diagnostic'ini, loop dışı `break`/`continue` reddini, `option` proposal diagnostic'ini, include edilen module içindeki private function erişimi reddini, `static` function içinden non-static global/function erişimi reddini, struct duplicate/unknown field diagnostic'lerini, direct self-by-value struct field reddini, unknown struct method reddini, constructor olmayan type için constructor initializer reddini, instance method'un `::` ile çağrılamamasını, non-static `new` factory reddini ve allocator hook'unun henüz proposal diagnostic'i olduğunu kapsar.
+`examples/type_checker/` seti kontrollü diagnostic üretir; crash/assert beklenmez. `// expected-code: CSTNNNN` etiketi varsa runner beklenen diagnostic kodunu da doğrular. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, safe cast qualifier stripping reddini, user-defined cast controlled diagnostic'ini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` parametre/pointer adresi reassignment reddini, `readonly` parametre/pointer address/value assignment reddini, array parametreye scalar/farklı boyutlu array geçişi reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, function arg/return ownership transfer ihlallerini, `nomove` ownership-flow ihlallerini, `async`/`await` proposal diagnostic'ini, moved-after-use reddini, dropped-after-use reddini, direct destructor call reddini, `.=` protocol proposal diagnostic'ini, loop dışı `break`/`continue` reddini, `option` proposal diagnostic'ini, include edilen module içindeki private function erişimi reddini, `static` function içinden non-static global/function erişimi reddini, struct duplicate/unknown field diagnostic'lerini, direct self-by-value struct field reddini, unknown struct method reddini, constructor olmayan type için constructor initializer reddini, instance method'un `::` ile çağrılamamasını, non-static/by-value `new` method formlarının reddini, user-defined lifecycle operator reddini, local/static data member reddini, eksik trait conformance reddini ve allocator olmayan değerle `new(allocator)` kullanımını kapsar.
 
 `examples/functions/`, `examples/variables/` ve `examples/papers/` dizinleri hâlâ daha çok proposal/stres örnekleridir. Runner ile ayrı çalıştırılır; amaç hepsini bugün yeşil yapmak değil, dil geliştikçe buradan küçük MVP smoke'lar çıkarmaktır. `examples/interactive/` ise input, terminal kontrolü, raw input, frame render ve ownership stresini daha büyük programlarla dener.
 
@@ -186,7 +188,7 @@ if, elif, else,
 ref, deref,
 include, involved, option, loop, default,
 from, import, export, public, private, static,
-cast, unsafe_cast, sizeof, typeof, move, async, await,
+cast, unsafe_cast, sizeof, typeof, move, drop, async, await,
 dynamic, protocol, state,
 with, struct, trait, macro, constructor, destructor, allocator,
 except, throw, defer, self, is,
@@ -205,7 +207,7 @@ nil, true, false
 
 Lexer enum'unda `NATIVE`, `MATRIX`, `VECTOR`, `EXTERN`, `FOR` gibi token'lar da var; ancak bunların keyword classification tarafında tam karşılığı yok ya da parser tarafından kullanılmıyor.
 
-Yeni proposal keyword'leri (`protocol`, `dynamic`, `state`, `struct`, `trait`, `attribute`, `macro`, `with`, `constructor`, `destructor`, `allocator`, `except`, `throw`, `defer`, `self`, `is`) lexer tarafından tanınır. Parser `struct Name { field; ... }` MVP'sini gerçek grammar olarak işler; diğer ileri proposal keyword'leri top-level kullanımlarda controlled proposal diagnostic üretir. Eski `policy` kelimesi yeni canonical grammar'da reserved değildir.
+Yeni proposal/lifecycle keyword'leri (`protocol`, `dynamic`, `state`, `struct`, `trait`, `attribute`, `macro`, `with`, `constructor`, `destructor`, `drop`, `new`, `shared`, `operator`, `allocator`, `except`, `throw`, `defer`, `self`, `is`, `dyn`) lexer tarafından tanınır. Parser `struct Name { field; ... }`, `trait Name { ... }`, `struct T with Trait`, `new Type(args)`, `shared new Type(args)` ve `drop value;` yüzeylerini gerçek grammar olarak işler; diğer ileri proposal keyword'leri top-level kullanımlarda controlled proposal diagnostic üretir. Eski `policy` kelimesi yeni canonical grammar'da reserved değildir.
 
 ### 4.2 Literal ve scalar desteği
 
@@ -300,7 +302,7 @@ Shape^ shape = Triangle();
 Triangle^ triangle = cast<Triangle^>(shape);
 ```
 
-Mevcut semantic pass'te `struct Name { field; ... }` MVP'si için user-defined type table doldurulur. Primitive ve by-value user-defined field layout LLVM `StructType` olarak üretilir, zero-init struct variable oluşturulur, `value.field` read/write syntax'ı çalışır, nested field chain `line.start.x` GEP zinciriyle iner ve by-value struct parametre/return desteklenir. Struct method MVP'sinde methodlar internal olarak `StructName.method(self&, ...)` fonksiyonuna iner; `value.method(args)` receiver'ı implicit `self` argümanı yapar ve `self.field` read/write referans üzerinden caller storage'ına iner. `Point^ owned = ref p; owned.x` ve `Counter* shared = ref c; shared.value` formları pointee struct alanına auto-deref edilir; `owned.method(args)` ve `shared.method(args)` çağrıları implicit `self&` için pointee adresini geçirir. `static` struct method self almaz ve `Type::method(args)` ile çağrılır; `::` instance receiver için kullanılmaz. Constructor MVP'sinde `constructor(args) { ... }` internal `StructName.constructor(self&, ...)` fonksiyonuna iner ve `StructName value = StructName(args);` local by-value initializer storage'ı zero-init edip constructor'ı çağırır. `new` lifecycle factory adı static olmak zorundadır; bugünkü MVP'de `static new(...) :: Type` aynı struct'ı by-value döndürür ve `Type::new(...)` ile çağrılır. `destructor(...) { ... }` bugün explicit method olarak `StructName.destructor(self&, ...)` lowering'i kullanır; otomatik scope-exit çağrısı üretmez. Direct self-by-value field reddedilir. `trait`, `protocol`, allocator/control-block ve genel lifetime lowering henüz tamamlanmış değildir.
+Mevcut semantic pass'te `struct Name { field; ... }` MVP'si için user-defined type table doldurulur. Primitive ve by-value user-defined field layout LLVM `StructType` olarak üretilir, zero-init struct variable oluşturulur, `value.field` read/write syntax'ı çalışır, nested field chain `line.start.x` GEP zinciriyle iner ve by-value struct parametre/return desteklenir. Struct method MVP'sinde methodlar internal olarak `StructName.method(self&, ...)` fonksiyonuna iner; `value.method(args)` receiver'ı implicit `self` argümanı yapar ve `self.field` read/write referans üzerinden caller storage'ına iner. `Point^ owned = ref p; owned.x` ve `Counter* shared = ref c; shared.value` formları pointee struct alanına auto-deref edilir; `owned.method(args)` ve `shared.method(args)` çağrıları implicit `self&` için pointee adresini geçirir. `static` struct method self almaz ve `Type::method(args)` ile çağrılır; `::` instance receiver için kullanılmaz. Constructor MVP'sinde `constructor(args) { ... }` internal `StructName.constructor(self&, ...)` fonksiyonuna iner ve `StructName value = StructName(args);` local by-value initializer storage'ı zero-init edip constructor'ı çağırır. Value operator MVP'sinde `operator +`, `-`, `*`, `/`, `%` ve comparison operator'ları struct method ABI'siyle çalışır; lifecycle/allocation operator'ları compiler-reserved kalır. `new` static method değildir; `new Type(args)` unique heap storage, `shared new Type(args)` shared handle/control-count üretir, constructor'ı çağırır ve drop/scope-exit release hattına bağlanır. `new(allocator) Type(args)` için allocator değerinin `Allocator` trait'ini sağlaması beklenir. `destructor(...) { ... }` tanımlanabilir, normal kullanıcı çağrısı `value.destructor()` reddedilir; erken release `drop value;` ile yapılır ve by-value local struct'lar scope/return çıkışında otomatik destructor çağırır. Direct self-by-value field reddedilir. Trait MVP'si `trait Name { requirement(...) :: Type; }` ve `struct T with Trait` compile-time conformance check'i yapar; `protocol`, `dynamic protocol` ve `dyn Trait` runtime/flow lowering'i henüz tamamlanmış değildir.
 
 ## 6. Pointer, Reference ve Ownership Modeli
 
@@ -339,7 +341,7 @@ Desteklenen biçimler:
 - Unary operator olarak `deref`.
 - `*` expression içinde dereference olarak da kullanılabiliyor.
 
-Güncel codegen notu: `ref x` shared pointer beklenen yerde `{ data=&x, strong=new atomic i64(1) }` handle'ı üretir. `int32* q = p` ve `q = p` atomic retain yapar; `q := p` ve `q = move p` transfer yapar ve source moved kabul edilir. Shared pointer by-value function argument plain symbol ile retain/copy yapar; `move` argument/return source'u null'a çekilir. `strong_count(p)` compiler builtin'i atomic strong-count değerini döndürür. Primitive pointer parametre/return ABI'si de bu shared handle'ı taşır; `read_ptr(ref x)`, `identity(int32* p) :: int32*`, `int32* q = deref pp`, `deref p = value`, `deref p += value`, `nomove int32^ p`, `**pp` ve `**pp = value` smoke setinde çalışır. Primitive reference parametreler `int32& x` syntax'ı ile çağıranın storage'ına alias olur; çağrı tarafında açık `ref value` gerekir, fonksiyon gövdesinde `x` normal değer gibi okunur ve `x = value;` çağıranın değerini günceller. `const`/`constref`/`constptr`/`readonly` qualifier kontrolleri semantic pass'te korunur.
+Güncel codegen notu: `ref x` shared pointer beklenen yerde `{ data=&x, strong=new atomic i64(1) }` handle'ı üretir. `int32* q = p` ve `q = p` atomic retain yapar; `q := p` ve `q = move p` transfer yapar ve source moved kabul edilir. Shared pointer by-value function argument plain symbol ile retain/copy yapar; `move` argument/return source'u null'a çekilir. `strong_count(p)` compiler builtin'i atomic strong-count değerini döndürür. Primitive pointer parametre/return ABI'si de bu shared handle'ı taşır; `read_ptr(ref x)`, `identity(int32* p) :: int32*`, `int32* q = deref pp`, `deref p = value`, `deref p += value`, `nomove int32^ p`, `**pp` ve `**pp = value` smoke setinde çalışır. CRT/string interop için `char*` ve `const char*` raw C string pointer ABI'sinde kalır; string literal `const char*` parametreye doğrudan geçebilir. Primitive reference parametreler `int32& x` syntax'ı ile çağıranın storage'ına alias olur; çağrı tarafında açık `ref value` gerekir, fonksiyon gövdesinde `x` normal değer gibi okunur ve `x = value;` çağıranın değerini günceller. `const`/`constref`/`constptr`/`readonly` qualifier kontrolleri semantic pass'te korunur.
 
 ### 6.3 Qualifier'lar
 
@@ -423,7 +425,7 @@ Visibility/linkage ayrımı:
 - Global scope'ta `static`, internal linkage/storage duration anlamı taşır.
 - Static function LLVM tarafında internal linkage alır.
 - Static function yalnızca static global state'e ve static function'lara erişebilir; non-static global symbol/function kullanımı semantic diagnostic üretir.
-- Local static, static member, init-order ve thread-safe one-time initialization henüz yoktur.
+- Local static ve static data member bu modelde kapalıdır; parser module-level static state'e yönlendiren diagnostic üretir. Thread-safe one-time local initialization gerekiyorsa ayrı proposal olarak ele alınacaktır.
 - `protocol` tarafında ayrıca `static` yazmaya gerek yoktur; protocol default olarak static/provable kabul edilir. Runtime state isteyen açıkça `dynamic protocol` yazmalıdır.
 
 ### 7.1 Çoklu deklarasyon
@@ -1091,7 +1093,7 @@ struct String : Allocator with CustomAlloc {
 }
 ```
 
-Bu bölümün büyük kısmı hâlâ tasarım/proposal seviyesindedir. Mevcut parser `struct Name { field; ... }` MVP'sini, method/`self` MVP'sini, static struct method MVP'sini, static `new` factory MVP'sini, local by-value constructor initializer MVP'sini, explicit destructor method MVP'sini ve unique/shared struct pointer üzerinden `ptr.field`, `ptr.method(args)` erişimini işler; `protocol`, `trait`, `dynamic protocol`, otomatik destructor/scope-exit ve allocator/control-block yüzeyi henüz gerçek lowering değildir.
+Bu bölümün bir kısmı hâlâ tasarım/proposal seviyesindedir. Mevcut parser `struct Name { field; ... }` MVP'sini, method/`self` MVP'sini, static struct method MVP'sini, local by-value constructor initializer MVP'sini, destructor/drop/scope-exit MVP'sini, `new`/`shared new` allocation operator MVP'sini, `trait Name { ... }` ve `struct T with Trait` compile-time conformance yüzeyini ve unique/shared struct pointer üzerinden `ptr.field`, `ptr.method(args)` erişimini işler; `protocol`, `dynamic protocol`, `dyn Trait` ve tam allocator/control-block failure policy yüzeyi henüz gerçek lowering değildir.
 
 Karar:
 
@@ -1113,17 +1115,17 @@ Struct yönü:
 
 - İlk MVP `struct Name { field; ... }` olarak başladı: primitive/by-value field layout, zero-init storage, `value.field` read/write, by-value parametre/return, nested field chain, method/`self` lowering ve local constructor initializer çalışır.
 - Unique `^` ve shared `*` struct handle'larında `ptr.field` pointee alanına, `ptr.method(args)` implicit `self&` pointee adresine iner. `::` yalnız static type method çağrısıdır: `Type::method(args)`.
-- `static new(...) :: Type` bugün `Type::new(...)` factory olarak çalışır; heap allocation/control-block ve allocator seçimi sonraki struct lifetime adımıdır.
-- Explicit `destructor(...)` bugün normal method/self lowering'iyle çağrılabilir; otomatik scope-exit ve allocator/control-block sonraki struct lifetime adımıdır.
+- By-value initialization için constructor ana yoldur: `Type value = Type(args);`. `new` heap allocation/control-block ve allocator seçimi için allocation operator'dır; by-value `new` method/factory kullanımı reddedilir.
+- `destructor(...)` tanımlanabilir; normal kullanımda by-value local struct için compiler return/scope-exit öncesi otomatik çağırır. Erken release için hedef yüzey `drop value;` olur; `drop` destructor'ı çağırıp değeri dropped state'e çeker ve sonraki kullanımı diagnostic yapar. `value.destructor()` normal kullanıcı yüzeyi değildir ve diagnostic üretir.
 - Field layout doğrudan LLVM `StructType` ile temsil edilmeli; gizli reflection/layout metadata ilk MVP'ye girmemelidir.
 - Method syntax `self` lowering ile çözüldü: `value.method(args)`, `owned.method(args)` ve `shared.method(args)` internal `StructName.method(self&, ...)` call olur. Static method self almaz ve `Type::method(args)` ile çağrılır.
-- `constructor` local by-value initializer için çalışır. `new` static by-value factory olarak çalışır. `destructor` explicit çağrı olarak çalışır; otomatik shared `*`, unique `^`, allocator/control-block ve scope-exit release modeliyle bağlanması sonraki adımdır.
+- `constructor` local by-value initializer için çalışır. `new` allocation entry olarak unique/shared heap allocation, constructor call ve drop/scope-exit release hattına bağlanır. Explicit allocator değeri `Allocator` conformance ister; shared metadata/failure policy runtime contract'ı ileride sıkılaştırılacaktır.
 - `syntax.cstar` içindeki `struct Shape<T> from Area<T>` fikri attribute/type capability bağlama proposal'ıdır. İlk parser MVP'si bunu controlled diagnostic olarak tutmalı; gerçek field/method struct desteği önce gelmelidir.
 
 Trait yönü:
 
 - `trait`, runtime interface/vtable değildir; varsayılan yön compile-time capability contract ve static/monomorphized dispatch'tir.
-- `struct T with TraitA, TraitB` gibi bir yüzey conformance check üretmelidir.
+- `struct T with TraitA, TraitB` conformance check üretir; eksik method controlled semantic diagnostic'tir.
 - Trait, protocol ile karıştırılmamalıdır: trait “bu type ne yapabilir?”, protocol “bu değer hangi state içinde güvenli?” sorusunu cevaplar.
 
 Allocator ve hata yönetimi:
@@ -1232,7 +1234,7 @@ main(int argc, char** argv) :: int {
 }
 ```
 
-Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, scalar/dereference/tek ve çok boyutlu array assignment, çok boyutlu dynamic index, `ret expr`, primitive function call, `import/export/from` native/module declaration, local `.cstar` include, `public`/default-private module visibility MVP'si, module-level `static` function/variable MVP'si ve alias function lookup, struct declaration/zero-init/field read-write/nested field/by-value param-return/method-self/local-constructor/unique-shared-pointer-field-method/instance-scope-method-alias MVP'si, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()`, `read_key()`, temel `if/elif/else`, while-style `loop`, range loop, array iterable loop, `break` ve `continue` akışıdır. Genel sequence iterable, gerçek namespace/type module sistemi ve trait/protocol lowering hâlâ ayrı aşama gerektirir.
+Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, scalar/dereference/tek ve çok boyutlu array assignment, çok boyutlu dynamic index, `ret expr`, primitive function call, `import/export/from` native/module declaration, local `.cstar` include, `public`/default-private module visibility MVP'si, module-level `static` function/variable MVP'si ve alias function lookup, struct declaration/zero-init/field read-write/nested field/by-value param-return/method-self/local-constructor/drop/by-value scope-exit destructor/unique-shared-pointer-field-method/instance-scope-method-alias/unique-shared-new-operator/value-operator MVP'si, trait declaration ve `struct with Trait` conformance MVP'si, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()`, `read_key()`, temel `if/elif/else`, while-style `loop`, range loop, array iterable loop, `break` ve `continue` akışıdır. Genel sequence iterable, gerçek namespace/type module sistemi, operator index/generic overload resolution ve protocol/dynamic trait-object lowering hâlâ ayrı aşama gerektirir.
 
 ## 17. Bilinen Sorunlar ve Teknik Riskler
 
@@ -1244,10 +1246,10 @@ Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güve
 
 ### 17.2 Semantic riskleri
 
-- User-defined type sistemi tamamlanmamış.
+- User-defined type sistemi genişlemeye devam ediyor; struct/trait ve temel value operator MVP çalışır, operator index, generic trait bound, protocol flow analysis ve dynamic trait object ABI hâlâ eksiktir.
 - Array validation MVP'si sabit index warning'i üretir; runtime bounds check ve slice doğrulaması sonraki safety/stdlib aşamasındadır.
 - Scope ve symbol validation elle yönetilen id/level mekanizmasına bağlı.
-- `move`/ownership modeli semantic pass ve shared handle codegen içinde çalışır; by-value function argument/return transfer MVP'si, `nomove` parametre kısıtı ve async/task boundary tasarım kararı vardır. Kalan büyük eksik scope çıkışı/destructor lowering, gerçek async lowering ve allocator/new control-block entegrasyonudur.
+- `move`/ownership modeli semantic pass ve shared handle codegen içinde çalışır; by-value function argument/return transfer MVP'si, `nomove` parametre kısıtı, drop/scope-exit destructor ve unique/shared `new` release hattı vardır. Kalan büyük eksik gerçek async lowering, shared control-block runtime contract'ının sıkılaştırılması ve allocation failure policy'sidir.
 - `const`, `readonly`, primitive `constref` assignment reddi, primitive `constptr` pointer adresi reassignment reddi, primitive `readonly` pointer address/value assignment reddi, primitive `const` pointer target assignment reddi ve çok seviyeli qualifier pointer reddi type-checker negatif testleriyle doğrulanır. Ownership tarafı için davranış hâlâ ayrıntılı tasarım/uygulama ister.
 
 ### 17.3 Codegen riskleri

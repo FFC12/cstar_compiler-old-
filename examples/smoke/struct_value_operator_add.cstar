@@ -1,0 +1,23 @@
+// expected-exit: 10
+
+struct Vec2 {
+  int32 x;
+  int32 y;
+
+  constructor(int32 x, int32 y) {
+    self.x = x;
+    self.y = y;
+  }
+
+  operator +(Vec2 rhs) :: Vec2 {
+    Vec2 result = Vec2(self.x + rhs.x, self.y + rhs.y);
+    ret result;
+  }
+}
+
+main() :: int32 {
+  Vec2 a = Vec2(1, 2);
+  Vec2 b = Vec2(3, 4);
+  Vec2 c = a + b;
+  ret c.x + c.y;
+}

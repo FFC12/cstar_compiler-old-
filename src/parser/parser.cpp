@@ -9,8 +9,7 @@ static bool IsProposalOnlyTopLevel(TokenKind kind) {
     case DYNAMIC:
     case PROTOCOL:
     case STATE:
-    case WITH:
-    case TRAIT:
+    case DYN:
     case MACRO:
     case CONSTRUCTOR:
     case DESTRUCTOR:
@@ -119,7 +118,8 @@ void CStarParser::parseLinkageBlock(
 StructFieldInfo CStarParser::parseStructField(
     DeclarationModifiers modifiers) {
   if (modifiers.isStatic) {
-    ParserError("static struct members are not implemented yet",
+    ParserError("static data members are not part of the current struct model; "
+                "use module-level static state",
                 prevTokenInfo());
   }
 
@@ -168,6 +168,105 @@ StructFieldInfo CStarParser::parseStructField(
   return field;
 }
 
+TraitRequirementInfo CStarParser::parseTraitRequirement() {
+  TraitRequirementInfo requirement;
+
+  if (is(TokenKind::OPERATOR)) {
+    ParserError(
+        "operator requirements are not implemented yet; lifecycle allocation "
+        "operators are compiler-reserved",
+        currentTokenInfo());
+  }
+
+  expected(TokenKind::IDENT);
+  requirement.name = currentTokenStr();
+  this->advance();
+
+  if (is(TokenKind::LPAREN)) {
+    size_t depth = 0;
+    do {
+      if (is(TokenKind::LPAREN)) {
+        depth += 1;
+      } else if (is(TokenKind::RPAREN)) {
+        if (depth == 0) {
+          ParserError("Unexpected ')' in trait requirement",
+                      currentTokenInfo());
+        }
+        depth -= 1;
+      }
+      this->advance();
+    } while (depth > 0 && !is(TokenKind::_EOF));
+  }
+
+  if (is(TokenKind::COLONCOLON)) {
+    this->advance();
+    if (!isType(currentTokenInfo()) && !is(TokenKind::IDENT) &&
+        !is(TokenKind::VOID)) {
+      ParserError("Expected return type in trait requirement",
+                  currentTokenInfo());
+    }
+    this->advance();
+    while (is(TokenKind::STAR) || is(TokenKind::XOR) ||
+           is(TokenKind::AND)) {
+      this->advance();
+    }
+  }
+
+  expected(TokenKind::SEMICOLON);
+  this->advance();
+  return requirement;
+}
+
+void CStarParser::parseTraitDecl(DeclarationModifiers declarationModifiers) {
+  if (declarationModifiers.linkage == VisibilitySpecifier::VIS_IMPORT ||
+      declarationModifiers.linkage == VisibilitySpecifier::VIS_EXPORT) {
+    ParserError("trait visibility uses public/private, not import/export",
+                currentTokenInfo());
+  }
+  if (declarationModifiers.isStatic) {
+    ParserError("static trait declarations are not valid", currentTokenInfo());
+  }
+
+  auto posInfo = currentTokenInfo().getTokenPositionInfo();
+  size_t begin = posInfo.begin;
+  size_t line = posInfo.line;
+
+  this->advance();
+  expected(TokenKind::IDENT);
+  auto traitName = currentTokenStr();
+  this->advance();
+
+  if (is(TokenKind::LT)) {
+    ParserError("generic traits are proposal-only in this compiler phase",
+                currentTokenInfo());
+  }
+
+  expected(TokenKind::LBRACK);
+  this->advance();
+
+  std::vector<TraitRequirementInfo> requirements;
+  while (!is(TokenKind::RBRACK) && !is(TokenKind::_EOF)) {
+    skipTopLevelTrivia();
+    if (is(TokenKind::RBRACK)) {
+      break;
+    }
+    requirements.push_back(parseTraitRequirement());
+  }
+
+  expected(TokenKind::RBRACK);
+  posInfo = currentTokenInfo().getTokenPositionInfo();
+  SemanticLoc semLoc(begin, posInfo.end, line);
+  this->advance();
+
+  this->m_AST.emplace_back(std::make_unique<TraitAST>(
+      traitName, std::move(requirements), declarationModifiers.access, semLoc));
+
+  skipTopLevelTrivia();
+  if (is(TokenKind::SEMICOLON)) {
+    this->advance();
+  }
+}
+
 void CStarParser::parseStructDecl(DeclarationModifiers declarationModifiers) {
   if (declarationModifiers.linkage == VisibilitySpecifier::VIS_IMPORT ||
       declarationModifiers.linkage == VisibilitySpecifier::VIS_EXPORT) {
@@ -188,11 +287,27 @@ void CStarParser::parseStructDecl(DeclarationModifiers declarationModifiers) {
   auto structName = currentTokenStr();
   this->advance();
 
-  if (is(TokenKind::LT) || is(TokenKind::FROM) || is(TokenKind::WITH)) {
+  if (is(TokenKind::LT) || is(TokenKind::FROM)) {
     ParserError(
-        "generic/attribute/trait-bound struct syntax is proposal-only; use "
+        "generic/attribute struct syntax is proposal-only; use "
         "`struct Name { field; ... }` for the current MVP",
         currentTokenInfo());
+  }
+
+  std::vector<std::string> traits;
+  if (is(TokenKind::WITH)) {
+    this->advance();
+    do {
+      skipTopLevelTrivia();
+      expected(TokenKind::IDENT);
+      traits.push_back(currentTokenStr());
+      this->advance();
+      skipTopLevelTrivia();
+      if (!is(TokenKind::COMMA)) {
+        break;
+      }
+      this->advance();
+    } while (!is(TokenKind::_EOF));
   }
 
   expected(TokenKind::LBRACK);
@@ -213,11 +328,22 @@ void CStarParser::parseStructDecl(DeclarationModifiers declarationModifiers) {
                   currentTokenInfo());
     }
 
+    if (is(TokenKind::OPERATOR)) {
+      const auto astSizeBeforeMethod = m_AST.size();
+      funcDecl(memberModifiers, false, structName);
+      while (m_AST.size() > astSizeBeforeMethod) {
+        methods.push_back(std::move(m_AST.back()));
+        m_AST.pop_back();
+      }
+      continue;
+    }
+
     bool outOfSize = false;
     auto nextToken = nextTokenInfo(outOfSize).getTokenKind();
     if (!outOfSize &&
         (is(TokenKind::IDENT) || is(TokenKind::CONSTRUCTOR) ||
-         is(TokenKind::DESTRUCTOR)) &&
+         is(TokenKind::DESTRUCTOR) || is(TokenKind::NEW) ||
+         is(TokenKind::OPERATOR)) &&
         (nextToken == TokenKind::LPAREN ||
          nextToken == TokenKind::COLONCOLON ||
          nextToken == TokenKind::LBRACK)) {
@@ -240,6 +366,7 @@ void CStarParser::parseStructDecl(DeclarationModifiers declarationModifiers) {
 
   auto structAst =
       std::make_unique<StructAST>(structName, std::move(fields),
+                                  std::move(traits),
                                   declarationModifiers.access, semLoc);
   this->m_AST.emplace_back(std::move(structAst));
   for (auto &method : methods) {
@@ -375,6 +502,11 @@ void CStarParser::translationUnit() {
       skipTopLevelTrivia();
       if (is(TokenKind::STRUCT)) {
         parseStructDecl(declarationModifiers);
+        continue;
+      }
+
+      if (is(TokenKind::TRAIT)) {
+        parseTraitDecl(declarationModifiers);
         continue;
       }
 
@@ -621,7 +753,8 @@ DeclarationModifiers CStarParser::parseDeclarationModifiers(bool localScope) {
         break;
       case STATIC:
         if (localScope) {
-          ParserError("'static' local declarations are not implemented yet",
+          ParserError("'static' local declarations are not part of the current "
+                      "lifetime model; use module-level static state",
                       currentTokenInfo());
         }
         if (modifiers.linkage == VisibilitySpecifier::VIS_EXPORT ||

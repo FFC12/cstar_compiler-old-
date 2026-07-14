@@ -1,0 +1,12 @@
+// expected: pass
+// expected-exit: 7
+
+passthrough_label(const char* label, int32 value) :: int32 {
+  print(label);
+  print("\n");
+  ret value;
+}
+
+main() :: int32 {
+  ret passthrough_label("label-ok", 7);
+}

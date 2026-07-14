@@ -89,6 +89,7 @@ Tamamlanan dil/codegen parçaları:
   - `enable_raw_input()` / `disable_raw_input()` POSIX `stty` üzerinden non-canonical, non-blocking terminal modunu açıp kapatır.
   - `read_key()` CRT `getchar()` ile tuş yokken `-1`, tuş varken `int32` byte değeri döndürür; WASD/ok tuşu oyunları için geçici native runtime yüzeyi.
   - String literal kaçışları için temel `\n`, `\t`, `\"`, `\\` decode ediliyor.
+  - `char*` / `const char*` CRT/string ABI'si raw C pointer olarak korunur; string literal `const char*` parametreye ve include edilen module fonksiyonlarına geçebilir.
   - Bu katman ileride stdlib/native interop ABI'sinin bağlanacağı giriş noktasıdır.
 
 Çalışan smoke seti:
@@ -194,7 +195,7 @@ examples/smoke/struct_shared_pointer_field_method.cstar
 examples/smoke/struct_scope_method_receiver.cstar
 examples/smoke/struct_destructor_method.cstar
 examples/smoke/struct_pointer_destructor_method.cstar
-examples/smoke/struct_static_new_factory.cstar
+examples/smoke/struct_scope_exit_destructor.cstar
 ```
 
 Interactive örnek:
@@ -236,7 +237,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Exit code `1` çoğu dosya için kabul edilebilir diagnostic olabilir.
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
-- Güncel durumda `-ExpectDiagnostics` ile 64/64 dosya kontrollü diagnostic üretiyor, crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 67/67 dosya kontrollü diagnostic üretiyor, crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -310,6 +311,16 @@ examples/type_checker/053.cstar
 examples/type_checker/054.cstar
 examples/type_checker/055.cstar
 examples/type_checker/056.cstar
+examples/type_checker/057.cstar
+examples/type_checker/058.cstar
+examples/type_checker/059.cstar
+examples/type_checker/060.cstar
+examples/type_checker/061.cstar
+examples/type_checker/062.cstar
+examples/type_checker/063.cstar
+examples/type_checker/064.cstar
+examples/type_checker/065.cstar
+examples/type_checker/066.cstar
 ```
 
 Bu dosyalar parser/pass hattına giriyor ve semantic diagnostic üretebiliyor. Kritik semantic sınıflar `expected-code` etiketiyle doğrulanabilir.
@@ -1107,33 +1118,63 @@ Durum:
   - `value::method(args)` / `Type::non_static(args)` controlled diagnostic üretir.
   - `examples/smoke/struct_scope_method_receiver.cstar`
   - `examples/type_checker/062.cstar`
-- Static `new` factory MVP'si tamamlandı:
-  - `new` struct içinde lifecycle factory adı olarak ayrıldı.
-  - `new` static olmak zorundadır ve `Type::new(args)` formuyla çağrılır.
-  - İlk MVP'de `new` aynı struct type'ını by-value döndürür; heap allocation/control-block bağlama allocator aşamasına kaldı.
-  - Non-static `new` controlled semantic diagnostic üretir.
-  - `examples/smoke/struct_static_new_factory.cstar`
+- `new` allocation entry kararı tamamlandı:
+  - Constructor by-value initialization için ana yoldur; by-value factory özel bir lifecycle yüzeyi değildir.
+  - `new` static method değildir; heap allocation/control-block/allocator seçimli compiler-recognized allocation operator'dır.
+  - `new Type(args)` unique heap allocation + constructor lowering üretir.
+  - `shared new Type(args)` shared handle + atomic strong-count control-block üretir.
+  - `new(allocator) Type(args)` ve `shared new(allocator) Type(args)` parser/semantic yüzeyi vardır; allocator değerinin `Allocator` conformance'ı aranır.
+  - Non-static `new`, by-value `static new(...) :: Type` ve user-defined lifecycle operator'ları controlled diagnostic üretir.
+  - `examples/smoke/struct_unique_new_operator.cstar`
+  - `examples/smoke/struct_shared_new_operator.cstar`
   - `examples/type_checker/063.cstar`
-- Explicit destructor method MVP'si tamamlandı:
+  - `examples/type_checker/064.cstar`
+- Destructor/drop/scope-exit MVP'si tamamlandı:
   - `destructor(...) { ... }` struct body içinde method olarak parse edilir.
   - Internal lowering normal method modeliyle `StructName.destructor(self&, ...)` fonksiyonuna iner.
-  - `value.destructor()` ve `ptr.destructor()` explicit çağrı olarak çalışır.
-  - Otomatik scope-exit çağrısı, ownership release ve allocator/new entegrasyonu bu MVP'nin parçası değildir.
+  - `drop value;` statement'ı destructor'ı çağırır, değeri dropped/moved state'e çeker ve sonraki kullanım `CST2105` diagnostic üretir.
+  - By-value local struct variable için function return/implicit scope-exit öncesinde destructor otomatik çağrılır.
+  - `value.destructor()` ve `ptr.destructor()` normal kullanıcı yüzeyi değildir; `CST2105` ile `drop value;` öneren diagnostic üretir.
   - `allocator` hook'u trait/allocator aşamasına kadar controlled parser diagnostic üretir.
   - `examples/smoke/struct_destructor_method.cstar`
   - `examples/smoke/struct_pointer_destructor_method.cstar`
+  - `examples/smoke/struct_scope_exit_destructor.cstar`
   - `examples/type_checker/061.cstar`
-- `trait`, `protocol`, `dynamic protocol` ve ileri lifetime keyword'leri için controlled proposal diagnostic korunur.
+  - `examples/type_checker/065.cstar`
+  - `examples/type_checker/066.cstar`
+- Trait MVP'si tamamlandı:
+  - `trait Name { requirement(...) :: Type; }` parser/AST ve requirement table üretir.
+  - `struct T with TraitA, TraitB` grammar'ı parse edilir.
+  - Pass1 compile-time conformance check yapar.
+  - `Allocator` capability `new(allocator) Type(args)` semantic kontrolünde kullanılır.
+  - `examples/smoke/trait_struct_conformance.cstar`
+  - `examples/type_checker/068.cstar`
+  - `examples/type_checker/069.cstar`
+- `protocol`, `dynamic protocol`, `dyn Trait` ve ileri lifetime keyword'leri için controlled proposal diagnostic/rezervasyon korunur.
 - Eski `policy for T { ... }` runtime hook modeli ve `policy protocol` çift isimli form superseded kabul edildi.
 - Ana yön `protocol Name for Type { ... }`: compile-time typestate/state contract.
 - `static protocol` gereksizdir; static/provable davranış default kabul edilir.
 - `dynamic protocol` açık runtime maliyeti isteyen durumlar içindir.
 - `.=` token'ı parser'da tanınır, fakat yalnızca dynamic/provability-gap protocol lowering netleşince codegen'e alınacak; bugün proposal diagnostic üretir.
+- `examples/papers/struct.cstar` final struct/lifecycle proposal olarak eklendi:
+  - `new` static method değil, compiler-recognized allocation operator.
+  - Kullanıcı `operator new/delete/shared_new/shared_delete` yazmaz.
+  - Allocation customization yalnız `Allocator` trait ile yapılır.
+  - Compiler `new(allocator) Type(args)` lowering'ini allocator + constructor + ownership runtime ile synthesize eder.
+  - User-defined operator overloading yalnız value operator'ları içindir.
+  - Struct data inheritance yoktur; layout reuse composition ile yapılır.
+  - Dynamic dispatch yalnız açık `dyn Trait` yüzeyiyle mümkündür.
 
 Kalan:
 
-- Heap allocation/control-block layout'u `new`/allocator sistemiyle birleştir.
-- Shared `*` handle ve unique `^` ile otomatik struct lifetime/release entegrasyonu.
+- User-defined value operator overloading genişletmeleri:
+  - MVP `operator +`, `-`, `*`, `/`, `%`, comparison operator'larını struct method ABI'siyle destekler.
+  - `operator index` ve zengin overload resolution ileride genişletilecek.
+  - lifecycle/ownership operator'larının user overload olarak reddi diagnostic ile korunur.
+- Allocator-backed shared control-block layout ileride tek runtime layout contract'ına taşınacak:
+  - Bugünkü MVP data allocation için explicit allocator'ı kullanır.
+  - Shared strong-count metadata default runtime allocation ile oluşturulur.
+  - Failure policy explicit signature/effect modeline bağlanacak.
 - `protocol` parser tasarımı:
   - `protocol FileState for FileHandle { ... }`
   - `state closed, opened;`
@@ -1163,7 +1204,8 @@ Kalan:
 
 Durum:
 
-- Local static, static member, init-order ve thread-safe static initialization yok.
+- Module-level static ve struct static method çalışır.
+- Local static storage duration ve static data member bu struct/lifetime modelinde açıkça kapalıdır; parser module-level static state'e yönlendiren diagnostic üretir.
 
 Tamamlanan:
 
@@ -1180,12 +1222,15 @@ Tamamlanan:
   - `Type::name(args)` static method çağrısına iner.
   - `examples/smoke/struct_scope_method_receiver.cstar`
   - `examples/type_checker/062.cstar`
+- Local static declaration diagnostic:
+  - `examples/type_checker/070.cstar`
+- Static data member diagnostic:
+  - `examples/type_checker/071.cstar`
 
 Kalan:
 
-- Local static storage duration.
-- Local static için one-time thread-safe init planı.
-- Static member ve method/member static grammar kararları.
+- Bu alt aşamada açık MVP maddesi kalmadı.
+- Local static gerekiyorsa ileride ayrı thread-safe one-time init proposal'ı olarak açılacak; şimdiki canonical yüzey module-level static state'tir.
 
 ### 7.2 Struct
 
@@ -1230,39 +1275,71 @@ Tamamlanan:
   - `::` instance receiver için kullanılmaz.
   - `examples/smoke/struct_scope_method_receiver.cstar`
   - `examples/type_checker/062.cstar`
-- Static `new` factory MVP'si:
-  - `static new(...) :: Type`
-  - `Type::new(args)`
-  - non-static `new` diagnostic
-  - `examples/smoke/struct_static_new_factory.cstar`
+- `new` allocation entry kararı:
+  - Constructor by-value initialization için yeterlidir.
+  - `new` static method değildir; allocation operator'dır.
+  - `new` by-value factory olarak kullanılamaz.
+  - Kullanıcı `operator new/delete/shared_new/shared_delete` yazamaz.
+  - Allocation customization yalnız `Allocator` trait ile yapılır.
+  - Compiler `new(allocator) Type(args)` lowering'ini synthesize eder.
+  - `new Type(args)`, `shared new Type(args)`, `new(allocator) Type(args)` ve `shared new(allocator) Type(args)` parser/AST/semantic/codegen hattındadır.
+  - unique `^` drop/scope-exit destructor + free çağırır.
+  - shared `*` drop/scope-exit atomic strong-count release yapar; son release destructor + free çağırır.
+  - `examples/smoke/struct_unique_new_operator.cstar`
+  - `examples/smoke/struct_shared_new_operator.cstar`
+  - `examples/smoke/struct_value_operator_add.cstar`
+  - `examples/type_checker/067.cstar`
   - `examples/type_checker/063.cstar`
-- Explicit destructor method MVP'si:
+  - `examples/type_checker/064.cstar`
+- Destructor/drop/scope-exit MVP'si:
   - `destructor(...) { ... }`
-  - `value.destructor()`
-  - `ptr.destructor()`
+  - `drop value;`
+  - by-value local struct için return/implicit scope-exit destructor çağrısı
+  - direct `value.destructor()` diagnostic
   - `examples/smoke/struct_destructor_method.cstar`
   - `examples/smoke/struct_pointer_destructor_method.cstar`
+  - `examples/smoke/struct_scope_exit_destructor.cstar`
   - `examples/type_checker/061.cstar`
+  - `examples/type_checker/065.cstar`
+  - `examples/type_checker/066.cstar`
 
 Kalan:
 
-- Heap allocation/control-block layout'u `new`/allocator sistemiyle birleştir.
-- Otomatik destructor/scope-exit lowering.
-- Shared `*` handle ve unique `^` ile otomatik struct lifetime/release entegrasyonu.
-- `syntax.cstar` içindeki `struct Shape<T> from Area<T>` formunu ilk MVP'de parse etmeye çalışma; önce field/method struct çekirdeği, sonra attribute binding.
-- Constructor MVP local by-value struct initializer için çalışır; `new`/allocator, destructor/scope-exit, shared retain/release ve custom allocator modeli aynı lifetime planına bağlanmalı.
+- User-defined value operator overloading genişletmeleri:
+  - MVP `operator +`, `-`, `*`, `/`, `%`, comparison operator'larını struct method ABI'siyle destekler.
+  - `operator index` ve zengin overload resolution ileride genişletilecek.
+  - lifecycle/ownership operator'ları compiler-reserved kalır.
+  - `operator new/delete/move/copy/drop` user overload olarak diagnostic üretir.
+- Struct data inheritance eklenmeyecek:
+  - `extends` yok.
+  - layout reuse composition.
+  - `struct T with Trait` yalnız conformance.
+- `syntax.cstar` içindeki struct trait bağlama örneği canonical `struct Shape<T> with Area<T>` yönüne çevrildi; `from` struct inheritance/modelleme için kullanılmayacak.
 
 ### 7.3 Trait
 
-Kalan:
+Tamamlanan:
 
 - `trait Name { ... }` parser/AST.
 - Trait requirement table.
 - `struct T with TraitA, TraitB` grammar.
 - Compile-time conformance check.
-- Dynamic dispatch yok; monomorphized/static dispatch varsayılan.
+- Allocator capability final struct proposal'a göre trait üzerinden yürür:
+  - user-defined `operator new` yok.
+  - `Allocator` conformance `new(allocator) Type(args)` semantic kontrolü için zorunlu.
+  - `examples/smoke/trait_struct_conformance.cstar`
+  - `examples/type_checker/068.cstar`
+  - `examples/type_checker/069.cstar`
+
+Kalan:
+
+- Dynamic dispatch implicit değildir; monomorphized/static dispatch varsayılan.
+- Açık dynamic dispatch için `dyn Trait` grammar/ABI:
+  - explicit trait object representation.
+  - vtable/runtime maliyeti görünür olacak.
+  - `with Trait` otomatik `dyn Trait` üretmeyecek.
 - Generic bound syntax proposal'ı.
-- Allocator capability için trait kullanılabilir; allocation failure eski policy hook yerine explicit `except`/`throw` veya result-like dönüş modeliyle tasarlanmalı.
+- Allocation failure eski policy hook yerine explicit `except`/`throw` veya result-like dönüş modeliyle tasarlanmalı.
 
 ## Aşama 8 - Metaprogramming ve İleri Proposal
 

@@ -2,9 +2,8 @@
 // expected-code: CST1001
 
 struct Meter {
-  new() :: Meter {
-    Meter meter;
-    ret meter;
+  operator new(Meter value) :: Meter^ {
+    ret ref value;
   }
 }
 

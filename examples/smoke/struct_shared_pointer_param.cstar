@@ -1,0 +1,26 @@
+// expected: pass
+// expected-exit: 2
+
+struct Agent {
+  int32 value;
+
+  constructor(int32 value) {
+    self.value = value;
+  }
+
+  destructor() {
+    self.value = 0;
+    ret;
+  }
+}
+
+audit_agent(Agent* agent) :: int32 {
+  ret strong_count(agent) as int32;
+}
+
+main() :: int32 {
+  Agent* observer = shared new Agent(4);
+  int32 count = audit_agent(observer);
+  drop observer;
+  ret count;
+}

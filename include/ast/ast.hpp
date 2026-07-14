@@ -20,6 +20,7 @@ enum ExprKind {
   ParamExpr,
   RetExpr,
   FuncCallExpr,
+  NewExpr,
   CastExpr,
   SymbolExpr,
   FixExpr,
@@ -40,6 +41,7 @@ enum DeclKind {
   MacroDecl,
   DirectiveDecl,
   StructDecl,
+  TraitDecl,
   PackageDecl,
   PackageInvDecl,
 };
@@ -49,6 +51,7 @@ enum StmtKind {
   LoopStmt,
   BreakStmt,
   ContinueStmt,
+  DropStmt,
 };
 
 struct SemanticLoc {

@@ -5,6 +5,7 @@ LocalSymbolInfoList Visitor::LocalSymbolTable{};
 FunctionSignatureTable Visitor::FunctionTable{};
 std::set<std::string> Visitor::ModuleAliases{};
 std::map<std::string, StructInfo> Visitor::StructTable{};
+std::map<std::string, TraitInfo> Visitor::TraitTable{};
 std::map<std::string, llvm::StructType*> Visitor::LLVMStructTypes{};
 
 // Type checking..
@@ -37,6 +38,9 @@ void CStarCodegen::pass1() {
         Visitor::SymbolId++;
 
         auto symbolInfo = ast->acceptBefore(preVisitor);
+      } else if (ast->getDeclKind() == DeclKind::StructDecl ||
+                 ast->getDeclKind() == DeclKind::TraitDecl) {
+        ast->acceptBefore(preVisitor);
       }
     }
   }

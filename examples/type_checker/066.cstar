@@ -1,0 +1,17 @@
+// expected: fail
+// expected-code: CST2105
+
+struct Resource {
+  int32 value;
+
+  destructor() {
+    self.value = 0;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Resource resource;
+  drop resource;
+  ret resource.value;
+}

@@ -1,0 +1,135 @@
+// expected: interactive
+
+include "modules/math_runtime.cstar" as math
+include "modules/terminal.cstar" as ui
+
+trait Scorable {
+  score() :: int32;
+}
+
+struct Agent with Scorable {
+  int32 hp;
+  int32 ep;
+  int32 tier;
+
+  constructor(int32 hpValue, int32 epValue, int32 tierValue) {
+    self.hp = hpValue;
+    self.ep = epValue;
+    self.tier = tierValue;
+  }
+
+  destructor() {
+    self.hp = 0;
+    self.ep = 0;
+    self.tier = 0;
+    ret;
+  }
+
+  score() :: int32 {
+    ret self.hp + self.ep + self.tier;
+  }
+
+  operator +(Agent rhs) :: Agent {
+    Agent merged = Agent(
+      self.hp + rhs.hp,
+      self.ep + rhs.ep,
+      self.tier + rhs.tier
+    );
+    ret merged;
+  }
+}
+
+consume_badge(int32^ badge) :: int32 {
+  ret deref badge;
+}
+
+inspect_badge(nomove int32^ badge) :: int32 {
+  ret deref badge;
+}
+
+audit_shared(Agent* agent) :: int32 {
+  Agent* local = agent;
+  Agent* moved;
+  moved := local;
+
+  ret strong_count(agent) as int32;
+}
+
+main() :: int32 {
+  ui.banner();
+  ui.prompt_name();
+  print(input_string());
+  print("\n");
+
+  ui.prompt_health();
+  int64 healthInput = input_int();
+  int32 rawHealth = cast<int32>(healthInput);
+  int32 health = rawHealth;
+  ui.prompt_energy();
+  int64 energyInput = input_int();
+  int32 rawEnergy = cast<int32>(energyInput);
+  int32 energy = rawEnergy;
+  ui.prompt_rank();
+  int64 rankInput = input_int();
+  int32 rank = cast<int32>(rankInput);
+  ui.prompt_delta();
+  int64 deltaInput = input_int();
+  int32 delta = cast<int32>(deltaInput);
+
+  int32 cleanDelta = 0;
+  int32* deltaSlot = ref cleanDelta;
+  math.write_abs(deltaSlot, delta);
+  int32 versionBonus = math.version_bonus();
+  Agent base = Agent(health, energy, rank);
+  int32 boostHealth = math.clamp_stat(cleanDelta);
+  Agent boost = Agent(boostHealth, versionBonus, 1);
+  Agent combined = base + boost;
+
+  int32 scoreValue = 0;
+  int32* scoreSlot = ref scoreValue;
+  int32 combinedScore = combined.score();
+  math.write_score(scoreSlot, combinedScore, versionBonus);
+
+  Agent^ owned = new Agent(combined.hp, combined.ep, combined.tier);
+  Agent* observer = shared new Agent(owned.hp, owned.ep, owned.tier);
+  int32 pressure = audit_shared(observer);
+
+  int32 badgeValue = scoreValue + pressure;
+  int32^ badge = ref badgeValue;
+  int32 inspected = inspect_badge(move badge);
+
+  int32 finalBadgeValue = inspected;
+  int32^ finalBadge = ref finalBadgeValue;
+  int32 consumed = consume_badge(move finalBadge);
+
+  int32 combinedHealth = combined.hp;
+  int32 combinedEnergy = combined.ep;
+  int32 combinedRank = combined.tier;
+
+  ui.print_metric("combined health", combinedHealth);
+  ui.print_metric("combined energy", combinedEnergy);
+  ui.print_metric("combined rank", combinedRank);
+  ui.print_metric("score", scoreValue);
+  ui.print_metric("shared pressure", pressure);
+  ui.print_metric("badge", consumed);
+
+  drop observer;
+  drop owned;
+
+  int32 resultCode;
+  resultCode = 1;
+  if (scoreValue > 180) {
+    print("result: critical capability\n");
+    resultCode = 4;
+  } elif (scoreValue > 120) {
+    print("result: strong capability\n");
+    resultCode = 3;
+  } elif (scoreValue > 60) {
+    print("result: steady capability\n");
+    resultCode = 2;
+  } else {
+    print("result: training mode\n");
+  }
+
+  ret resultCode;
+}

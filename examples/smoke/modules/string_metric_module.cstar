@@ -1,0 +1,7 @@
+public metric_value(const char* label, int32 value) :: int32 {
+  print(label);
+  print(": ");
+  print(value);
+  print("\n");
+  ret value;
+}

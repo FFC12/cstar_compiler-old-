@@ -126,6 +126,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
   auto isExpressionOperandStart = [&](const TokenInfo &token) {
     const auto kind = token.getTokenKind();
     return kind == TokenKind::IDENT || kind == TokenKind::SELF ||
+           kind == TokenKind::NEW || kind == TokenKind::SHARED ||
            kind == TokenKind::SCALARD ||
            kind == TokenKind::SCALARI || kind == TokenKind::LITERAL ||
            kind == TokenKind::TRUE || kind == TokenKind::FALSE ||
@@ -142,6 +143,13 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
         (isSubExpr ||
          CanContinueExpressionAcrossLine(previousSignificantTokenKind()))) {
       this->advance();
+      continue;
+    }
+
+    if (is(TokenKind::NEW) || is(TokenKind::SHARED)) {
+      auto node = advanceNewExpression(is(TokenKind::SHARED));
+      exprBucket.push_back(std::move(node));
+      i += 1;
       continue;
     }
 
@@ -1123,6 +1131,56 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
   }
 
   return std::move(exprBucket[0]);
+}
+
+ASTNode CStarParser::advanceNewExpression(bool isShared) {
+  auto startInfo = currentTokenInfo();
+  auto startPos = startInfo.getTokenPositionInfo();
+
+  if (isShared) {
+    this->advance();
+    expected(TokenKind::NEW);
+  }
+
+  expected(TokenKind::NEW);
+  this->advance();
+
+  ASTNode allocator = nullptr;
+  if (is(TokenKind::LPAREN)) {
+    bool outOfSize = false;
+    auto tokenAfterOpen = nextTokenInfo(outOfSize).getTokenKind();
+    if (outOfSize) {
+      ParserError("Incomplete new allocator expression", currentTokenInfo());
+    }
+    if (tokenAfterOpen == TokenKind::RPAREN) {
+      ParserError("new allocator expression cannot be empty",
+                  currentTokenInfo());
+    }
+    allocator = expression(true, 1);
+  }
+
+  expected(TokenKind::IDENT);
+  auto typeName = currentTokenStr();
+  this->advance();
+
+  expected(TokenKind::LPAREN);
+  ASTNode args = nullptr;
+  bool outOfSize = false;
+  auto tokenAfterOpen = nextTokenInfo(outOfSize).getTokenKind();
+  if (outOfSize) {
+    ParserError("Incomplete new constructor call", currentTokenInfo());
+  }
+  if (tokenAfterOpen == TokenKind::RPAREN) {
+    this->advance();
+    this->advance();
+  } else {
+    args = expression(true, 1);
+  }
+
+  auto endPos = prevTokenInfo().getTokenPositionInfo();
+  SemanticLoc semLoc(startPos.begin, endPos.end, startPos.line);
+  return std::make_unique<NewAST>(typeName, std::move(allocator),
+                                  std::move(args), isShared, semLoc);
 }
 
 ASTNode CStarParser::advanceConstantOrLiteral() {

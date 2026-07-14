@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <ast/trait_ast.hpp>
 #include <codegen/codegen.hpp>
 #include <utility>
 
@@ -11,6 +12,7 @@ void CStarCodegen::pass0() {
   Visitor::ScopeId = 0;
   Visitor::FunctionTable.clear();
   Visitor::StructTable.clear();
+  Visitor::TraitTable.clear();
   Visitor::LLVMStructTypes.clear();
 
   // TODO: Will be revised
@@ -34,6 +36,21 @@ void CStarCodegen::pass0() {
         }
         this->m_DefinedTypes[symbolInfo.definedTypeName] =
             Visitor::StructTable[symbolInfo.definedTypeName].fields.size();
+      } else if (ast->getDeclKind() == DeclKind::TraitDecl) {
+        Visitor preVisitor(this->m_DefinedTypes);
+        const bool redefined =
+            Visitor::TraitTable.count(
+                static_cast<TraitAST *>(ast.get())->name()) != 0;
+        auto symbolInfo = ast->acceptBefore(preVisitor);
+        auto messages = preVisitor.getUnknownTypeErrorMessages();
+        for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
+          SemanticError(it->message, it->symbolInfo, it->code);
+        }
+        if (redefined) {
+          SemanticError("Redefinition of the trait '" +
+                            symbolInfo.definedTypeName + "'",
+                        symbolInfo);
+        }
       } else if (ast->getDeclKind() == DeclKind::FuncDecl ||
           ast->getDeclKind() == DeclKind::ImportFuncDecl ||
           ast->getDeclKind() == DeclKind::ExportFuncDecl) {

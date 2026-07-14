@@ -31,6 +31,16 @@ struct StructInfo {
   std::string name;
   std::vector<StructFieldInfo> fields;
   std::map<std::string, size_t> fieldIndexes;
+  std::vector<std::string> traits;
+};
+
+struct TraitRequirementInfo {
+  std::string name;
+};
+
+struct TraitInfo {
+  std::string name;
+  std::vector<TraitRequirementInfo> requirements;
 };
 
 // This is using for pipelining informations

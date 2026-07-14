@@ -1,0 +1,18 @@
+// expected-fail: CST2001
+
+trait Measurable {
+  value() :: int32;
+}
+
+struct Meter with Measurable {
+  int32 reading;
+
+  constructor(int32 value) {
+    self.reading = value;
+  }
+}
+
+main() :: int32 {
+  Meter meter = Meter(1);
+  ret 0;
+}
