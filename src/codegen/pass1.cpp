@@ -6,6 +6,7 @@ FunctionSignatureTable Visitor::FunctionTable{};
 std::set<std::string> Visitor::ModuleAliases{};
 std::map<std::string, StructInfo> Visitor::StructTable{};
 std::map<std::string, TraitInfo> Visitor::TraitTable{};
+std::map<std::string, EnumInfo> Visitor::EnumTable{};
 std::map<std::string, llvm::StructType*> Visitor::LLVMStructTypes{};
 
 // Type checking..
@@ -39,7 +40,8 @@ void CStarCodegen::pass1() {
 
         auto symbolInfo = ast->acceptBefore(preVisitor);
       } else if (ast->getDeclKind() == DeclKind::StructDecl ||
-                 ast->getDeclKind() == DeclKind::TraitDecl) {
+                 ast->getDeclKind() == DeclKind::TraitDecl ||
+                 ast->getDeclKind() == DeclKind::EnumDecl) {
         ast->acceptBefore(preVisitor);
       }
     }

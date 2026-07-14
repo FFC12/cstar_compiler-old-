@@ -1,0 +1,19 @@
+// expected: pass
+// expected-exit: 0
+
+enum Color : uint8 {
+    Red,
+    Green,
+    Blue = 7,
+}
+
+choose(Color color) :: Color {
+    ret color;
+}
+
+main() :: int32 {
+    Color color = Color.Green;
+    Color selected = choose(color);
+
+    ret 0;
+}

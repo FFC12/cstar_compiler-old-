@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <ast/enum_ast.hpp>
 #include <ast/trait_ast.hpp>
 #include <codegen/codegen.hpp>
 #include <utility>
@@ -13,6 +14,7 @@ void CStarCodegen::pass0() {
   Visitor::FunctionTable.clear();
   Visitor::StructTable.clear();
   Visitor::TraitTable.clear();
+  Visitor::EnumTable.clear();
   Visitor::LLVMStructTypes.clear();
 
   // TODO: Will be revised
@@ -51,6 +53,21 @@ void CStarCodegen::pass0() {
                             symbolInfo.definedTypeName + "'",
                         symbolInfo);
         }
+      } else if (ast->getDeclKind() == DeclKind::EnumDecl) {
+        Visitor preVisitor(this->m_DefinedTypes);
+        auto *enumAst = static_cast<EnumAST *>(ast.get());
+        const bool redefined = Visitor::EnumTable.count(enumAst->name()) != 0;
+        auto symbolInfo = ast->acceptBefore(preVisitor);
+        auto messages = preVisitor.getUnknownTypeErrorMessages();
+        for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
+          SemanticError(it->message, it->symbolInfo, it->code);
+        }
+        if (redefined || this->m_DefinedTypes.count(symbolInfo.definedTypeName) != 0) {
+          SemanticError("Redefinition of the enum '" +
+                            symbolInfo.definedTypeName + "'",
+                        symbolInfo);
+        }
+        this->m_DefinedTypes[symbolInfo.definedTypeName] = 1;
       } else if (ast->getDeclKind() == DeclKind::FuncDecl ||
           ast->getDeclKind() == DeclKind::ImportFuncDecl ||
           ast->getDeclKind() == DeclKind::ExportFuncDecl) {

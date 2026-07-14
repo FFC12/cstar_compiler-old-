@@ -3,6 +3,7 @@
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
 #include <ast/control_flow_ast.hpp>
+#include <ast/enum_ast.hpp>
 #include <ast/fix_ast.hpp>
 #include <ast/func_ast.hpp>
 #include <ast/func_call_ast.hpp>
@@ -339,6 +340,21 @@ static bool IsFloatingType(TypeSpecifier typeSpecifier) {
     default:
       return false;
   }
+}
+
+static const EnumMemberInfo *FindEnumMember(const std::string &enumName,
+                                            const std::string &memberName) {
+  auto enumIt = Visitor::EnumTable.find(enumName);
+  if (enumIt == Visitor::EnumTable.end()) {
+    return nullptr;
+  }
+
+  auto memberIt = enumIt->second.memberIndexes.find(memberName);
+  if (memberIt == enumIt->second.memberIndexes.end()) {
+    return nullptr;
+  }
+
+  return &enumIt->second.members[memberIt->second];
 }
 
 static bool LosslessCasting(TypeSpecifier target, TypeSpecifier source) {
@@ -784,6 +800,7 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
             m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
             m_ExpectedType = param.type;
             m_DefinedTypeFlag = param.type == TypeSpecifier::SPEC_DEFINED;
+            m_DefinedTypeName = param.definedTypeName;
             argNodes[i]->acceptBefore(*this);
           }
         }
@@ -1063,6 +1080,7 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
 
         this->m_DefinedTypeFlag =
             matchedSymbol.type == TypeSpecifier::SPEC_DEFINED;
+        this->m_DefinedTypeName = matchedSymbol.definedTypeName;
 
         this->m_LastBinOpHasAtLeastOnePtr = false;
         this->m_LastSymbolInfo = matchedSymbol;
@@ -1209,6 +1227,16 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
             }
           } else {
             if (matchedSymbol.type == this->m_LastSymbolInfo.type) {
+              if (matchedSymbol.type == TypeSpecifier::SPEC_DEFINED &&
+                  matchedSymbol.definedTypeName !=
+                      this->m_LastSymbolInfo.definedTypeName) {
+                this->m_TypeErrorMessages.emplace_back(
+                    "Defined type mismatch. Expected '" +
+                        this->m_LastSymbolInfo.definedTypeName +
+                        "' but found '" + matchedSymbol.definedTypeName + "'",
+                    symbolInfo);
+              }
+
               if (m_LastSubscriptable) {
                 if (m_LastSubscriptable == matchedSymbol.isSubscriptable) {
                   // all arrays has indirection level since nature of being
@@ -1528,6 +1556,40 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
       accessInfo.begin = binaryOpAst.m_SemLoc.begin;
       accessInfo.end = binaryOpAst.m_SemLoc.end;
       accessInfo.line = binaryOpAst.m_SemLoc.line;
+
+      if (lhs != nullptr && rhs != nullptr &&
+          lhs->m_ExprKind == ExprKind::SymbolExpr &&
+          rhs->m_ExprKind == ExprKind::SymbolExpr) {
+        auto *enumSymbol = static_cast<SymbolAST *>(lhs.get());
+        auto *memberSymbol = static_cast<SymbolAST *>(rhs.get());
+        if (Visitor::EnumTable.count(enumSymbol->m_SymbolName) != 0) {
+          auto *member = FindEnumMember(enumSymbol->m_SymbolName,
+                                        memberSymbol->m_SymbolName);
+          if (member == nullptr) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Enum '" + enumSymbol->m_SymbolName + "' has no member '" +
+                    memberSymbol->m_SymbolName + "'",
+                accessInfo);
+            return accessInfo;
+          }
+
+          if (m_DefinedTypeFlag && !m_DefinedTypeName.empty() &&
+              m_DefinedTypeName != enumSymbol->m_SymbolName) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Enum value '" + enumSymbol->m_SymbolName + "." +
+                    memberSymbol->m_SymbolName +
+                    "' is incompatible with enum type '" +
+                    m_DefinedTypeName + "'",
+                accessInfo);
+          }
+          accessInfo.type = TypeSpecifier::SPEC_DEFINED;
+          accessInfo.definedTypeName = enumSymbol->m_SymbolName;
+          accessInfo.symbolName = enumSymbol->m_SymbolName + "." +
+                                  memberSymbol->m_SymbolName;
+          accessInfo.value = std::to_string(member->value);
+          return accessInfo;
+        }
+      }
 
       auto resolveFieldAccess =
           [&](auto &self, IAST *node) -> SymbolInfo {
@@ -2185,12 +2247,30 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
       this->m_LastScopeSymbols.emplace_back(loopSymbol.symbolName, loopSymbol);
     }
   };
+  auto validateSymbolInCurrentScope = [&](std::string &name,
+                                          SymbolInfo &lookupInfo,
+                                          SymbolInfo &matchedSymbol,
+                                          bool noError = false) {
+    const auto previousLastSymbolInfo = m_LastSymbolInfo;
+    m_LastSymbolInfo.symbolId = m_SymbolId;
+    m_LastSymbolInfo.scopeId = m_ScopeId;
+    m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
+    const bool found =
+        symbolValidation(name, lookupInfo, matchedSymbol, noError);
+    m_LastSymbolInfo = previousLastSymbolInfo;
+    return found;
+  };
   auto findKnownSymbol = [&](const std::string &name,
                              SymbolInfo &matchedSymbol) {
     SymbolInfo lookupInfo;
     auto lookupName = name;
-    if (symbolValidation(lookupName, lookupInfo, matchedSymbol, true)) {
+    if (validateSymbolInCurrentScope(lookupName, lookupInfo, matchedSymbol,
+                                     true)) {
       return true;
+    }
+
+    if (m_TypeChecking) {
+      return false;
     }
 
     for (auto it = m_SymbolInfos.rbegin(); it != m_SymbolInfos.rend(); ++it) {
@@ -2243,8 +2323,9 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
           symbolInfo.line = iterSymbol->m_SemLoc.line;
 
           SymbolInfo matchedSymbol;
-          if (symbolValidation(iterSymbol->m_SymbolName, symbolInfo,
-                               matchedSymbol)) {
+          auto iterName = iterSymbol->m_SymbolName;
+          if (validateSymbolInCurrentScope(iterName, symbolInfo,
+                                           matchedSymbol)) {
             if (!matchedSymbol.isSubscriptable) {
               symbolInfo.begin = iterSymbol->m_SemLoc.begin;
               symbolInfo.end = iterSymbol->m_SemLoc.end;
@@ -2463,6 +2544,7 @@ SymbolInfo Visitor::preVisit(NewAST &newAst) {
     m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
     m_ExpectedType = param.type;
     m_DefinedTypeFlag = param.type == TypeSpecifier::SPEC_DEFINED;
+    m_DefinedTypeName = param.definedTypeName;
     argNodes[i]->acceptBefore(*this);
   }
 
@@ -2867,6 +2949,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
     m_ExpectedType = signature.params[i].type;
     m_DefinedTypeFlag = signature.params[i].type == TypeSpecifier::SPEC_DEFINED;
+    m_DefinedTypeName = signature.params[i].definedTypeName;
     m_LastBinOpHasAtLeastOnePtr = false;
 
     const bool parameterIsOwnedPointer =
@@ -3144,6 +3227,7 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {
   const auto previousExpectedType = m_ExpectedType;
   const auto previousLastSymbolInfo = m_LastSymbolInfo;
   const auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+  const auto previousDefinedTypeName = m_DefinedTypeName;
   const auto previousLastRetExpr = m_LastRetExpr;
   symbolInfo.begin = retAst.m_SemLoc.begin;
   symbolInfo.end = retAst.m_SemLoc.end;
@@ -3153,6 +3237,9 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {
     this->m_LastRetExpr = true;
     m_LastSymbolInfo = m_LastFuncRetTypeInfo;
     m_ExpectedType = m_LastFuncRetTypeInfo.type;
+    m_DefinedTypeFlag =
+        m_LastFuncRetTypeInfo.type == TypeSpecifier::SPEC_DEFINED;
+    m_DefinedTypeName = m_LastFuncRetTypeInfo.definedTypeName;
     this->m_LastSymbolInfo.symbolId = m_SymbolId;
     this->m_LastSymbolInfo.scopeId = m_ScopeId;
     this->m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
@@ -3208,6 +3295,7 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {
   this->m_ExpectedType = previousExpectedType;
   this->m_LastSymbolInfo = previousLastSymbolInfo;
   this->m_DefinedTypeFlag = previousDefinedTypeFlag;
+  this->m_DefinedTypeName = previousDefinedTypeName;
   this->m_LastRetExpr = previousLastRetExpr;
 
   return symbolInfo;
@@ -3416,6 +3504,36 @@ SymbolInfo Visitor::preVisit(TraitAST &traitAst) {
   }
 
   TraitTable[info.name] = std::move(info);
+  return symbolInfo;
+}
+
+SymbolInfo Visitor::preVisit(EnumAST &enumAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.symbolName = enumAst.m_Name;
+  symbolInfo.definedTypeName = enumAst.m_Name;
+  symbolInfo.begin = enumAst.m_SemLoc.begin;
+  symbolInfo.end = enumAst.m_SemLoc.end;
+  symbolInfo.line = enumAst.m_SemLoc.line;
+  symbolInfo.type = TypeSpecifier::SPEC_DEFINED;
+
+  EnumInfo info;
+  info.name = enumAst.m_Name;
+  info.underlyingType = enumAst.m_UnderlyingType;
+
+  for (const auto &member : enumAst.m_Members) {
+    if (info.memberIndexes.count(member.name) != 0) {
+      SymbolInfo memberSymbol = symbolInfo;
+      memberSymbol.symbolName = member.name;
+      this->m_TypeErrorMessages.emplace_back(
+          "Redefinition of enum member '" + member.name + "'", memberSymbol);
+      continue;
+    }
+
+    info.memberIndexes[member.name] = info.members.size();
+    info.members.push_back(member);
+  }
+
+  EnumTable[info.name] = std::move(info);
   return symbolInfo;
 }
 

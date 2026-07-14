@@ -46,6 +46,12 @@ Tamamlanan dil/codegen parçaları:
 - Uninitialized local primitive default init: şimdilik zero-init.
 - `char`, `float32`, `float64` primitive smoke'ları.
 - Float literal fractional kısmı lexer'da korunuyor (`0.5`, `4.5` gibi).
+- Scalar enum MVP:
+  - `enum Name : uint8 { A, B = 7 }`
+  - explicit repr zorunlu.
+  - canonical member erişimi `Name.A`.
+  - enum local/param/return storage underlying integer'a iner.
+  - unknown member ve enum-type mismatch diagnostic üretir.
 - Basit arithmetic expression.
 - Integer ve floating point `+`, `-`, `*`, `/`, `%` codegen.
 - Comparison/logical expression.
@@ -122,6 +128,7 @@ examples/smoke/char_literal.cstar
 examples/smoke/float32_arithmetic.cstar
 examples/smoke/float64_arithmetic.cstar
 examples/smoke/bool_literal.cstar
+examples/smoke/scalar_enum.cstar
 examples/smoke/binary_expr.cstar
 examples/smoke/comparison_expr.cstar
 examples/smoke/not_equal_expr.cstar
@@ -247,7 +254,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Her zaman yeşil kalması gereken küçük çalışan compiler çekirdeği.
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
-- Güncel durumda module helper dosyaları hariç 106/106 dosya başarılı.
+- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 120/120 smoke dosyası başarılı.
 
 `examples/type_checker/`:
 
@@ -255,7 +262,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Exit code `1` çoğu dosya için kabul edilebilir diagnostic olabilir.
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
-- Güncel durumda `-ExpectDiagnostics` ile 67/67 dosya kontrollü diagnostic üretiyor, crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 80 dosyada 78 kontrollü diagnostic, 1 positive/pass ve 1 module helper skip var; crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -1392,6 +1399,8 @@ Proposal'da görünen ama çok sonraya bırakılacak başlıklar:
 - `attribute`
 - directive/macro sistemi
 - `$` ve `#` tabanlı compile-time hook'lar
+- allocator failure/effect modeli ve shared control-block runtime contract'ı
+- `protocol` / `dynamic protocol` typestate flow analysis
 - scalar enum / flags enum / explicit tagged layout
 - açık `dynamic Trait` trait-object ABI
 - `async` / `await`
@@ -1410,6 +1419,13 @@ Canonical proposal örnekleri artık concept bazlı dosyalara ayrılmıştır:
 
 `examples/papers/struct.cstar` yalnız struct/lifecycle/value operator kararlarını taşır. `examples/papers/syntax.cstar` artık bu ileri denemeleri taşımıyor.
 
+Concept split kararı:
+
+- Eski `policy for T { ... }` modeli ana grammar'a alınmayacak.
+- Allocation, protocol state, trait dispatch, cleanup, error flow, macro expansion ve async boundary tek hook sistemi altında birleşmeyecek.
+- Runtime maliyeti olan her şey source syntax'ta görünür olacak.
+- `--show-desugar` macro expansion, `.=` protocol check, scope-exit cleanup ve allocator/new lowering gibi compiler-synthesized adımları gösterebilmeli.
+
 ### 8.1 Attribute
 
 Durum:
@@ -1421,16 +1437,30 @@ Durum:
 Kalan:
 
 - `attribute Name for <kind> { ... }` grammar'ını parser/AST seviyesine indir.
+- `@Name(args)` item annotation grammar'ını ekle.
+- Attribute target kind'larını ilk MVP'de sınırlı tut:
+  - `struct`
+  - ileride `function`, `enum`, `field`, `module`
 - Attribute'ın trait'ten farkını yaz:
   - trait: type capability/contract.
   - attribute: compile-time transformation/reflection helper.
+- Attribute'ın protocol'den farkını yaz:
+  - protocol: value state/typestate contract.
+  - attribute: item/type üzerinde checked compile-time transform.
 - Reflection yüzeyi:
   - `name($item)`, `fields($item)`, `methods($item)`.
   - field metadata: name/type/visibility/qualifier/offset.
   - method metadata: name/params/return/static.
   - `has_attribute(...)`, `attribute_args(...)`, `sizeof(Type)`, `alignof(Type)`.
 - `fields($item)`, `methods($item)`, `$emit`, `$item`, `#for`, `#error` gibi compile-time reflection/generation yüzeylerini uygula.
+- Generated declaration'lar normal pass0/pass1 semantic kontrollerinden geçmeli.
+- Attribute expansion order:
+  - source item parse.
+  - item/field/method metadata register.
+  - attribute item emission.
+  - original + generated item pass0/pass1.
 - Attribute layout'u gizlice değiştirmemeli, private field'ı public yapmamalı, runtime metadata üretmemeli ve trait/protocol conformance'ı bypass etmemeli.
+- Function body rewrite ilk MVP'ye alınmamalı; gerekirse ayrı ve daha riskli macro capability olarak tasarlanmalı.
 - İlk MVP sadece parse + controlled diagnostic olmalı; expansion sonra.
 
 ### 8.2 Macro / Directive
@@ -1445,13 +1475,25 @@ Durum:
 Kalan:
 
 - `macro name($arg: kind, ...) -> expr|stmt|item|type { ... }` grammar'ını parser/AST seviyesine indir.
+- Macro parameter kind setini netleştir:
+  - `expr`
+  - `stmt`
+  - `item`
+  - `type`
+  - `ident`
+  - `tokens` yalnız escape hatch olarak.
+- Macro return kind'ı `expr`, `stmt`, `item`, `type` ile sınırlı başlamalı.
 - Macro expansion zamanı:
   - parse-time mı,
   - semantic-time mı,
   - IR-before-codegen mi?
 - Hijyen/hygiene kuralları.
 - Error reporting ve source span mapping.
+- Macro local isimleri caller scope'una sızmamalı.
+- Macro diagnostic'i hem macro tanımını hem çağrı yerini gösterebilmeli.
 - `#if`, `#warning`, `#error`, `cfg(...)`, `feature(...)`, `target.*` compile-time config yüzeyini tasarla.
+- `build.mode`, `target.os`, `target.arch`, `feature("name")`, `cfg("key")`, `cfg_int("key")` gibi değerlerin nereden besleneceği CLI/build config tarafında tasarlanmalı.
+- `#if` kör text replacement değil, parsed item/statement selection olarak çalışmalı.
 - Protocol ile macro/directive karıştırılmamalı; protocol gizli hook sistemi olmayacak.
 
 ### 8.3 Enum / Explicit Tagged Layout
@@ -1459,17 +1501,46 @@ Kalan:
 Durum:
 
 - Lexer `enum` keyword'ünü tanır.
-- Parser enum AST/lowering yok.
+- Parser/AST/pass0/pass1/codegen scalar enum MVP'si çalışır:
+  - C-like grammar: `enum Color : uint8 { Red, Green, Blue = 7 }`.
+  - Explicit repr tüm enum'lar için zorunlu tutulur.
+  - Member value assignment implicit incremental veya explicit integer literal olabilir.
+  - Canonical erişim `Color.Green`; unqualified member erişimi açılmadı.
+  - Enum local variable, function parametre ve return storage'ı underlying integer type'a iner.
+  - Unknown enum member ve farklı enum type atanması controlled diagnostic üretir.
+  - Positive smoke: `examples/smoke/scalar_enum.cstar`.
+  - Negative diagnostic: `examples/type_checker/077.cstar`, `examples/type_checker/078.cstar`.
+- `flags` ve `tagged` canonical proposal yüzeyidir; lexer/parser durumları ayrıca kontrol edilip eksikse keyword/token olarak eklenmeli.
 - `option` statement enum pattern matching için temel yüzey olarak kullanılacak.
 
 Kalan:
 
-- C-like enum grammar'ı: `enum Color : uint8 { Red, Green, Blue }`.
 - Flags enum grammar'ı: `flags enum FileMode : uint32 { Read = 1, Write = 2 }`.
+- Scalar enum hardening:
+  - duplicate value policy.
+  - out-of-range repr diagnostic.
+  - signed/unsigned repr boundary testleri.
+  - duplicate member negative testini parser + semantic tarafında net diagnostic koduna bağla.
+- Flags enum semantic:
+  - bitwise `|`, `&`, `^`, `~` legal.
+  - arithmetic legal olmamalı.
+  - duplicate/overlap değer policy'si warning olabilir.
 - Payload gereken durumda canonical model explicit `TokenKind + struct Token` layout'u olmalı.
 - `tagged Packet : uint8 { ... }` sugar'ı explicit `tag + storage` layout'una inecek şekilde tasarlanmalı.
-- Public/export ABI için enum repr zorunlu olmalı.
+- `tagged` desugar contract:
+  - generated `PacketTag` enum repr açık.
+  - generated `Packet` struct ABI-visible alignment/storage taşır.
+  - heap allocation veya hidden runtime metadata üretmez.
+- Variant construction syntax: `Packet.Data { bytes: bytes, len: len }`.
+- Variant field access: `packet.Data.len`.
+  - Pass1 tag'i kanıtlayabiliyorsa direct field access.
+  - Kanıtlayamıyorsa ilk MVP controlled diagnostic.
+  - Runtime checked access ayrı safety feature olarak sonra değerlendirilecek.
 - Exhaustiveness kontrolü `option(enum_value)` için yapılabilir; `_` default yeni value eklendiğinde warning üretmeli.
+- Smoke/type-checker adayları:
+  - flags enum bitwise pass.
+  - enum repr overflow diagnostic.
+  - tagged variant access without proven tag diagnostic.
 
 ### 8.4 Dynamic Trait Object
 
@@ -1484,43 +1555,220 @@ Kalan:
 - `dynamic Trait&`, `dynamic Trait*`, `dynamic Trait^` grammar'ı.
 - Representation contract: `{ data: void*, vtable: constptr TraitVTable* }`.
 - `dynamic ref value as Trait` / `dynamic move value as Trait` erase syntax'ı; yalnız value type trait'i sağlıyorsa legal.
+- `unsafe_cast` trait object üretememeli; vtable doğruluğu compiler sorumluluğu olmalı.
 - Vtable method imzası üretimi ve dispatch lowering.
+- Dynamic trait method call:
+  - `writer.write(data)` vtable dispatch'e inmeli.
+  - return/param ABI static trait requirement'ı ile uyumlu olmalı.
 - Ownership davranışı handle marker üzerinden ayrılmalı: borrowed `&`, shared `*`, unique `^`.
 - Public/export ABI için generated vtable struct ve data pointer repr'ı açık olmalı.
+- Type erasure diagnostics:
+  - trait'i sağlamayan type için `dynamic ref value as Trait` reddi.
+  - moved-after-use ve shared retain/release davranışı normal ownership sistemiyle aynı kalmalı.
+
+### 8.5 Allocator / New Lowering Contract
+
+Durum:
+
+- `new Type(args)`, `shared new Type(args)` ve `new(allocator) Type(args)` MVP yüzeyi çalışır.
+- `Allocator` trait conformance semantic kontrolünde kullanılır.
+- `examples/papers/allocator.cstar` canonical proposal dosyasıdır.
+- Shared handle güçlü sayacı MVP olarak vardır; allocator-backed shared metadata contract'ı henüz tam değildir.
+
+Kalan:
+
+- `Allocator` trait requirement'larını standartlaştır:
+  - `alloc(usize bytes, usize align) :: void*`
+  - `free(void* ptr, usize bytes, usize align) :: void`
+- `new(allocator) Type(args)` lowering'ini `--show-desugar` ile görünür yap:
+  - `alloc(sizeof(Type), alignof(Type))`
+  - placement constructor call
+  - unique/shared handle attach
+  - destructor + `free` cleanup edge
+- `shared new(allocator) Type(args)` için control-block layout contract'ı tasarla:
+  - strong count.
+  - data offset/alignment.
+  - allocator reference veya allocator vtable bilgisi.
+  - last release -> destructor -> allocator.free.
+- Bugünkü explicit allocator'ın yalnız data allocation mı yaptığı, yoksa shared control-block'u da mı yönettiği netleştirilmeli; hedef tek runtime layout contract'ı olmalı.
+- Allocation failure policy:
+  - gizli policy hook yok.
+  - `except`/`throw` veya explicit result-like return ile görünür olmalı.
+  - null raw pointer dönen allocator için controlled runtime/semantic policy belirlenmeli.
+- Test adayları:
+  - allocator olmayan değerle `new(allocator)` diagnostic'i korunmalı.
+  - allocator-backed unique allocation pass.
+  - allocator-backed shared allocation pass.
+  - destructor + allocator.free çağrı sırası smoke.
+
+### 8.6 Protocol / Typestate
+
+Durum:
+
+- `.=` token olarak tanınır ve protocol proposal diagnostic üretir.
+- `protocol`, `dynamic protocol`, `state`, `is` lexer seviyesinde ayrılmıştır.
+- `examples/papers/protocol.cstar` canonical proposal dosyasıdır.
+- Eski `policy for T` ve `policy protocol` superseded kabul edilir.
+
+Kalan:
+
+- `protocol Name for Type { ... }` parser/AST:
+  - protocol adı.
+  - target type.
+  - state seti.
+  - default state.
+  - transition table.
+  - forbidden-call table.
+  - scope-exit transition table.
+- Static/provable protocol default olmalı; `static protocol` syntax'ı eklenmemeli.
+- State-qualified type yüzeyi:
+  - `opened FileHandle^`
+  - `closed FileHandle^`
+  - `const opened FileHandle^`
+  - çoklu state slot: `opened locked FileHandle^`
+- Pass1 flow analysis:
+  - method call sonrası state transition.
+  - return type state match.
+  - moved pointer ile state bilgisinin taşınması.
+  - forbidden call diagnostic: `read() :: !closed`.
+  - `state is ...` / `value is state` kontrolü.
+- `scope_exit A -> B :: method();` cleanup edge:
+  - `ret`, `throw`, `break`, `continue` yollarında çalışmalı.
+  - cleanup order reverse acquisition order.
+  - cleanup transition cleanup-safe/noexcept kabul edilmeli.
+  - fallible cleanup explicit user code gerektirmeli.
+- Çoklu protocol state slot'u tek birleşik enum'a indirgenmemeli; her protocol kendi named slot'una sahip olmalı.
+- `dynamic protocol`:
+  - explicit runtime discriminant/tag field.
+  - `.=` yalnız dynamic/provability-gap transition için.
+  - hidden hook table/hashmap/virtual dispatch yok.
+  - `.=` lowering switch/check olarak `--show-desugar` ile görünür olmalı.
+- Test adayları:
+  - valid open/read/close state flow pass.
+  - closed file read diagnostic.
+  - scope-exit cleanup on return.
+  - scope-exit cleanup on throw.
+  - `.=` dynamic protocol controlled diagnostic -> ileride lowering smoke.
+
+### 8.7 Effects / Except / Throw / Defer
+
+Durum:
+
+- `except`, `throw`, `defer` keyword'leri lexer seviyesinde tanınır.
+- Parser/AST/effect semantic yok veya proposal diagnostic seviyesindedir.
+- Protocol scope-exit modeli `throw` yollarını da kapsayacak şekilde tasarlandı.
+
+Kalan:
+
+- Function signature effect grammar:
+  - `fn(...) except ErrorType :: ReturnType`
+  - no-effect function'dan fallible call yapıldığında diagnostic.
+- `throw Expr;` statement AST/semantic.
+- Error type olarak ilk MVP'de scalar enum veya explicit result-like type tercih edilmeli.
+- Unwind/lowering stratejisi:
+  - ilk MVP structured early-return lowering olabilir.
+  - gerçek platform exception ABI'si sonraya bırakılabilir.
+- `defer` statement:
+  - explicit cleanup block.
+  - protocol `scope_exit` ile çakışmayan net sıra.
+  - reverse lexical order.
+- Cleanup safety:
+  - defer/scope-exit içinden throw policy'si netleşmeli.
+  - fallible cleanup açıkça handle edilmeli.
+- `--show-desugar` defer ve scope-exit cleanup edge'lerini göstermeli.
+
+### 8.8 Concurrency / Async / Task Ownership
+
+Durum:
+
+- `async`, `await`, `nomove` lexer/parser seviyesinde kısmen tanınır; async proposal diagnostic üretir.
+- `nomove` ownership-flow kısıtı bugünkü type-checker setinde çalışır.
+- `examples/papers/concurrency.cstar` canonical proposal dosyasıdır.
+
+Kalan:
+
+- `async` function effect grammar ve AST:
+  - `fn(...) async :: T`
+  - `fn(...) async except E :: T` kombinasyonu ileride.
+- `await expr` expression/statement lowering.
+- Task return handle veya future type modeli:
+  - implicit compiler task handle mı,
+  - explicit stdlib `Task<T>` mı?
+- Task boundary ownership rules:
+  - `T^` yalnız explicit `move` ile crossing.
+  - moved unique value task record'a taşınmalı.
+  - `T*` by-value crossing atomic retain/copy yapmalı.
+  - borrowed `&` crossing yalnız structured concurrency/lifetime proof varsa legal.
+- `Send`/`Sync` marker:
+  - runtime vtable değil trait/capability marker.
+  - scheduler lowering boundary check üretmeli.
+- `nomove`:
+  - protocol state değil.
+  - hidden policy hook değil.
+  - async/task boundary relay'i engellemeli.
+- Structured concurrency:
+  - `task_group` veya benzeri scope-bound join modeli tasarlanmalı.
+  - child task parent scope'u aşamamalı.
+- Runtime backend:
+  - ilk MVP single-thread event loop mu OS thread mi netleştir.
+  - CRT/std native sleep/read_key gibi geçici console builtin'leriyle karışmamalı.
+- Test adayları:
+  - async proposal diagnostic korunmalı.
+  - unique without move diagnostic.
+  - moved-after-await diagnostic.
+  - shared pointer retain across task smoke.
+  - borrowed reference task escape diagnostic.
+
+### 8.9 Proposal Dosyaları ve Controlled Diagnostic Bakımı
+
+Durum:
+
+- `examples/papers/*.cstar` concept bazlı proposal belgeleri olarak ayrıldı.
+- Bu dosyaların bugünkü amacı tamamen compile olmak değil, tasarım yüzeyini canlı tutmak ve compiler'ın crash/assert üretmeden controlled diagnostic vermesini sağlamaktır.
+
+Kalan:
+
+- Her proposal dosyasının başındaki `// expected: diagnostic (proposal)` etiketi korunmalı.
+- `tools/run_examples.ps1 -Suite papers -ExpectDiagnostics` çıktısı crash/assert içermemeli.
+- Yeni proposal syntax eklenince önce ilgili `examples/papers/<concept>.cstar` güncellenmeli.
+- Bir proposal parçası gerçek MVP'ye indiğinde:
+  - küçük positive smoke `examples/smoke/` altına çıkarılmalı.
+  - negatif semantic örnek `examples/type_checker/` altına eklenmeli.
+  - `DOKUMANTASYON_TR.md` ve bu TODO dosyasında “proposal”dan “MVP/çalışıyor” durumuna taşınmalı.
+- `policy.cstar` concept map olarak kalmalı; yeni runtime hook syntax'ı eklemek için kullanılmamalı.
 
 ## Bir Sonraki En İyi Adım
 
 Tamamlanan son adım:
 
-- Struct MVP genişletildi:
+- Scalar enum MVP compiler hattına indirildi:
+  - `EnumAST`, `EnumTable`, parser/pass0/pass1/codegen desteği eklendi.
+  - `enum Name : repr { A, B = 7 }` grammar'ı çalışıyor.
+  - `Color.Green` lookup, enum local/param/return ve mismatch diagnostic'leri doğrulandı.
+  - `examples/smoke/scalar_enum.cstar`
+  - `examples/type_checker/077.cstar`
+  - `examples/type_checker/078.cstar`
 
-```cstar
-struct Point {
-    int32 x;
-    int32 y;
-}
+Önceki tamamlanan planlama adımı:
 
-struct Line {
-    Point start;
-    Point end;
-}
+- Proposal dosyaları concept bazlı ayrıldı:
 
-sum(Point p) :: int32 {
-    ret p.x + p.y;
-}
+- `policy.cstar`: concept map / eski hook modelinin ayrıştırılması.
+- `struct.cstar`: struct/lifecycle/value operator.
+- `allocator.cstar`: allocator capability ve `new` lowering.
+- `trait.cstar`: static trait + explicit `dynamic Trait`.
+- `protocol.cstar`: typestate, `.=` ve scope-exit cleanup.
+- `enum.cstar`: scalar enum, flags enum, tagged layout.
+- `metaprogramming.cstar`: macro/directive/attribute/reflection.
+- `concurrency.cstar`: async/task ownership, `Send`/`Sync`, `nomove`.
 
-main() :: int32 {
-    Line line;
-    line.start.x = 3;
-    line.end.y += 1;
-    ret sum(line.start) + line.end.y;
-}
-```
-
-Parser/AST, StructTable metadata, LLVM `StructType`, zero-init storage, by-value param/return, nested field GEP zinciri, method/self lowering, constructor initializer MVP'si ve direct self-by-value diagnostic doğrulandı.
+Bu dosyalar compiler ile controlled diagnostic verir; crash/assert kabul edilmez.
 
 Sıradaki teknik iş:
 
-- Aşama 7'de pointer/shared handle field access ve method receiver kararını netleştirmek.
-- Ardından `new`/allocator ve destructor/scope-exit entegrasyonunu shared/unique lifetime modeliyle bağlamak.
-- Sonra `trait` requirement table ve `protocol` parser/flow tasarımına geçmek.
+- Önce Aşama 8.9 bakımını sürekli yeşil tut: papers suite controlled diagnostic vermeli.
+- Enum hardening'i tamamla:
+  - repr overflow diagnostic.
+  - duplicate value policy.
+  - flags enum grammar + bitwise-only semantic.
+- Sonra `tagged` desugar veya `protocol` flow analysis'e geçmek daha sağlıklı olur; çünkü tagged access ve protocol state proof aynı statik kanıtlama altyapısını paylaşabilir.

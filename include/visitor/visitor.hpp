@@ -77,6 +77,7 @@ class NewAST;
 class BreakStmtAST;
 class ContinueStmtAST;
 class DropStmtAST;
+class EnumAST;
 class ParamAST;
 class RetAST;
 class ScalarOrLiteralAST;
@@ -230,6 +231,7 @@ class Visitor {
   static FunctionSignatureTable FunctionTable;
   static std::map<std::string, StructInfo> StructTable;
   static std::map<std::string, TraitInfo> TraitTable;
+  static std::map<std::string, EnumInfo> EnumTable;
   static std::map<std::string, llvm::StructType*> LLVMStructTypes;
   static std::set<std::string> ModuleAliases;
   static size_t SymbolId, ScopeId;
@@ -263,6 +265,7 @@ class Visitor {
   ValuePtr visit(SymbolAST& symbolAst);
   ValuePtr visit(StructAST& structAst);
   ValuePtr visit(TraitAST& traitAst);
+  ValuePtr visit(EnumAST& enumAst);
   ValuePtr visit(FixAST& fixAst);
   llvm::Function* declareFunction(FuncAST& funcAst);
 
@@ -286,6 +289,7 @@ class Visitor {
   SymbolInfo preVisit(SymbolAST& symbolAst);
   SymbolInfo preVisit(StructAST& structAst);
   SymbolInfo preVisit(TraitAST& traitAst);
+  SymbolInfo preVisit(EnumAST& enumAst);
   SymbolInfo preVisit(FixAST& fixAst);
 
   void finalizeCodegen();

@@ -3,6 +3,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <cstdint>
 #include <parser/type_qualifier.hpp>
 #include <parser/type_specifiers.hpp>
 
@@ -41,6 +42,18 @@ struct TraitRequirementInfo {
 struct TraitInfo {
   std::string name;
   std::vector<TraitRequirementInfo> requirements;
+};
+
+struct EnumMemberInfo {
+  std::string name;
+  int64_t value = 0;
+};
+
+struct EnumInfo {
+  std::string name;
+  TypeSpecifier underlyingType = TypeSpecifier::SPEC_I32;
+  std::vector<EnumMemberInfo> members;
+  std::map<std::string, size_t> memberIndexes;
 };
 
 // This is using for pipelining informations

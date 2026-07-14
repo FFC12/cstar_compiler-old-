@@ -9,6 +9,7 @@
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
 #include <ast/control_flow_ast.hpp>
+#include <ast/enum_ast.hpp>
 #include <ast/func_ast.hpp>
 #include <ast/func_call_ast.hpp>
 #include <ast/if_stmt.hpp>
@@ -143,6 +144,39 @@ static llvm::StructType *GetDefinedStructTy(const std::string &name) {
   return structType;
 }
 
+static TypeSpecifier GetDefinedStorageType(const std::string &definedTypeName) {
+  auto enumIt = Visitor::EnumTable.find(definedTypeName);
+  if (enumIt != Visitor::EnumTable.end()) {
+    return enumIt->second.underlyingType;
+  }
+
+  return TypeSpecifier::SPEC_DEFINED;
+}
+
+static TypeSpecifier GetEffectiveStorageType(TypeSpecifier typeSpecifier,
+                                             const std::string &definedTypeName) {
+  if (typeSpecifier == TypeSpecifier::SPEC_DEFINED) {
+    return GetDefinedStorageType(definedTypeName);
+  }
+
+  return typeSpecifier;
+}
+
+static const EnumMemberInfo *FindEnumMember(const std::string &enumName,
+                                            const std::string &memberName) {
+  auto enumIt = Visitor::EnumTable.find(enumName);
+  if (enumIt == Visitor::EnumTable.end()) {
+    return nullptr;
+  }
+
+  auto memberIt = enumIt->second.memberIndexes.find(memberName);
+  if (memberIt == enumIt->second.memberIndexes.end()) {
+    return nullptr;
+  }
+
+  return &enumIt->second.members[memberIt->second];
+}
+
 static llvm::Value *ExtractSharedPointerData(llvm::Value *handle);
 static llvm::Value *ExtractSharedPointerCount(llvm::Value *handle);
 
@@ -180,6 +214,11 @@ static llvm::Type *GetStorageType(TypeSpecifier typeSpecifier,
                                   bool isRef,
                                   const std::string &definedTypeName) {
   if (typeSpecifier == TypeSpecifier::SPEC_DEFINED && indirectLevel == 0) {
+    auto enumIt = Visitor::EnumTable.find(definedTypeName);
+    if (enumIt != Visitor::EnumTable.end()) {
+      return GetType(enumIt->second.underlyingType, 0, false);
+    }
+
     return GetDefinedStructTy(definedTypeName);
   }
 
@@ -1423,6 +1462,27 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
   llvm::Value *value = nullptr, *rhs, *lhs;
 
   if (binaryOpAst.m_BinOpKind == B_DOT) {
+    if (binaryOpAst.m_LHS != nullptr && binaryOpAst.m_RHS != nullptr &&
+        binaryOpAst.m_LHS->m_ExprKind == ExprKind::SymbolExpr &&
+        binaryOpAst.m_RHS->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *enumSymbol = static_cast<SymbolAST *>(binaryOpAst.m_LHS.get());
+      auto *memberSymbol = static_cast<SymbolAST *>(binaryOpAst.m_RHS.get());
+      auto enumIt = EnumTable.find(enumSymbol->m_SymbolName);
+      if (enumIt != EnumTable.end()) {
+        auto *member =
+            FindEnumMember(enumSymbol->m_SymbolName, memberSymbol->m_SymbolName);
+        if (member == nullptr) {
+          assert(false && "Enum member should have been checked in pass1.");
+        }
+
+        auto *enumType = GetType(enumIt->second.underlyingType, 0);
+        m_LastType = enumType;
+        m_LastDefinedTypeName = enumSymbol->m_SymbolName;
+        m_LastSigned = IsSigned(enumIt->second.underlyingType);
+        return llvm::ConstantInt::get(enumType, member->value, m_LastSigned);
+      }
+    }
+
     struct FieldAddress {
       llvm::Value *address = nullptr;
       llvm::Type *valueType = nullptr;
@@ -1764,7 +1824,9 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
     auto *loadedValue = CreateLoad(referencedAddress, referencedType,
                                    symbolAst.m_SymbolName + ".ref");
 
-    isSigned = IsSigned(getSymbolInfo(symbolAst.m_SymbolName).type);
+    auto symbolInfo = getSymbolInfo(symbolAst.m_SymbolName);
+    isSigned = IsSigned(GetEffectiveStorageType(symbolInfo.type,
+                                                symbolInfo.definedTypeName));
     if (m_LastType == nullptr) {
       m_LastType = referencedType;
       m_LastSigned = isSigned;
@@ -1782,14 +1844,18 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
     auto *arrayAddress =
         CreateLoad(value, slotType, symbolAst.m_SymbolName + ".array.addr");
     m_LastType = arrayParam->second;
-    m_LastSigned = IsSigned(getSymbolInfo(symbolAst.m_SymbolName).type);
+    auto symbolInfo = getSymbolInfo(symbolAst.m_SymbolName);
+    m_LastSigned = IsSigned(GetEffectiveStorageType(symbolInfo.type,
+                                                    symbolInfo.definedTypeName));
     return arrayAddress;
   }
 
   if (this->m_LastVarDecl && !this->m_LastArrayIndex) {
     valueType = GetPointeeType(value);
 
-    isSigned = IsSigned(getSymbolInfo(symbolAst.m_SymbolName).type);
+    auto symbolInfo = getSymbolInfo(symbolAst.m_SymbolName);
+    isSigned = IsSigned(GetEffectiveStorageType(symbolInfo.type,
+                                                symbolInfo.definedTypeName));
     llvm::Type *type = value->getType();
 
     if (value->getType()->isPointerTy()) {
@@ -1945,7 +2011,8 @@ ValuePtr Visitor::visit(VarAST &varAst) {
   this->m_LastType = type;
   this->m_LastDefinedTypeName = definedTypeName;
   this->m_LastGlobVar = !varAst.m_IsLocal;
-  this->m_LastSigned = IsSigned(varAst.m_TypeSpec);
+  this->m_LastSigned =
+      IsSigned(GetEffectiveStorageType(varAst.m_TypeSpec, definedTypeName));
   this->m_LastInitializerList = varAst.m_IsInitializerList;
   this->m_LastVarName = varAst.m_Name;
   Visitor::LastGlobVarRef = nullptr;
@@ -3772,6 +3839,8 @@ ValuePtr Visitor::visit(StructAST &structAst) {
 }
 
 ValuePtr Visitor::visit(TraitAST &traitAst) { return nullptr; }
+
+ValuePtr Visitor::visit(EnumAST &enumAst) { return nullptr; }
 
 void Visitor::finalizeCodegen() {
   if (this->m_GlobaInitVarFunc.size() > 0) {

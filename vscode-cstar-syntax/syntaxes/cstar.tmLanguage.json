@@ -6,15 +6,17 @@
     { "include": "#comments" },
     { "include": "#strings" },
     { "include": "#characters" },
+    { "include": "#directives" },
     { "include": "#imports" },
     { "include": "#declarations" },
-    { "include": "#operators" },
+    { "include": "#generic-arguments" },
     { "include": "#keywords" },
     { "include": "#types" },
     { "include": "#constants" },
     { "include": "#numbers" },
     { "include": "#functions" },
     { "include": "#members" },
+    { "include": "#operators" },
     { "include": "#punctuation" }
   ],
   "repository": {
@@ -55,6 +57,26 @@
         {
           "name": "string.quoted.single.cstar",
           "match": "'([^'\\\\]|\\\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}|[0-7]{1,3}|[abfnrtv\\\\'\"?0]))'"
+        }
+      ]
+    },
+    "directives": {
+      "patterns": [
+        {
+          "name": "keyword.control.directive.conditional.cstar",
+          "match": "#\\s*(if|else|for|warning|error)\\b"
+        },
+        {
+          "name": "keyword.control.directive.cstar",
+          "match": "(@|#)\\s*[A-Za-z_][A-Za-z0-9_]*\\b"
+        },
+        {
+          "name": "variable.language.macro.cstar",
+          "match": "\\$[A-Za-z_][A-Za-z0-9_]*\\b|\\$[0-9]+\\b"
+        },
+        {
+          "name": "keyword.control.emit.cstar",
+          "match": "\\$emit\\b"
         }
       ]
     },
@@ -121,18 +143,28 @@
         },
         {
           "name": "meta.protocol.cstar",
-          "match": "\\b(protocol)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "match": "\\b(?:(dynamic)\\s+)?(protocol)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "storage.type.protocol.cstar" },
-            "2": { "name": "entity.name.type.protocol.cstar" }
+            "1": { "name": "storage.modifier.dynamic.cstar" },
+            "2": { "name": "storage.type.protocol.cstar" },
+            "3": { "name": "entity.name.type.protocol.cstar" }
           }
         },
         {
           "name": "meta.enum.cstar",
-          "match": "\\b(enum)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "match": "\\b(?:(flags)\\s+)?(enum)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
-            "1": { "name": "storage.type.enum.cstar" },
-            "2": { "name": "entity.name.type.enum.cstar" }
+            "1": { "name": "storage.modifier.flags.cstar" },
+            "2": { "name": "storage.type.enum.cstar" },
+            "3": { "name": "entity.name.type.enum.cstar" }
+          }
+        },
+        {
+          "name": "meta.tagged.cstar",
+          "match": "\\b(tagged)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "storage.type.tagged.cstar" },
+            "2": { "name": "entity.name.type.tagged.cstar" }
           }
         },
         {
@@ -149,7 +181,7 @@
         },
         {
           "name": "storage.type.attribute.cstar",
-          "match": "\\b(attribute|prototype|state)\\b"
+          "match": "\\b(attribute|prototype|state|default|scope_exit)\\b"
         },
         {
           "name": "meta.operator.declaration.cstar",
@@ -158,6 +190,34 @@
             "1": { "name": "storage.type.operator.cstar" },
             "2": { "name": "entity.name.function.operator.cstar" }
           }
+        }
+      ]
+    },
+    "generic-arguments": {
+      "patterns": [
+        {
+          "name": "meta.generic.arguments.cstar",
+          "begin": "(?<=[A-Za-z0-9_])<",
+          "end": ">",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.typeparameters.begin.cstar" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.typeparameters.end.cstar" }
+          },
+          "patterns": [
+            { "include": "#generic-arguments" },
+            { "include": "#types" },
+            { "include": "#keywords" },
+            {
+              "name": "punctuation.separator.generic.cstar",
+              "match": ",|::"
+            },
+            {
+              "name": "punctuation.operator.pointer.cstar",
+              "match": "\\*|\\^|&"
+            }
+          ]
         }
       ]
     },
@@ -225,7 +285,7 @@
         },
         {
           "name": "keyword.control.flow.cstar",
-          "match": "\\b(ret|throw|defer|drop)\\b"
+          "match": "\\b(ret|throw|defer|drop|scope_exit)\\b"
         },
         {
           "name": "keyword.operator.ownership.cstar",
@@ -241,7 +301,11 @@
         },
         {
           "name": "storage.modifier.cstar",
-          "match": "\\b(static|dynamic|extern|native|const|constptr|constref|readonly|nomove|async|await|except|noexcept|onexcept|involved|with|allocator|unsafe)\\b"
+          "match": "\\b(static|dynamic|extern|native|const|constptr|constref|readonly|nomove|async|await|except|noexcept|onexcept|involved|with|allocator|unsafe|closed|opened|idle|sending|failed)\\b"
+        },
+        {
+          "name": "storage.type.meta-kind.cstar",
+          "match": "\\b(expr|stmt|item|type|ident|tokens|function|field|method)\\b"
         }
       ]
     },
@@ -249,7 +313,7 @@
       "patterns": [
         {
           "name": "storage.type.primitive.cstar",
-          "match": "\\b(void|bool|char|uchar|int|uint|int8|int16|int32|int64|uint8|uint16|uint32|uint64|isize|usize|float|float32|float64|any)\\b"
+          "match": "\\b(void|bool|char|uchar|int|uint|int8|int16|int32|int64|uint8|uint16|uint32|uint64|uint128|isize|usize|float|float32|float64|any|vec2|vec3|vec4|dyn)\\b"
         },
         {
           "name": "entity.name.type.cstar",

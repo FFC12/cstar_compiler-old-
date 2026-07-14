@@ -141,6 +141,12 @@ $CodeMismatches = @()
 $Skipped = @()
 foreach ($File in $Files) {
   $RelativeName = Resolve-Path -Relative $File.FullName
+  if (($File.FullName -split '[\\/]' | Where-Object { $_ -eq "modules" }).Count -gt 0) {
+    Write-Host "[SKIP] $RelativeName (module helper)" -ForegroundColor DarkGray
+    $Skipped += $RelativeName
+    continue
+  }
+
   $ExpectedKind = $null
   $ExpectedExit = $null
   $ExpectedCodes = @()

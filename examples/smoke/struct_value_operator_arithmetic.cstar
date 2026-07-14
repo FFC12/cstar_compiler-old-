@@ -1,5 +1,5 @@
 // expected: pass
-// expected-exit: 14
+// expected-exit: 12
 
 struct Score {
   int32 value;

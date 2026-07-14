@@ -93,5 +93,34 @@
       "start": "^\\s*//\\s*#?region\\b",
       "end": "^\\s*//\\s*#?endregion\\b"
     }
-  }
+  },
+  "wordPattern": "(-?\\d*\\.\\d\\w*)|([^`~!@#%\\^&*()\\-=+\\[{\\]}\\\\|;:'\",.<>/?\\s]+)",
+  "indentationRules": {
+    "increaseIndentPattern": "^((?!.*?//).)*(\\{[^}\"'`]*|\\([^\\)\"'`]*|\\[[^\\]\"'`]*)$",
+    "decreaseIndentPattern": "^\\s*[}\\])]"
+  },
+  "onEnterRules": [
+    {
+      "beforeText": "^\\s*/\\*\\*(?!/)([^*]|\\*(?!/))*$",
+      "afterText": "^\\s*\\*/$",
+      "action": {
+        "indent": "indentOutdent",
+        "appendText": " * "
+      }
+    },
+    {
+      "beforeText": "^\\s*/\\*\\*(?!/)([^*]|\\*(?!/))*$",
+      "action": {
+        "indent": "none",
+        "appendText": " * "
+      }
+    },
+    {
+      "beforeText": "^(.*\\*/)?\\s*\\*( ([^*]|\\*(?!/))*)?$",
+      "action": {
+        "indent": "none",
+        "appendText": "* "
+      }
+    }
+  ]
 }

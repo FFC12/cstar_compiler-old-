@@ -1,7 +1,9 @@
 #include <parser/parser.hpp>
 
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
+#include <set>
 #include <string>
 
 static bool IsProposalOnlyTopLevel(TokenKind kind) {
@@ -23,7 +25,6 @@ static bool IsProposalOnlyTopLevel(TokenKind kind) {
     case IS:
     case ATTRIB:
     case PROTO:
-    case ENUM:
       return true;
     default:
       return false;
@@ -260,6 +261,122 @@ void CStarParser::parseTraitDecl(DeclarationModifiers declarationModifiers) {
 
   this->m_AST.emplace_back(std::make_unique<TraitAST>(
       traitName, std::move(requirements), declarationModifiers.access, semLoc));
+
+  skipTopLevelTrivia();
+  if (is(TokenKind::SEMICOLON)) {
+    this->advance();
+  }
+}
+
+static bool IsEnumUnderlyingType(TypeSpecifier type) {
+  switch (type) {
+    case TypeSpecifier::SPEC_I8:
+    case TypeSpecifier::SPEC_I16:
+    case TypeSpecifier::SPEC_I32:
+    case TypeSpecifier::SPEC_I64:
+    case TypeSpecifier::SPEC_INT:
+    case TypeSpecifier::SPEC_U8:
+    case TypeSpecifier::SPEC_U16:
+    case TypeSpecifier::SPEC_U32:
+    case TypeSpecifier::SPEC_U64:
+    case TypeSpecifier::SPEC_UINT:
+    case TypeSpecifier::SPEC_ISIZE:
+    case TypeSpecifier::SPEC_USIZE:
+      return true;
+    default:
+      return false;
+  }
+}
+
+void CStarParser::parseEnumDecl(DeclarationModifiers declarationModifiers) {
+  if (declarationModifiers.linkage == VisibilitySpecifier::VIS_IMPORT ||
+      declarationModifiers.linkage == VisibilitySpecifier::VIS_EXPORT) {
+    ParserError("enum visibility uses public/private, not import/export",
+                currentTokenInfo());
+  }
+  if (declarationModifiers.isStatic) {
+    ParserError("static enum declarations are not valid", currentTokenInfo());
+  }
+
+  auto posInfo = currentTokenInfo().getTokenPositionInfo();
+  size_t begin = posInfo.begin;
+  size_t line = posInfo.line;
+
+  this->advance();
+  expected(TokenKind::IDENT);
+  auto enumName = currentTokenStr();
+  this->advance();
+
+  expected(TokenKind::COLON);
+  this->advance();
+  if (!isType(currentTokenInfo())) {
+    ParserError("Expected enum underlying integer type", currentTokenInfo());
+  }
+
+  auto underlyingType = typeSpecifierOf(currentTokenInfo());
+  if (!IsEnumUnderlyingType(underlyingType)) {
+    ParserError("Enum underlying type must be an integer type",
+                currentTokenInfo());
+  }
+  this->advance();
+
+  expected(TokenKind::LBRACK);
+  this->advance();
+
+  int64_t nextValue = 0;
+  std::set<std::string> memberNames;
+  std::vector<EnumMemberInfo> members;
+  while (!is(TokenKind::RBRACK) && !is(TokenKind::_EOF)) {
+    skipTopLevelTrivia();
+    if (is(TokenKind::RBRACK)) {
+      break;
+    }
+
+    expected(TokenKind::IDENT);
+    EnumMemberInfo member;
+    member.name = currentTokenStr();
+    member.value = nextValue;
+    if (memberNames.count(member.name) != 0) {
+      ParserError("Redefinition of enum member '" + member.name + "'",
+                  currentTokenInfo());
+    }
+    memberNames.insert(member.name);
+    this->advance();
+
+    if (is(TokenKind::EQUAL)) {
+      this->advance();
+      expected(TokenKind::SCALARI);
+      member.value = std::stoll(currentTokenStr());
+      nextValue = member.value;
+      this->advance();
+    }
+
+    members.push_back(std::move(member));
+    nextValue += 1;
+    skipTopLevelTrivia();
+
+    if (is(TokenKind::COMMA)) {
+      this->advance();
+      continue;
+    }
+
+    if (!is(TokenKind::RBRACK)) {
+      expected({TokenKind::COMMA, TokenKind::RBRACK});
+    }
+  }
+
+  expected(TokenKind::RBRACK);
+  posInfo = currentTokenInfo().getTokenPositionInfo();
+  SemanticLoc semLoc(begin, posInfo.end, line);
+  this->advance();
+
+  if (members.empty()) {
+    ParserError("Enum must declare at least one member", currentTokenInfo());
+  }
+
+  this->m_AST.emplace_back(std::make_unique<EnumAST>(
+      enumName, underlyingType, std::move(members),
+      declarationModifiers.access, semLoc));
 
   skipTopLevelTrivia();
   if (is(TokenKind::SEMICOLON)) {
@@ -507,6 +624,11 @@ void CStarParser::translationUnit() {
 
       if (is(TokenKind::TRAIT)) {
         parseTraitDecl(declarationModifiers);
+        continue;
+      }
+
+      if (is(TokenKind::ENUM)) {
+        parseEnumDecl(declarationModifiers);
         continue;
       }
 

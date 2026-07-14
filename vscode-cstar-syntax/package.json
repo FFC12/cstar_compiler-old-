@@ -1,26 +1,51 @@
 {
   "name": "cstar-syntax",
-  "displayName": "C* Syntax",
-  "description": "Syntax highlighting and editor basics for C* (.cstar) source files.",
-  "version": "0.1.0",
+  "displayName": "C* Language Support",
+  "description": "Production-ready syntax highlighting, snippets, file icons, and editor defaults for C* (.cstar) source files.",
+  "version": "0.3.0",
   "publisher": "cstar-project",
   "license": "MIT",
+  "icon": "images/cstar-icon.png",
   "engines": {
     "vscode": "^1.84.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Snippets"
   ],
   "keywords": [
     "cstar",
     "c*",
     "syntax",
-    "highlighting"
+    "highlighting",
+    "snippets",
+    "language"
   ],
+  "galleryBanner": {
+    "color": "#111827",
+    "theme": "dark"
+  },
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
+  "activationEvents": [
+    "onLanguage:cstar",
+    "onCommand:cstar.restartAnalyzer"
+  ],
+  "main": "./extension.js",
   "files": [
     "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
     "language-configuration.json",
-    "syntaxes/cstar.tmLanguage.json"
+    "syntaxes/cstar.tmLanguage.json",
+    "snippets/cstar.code-snippets",
+    "images/cstar-icon.png",
+    "images/cstar-file.svg",
+    "extension.js",
+    "server/analyzer.js",
+    "server/server.js"
   ],
   "contributes": {
     "languages": [
@@ -34,6 +59,10 @@
         "extensions": [
           ".cstar"
         ],
+        "icon": {
+          "light": "./images/cstar-file.svg",
+          "dark": "./images/cstar-file.svg"
+        },
         "configuration": "./language-configuration.json"
       }
     ],
@@ -42,6 +71,53 @@
         "language": "cstar",
         "scopeName": "source.cstar",
         "path": "./syntaxes/cstar.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "cstar",
+        "path": "./snippets/cstar.code-snippets"
+      }
+    ],
+    "configurationDefaults": {
+      "[cstar]": {
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true,
+        "editor.bracketPairColorization.enabled": true,
+        "editor.guides.bracketPairs": "active",
+        "editor.wordBasedSuggestions": "matchingDocuments",
+        "files.trimTrailingWhitespace": true
+      }
+    },
+    "configuration": {
+      "title": "C*",
+      "properties": {
+        "cstar.enableAnalyzer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the bundled C* static analyzer language server."
+        },
+        "cstar.analyzer.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute path to a custom C* analyzer server.js. Empty uses the bundled server."
+        },
+        "cstar.analyzer.nodePath": {
+          "type": "string",
+          "default": "node",
+          "description": "Node executable used to run the C* analyzer server."
+        },
+        "cstar.analyzer.trace": {
+          "type": "boolean",
+          "default": false,
+          "description": "Write C* analyzer JSON-RPC trace messages to the C* output channel."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "cstar.restartAnalyzer",
+        "title": "C*: Restart Static Analyzer"
       }
     ]
   }

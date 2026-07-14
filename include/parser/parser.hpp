@@ -5,6 +5,7 @@
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
 #include <ast/control_flow_ast.hpp>
+#include <ast/enum_ast.hpp>
 #include <ast/fix_ast.hpp>
 #include <ast/func_ast.hpp>
 #include <ast/func_call_ast.hpp>
@@ -239,6 +240,7 @@ class CStarParser {
   void translationUnit();
   void parseIncludeDirective();
   void parseLinkageBlock(VisibilitySpecifier visibilitySpecifier);
+  void parseEnumDecl(DeclarationModifiers declarationModifiers);
   void parseStructDecl(DeclarationModifiers declarationModifiers);
   void parseTraitDecl(DeclarationModifiers declarationModifiers);
   std::string parseLinkSource();

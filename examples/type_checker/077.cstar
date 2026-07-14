@@ -1,0 +1,12 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+enum Color : uint8 {
+    Red,
+    Green,
+}
+
+main() :: int32 {
+    Color color = Color.Blue;
+    ret 0;
+}

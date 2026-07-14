@@ -1,0 +1,98 @@
+{
+  "main function": {
+    "prefix": "main",
+    "body": [
+      "main() :: int32 {",
+      "    ${1:ret 0;}",
+      "}"
+    ],
+    "description": "C* main function returning int32"
+  },
+  "function": {
+    "prefix": "fn",
+    "body": [
+      "${1:name}(${2}) :: ${3:void} {",
+      "    ${0:ret;}",
+      "}"
+    ],
+    "description": "C* function declaration"
+  },
+  "struct": {
+    "prefix": "struct",
+    "body": [
+      "struct ${1:Name} {",
+      "    ${2:int32 value;}",
+      "",
+      "    constructor(${3}) {",
+      "        ${0:ret;}",
+      "    }",
+      "}"
+    ],
+    "description": "C* struct with constructor"
+  },
+  "trait": {
+    "prefix": "trait",
+    "body": [
+      "trait ${1:Name} {",
+      "    ${2:method}(${3}) :: ${4:void};",
+      "}"
+    ],
+    "description": "C* trait contract"
+  },
+  "loop range": {
+    "prefix": "loopr",
+    "body": [
+      "loop(${1:i} in [${2:0}, ${3:10}]) {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "C* numeric range loop"
+  },
+  "loop iterable": {
+    "prefix": "loopi",
+    "body": [
+      "loop(${1:value} in ${2:items}) {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "C* iterable loop"
+  },
+  "if elif else": {
+    "prefix": "ife",
+    "body": [
+      "if (${1:condition}) {",
+      "    ${2}",
+      "} elif (${3:other}) {",
+      "    ${4}",
+      "} else {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "C* if / elif / else block"
+  },
+  "import from block": {
+    "prefix": "importfrom",
+    "body": [
+      "import from \"${1:std:crt}\" {",
+      "    ${2:printf}(const char* fmt, ...) :: int32;",
+      "}"
+    ],
+    "description": "C* native import-from block"
+  },
+  "include alias": {
+    "prefix": "includeas",
+    "body": [
+      "include \"${1:modules/module.cstar}\" as ${2:mod}"
+    ],
+    "description": "C* module include with alias"
+  },
+  "operator overload": {
+    "prefix": "operator",
+    "body": [
+      "operator ${1:+}(${2:Self rhs}) :: ${3:Self} {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "C* value operator method"
+  }
+}
