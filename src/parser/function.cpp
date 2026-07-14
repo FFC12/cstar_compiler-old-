@@ -1,8 +1,65 @@
 #include <parser/parser.hpp>
 
+ASTNode CStarParser::advanceDefinedType() {
+  expected(TokenKind::IDENT);
+
+  auto tokenPos = currentTokenInfo().getTokenPositionInfo();
+  auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
+  auto symbol =
+      std::make_unique<SymbolAST>(currentTokenStr(), semLoc);
+  this->advance();
+
+  bool isUniquePtr = false;
+  size_t indirectionLevel = 0;
+  bool isRef = false;
+
+  while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
+    const bool currentPointerIsUnique =
+        this->currentTokenKind() == TokenKind::XOR;
+    indirectionLevel = advancePointerType(currentPointerIsUnique);
+    if (currentPointerIsUnique) {
+      isUniquePtr = true;
+    }
+  }
+
+  if (is(TokenKind::AND)) {
+    indirectionLevel = 1;
+    isRef = true;
+    this->advance();
+  }
+
+  return std::make_unique<TypeAST>(TypeSpecifier::SPEC_DEFINED,
+                                   std::move(symbol), isUniquePtr, true, isRef,
+                                   indirectionLevel, semLoc);
+}
+
+ASTNode CStarParser::advanceFieldAccessChain(size_t begin, size_t line) {
+  ASTNode access = std::move(advanceSymbol());
+
+  while (is(TokenKind::DOT)) {
+    auto dotInfo = currentTokenInfo().getTokenPositionInfo();
+    std::string dotOp = currentTokenStr();
+    this->advance();
+
+    expected(TokenKind::IDENT);
+    auto fieldSymbol = std::move(advanceSymbol());
+
+    SemanticLoc fieldLoc(begin, dotInfo.end, line);
+    access = std::make_unique<BinaryOpAST>(
+        std::move(access), std::move(fieldSymbol), nullptr, BinOpKind::B_DOT,
+        dotOp, fieldLoc);
+  }
+
+  return access;
+}
+
 void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
-                           bool forceForwardDecl) {
-  auto funcName = currentTokenStr();
+                           bool forceForwardDecl,
+                           const std::string &methodOwner) {
+  auto sourceFuncName = currentTokenStr();
+  auto funcName = methodOwner.empty()
+                      ? sourceFuncName
+                      : methodOwner + "." + sourceFuncName;
   bool isForwardDecl =
       forceForwardDecl ||
       declarationModifiers.linkage == VisibilitySpecifier::VIS_IMPORT;
@@ -29,18 +86,35 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
     this->advance();
   }
 
-  expected(TokenKind::LPAREN);
-
-  // '('
-  this->advance();
-
   std::vector<ASTNode> params{};
-  advanceParams(params, isForwardDecl);
+  const bool hasParamList = is(TokenKind::LPAREN);
+  if (hasParamList) {
+    // '('
+    this->advance();
 
-  expected(TokenKind::RPAREN);
+    advanceParams(params, isForwardDecl);
 
-  // ')'
-  this->advance();
+    expected(TokenKind::RPAREN);
+
+    // ')'
+    this->advance();
+  } else if (methodOwner.empty()) {
+    expected(TokenKind::LPAREN);
+  }
+
+  if (!methodOwner.empty()) {
+    auto selfLoc = SemanticLoc(begin, begin + methodOwner.size(), line);
+    auto selfSymbol = std::make_unique<SymbolAST>("self", selfLoc);
+    auto selfTypeSymbol = std::make_unique<SymbolAST>(methodOwner, selfLoc);
+    auto selfType = std::make_unique<TypeAST>(
+        TypeSpecifier::SPEC_DEFINED, std::move(selfTypeSymbol), false, true,
+        true, 1, selfLoc);
+    auto selfParam = std::make_unique<ParamAST>(
+        std::move(selfSymbol), nullptr, std::move(selfType),
+        std::vector<ASTNode>(), false, false, false, false, false,
+        TypeQualifier::Q_NONE, selfLoc);
+    params.insert(params.begin(), std::move(selfParam));
+  }
 
   if (is(TokenKind::ASYNC)) {
     ParserHint(
@@ -68,7 +142,7 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
     if (isType(currentTokenInfo())) {
       returnType = this->advanceType();
     } else if (is(TokenKind::IDENT)) {
-      returnType = this->advanceSymbol();
+      returnType = this->advanceDefinedType();
     } else {
       ParserError("Unexpected token", currentTokenInfo());
     }
@@ -283,17 +357,18 @@ param_again:
               typeQualifier, semLoc, isNoMove);
           params.emplace_back(std::move(param));
         } else {
-          if (!isForwardDecl) {  // not clear that is cast allowed or not
-            // get the param name
+          if (!isForwardDecl) {
+            auto type = this->advanceDefinedType();
+
+            expected(TokenKind::IDENT);
             symbol0 = this->advanceSymbol();
-            symbol1 = this->advanceSymbol();
 
             size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
             auto semLoc = SemanticLoc(beginLoc, endLoc, line);
 
             auto param = std::make_unique<ParamAST>(
-                std::move(symbol0), std::move(symbol1), nullptr,
-                std::vector<ASTNode>(), false, false, true, true, false,
+                std::move(symbol0), nullptr, std::move(type),
+                std::vector<ASTNode>(), false, false, false, false, false,
                 typeQualifier, semLoc, isNoMove);
             params.emplace_back(std::move(param));
           }
@@ -346,6 +421,7 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
     }
 
     if (isType(currentTokenInfo()) || is(TokenKind::IDENT) ||
+        is(TokenKind::SELF) ||
         is(TokenKind::STAR) || is(TokenKind::DEREF) ||
         is(TokenKind::PLUSPLUS) || is(TokenKind::MINUSMINUS)) {
       bool outOfSize = false;
@@ -403,6 +479,67 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
             "'.=' policy/member-safe assignment is part of the C* proposal "
             "and requires the policy runtime semantics first",
             nextTokenInfo);
+      } else if ((is(TokenKind::IDENT) || is(TokenKind::SELF)) &&
+                 nextToken == TokenKind::DOT) {
+        auto fieldAccess = advanceFieldAccessChain(begin, line);
+
+        if (is(TokenKind::LPAREN)) {
+          ASTNode args = nullptr;
+          bool callOutOfSize = false;
+          auto tokenAfterOpen =
+              this->nextTokenInfo(callOutOfSize).getTokenKind();
+          if (callOutOfSize) {
+            ParserError("Incomplete function call expression",
+                        currentTokenInfo());
+          }
+
+          if (tokenAfterOpen == TokenKind::RPAREN) {
+            this->advance();
+            this->advance();
+          } else {
+            args = std::move(this->expression(true, 1));
+          }
+
+          size_t end = currentTokenInfo().getTokenPositionInfo().end;
+          SemanticLoc semanticLoc = SemanticLoc(begin, end, line);
+
+          auto expr = std::make_unique<FuncCallAST>(
+              std::move(fieldAccess), nullptr, std::move(args), semanticLoc);
+
+          expected(TokenKind::SEMICOLON);
+          this->advance();
+
+          scope.emplace_back(std::move(expr));
+          continue;
+        }
+
+        if (is(TokenKind::POLICY_ASSIGN)) {
+          ParserError(
+              "'.=' policy/member-safe assignment is part of the C* proposal "
+              "and requires the policy runtime semantics first",
+              currentTokenInfo());
+        }
+
+        if (!isShortcutOp(currentTokenInfo())) {
+          ParserError("Unexpected token for assignment expression.",
+                      currentTokenInfo());
+        }
+
+        auto shortcutOp = typeOfShortcutOp(currentTokenInfo());
+        auto shortcutOpStr = currentTokenStr();
+        auto expr = std::move(this->expression(false, 0, false, false, true));
+
+        expected(TokenKind::SEMICOLON);
+        this->advance();
+
+        size_t end = currentTokenInfo().getTokenPositionInfo().end;
+        SemanticLoc semanticLoc = SemanticLoc(begin, end, line);
+
+        auto assignmentExpr = std::make_unique<AssignmentAST>(
+            std::move(fieldAccess), std::move(expr), false, 0, shortcutOp,
+            shortcutOpStr, semanticLoc);
+
+        scope.emplace_back(std::move(assignmentExpr));
       } else if (isShortcutOp(nextTokenInfo)) {
         auto symbol = std::move(advanceSymbol());
         auto shortcutOp = typeOfShortcutOp(currentTokenInfo());

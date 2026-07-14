@@ -30,7 +30,7 @@ Projede öne çıkan fikirler:
 - `loop(...) { ... }` ile hem while benzeri hem iterable/range benzeri döngü fikri.
 - `cast<T>(expr)` ve `unsafe_cast<T>(expr)` ayrımı.
 - `move`, `typeof`, `sizeof` gibi unary operator fikirleri.
-- `attribute`, `protocol`, `trait`, directive/macro gibi daha ileri fikirler tasarlanmış, fakat mevcut compiler bunları derleyemiyor.
+- `struct` MVP'si başlamıştır; `attribute`, `protocol`, `trait`, directive/macro gibi daha ileri fikirler tasarlanmış, fakat mevcut compiler bunları henüz gerçek lowering olarak derleyemiyor.
 
 ## 2. Depo Yapısı
 
@@ -92,7 +92,7 @@ VSCode F5/debug akışı için `.vscode` yapılandırmaları da eklendi.
 
 `expected-exit`, generated executable'ın process exit status değeridir. Yani `ret 7;` console'a `7` yazdırmaz; programın exit code'unu `7` yapar. Terminalde doğrudan `.exe` çalıştırıldığında Windows bu değeri ekrana basmaz, PowerShell tarafında `$LASTEXITCODE` ile görülür. Smoke runner bu değeri otomatik yakalar ve `[OK] ... (exit N)` şeklinde doğrular.
 
-Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu anda 92/92 başarılıdır:
+Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu anda module helper dosyaları hariç 98/98 başarılıdır:
 
 - minimal program ve `ret expr`
 - `ret;` kullanan void fonksiyon çağrısı
@@ -153,8 +153,17 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu
 - `break` / `continue` statement'ları ve loop dışı kullanım diagnostic'i
 - range loop: `loop(i in [min, max])`
 - array iterable loop: `loop(value in arr)` ve `loop(index, value in arr)`
+- struct MVP:
+  - `struct Name { field; ... }`
+  - zero-init local/global struct storage
+  - `value.field` read
+  - `value.field = expr` ve `value.field += expr`
+  - by-value struct function parametre/return
+  - nested by-value struct field ve chained field access: `line.start.x`
+  - struct method ve `self` MVP: `value.method(args)`, implicit `self&`, `self.field` read/write
+  - parantezsiz no-param method tanımı: `read :: int32 { ... }`
 
-`examples/type_checker/` seti şu anda 55/55 kontrollü diagnostic üretir; crash/assert beklenmez. `// expected-code: CSTNNNN` etiketi varsa runner beklenen diagnostic kodunu da doğrular. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, safe cast qualifier stripping reddini, user-defined cast controlled diagnostic'ini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` parametre/pointer adresi reassignment reddini, `readonly` parametre/pointer address/value assignment reddini, array parametreye scalar/farklı boyutlu array geçişi reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, function arg/return ownership transfer ihlallerini, `nomove` ownership-flow ihlallerini, `async`/`await` proposal diagnostic'ini, moved-after-use reddini, `.=` protocol proposal diagnostic'ini, loop dışı `break`/`continue` reddini, `option` proposal diagnostic'ini, include edilen module içindeki private function erişimi reddini ve `static` function içinden non-static global/function erişimi reddini kapsar.
+`examples/type_checker/` seti şu anda 59/59 kontrollü diagnostic üretir; crash/assert beklenmez. `// expected-code: CSTNNNN` etiketi varsa runner beklenen diagnostic kodunu da doğrular. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, safe cast qualifier stripping reddini, user-defined cast controlled diagnostic'ini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` parametre/pointer adresi reassignment reddini, `readonly` parametre/pointer address/value assignment reddini, array parametreye scalar/farklı boyutlu array geçişi reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, function arg/return ownership transfer ihlallerini, `nomove` ownership-flow ihlallerini, `async`/`await` proposal diagnostic'ini, moved-after-use reddini, `.=` protocol proposal diagnostic'ini, loop dışı `break`/`continue` reddini, `option` proposal diagnostic'ini, include edilen module içindeki private function erişimi reddini, `static` function içinden non-static global/function erişimi reddini, struct duplicate/unknown field diagnostic'lerini, direct self-by-value struct field reddini ve unknown struct method reddini kapsar.
 
 `examples/functions/`, `examples/variables/` ve `examples/papers/` dizinleri hâlâ daha çok proposal/stres örnekleridir. Runner ile ayrı çalıştırılır; amaç hepsini bugün yeşil yapmak değil, dil geliştikçe buradan küçük MVP smoke'lar çıkarmaktır. `examples/interactive/` ise input, terminal kontrolü, raw input, frame render ve ownership stresini daha büyük programlarla dener.
 
@@ -191,7 +200,7 @@ nil, true, false
 
 Lexer enum'unda `NATIVE`, `MATRIX`, `VECTOR`, `EXTERN`, `FOR` gibi token'lar da var; ancak bunların keyword classification tarafında tam karşılığı yok ya da parser tarafından kullanılmıyor.
 
-Yeni proposal keyword'leri (`protocol`, `dynamic`, `state`, `struct`, `trait`, `attribute`, `macro`, `with`, `constructor`, `destructor`, `allocator`, `except`, `throw`, `defer`, `self`, `is`) lexer tarafından tanınır. Parser bunları henüz gerçek grammar olarak işlemez; top-level kullanımlarda controlled proposal diagnostic üretir. Eski `policy` kelimesi yeni canonical grammar'da reserved değildir.
+Yeni proposal keyword'leri (`protocol`, `dynamic`, `state`, `struct`, `trait`, `attribute`, `macro`, `with`, `constructor`, `destructor`, `allocator`, `except`, `throw`, `defer`, `self`, `is`) lexer tarafından tanınır. Parser `struct Name { field; ... }` MVP'sini gerçek grammar olarak işler; diğer ileri proposal keyword'leri top-level kullanımlarda controlled proposal diagnostic üretir. Eski `policy` kelimesi yeni canonical grammar'da reserved değildir.
 
 ### 4.2 Literal ve scalar desteği
 
@@ -286,7 +295,7 @@ Shape^ shape = Triangle();
 Triangle^ triangle = cast<Triangle^>(shape);
 ```
 
-Ancak mevcut semantic pass'te user-defined type table fiilen doldurulmuyor. `struct`, `trait`, `protocol` gibi yapılar parse edilmediği için gerçek user-defined type desteği tamamlanmış değil.
+Mevcut semantic pass'te `struct Name { field; ... }` MVP'si için user-defined type table doldurulur. Primitive ve by-value user-defined field layout LLVM `StructType` olarak üretilir, zero-init struct variable oluşturulur, `value.field` read/write syntax'ı çalışır, nested field chain `line.start.x` GEP zinciriyle iner ve by-value struct parametre/return desteklenir. Struct method MVP'sinde methodlar internal olarak `StructName.method(self&, ...)` fonksiyonuna iner; `value.method(args)` receiver'ı implicit `self` argümanı yapar ve `self.field` read/write referans üzerinden caller storage'ına iner. Direct self-by-value field reddedilir. `trait`, `protocol`, constructor/destructor ve lifetime lowering henüz tamamlanmış değildir.
 
 ## 6. Pointer, Reference ve Ownership Modeli
 
@@ -888,7 +897,7 @@ readonly char* str = "Hello";
 ### 13.3 Eksik/yarım semantic alanlar
 
 - User-defined type table dolmuyor.
-- `struct`, `trait`, `protocol`, `dynamic protocol`, `attribute`, `macro/directive`, `except/throw` yüzeyi lexer tarafından tanınır; parser henüz gerçek grammar üretmez ve controlled proposal diagnostic verir.
+- `struct Name { field; ... }` MVP grammar'ı çalışır; `trait`, `protocol`, `dynamic protocol`, `attribute`, `macro/directive`, `except/throw` yüzeyi lexer tarafından tanınır ve henüz gerçek grammar/lowering olmayan alanlarda controlled proposal diagnostic verir.
 - User-defined type cast/conversion overload semantic'i yok; `struct`/defined type sistemi gelene kadar controlled diagnostic üretilir.
 - Safe cast tarafında pointer qualifier stripping reddedilir; daha zengin qualifier/cast kuralları `struct`/`trait` ve çok seviyeli pointer syntax'ı olgunlaşınca genişletilecek.
 - `typeof` ve `move` bazı binary operation bağlamlarında özellikle reddediliyor ama genel davranış tamamlanmamış.
@@ -1077,7 +1086,7 @@ struct String : Allocator with CustomAlloc {
 }
 ```
 
-Bunlar tasarım/proposal seviyesinde. Mevcut parser `protocol`, `trait`, `struct` keyword'lerini gerçek grammar olarak işlemiyor.
+Bu bölümün büyük kısmı hâlâ tasarım/proposal seviyesindedir. Mevcut parser `struct Name { field; ... }` MVP'sini işler; `protocol`, `trait`, `dynamic protocol`, constructor/destructor ve allocator yüzeyi henüz gerçek lowering değildir.
 
 Karar:
 
@@ -1097,9 +1106,10 @@ Protocol amacı:
 
 Struct yönü:
 
-- İlk MVP `struct Name { field; ... }` olmalıdır.
+- İlk MVP `struct Name { field; ... }` olarak başladı: primitive/by-value field layout, zero-init storage, `value.field` read/write, by-value parametre/return, nested field chain ve method/`self` lowering çalışır.
+- Constructor/destructor ve pointer/shared field access sonraki struct adımıdır.
 - Field layout doğrudan LLVM `StructType` ile temsil edilmeli; gizli reflection/layout metadata ilk MVP'ye girmemelidir.
-- Method syntax `self` lowering ile çözülmeli; `self` keyword'ü reserved kabul edilir.
+- Method syntax `self` lowering ile çözüldü: `value.method(args)` internal `StructName.method(self&, ...)` call olur. İlk MVP sadece value receiver içindir; pointer/shared receiver kararları ayrıca yapılacaktır.
 - `constructor` ve `destructor` explicit lifetime noktalarıdır; shared `*`, unique `^`, allocator ve scope-exit release ile aynı modelde düşünülmelidir.
 - `syntax.cstar` içindeki `struct Shape<T> from Area<T>` fikri attribute/type capability bağlama proposal'ıdır. İlk parser MVP'si bunu controlled diagnostic olarak tutmalı; gerçek field/method struct desteği önce gelmelidir.
 
@@ -1215,7 +1225,7 @@ main(int argc, char** argv) :: int {
 }
 ```
 
-Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, scalar/dereference/tek ve çok boyutlu array assignment, çok boyutlu dynamic index, `ret expr`, primitive function call, `import/export/from` native/module declaration, local `.cstar` include, `public`/default-private module visibility MVP'si, module-level `static` function/variable MVP'si ve alias function lookup, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()`, `read_key()`, temel `if/elif/else`, while-style `loop`, range loop, array iterable loop, `break` ve `continue` akışıdır. Genel sequence iterable, gerçek namespace/type module sistemi ve struct/trait/protocol lowering hâlâ ayrı aşama gerektirir.
+Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, scalar/dereference/tek ve çok boyutlu array assignment, çok boyutlu dynamic index, `ret expr`, primitive function call, `import/export/from` native/module declaration, local `.cstar` include, `public`/default-private module visibility MVP'si, module-level `static` function/variable MVP'si ve alias function lookup, struct declaration/zero-init/field read-write/nested field/by-value param-return/method-self MVP'si, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()`, `read_key()`, temel `if/elif/else`, while-style `loop`, range loop, array iterable loop, `break` ve `continue` akışıdır. Genel sequence iterable, gerçek namespace/type module sistemi ve trait/protocol lowering hâlâ ayrı aşama gerektirir.
 
 ## 17. Bilinen Sorunlar ve Teknik Riskler
 

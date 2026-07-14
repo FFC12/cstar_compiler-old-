@@ -817,6 +817,28 @@ y <<= <span class="nu">1</span>;</code></pre>
         <section id="struct">
           <h2>Struct, Trait ve Enum</h2>
           <p class="lead">C* user-defined type sistemini `struct`, `trait`, `enum` ve `with` ile kurar. Bu bölüm dilin tamamlanmış tasarımını anlatır.</p>
+          <pre data-title="struct core"><code><span class="kw">struct</span> Point {
+    <span class="ty">int32</span> x;
+    <span class="ty">int32</span> y;
+}
+
+<span class="kw">struct</span> Line {
+    Point start;
+    Point end;
+}
+
+<span class="fn">sum</span>(Point p) <span class="op">::</span> <span class="ty">int32</span> {
+    <span class="kw">ret</span> p.x + p.y;
+}
+
+<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
+    Line line;
+    line.start.x = 3;
+    line.start.y = 4;
+    line.end.x = 5;
+    line.end.y += 1;
+    <span class="kw">ret</span> <span class="fn">sum</span>(line.start) + line.end.x + line.end.y;
+}</code></pre>
           <pre data-title="struct and trait"><code><span class="kw">trait</span> Allocator {
     <span class="fn">alloc</span>(<span class="ty">usize</span> bytes, <span class="ty">usize</span> align) <span class="op">::</span> <span class="ty">void</span>*;
     <span class="fn">free</span>(<span class="ty">void</span>* ptr, <span class="ty">usize</span> bytes, <span class="ty">usize</span> align) <span class="op">::</span> <span class="ty">void</span>;

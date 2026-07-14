@@ -181,6 +181,10 @@ examples/smoke/multidim_array_param_read.cstar
 examples/smoke/multidim_array_param_write.cstar
 examples/smoke/multidim_array_read.cstar
 examples/smoke/multidim_array_shortcut_assignment.cstar
+examples/smoke/struct_field_read.cstar
+examples/smoke/struct_field_assignment.cstar
+examples/smoke/struct_function_param_return.cstar
+examples/smoke/struct_nested_field.cstar
 ```
 
 Interactive örnek:
@@ -214,7 +218,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Her zaman yeşil kalması gereken küçük çalışan compiler çekirdeği.
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
-- Güncel durumda 92/92 dosya başarılı.
+- Güncel durumda module helper dosyaları hariç 98/98 dosya başarılı.
 
 `examples/type_checker/`:
 
@@ -222,7 +226,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Exit code `1` çoğu dosya için kabul edilebilir diagnostic olabilir.
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
-- Güncel durumda `-ExpectDiagnostics` ile 55/55 dosya kontrollü diagnostic üretiyor, crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 59/59 dosya kontrollü diagnostic üretiyor, crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -294,6 +298,8 @@ examples/type_checker/051.cstar
 examples/type_checker/052.cstar
 examples/type_checker/053.cstar
 examples/type_checker/054.cstar
+examples/type_checker/055.cstar
+examples/type_checker/056.cstar
 ```
 
 Bu dosyalar parser/pass hattına giriyor ve semantic diagnostic üretebiliyor. Kritik semantic sınıflar `expected-code` etiketiyle doğrulanabilir.
@@ -1042,8 +1048,31 @@ Durum:
 
 - `SPEC_DEFINED` var.
 - Lexer `struct`, `trait`, `protocol`, `dynamic`, `state`, `with`, `constructor`, `destructor`, `allocator`, `except`, `throw`, `defer`, `self`, `is`, `macro` keyword'lerini tanır.
-- Parser bu proposal keyword'leri için top-level controlled diagnostic üretir; gerçek grammar yok.
-- Defined type table dolmuyor.
+- `struct Name { field; ... }` MVP grammar'ı parse edilir.
+- Struct declaration pass0 type table'a ve `StructTable` metadata'sına kaydedilir.
+- Primitive field layout LLVM `StructType` olarak üretilir.
+- Struct local/global variable zero-init storage üretir.
+- Struct field read `value.field` syntax'ı ile çalışır.
+- Struct field assignment target çalışır:
+  - `value.field = expr;`
+  - `value.field += expr;`
+- Struct by-value function parametre ve return çalışır.
+- Nested/by-value struct field layout ve recursive field-chain access çalışır:
+  - `line.start.x`
+  - `line.start.x = expr;`
+- Unknown field ve duplicate field controlled diagnostic üretir.
+- Direct self-by-value struct field controlled diagnostic üretir:
+  - `examples/type_checker/057.cstar`
+- Struct method syntax ve `self` lowering MVP'si çalışır:
+  - Methodlar `StructName.method(self&, ...)` internal fonksiyonuna iner.
+  - `value.method(args)` çağrısı receiver'ı implicit `self` argümanı yapar.
+  - `self.field` read/write caller struct storage'ına referans üzerinden iner.
+  - Parantezsiz no-param method tanımı desteklenir: `read :: int32 { ... }`.
+  - `examples/smoke/struct_method_self.cstar`
+  - `examples/smoke/struct_method_no_param_sugar.cstar`
+- Unknown method controlled diagnostic üretir:
+  - `examples/type_checker/058.cstar`
+- `trait`, `protocol`, `dynamic protocol` ve ileri lifetime keyword'leri için controlled proposal diagnostic korunur.
 - Eski `policy for T { ... }` runtime hook modeli ve `policy protocol` çift isimli form superseded kabul edildi.
 - Ana yön `protocol Name for Type { ... }`: compile-time typestate/state contract.
 - `static protocol` gereksizdir; static/provable davranış default kabul edilir.
@@ -1052,9 +1081,11 @@ Durum:
 
 Kalan:
 
-- Önce `struct` MVP tasarla.
-- Field layout + LLVM struct type.
 - Constructor/function call ayrımını çöz.
+- Pointer/shared handle field access kararını netleştir:
+  - `ptr.field`
+  - `ptr::method`
+- Shared `*` handle ve unique `^` ile struct lifetime entegrasyonu.
 - `protocol` parser tasarımı:
   - `protocol FileState for FileHandle { ... }`
   - `state closed, opened;`
@@ -1105,12 +1136,32 @@ Kalan:
 
 ### 7.2 Struct
 
-Kalan:
+Tamamlanan:
 
 - `struct Name { field; ... }` parser/AST.
 - Field layout ve LLVM `StructType`.
-- Field access: `value.field`, pointer/shared handle için `ptr.field` veya `ptr::method` kararını netleştir.
-- Method syntax ve `self` lowering.
+- Field access/read: `value.field`.
+- Field assignment target:
+  - `value.field = expr;`
+  - `value.field += expr;`
+- By-value struct function parametre ve return.
+- Nested/by-value struct field layout ve chained field access/assignment.
+- Direct self-by-value field diagnostic:
+  - `examples/type_checker/057.cstar`
+- Method syntax ve `self` lowering MVP'si:
+  - `value.method(args)`
+  - implicit `self&`
+  - `self.field` read/write
+  - no-param method sugar: `name :: type { ... }`
+  - `examples/smoke/struct_method_self.cstar`
+  - `examples/smoke/struct_method_no_param_sugar.cstar`
+  - `examples/type_checker/058.cstar`
+
+Kalan:
+
+- Pointer/shared handle field access kararını netleştir:
+  - `ptr.field`
+  - `ptr::method`
 - Constructor/new/allocator entegrasyonu.
 - Shared `*` handle ve unique `^` ile struct lifetime entegrasyonu.
 - `syntax.cstar` içindeki `struct Shape<T> from Area<T>` formunu ilk MVP'de parse etmeye çalışma; önce field/method struct çekirdeği, sonra attribute binding.
@@ -1183,33 +1234,35 @@ Kalan:
 
 Tamamlanan son adım:
 
-- Module visibility ve static declaration modifier ayrımı tamamlandı:
-
-```text
-// math_module.cstar
-public add_from_module(int32 a, int32 b) :: int32 {
-    ret a + b;
-}
-
-// app.cstar
-include "modules/math_module.cstar" as math
-
-main() :: int32 {
-    ret math.add_from_module(2, 5);
-}
-```
-
-`import`/`export` linkage alanına çekildi; local module görünürlüğü `public`/default-private ile ayrıldı. Module-level `static` function/variable MVP'si de semantic ve codegen tarafında çalışıyor.
-
-Sıradaki teknik iş:
-
-- Aşama 7'ye geçiş: önce küçük `struct` MVP.
+- Struct MVP genişletildi:
 
 ```cstar
 struct Point {
     int32 x;
     int32 y;
 }
+
+struct Line {
+    Point start;
+    Point end;
+}
+
+sum(Point p) :: int32 {
+    ret p.x + p.y;
+}
+
+main() :: int32 {
+    Line line;
+    line.start.x = 3;
+    line.end.y += 1;
+    ret sum(line.start) + line.end.y;
+}
 ```
 
-Öncelik parser/AST, field layout, LLVM `StructType`, field access ve constructor/new kararlarını birbirine karıştırmadan aşamalı açmak.
+Parser/AST, StructTable metadata, LLVM `StructType`, zero-init storage, by-value param/return, nested field GEP zinciri, method/self lowering ve direct self-by-value diagnostic doğrulandı.
+
+Sıradaki teknik iş:
+
+- Aşama 7'de constructor/function call ayrımını ve `constructor` hook parsing/lowering kararını netleştirmek.
+- Ardından constructor/new/allocator entegrasyonunu shared/unique lifetime modeliyle bağlamak.
+- Sonra `trait` requirement table ve `protocol` parser/flow tasarımına geçmek.

@@ -1,0 +1,15 @@
+// expected: pass
+// expected-exit: 9
+
+struct Point {
+  int32 x;
+  int32 y;
+}
+
+main() :: int32 {
+  Point p;
+  p.x = 4;
+  p.y = 2;
+  p.y += 3;
+  ret p.x + p.y;
+}

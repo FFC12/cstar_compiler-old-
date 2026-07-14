@@ -1,0 +1,11 @@
+// expected: fail
+// expected-code: CST2001
+
+struct Point {
+  int32 x;
+}
+
+main() :: int32 {
+  Point p;
+  ret p.missing();
+}

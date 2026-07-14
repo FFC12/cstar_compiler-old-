@@ -30,6 +30,9 @@ class TypeAST : public IAST {
 
   void setIsRef(bool v) { this->m_IsRef = true; }
 
+  [[nodiscard]] TypeSpecifier typeSpec() const { return m_TypeSpec; }
+  [[nodiscard]] const ASTNode& symbol() const { return m_Symbol; }
+
   void debugNode() override {
     std::cout << this->m_TypeSpec << " as type";
     for (size_t i = 0; i < this->m_IndirectLevel; i++)

@@ -4,6 +4,8 @@ GlobalSymbolInfoList Visitor::GlobalSymbolTable{};
 LocalSymbolInfoList Visitor::LocalSymbolTable{};
 FunctionSignatureTable Visitor::FunctionTable{};
 std::set<std::string> Visitor::ModuleAliases{};
+std::map<std::string, StructInfo> Visitor::StructTable{};
+std::map<std::string, llvm::StructType*> Visitor::LLVMStructTypes{};
 
 // Type checking..
 // Every type can be checked from symbolLists

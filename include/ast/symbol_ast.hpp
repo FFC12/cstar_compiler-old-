@@ -17,6 +17,8 @@ class SymbolAST : public IAST {
     this->m_ASTKind = ASTKind::Expr;
     this->m_ExprKind = ExprKind::SymbolExpr;
   }
+
+  [[nodiscard]] const std::string& name() const { return m_SymbolName; }
   void debugNode() override { std::cout << m_SymbolName; }
 
   SymbolInfo acceptBefore(Visitor& visitor) override {

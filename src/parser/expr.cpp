@@ -125,7 +125,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
 
   auto isExpressionOperandStart = [&](const TokenInfo &token) {
     const auto kind = token.getTokenKind();
-    return kind == TokenKind::IDENT || kind == TokenKind::SCALARD ||
+    return kind == TokenKind::IDENT || kind == TokenKind::SELF ||
+           kind == TokenKind::SCALARD ||
            kind == TokenKind::SCALARI || kind == TokenKind::LITERAL ||
            kind == TokenKind::TRUE || kind == TokenKind::FALSE ||
            isType(token);
@@ -589,7 +590,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       } else if (this->currentTokenKind() == LINEFEED) {
         this->advance();
         continue;
-      } else if (this->currentTokenKind() == IDENT || is(SCALARI) ||
+      } else if (this->currentTokenKind() == IDENT ||
+                 this->currentTokenKind() == SELF || is(SCALARI) ||
                  is(SCALARD) || is(LITERAL)) {
         bool outOfSize = false;
         auto nextTokenInfo = this->nextTokenInfo(outOfSize);
@@ -601,7 +603,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
         }
 
         auto nextToken = nextTokenInfo.getTokenKind();
-        if (nextToken == IDENT || nextToken == SCALARI ||
+        if (nextToken == IDENT || nextToken == SELF || nextToken == SCALARI ||
             nextToken == SCALARD || nextToken == LITERAL) {
           auto val = currentTokenInfo().getTokenPositionInfo().begin;
           ParserHint(
@@ -1152,7 +1154,7 @@ ASTNode CStarParser::advanceConstantOrLiteral() {
 // Our Symbols are might be DEFINED.
 // So they might have POINTER LEVEL(s)
 ASTNode CStarParser::advanceSymbol() {
-  if (is(TokenKind::IDENT)) {
+  if (is(TokenKind::IDENT) || is(TokenKind::SELF)) {
     auto symbolName = this->currentTokenStr();
 
     auto tokenPos = currentTokenInfo().getTokenPositionInfo();

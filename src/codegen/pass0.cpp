@@ -10,6 +10,8 @@ void CStarCodegen::pass0() {
   Visitor::SymbolId = 0;
   Visitor::ScopeId = 0;
   Visitor::FunctionTable.clear();
+  Visitor::StructTable.clear();
+  Visitor::LLVMStructTypes.clear();
 
   // TODO: Will be revised
   // this->m_DefinedTypes["Type"] = 1;
@@ -18,7 +20,21 @@ void CStarCodegen::pass0() {
 
   for (auto& ast : m_AST) {
     if (ast->getASTKind() == ASTKind::Decl) {
-      if (ast->getDeclKind() == DeclKind::FuncDecl ||
+      if (ast->getDeclKind() == DeclKind::StructDecl) {
+        Visitor preVisitor(this->m_DefinedTypes);
+        auto symbolInfo = ast->acceptBefore(preVisitor);
+        auto messages = preVisitor.getUnknownTypeErrorMessages();
+        for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
+          SemanticError(it->message, it->symbolInfo, it->code);
+        }
+        if (this->m_DefinedTypes.count(symbolInfo.definedTypeName) != 0) {
+          SemanticError("Redefinition of the type '" +
+                            symbolInfo.definedTypeName + "'",
+                        symbolInfo);
+        }
+        this->m_DefinedTypes[symbolInfo.definedTypeName] =
+            Visitor::StructTable[symbolInfo.definedTypeName].fields.size();
+      } else if (ast->getDeclKind() == DeclKind::FuncDecl ||
           ast->getDeclKind() == DeclKind::ImportFuncDecl ||
           ast->getDeclKind() == DeclKind::ExportFuncDecl) {
         Visitor preVisitor(this->m_DefinedTypes);

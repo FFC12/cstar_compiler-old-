@@ -1233,7 +1233,23 @@ main() :: int32 {
 
 -------
 
-// FILE 085: examples/smoke/uninitialized_local.cstar
+// FILE 085: examples/smoke/struct_field_read.cstar
+// expected: pass
+// expected-exit: 0
+
+struct Point {
+  int32 x;
+  int32 y;
+}
+
+main() :: int32 {
+  Point p;
+  ret p.x + p.y;
+}
+
+-------
+
+// FILE 086: examples/smoke/uninitialized_local.cstar
 // expected: pass
 // expected-exit: 0
 
@@ -1244,7 +1260,7 @@ main() :: int32 {
 
 -------
 
-// FILE 086: examples/smoke/unique_pointer.cstar
+// FILE 087: examples/smoke/unique_pointer.cstar
 // expected: pass
 // expected-exit: 7
 
@@ -1257,7 +1273,7 @@ main() :: int32 {
 
 -------
 
-// FILE 087: examples/smoke/unique_pointer_function_move_arg.cstar
+// FILE 088: examples/smoke/unique_pointer_function_move_arg.cstar
 // expected-exit: 7
 
 take(int32^ pointer) :: int32 {
@@ -1273,7 +1289,7 @@ main() :: int32 {
 
 -------
 
-// FILE 088: examples/smoke/unique_pointer_move_assignment.cstar
+// FILE 089: examples/smoke/unique_pointer_move_assignment.cstar
 // expected-exit: 9
 main() :: int32 {
     int32 first = 3;
@@ -1288,7 +1304,7 @@ main() :: int32 {
 
 -------
 
-// FILE 089: examples/smoke/unique_pointer_move_init.cstar
+// FILE 090: examples/smoke/unique_pointer_move_init.cstar
 // expected-exit: 7
 main() :: int32 {
     int32 value = 7;
@@ -1300,7 +1316,7 @@ main() :: int32 {
 
 -------
 
-// FILE 090: examples/smoke/unique_pointer_return_move.cstar
+// FILE 091: examples/smoke/unique_pointer_return_move.cstar
 // expected-exit: 9
 
 forward(int32^ pointer) :: int32^ {
@@ -1317,7 +1333,7 @@ main() :: int32 {
 
 -------
 
-// FILE 091: examples/smoke/unsafe_cast_int_to_pointer.cstar
+// FILE 092: examples/smoke/unsafe_cast_int_to_pointer.cstar
 // expected: pass
 // expected-exit: 7
 
@@ -1333,7 +1349,7 @@ main() :: int32 {
 
 -------
 
-// FILE 092: examples/smoke/void_return.cstar
+// FILE 093: examples/smoke/void_return.cstar
 // expected: pass
 // expected-exit: 0
 
@@ -1348,7 +1364,7 @@ main() :: int32 {
 
 -------
 
-// FILE 093: examples/papers/policy.cstar
+// FILE 094: examples/papers/policy.cstar
 // expected: diagnostic (proposal)
 //
 // C* PROTOCOL / ALLOCATOR PROPOSAL
@@ -1677,7 +1693,7 @@ main() :: int32 {
 
 -------
 
-// FILE 094: examples/papers/syntax.cstar
+// FILE 095: examples/papers/syntax.cstar
 // expected: diagnostic (proposal)
 //Auto importing with involved. this means all standard libraries which needed by this unit to be imported, will be imported by automatically
 include involved {

@@ -39,6 +39,7 @@ enum DeclKind {
   AttribDecl,
   MacroDecl,
   DirectiveDecl,
+  StructDecl,
   PackageDecl,
   PackageInvDecl,
 };

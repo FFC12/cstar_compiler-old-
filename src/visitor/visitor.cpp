@@ -16,6 +16,7 @@
 #include <ast/param_ast.hpp>
 #include <ast/ret_ast.hpp>
 #include <ast/scalar_ast.hpp>
+#include <ast/struct_ast.hpp>
 #include <ast/symbol_ast.hpp>
 #include <ast/type_ast.hpp>
 #include <ast/unary_op_ast.hpp>
@@ -58,6 +59,59 @@ static llvm::StructType *GetSharedPointerTy() {
   return llvm::StructType::get(ctx, {GetI8PtrTy(), GetI8PtrTy()});
 }
 
+static std::string DefinedTypeNameFromTypeAst(TypeAST *typeAst) {
+  if (typeAst == nullptr || typeAst->typeSpec() != TypeSpecifier::SPEC_DEFINED ||
+      typeAst->symbol() == nullptr ||
+      typeAst->symbol()->getExprKind() != ExprKind::SymbolExpr) {
+    return {};
+  }
+
+  auto *symbol = static_cast<SymbolAST *>(typeAst->symbol().get());
+  return symbol->name();
+}
+
+static std::string DefinedTypeNameFromVarAst(VarAST &varAst) {
+  if (varAst.typeSpec() != TypeSpecifier::SPEC_DEFINED ||
+      varAst.typeName() == nullptr ||
+      varAst.typeName()->getExprKind() != ExprKind::SymbolExpr) {
+    return {};
+  }
+
+  auto *symbol = static_cast<SymbolAST *>(varAst.typeName().get());
+  return symbol->name();
+}
+
+static llvm::Type *GetStorageType(TypeSpecifier typeSpecifier,
+                                  size_t indirectLevel, bool isUnique,
+                                  bool isRef,
+                                  const std::string &definedTypeName);
+
+static llvm::Type *GetStructFieldLLVMType(const StructFieldInfo &field);
+
+static llvm::StructType *GetDefinedStructTy(const std::string &name) {
+  auto existing = Visitor::LLVMStructTypes.find(name);
+  if (existing != Visitor::LLVMStructTypes.end()) {
+    return existing->second;
+  }
+
+  auto structIt = Visitor::StructTable.find(name);
+  if (structIt == Visitor::StructTable.end()) {
+    return nullptr;
+  }
+
+  auto *structType =
+      llvm::StructType::create(Visitor::Builder->getContext(), name);
+  Visitor::LLVMStructTypes[name] = structType;
+
+  std::vector<llvm::Type *> fieldTypes;
+  fieldTypes.reserve(structIt->second.fields.size());
+  for (const auto &field : structIt->second.fields) {
+    fieldTypes.push_back(GetStructFieldLLVMType(field));
+  }
+  structType->setBody(fieldTypes, false);
+  return structType;
+}
+
 static llvm::Value *ExtractSharedPointerData(llvm::Value *handle);
 static llvm::Value *ExtractSharedPointerCount(llvm::Value *handle);
 
@@ -78,6 +132,28 @@ static llvm::Type *GetStorageType(TypeSpecifier typeSpecifier,
   }
 
   return GetType(typeSpecifier, indirectLevel, isRef);
+}
+
+static llvm::Type *GetStorageType(TypeSpecifier typeSpecifier,
+                                  size_t indirectLevel, bool isUnique,
+                                  bool isRef,
+                                  const std::string &definedTypeName) {
+  if (typeSpecifier == TypeSpecifier::SPEC_DEFINED && indirectLevel == 0) {
+    return GetDefinedStructTy(definedTypeName);
+  }
+
+  return GetStorageType(typeSpecifier, indirectLevel, isUnique, isRef);
+}
+
+static llvm::Type *GetStructFieldLLVMType(const StructFieldInfo &field) {
+  return GetStorageType(field.type, field.indirectionLevel, field.isUnique,
+                        field.isRef, field.definedTypeName);
+}
+
+static llvm::Type *GetSymbolLLVMType(const SymbolInfo &symbolInfo) {
+  return GetStorageType(symbolInfo.type, symbolInfo.indirectionLevel,
+                        symbolInfo.isUnique, symbolInfo.isRef,
+                        symbolInfo.definedTypeName);
 }
 
 static llvm::ArrayType *GetArrayType(llvm::Type *elementType,
@@ -639,14 +715,13 @@ Visitor::FunctionParamLayout Visitor::buildFunctionParamLayout(FuncAST &funcAst)
     }
 
     auto *typeAst = static_cast<TypeAST *>(paramAst->m_TypeNode.get());
+    const auto definedTypeName = DefinedTypeNameFromTypeAst(typeAst);
     auto *valueType = GetStorageType(typeAst->m_TypeSpec,
                                      typeAst->m_IndirectLevel,
                                      typeAst->m_IsUniquePtr,
-                                     typeAst->m_IsRef);
+                                     typeAst->m_IsRef, definedTypeName);
     auto *irType = typeAst->m_IsRef
-                       ? GetType(typeAst->m_TypeSpec,
-                                 typeAst->m_IndirectLevel + 1,
-                                 typeAst->m_IsRef)
+                       ? llvm::PointerType::get(Visitor::Builder->getContext(), 0)
                        : valueType;
 
     if (paramAst->m_IsSubscriptable) {
@@ -1080,6 +1155,86 @@ static llvm::Value *FindStorage(std::map<std::string, llvm::AllocaInst*> &locals
 ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
   llvm::Value *value = nullptr, *rhs, *lhs;
 
+  if (binaryOpAst.m_BinOpKind == B_DOT) {
+    struct FieldAddress {
+      llvm::Value *address = nullptr;
+      llvm::Type *valueType = nullptr;
+      SymbolInfo symbolInfo;
+      std::string name;
+    };
+
+    auto resolveFieldAddress =
+        [&](auto &self, IAST *node) -> FieldAddress {
+      if (node == nullptr) {
+        assert(false && "Struct field access requires symbol.field.");
+      }
+
+      if (node->m_ExprKind == ExprKind::SymbolExpr) {
+        auto *symbol = static_cast<SymbolAST *>(node);
+        auto info = getSymbolInfo(symbol->m_SymbolName);
+        auto *storage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                    symbol->m_SymbolName);
+        if (storage == nullptr) {
+          assert(false && "Struct field base storage was not found.");
+        }
+        if (info.isRef && m_ReferenceParamValueTypes.count(symbol->m_SymbolName) > 0) {
+          auto *slotType = GetPointeeType(storage);
+          storage = CreateLoad(storage, slotType,
+                               symbol->m_SymbolName + ".ref.field");
+        }
+        return {storage, GetSymbolLLVMType(info), info, symbol->m_SymbolName};
+      }
+
+      if (node->m_ExprKind != ExprKind::BinOp) {
+        assert(false && "Struct field access requires symbol.field.");
+      }
+
+      auto *fieldAccess = static_cast<BinaryOpAST *>(node);
+      if (fieldAccess->m_BinOpKind != B_DOT ||
+          fieldAccess->m_RHS == nullptr ||
+          fieldAccess->m_RHS->m_ExprKind != ExprKind::SymbolExpr) {
+        assert(false && "Struct field access requires symbol.field.");
+      }
+
+      auto base = self(self, fieldAccess->m_LHS.get());
+      auto *fieldSymbol = static_cast<SymbolAST *>(fieldAccess->m_RHS.get());
+      auto structIt = StructTable.find(base.symbolInfo.definedTypeName);
+      if (structIt == StructTable.end()) {
+        assert(false && "Struct type was not registered.");
+      }
+      auto fieldIt =
+          structIt->second.fieldIndexes.find(fieldSymbol->m_SymbolName);
+      if (fieldIt == structIt->second.fieldIndexes.end()) {
+        assert(false && "Struct field was not registered.");
+      }
+
+      auto *structType = GetDefinedStructTy(base.symbolInfo.definedTypeName);
+      const auto fieldIndex = fieldIt->second;
+      const auto &field = structIt->second.fields[fieldIndex];
+      auto fieldName = base.name + "." + field.name;
+      auto *fieldAddress = Builder->CreateStructGEP(
+          structType, base.address, static_cast<unsigned>(fieldIndex),
+          fieldName);
+      auto fieldInfo = base.symbolInfo;
+      fieldInfo.symbolName = fieldName;
+      fieldInfo.type = field.type;
+      fieldInfo.definedTypeName = field.definedTypeName;
+      fieldInfo.indirectionLevel = field.indirectionLevel;
+      fieldInfo.isUnique = field.isUnique;
+      fieldInfo.isRef = field.isRef;
+      fieldInfo.isSubscriptable = false;
+      fieldInfo.arrayDimensions.clear();
+      return {fieldAddress, GetStructFieldLLVMType(field), fieldInfo,
+              fieldName};
+    };
+
+    auto field = resolveFieldAddress(resolveFieldAddress, &binaryOpAst);
+    m_LastType = field.valueType;
+    m_LastDefinedTypeName = field.symbolInfo.definedTypeName;
+    m_LastSigned = IsSigned(field.symbolInfo.type);
+    return Builder->CreateLoad(field.valueType, field.address, field.name);
+  }
+
   if (binaryOpAst.m_BinOpKind == B_ARRS) {
     m_LastArrayIndex = true;
     lhs = binaryOpAst.m_LHS->accept(*this);
@@ -1465,9 +1620,12 @@ ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {
 ValuePtr Visitor::visit(VarAST &varAst) {
   llvm::Value *value;
   this->m_LastVarDecl = true;
+  const auto definedTypeName = DefinedTypeNameFromVarAst(varAst);
   auto type = GetStorageType(varAst.m_TypeSpec, varAst.m_IndirectLevel,
-                             varAst.m_IsUniquePtr, varAst.m_IsRef);
+                             varAst.m_IsUniquePtr, varAst.m_IsRef,
+                             definedTypeName);
   this->m_LastType = type;
+  this->m_LastDefinedTypeName = definedTypeName;
   this->m_LastGlobVar = !varAst.m_IsLocal;
   this->m_LastSigned = IsSigned(varAst.m_TypeSpec);
   this->m_LastInitializerList = varAst.m_IsInitializerList;
@@ -1573,7 +1731,9 @@ ValuePtr Visitor::visit(VarAST &varAst) {
         globVar = CreateZeroInitConstantGlobalVar(
             varAst.m_Name, varAst.m_VisibilitySpec, arrayType);
       } else {
-        if (IsSharedPointerTy(type)) {
+        if (type->isStructTy()) {
+          value = llvm::ConstantAggregateZero::get(type);
+        } else if (IsSharedPointerTy(type)) {
           value = llvm::ConstantAggregateZero::get(type);
         } else if (type->isFloatTy() || type->isDoubleTy()) {
           value = llvm::ConstantFP::get(type, 0.0f);
@@ -1590,7 +1750,9 @@ ValuePtr Visitor::visit(VarAST &varAst) {
         m_LocalVarsOnScope[varAst.m_Name] = llvm::dyn_cast<llvm::AllocaInst>(
             CreateLocalVariable(varAst.m_Name, arrayType, value));
       } else {
-        if (IsSharedPointerTy(type)) {
+        if (type->isStructTy()) {
+          value = llvm::ConstantAggregateZero::get(type);
+        } else if (IsSharedPointerTy(type)) {
           value = CreateNullSharedPointerHandle();
         } else if (type->isFloatTy() || type->isDoubleTy()) {
           value = llvm::ConstantFP::get(type, 0.0f);
@@ -1605,39 +1767,125 @@ ValuePtr Visitor::visit(VarAST &varAst) {
 
   this->m_LastVarDecl = false;
   this->m_LastType = nullptr;
+  this->m_LastDefinedTypeName.clear();
   this->m_LastSigned = false;
 
   return value;
 }
 
 ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
-  auto *lhs = dynamic_cast<SymbolAST *>(assignmentAst.m_LHS.get());
-  if (lhs == nullptr) {
-    assert(false && "Only symbol assignment is supported currently.");
-  }
-
   llvm::Value *storage = nullptr;
-  if (m_LocalVarsOnScope.count(lhs->m_SymbolName) > 0) {
-    storage = m_LocalVarsOnScope[lhs->m_SymbolName];
-  } else if (m_GlobalVars.count(lhs->m_SymbolName) > 0) {
-    storage = m_GlobalVars[lhs->m_SymbolName];
-  } else {
-    assert(false && "Assignment target was not found.");
-  }
-
-  auto symbolInfo = getSymbolInfo(lhs->m_SymbolName);
+  SymbolInfo symbolInfo;
+  std::string targetName;
   AssignmentTarget target;
-  auto referenceParam = m_ReferenceParamValueTypes.find(lhs->m_SymbolName);
-  if (referenceParam != m_ReferenceParamValueTypes.end() &&
-      !assignmentAst.m_IsDereferenced) {
-    auto *referenceSlotType = GetPointeeType(storage);
-    target.address = CreateLoad(storage, referenceSlotType,
-                                lhs->m_SymbolName + ".ref.addr");
-    target.valueType = referenceParam->second;
+
+  if (assignmentAst.m_LHS->m_ExprKind == ExprKind::SymbolExpr) {
+    auto *lhs = static_cast<SymbolAST *>(assignmentAst.m_LHS.get());
+    targetName = lhs->m_SymbolName;
+    if (m_LocalVarsOnScope.count(lhs->m_SymbolName) > 0) {
+      storage = m_LocalVarsOnScope[lhs->m_SymbolName];
+    } else if (m_GlobalVars.count(lhs->m_SymbolName) > 0) {
+      storage = m_GlobalVars[lhs->m_SymbolName];
+    } else {
+      assert(false && "Assignment target was not found.");
+    }
+
+    symbolInfo = getSymbolInfo(lhs->m_SymbolName);
+    auto referenceParam = m_ReferenceParamValueTypes.find(lhs->m_SymbolName);
+    if (referenceParam != m_ReferenceParamValueTypes.end() &&
+        !assignmentAst.m_IsDereferenced) {
+      auto *referenceSlotType = GetPointeeType(storage);
+      target.address = CreateLoad(storage, referenceSlotType,
+                                  lhs->m_SymbolName + ".ref.addr");
+      target.valueType = referenceParam->second;
+    } else {
+      target = ResolveAssignmentTarget(
+          storage, symbolInfo,
+          assignmentAst.m_IsDereferenced ? assignmentAst.m_DerefLevel : 0);
+    }
+  } else if (assignmentAst.m_LHS->m_ExprKind == ExprKind::BinOp) {
+    struct FieldAddress {
+      llvm::Value *address = nullptr;
+      llvm::Type *valueType = nullptr;
+      SymbolInfo symbolInfo;
+      std::string name;
+    };
+
+    auto resolveFieldAddress =
+        [&](auto &self, IAST *node) -> FieldAddress {
+      if (node == nullptr) {
+        assert(false && "Unsupported assignment target.");
+      }
+
+      if (node->m_ExprKind == ExprKind::SymbolExpr) {
+        auto *symbol = static_cast<SymbolAST *>(node);
+        auto info = getSymbolInfo(symbol->m_SymbolName);
+        auto *symbolStorage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                          symbol->m_SymbolName);
+        if (symbolStorage == nullptr) {
+          assert(false && "Struct assignment target storage was not found.");
+        }
+        if (info.isRef &&
+            m_ReferenceParamValueTypes.count(symbol->m_SymbolName) > 0) {
+          auto *slotType = GetPointeeType(symbolStorage);
+          symbolStorage = CreateLoad(symbolStorage, slotType,
+                                     symbol->m_SymbolName + ".ref.field");
+        }
+        return {symbolStorage, GetSymbolLLVMType(info), info,
+                symbol->m_SymbolName};
+      }
+
+      if (node->m_ExprKind != ExprKind::BinOp) {
+        assert(false && "Unsupported assignment target.");
+      }
+
+      auto *fieldAccess = static_cast<BinaryOpAST *>(node);
+      if (fieldAccess->m_BinOpKind != B_DOT ||
+          fieldAccess->m_RHS == nullptr ||
+          fieldAccess->m_RHS->m_ExprKind != ExprKind::SymbolExpr) {
+        assert(false && "Unsupported assignment target.");
+      }
+
+      auto base = self(self, fieldAccess->m_LHS.get());
+      auto *fieldSymbol = static_cast<SymbolAST *>(fieldAccess->m_RHS.get());
+      auto structIt = StructTable.find(base.symbolInfo.definedTypeName);
+      if (structIt == StructTable.end()) {
+        assert(false && "Struct type was not registered.");
+      }
+      auto fieldIt =
+          structIt->second.fieldIndexes.find(fieldSymbol->m_SymbolName);
+      if (fieldIt == structIt->second.fieldIndexes.end()) {
+        assert(false && "Struct field was not registered.");
+      }
+
+      auto *structType = GetDefinedStructTy(base.symbolInfo.definedTypeName);
+      const auto fieldIndex = fieldIt->second;
+      const auto &field = structIt->second.fields[fieldIndex];
+      auto fieldName = base.name + "." + field.name;
+      auto *fieldAddress = Builder->CreateStructGEP(
+          structType, base.address, static_cast<unsigned>(fieldIndex),
+          fieldName);
+      auto fieldInfo = base.symbolInfo;
+      fieldInfo.symbolName = fieldName;
+      fieldInfo.type = field.type;
+      fieldInfo.definedTypeName = field.definedTypeName;
+      fieldInfo.indirectionLevel = field.indirectionLevel;
+      fieldInfo.isUnique = field.isUnique;
+      fieldInfo.isRef = field.isRef;
+      fieldInfo.isSubscriptable = false;
+      fieldInfo.arrayDimensions.clear();
+      return {fieldAddress, GetStructFieldLLVMType(field), fieldInfo,
+              fieldName};
+    };
+
+    auto field = resolveFieldAddress(resolveFieldAddress,
+                                     assignmentAst.m_LHS.get());
+    targetName = field.name;
+    target.address = field.address;
+    target.valueType = field.valueType;
+    symbolInfo = field.symbolInfo;
   } else {
-    target = ResolveAssignmentTarget(
-        storage, symbolInfo,
-        assignmentAst.m_IsDereferenced ? assignmentAst.m_DerefLevel : 0);
+    assert(false && "Unsupported assignment target.");
   }
 
   llvm::Type *previousType = m_LastType;
@@ -1646,11 +1894,11 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
 
   if (assignmentAst.m_Subscriptable) {
     llvm::Type *arrayType = GetPointeeType(target.address);
-    auto arrayParamType = m_ArrayParamValueTypes.find(lhs->m_SymbolName);
+    auto arrayParamType = m_ArrayParamValueTypes.find(targetName);
     if (arrayParamType != m_ArrayParamValueTypes.end()) {
       auto *slotType = GetPointeeType(target.address);
       target.address =
-          CreateLoad(target.address, slotType, lhs->m_SymbolName + ".array.addr");
+          CreateLoad(target.address, slotType, targetName + ".array.addr");
       arrayType = arrayParamType->second;
     }
     if (!arrayType->isArrayTy()) {
@@ -1673,7 +1921,7 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
         CreateLinearArrayIndex(indexes, symbolInfo.arrayDimensions)};
     target.address =
         Builder->CreateInBoundsGEP(arrayType, target.address, idxList,
-                                   lhs->m_SymbolName + ".element");
+                                   targetName + ".element");
     target.valueType = arrayType->getArrayElementType();
   }
 
@@ -1689,7 +1937,7 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
   if (targetIsShared) {
     auto *oldHandle =
         Visitor::Builder->CreateLoad(GetSharedPointerTy(), target.address,
-                                     lhs->m_SymbolName + ".old.sp");
+                                     targetName + ".old.sp");
     ReleaseSharedPointer(oldHandle);
   }
 
@@ -1704,7 +1952,7 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
   if (assignmentAst.m_ShortcutOp != ShortcutOp::S_NONE &&
       assignmentAst.m_ShortcutOp != ShortcutOp::S_MOV) {
     llvm::Value *currentValue = Visitor::Builder->CreateLoad(
-        target.valueType, target.address, lhs->m_SymbolName);
+        target.valueType, target.address, targetName);
 
     result = CreateShortcutAssignmentValue(currentValue, rhs, target.valueType,
                                            assignmentAst.m_ShortcutOp,
@@ -1950,10 +2198,12 @@ llvm::Function *Visitor::declareFunction(FuncAST &funcAst) {
 
   auto *retType = static_cast<TypeAST *>(funcAst.m_RetType.get());
   auto paramLayout = buildFunctionParamLayout(funcAst);
+  const auto retDefinedTypeName = DefinedTypeNameFromTypeAst(retType);
 
   auto *functionType = llvm::FunctionType::get(
       GetStorageType(retType->m_TypeSpec, retType->m_IndirectLevel,
-                     retType->m_IsUniquePtr, retType->m_IsRef),
+                     retType->m_IsUniquePtr, retType->m_IsRef,
+                     retDefinedTypeName),
       paramLayout.hasParams() ? paramLayout.irTypes : std::vector<llvm::Type *>(),
       false);
 
@@ -2066,6 +2316,9 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     argNodes.push_back(node);
   };
   collectArgs(collectArgs, funcCallAst.m_Args.get());
+  if (auto *receiver = methodCallReceiver(funcCallAst.m_FuncSymbol.get())) {
+    argNodes.insert(argNodes.begin(), receiver);
+  }
   cstar::codegen::NativeRuntime nativeRuntime(*Visitor::Module,
                                               *Visitor::Builder);
 
@@ -2246,6 +2499,26 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     const bool paramIsShared =
         paramInfo != nullptr && paramInfo->indirectionLevel > 0 &&
         !paramInfo->isUnique && !paramInfo->isRef;
+
+    if (paramInfo != nullptr && paramInfo->isRef &&
+        argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
+      auto *storage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                  argSymbol->m_SymbolName);
+      if (storage == nullptr) {
+        assert(false && "Reference argument storage was not found.");
+      }
+
+      auto referenceParam =
+          m_ReferenceParamValueTypes.find(argSymbol->m_SymbolName);
+      if (referenceParam != m_ReferenceParamValueTypes.end()) {
+        auto *slotType = GetPointeeType(storage);
+        storage = CreateLoad(storage, slotType,
+                             argSymbol->m_SymbolName + ".ref.arg");
+      }
+      args.push_back(storage);
+      continue;
+    }
 
     llvm::Value *argValue = argNodes[i]->accept(*this);
     argValue = CastValueToType(argValue, paramType, m_LastSigned);
@@ -2825,6 +3098,11 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
 ValuePtr Visitor::visit(TypeAST &typeAst) { return nullptr; }
 
 ValuePtr Visitor::visit(FixAST &fixAst) { return nullptr; }
+
+ValuePtr Visitor::visit(StructAST &structAst) {
+  (void)GetDefinedStructTy(structAst.m_Name);
+  return nullptr;
+}
 
 void Visitor::finalizeCodegen() {
   if (this->m_GlobaInitVarFunc.size() > 0) {

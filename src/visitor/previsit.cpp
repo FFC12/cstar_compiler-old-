@@ -11,6 +11,7 @@
 #include <ast/param_ast.hpp>
 #include <ast/ret_ast.hpp>
 #include <ast/scalar_ast.hpp>
+#include <ast/struct_ast.hpp>
 #include <ast/symbol_ast.hpp>
 #include <ast/type_ast.hpp>
 #include <ast/unary_op_ast.hpp>
@@ -24,6 +25,27 @@ using DiagnosticCode = cstar::diagnostics::DiagnosticCode;
 static std::string SymbolStateKey(const SymbolInfo &symbolInfo) {
   return std::to_string(symbolInfo.scopeId) + "#" +
          std::to_string(symbolInfo.scopeLevel) + "#" + symbolInfo.symbolName;
+}
+
+IAST *Visitor::methodCallReceiver(IAST *node) const {
+  if (node == nullptr || node->m_ExprKind != ExprKind::BinOp) {
+    return nullptr;
+  }
+
+  auto *binOp = static_cast<BinaryOpAST *>(node);
+  if (binOp->m_BinOpKind != BinOpKind::B_DOT || binOp->m_LHS == nullptr ||
+      binOp->m_RHS == nullptr ||
+      binOp->m_LHS->m_ExprKind != ExprKind::SymbolExpr ||
+      binOp->m_RHS->m_ExprKind != ExprKind::SymbolExpr) {
+    return nullptr;
+  }
+
+  auto *receiver = static_cast<SymbolAST *>(binOp->m_LHS.get());
+  if (ModuleAliases.count(receiver->m_SymbolName) != 0) {
+    return nullptr;
+  }
+
+  return binOp->m_LHS.get();
 }
 
 static std::vector<TypeQualifier> BuildQualifierLevels(
@@ -183,6 +205,7 @@ static std::string GetTypeStr(TypeSpecifier typeSpecifier) {
       assert(false && "!");
       return "nil";
     case SPEC_DEFINED:
+      return "defined";
     default:
       assert(false && "Unreacheable");
       return "<invalid>";
@@ -460,6 +483,12 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   }
 
   symbolInfo.type = varAst.m_TypeSpec;
+  if (varAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED &&
+      varAst.m_Typename != nullptr &&
+      varAst.m_Typename->m_ExprKind == ExprKind::SymbolExpr) {
+    auto *typeSymbol = static_cast<SymbolAST *>(varAst.m_Typename.get());
+    symbolInfo.definedTypeName = typeSymbol->m_SymbolName;
+  }
   symbolInfo.isSubscriptable = varAst.m_IsInitializerList;
   symbolInfo.indirectionLevel = varAst.m_IndirectLevel;
   symbolInfo.isConstRef = varAst.m_TypeQualifier == Q_CONSTREF;
@@ -548,6 +577,10 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
             dynamic_cast<SymbolAST *>(varAst.m_Typename.get())->m_SymbolName;
         this->m_DefinedTypeName = typeName;
         this->m_DefinedTypeFlag = true;
+        if (m_TypeChecking && this->m_TypeTable.count(typeName) == 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Unknown type '" + typeName + "'", symbolInfo);
+        }
       }
     }
 
@@ -637,19 +670,13 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
   SymbolInfo symbolInfo;
 
   if (m_TypeChecking) {
-    if (assignmentAst.m_LHS->m_ASTKind != ASTKind::Expr &&
-        assignmentAst.m_ExprKind != ExprKind::SymbolExpr) {
-      // problem..
-      assert(false && "Will be implemented!");
+    if (assignmentAst.m_LHS->m_ASTKind != ASTKind::Expr) {
+      assert(false && "Assignment target must be an expression.");
     } else {
       SymbolInfo matchedSymbol;
-      auto lhs = (SymbolAST *)assignmentAst.m_LHS.get();
-
-      symbolInfo.symbolName = lhs->m_SymbolName;
-      symbolInfo.begin = lhs->m_SemLoc.begin;
-      symbolInfo.end = lhs->m_SemLoc.end;
-      symbolInfo.line = lhs->m_SemLoc.line;
-
+      SymbolAST *lhs = nullptr;
+      bool isStructFieldAssignment = false;
+      std::string lhsName;
       this->m_LastAssignment = true;
       const size_t assignmentSymbolId = m_SymbolId;
       const size_t assignmentScopeId = m_ScopeId;
@@ -658,8 +685,111 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
       this->m_LastSymbolInfo.scopeId = assignmentScopeId;
       this->m_LastSymbolInfo.scopeLevel = assignmentScopeLevel;
 
+      if (assignmentAst.m_LHS->m_ExprKind == ExprKind::SymbolExpr) {
+        lhs = static_cast<SymbolAST *>(assignmentAst.m_LHS.get());
+        lhsName = lhs->m_SymbolName;
+        symbolInfo.symbolName = lhs->m_SymbolName;
+        symbolInfo.begin = lhs->m_SemLoc.begin;
+        symbolInfo.end = lhs->m_SemLoc.end;
+        symbolInfo.line = lhs->m_SemLoc.line;
+      } else if (assignmentAst.m_LHS->m_ExprKind == ExprKind::BinOp) {
+        auto resolveFieldAccess =
+            [&](auto &self, IAST *node) -> SymbolInfo {
+          SymbolInfo resolved;
+          if (node == nullptr) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Assignment target must be a symbol or struct field",
+                symbolInfo);
+            return resolved;
+          }
+
+          if (node->m_ExprKind == ExprKind::SymbolExpr) {
+            auto *symbol = static_cast<SymbolAST *>(node);
+            SymbolInfo lookup;
+            lookup.symbolName = symbol->m_SymbolName;
+            lookup.begin = symbol->m_SemLoc.begin;
+            lookup.end = symbol->m_SemLoc.end;
+            lookup.line = symbol->m_SemLoc.line;
+            symbolValidation(symbol->m_SymbolName, lookup, resolved);
+            return resolved;
+          }
+
+          if (node->m_ExprKind != ExprKind::BinOp) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Assignment target must be a symbol or struct field",
+                symbolInfo);
+            return resolved;
+          }
+
+          auto *fieldAccess = static_cast<BinaryOpAST *>(node);
+          if (fieldAccess->m_BinOpKind != B_DOT ||
+              fieldAccess->m_RHS == nullptr ||
+              fieldAccess->m_RHS->m_ExprKind != ExprKind::SymbolExpr) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Assignment target must be a symbol or struct field",
+                symbolInfo);
+            return resolved;
+          }
+
+          auto base = self(self, fieldAccess->m_LHS.get());
+          auto *fieldSymbol = static_cast<SymbolAST *>(fieldAccess->m_RHS.get());
+          if (base.type != TypeSpecifier::SPEC_DEFINED) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Field assignment requires a struct value", base);
+            return resolved;
+          }
+
+          auto structIt = StructTable.find(base.definedTypeName);
+          if (structIt == StructTable.end()) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Unknown struct type '" + base.definedTypeName + "'", base);
+            return resolved;
+          }
+
+          auto fieldIt =
+              structIt->second.fieldIndexes.find(fieldSymbol->m_SymbolName);
+          if (fieldIt == structIt->second.fieldIndexes.end()) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Struct '" + base.definedTypeName + "' has no field '" +
+                    fieldSymbol->m_SymbolName + "'",
+                base);
+            return resolved;
+          }
+
+          const auto &field = structIt->second.fields[fieldIt->second];
+          resolved = base;
+          resolved.symbolName = base.symbolName + "." + field.name;
+          resolved.type = field.type;
+          resolved.definedTypeName = field.definedTypeName;
+          resolved.indirectionLevel = field.indirectionLevel;
+          resolved.isUnique = field.isUnique;
+          resolved.isRef = field.isRef;
+          resolved.isSubscriptable = false;
+          resolved.arrayDimensions.clear();
+          resolved.isConstVal = false;
+          resolved.isConstPtr = false;
+          resolved.isConstRef = false;
+          resolved.isReadOnly = false;
+          resolved.begin = fieldSymbol->m_SemLoc.begin;
+          resolved.end = fieldSymbol->m_SemLoc.end;
+          resolved.line = fieldSymbol->m_SemLoc.line;
+          return resolved;
+        };
+
+        matchedSymbol =
+            resolveFieldAccess(resolveFieldAccess, assignmentAst.m_LHS.get());
+        lhsName = matchedSymbol.symbolName;
+        symbolInfo = matchedSymbol;
+        isStructFieldAssignment = true;
+      } else {
+        this->m_TypeErrorMessages.emplace_back(
+            "Assignment target must be a symbol or struct field", symbolInfo);
+        return symbolInfo;
+      }
+
       bool indirectable = false;
-      if (symbolValidation(lhs->m_SymbolName, symbolInfo, matchedSymbol)) {
+      if (isStructFieldAssignment ||
+          symbolValidation(lhsName, symbolInfo, matchedSymbol)) {
         // TODO: for different scenerarios.
 
         if (assignmentAst.m_IsDereferenced) {
@@ -1227,6 +1357,95 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
   if (this->m_TypeChecking) {
     ASTNode &lhs = binaryOpAst.m_LHS, &rhs = binaryOpAst.m_RHS;
 
+    if (binaryOpAst.m_BinOpKind == B_DOT) {
+      SymbolInfo accessInfo;
+      accessInfo.begin = binaryOpAst.m_SemLoc.begin;
+      accessInfo.end = binaryOpAst.m_SemLoc.end;
+      accessInfo.line = binaryOpAst.m_SemLoc.line;
+
+      auto resolveFieldAccess =
+          [&](auto &self, IAST *node) -> SymbolInfo {
+        SymbolInfo resolved;
+        resolved.begin = accessInfo.begin;
+        resolved.end = accessInfo.end;
+        resolved.line = accessInfo.line;
+
+        if (node == nullptr) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Struct field access expects `value.field`", accessInfo);
+          return resolved;
+        }
+
+        if (node->m_ExprKind == ExprKind::SymbolExpr) {
+          auto *symbol = static_cast<SymbolAST *>(node);
+          SymbolInfo lookup;
+          lookup.symbolName = symbol->m_SymbolName;
+          lookup.begin = symbol->m_SemLoc.begin;
+          lookup.end = symbol->m_SemLoc.end;
+          lookup.line = symbol->m_SemLoc.line;
+          symbolValidation(symbol->m_SymbolName, lookup, resolved);
+          return resolved;
+        }
+
+        if (node->m_ExprKind != ExprKind::BinOp) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Struct field access expects `value.field`", accessInfo);
+          return resolved;
+        }
+
+        auto *fieldAccess = static_cast<BinaryOpAST *>(node);
+        if (fieldAccess->m_BinOpKind != B_DOT ||
+            fieldAccess->m_RHS == nullptr ||
+            fieldAccess->m_RHS->m_ExprKind != ExprKind::SymbolExpr) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Struct field access expects `value.field`", accessInfo);
+          return resolved;
+        }
+
+        auto base = self(self, fieldAccess->m_LHS.get());
+        auto *fieldSymbol = static_cast<SymbolAST *>(fieldAccess->m_RHS.get());
+        if (base.type != TypeSpecifier::SPEC_DEFINED) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Field access requires a struct value", base);
+          return resolved;
+        }
+
+        auto structIt = StructTable.find(base.definedTypeName);
+        if (structIt == StructTable.end()) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Unknown struct type '" + base.definedTypeName + "'", base);
+          return resolved;
+        }
+
+        auto fieldIt =
+            structIt->second.fieldIndexes.find(fieldSymbol->m_SymbolName);
+        if (fieldIt == structIt->second.fieldIndexes.end()) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Struct '" + base.definedTypeName + "' has no field '" +
+                  fieldSymbol->m_SymbolName + "'",
+              accessInfo);
+          return resolved;
+        }
+
+        const auto &field = structIt->second.fields[fieldIt->second];
+        resolved = base;
+        resolved.symbolName = base.symbolName + "." + field.name;
+        resolved.type = field.type;
+        resolved.definedTypeName = field.definedTypeName;
+        resolved.indirectionLevel = field.indirectionLevel;
+        resolved.isUnique = field.isUnique;
+        resolved.isRef = field.isRef;
+        resolved.isSubscriptable = false;
+        resolved.arrayDimensions.clear();
+        resolved.begin = fieldSymbol->m_SemLoc.begin;
+        resolved.end = fieldSymbol->m_SemLoc.end;
+        resolved.line = fieldSymbol->m_SemLoc.line;
+        return resolved;
+      };
+
+      return resolveFieldAccess(resolveFieldAccess, &binaryOpAst);
+    }
+
     bool isPtrType = false;
     bool errorFlag = false;
 
@@ -1538,6 +1757,12 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
     auto retType = dynamic_cast<TypeAST *>(funcAst.m_RetType.get());
 
     symbolInfo.type = retType->m_TypeSpec;
+    if (retType->m_TypeSpec == TypeSpecifier::SPEC_DEFINED &&
+        retType->m_Symbol != nullptr &&
+        retType->m_Symbol->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *typeSymbol = static_cast<SymbolAST *>(retType->m_Symbol.get());
+      symbolInfo.definedTypeName = typeSymbol->m_SymbolName;
+    }
     symbolInfo.indirectionLevel = retType->m_IndirectLevel;
     symbolInfo.isConstRef = funcAst.m_RetTypeQualifier == Q_CONSTREF;
     symbolInfo.isConstPtr = funcAst.m_RetTypeQualifier == Q_CONSTPTR;
@@ -1891,7 +2116,49 @@ std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
       symbolInfo.end = member->m_SemLoc.end;
       symbolInfo.line = member->m_SemLoc.line;
 
-      if (ModuleAliases.count(alias->m_SymbolName) == 0) {
+      if (ModuleAliases.count(alias->m_SymbolName) != 0) {
+        return member->m_SymbolName;
+      }
+
+      if (emitDiagnostics) {
+        SymbolInfo receiverInfo;
+        SymbolInfo matchedReceiver;
+        receiverInfo.symbolName = alias->m_SymbolName;
+        receiverInfo.begin = alias->m_SemLoc.begin;
+        receiverInfo.end = alias->m_SemLoc.end;
+        receiverInfo.line = alias->m_SemLoc.line;
+        auto receiverName = alias->m_SymbolName;
+        if (!symbolValidation(receiverName, receiverInfo, matchedReceiver)) {
+          return {};
+        }
+
+        if (matchedReceiver.type != TypeSpecifier::SPEC_DEFINED ||
+            matchedReceiver.indirectionLevel != 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Method call receiver must be a struct value", receiverInfo);
+          return {};
+        }
+
+        auto methodName =
+            matchedReceiver.definedTypeName + "." + member->m_SymbolName;
+        if (FunctionTable.count(methodName) == 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Struct '" + matchedReceiver.definedTypeName +
+                  "' has no method '" + member->m_SymbolName + "'",
+              symbolInfo);
+          return {};
+        }
+
+        return methodName;
+      }
+
+      auto receiverInfo = getSymbolInfo(alias->m_SymbolName);
+      if (receiverInfo.type == TypeSpecifier::SPEC_DEFINED &&
+          receiverInfo.indirectionLevel == 0) {
+        return receiverInfo.definedTypeName + "." + member->m_SymbolName;
+      }
+
+      if (emitDiagnostics) {
         if (emitDiagnostics) {
           this->m_TypeErrorMessages.emplace_back(
               "Module alias '" + alias->m_SymbolName + "' was not declared",
@@ -1899,8 +2166,6 @@ std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
         }
         return {};
       }
-
-      return member->m_SymbolName;
     }
   }
 
@@ -1947,6 +2212,11 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     argNodes.push_back(node);
   };
   collectArgs(collectArgs, funcCallAst.m_Args.get());
+  const bool hasImplicitMethodReceiver =
+      methodCallReceiver(funcCallAst.m_FuncSymbol.get()) != nullptr;
+  if (auto *receiver = methodCallReceiver(funcCallAst.m_FuncSymbol.get())) {
+    argNodes.insert(argNodes.begin(), receiver);
+  }
 
   if (funcName == "print") {
     if (argNodes.empty()) {
@@ -2247,7 +2517,9 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
       }
     }
 
-    argNodes[i]->acceptBefore(*this);
+    if (!(hasImplicitMethodReceiver && i == 0 && signature.params[i].isRef)) {
+      argNodes[i]->acceptBefore(*this);
+    }
     if (markMovedCallSource) {
       m_MovedUniqueSymbols.insert(SymbolStateKey(movedCallSource));
     }
@@ -2355,6 +2627,11 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
     symbolInfo.type = typeInfo->m_TypeSpec;
   } else {
     symbolInfo.type = TypeSpecifier::SPEC_DEFINED;
+    if (typeInfo != nullptr && typeInfo->m_Symbol != nullptr &&
+        typeInfo->m_Symbol->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *typeSymbol = static_cast<SymbolAST *>(typeInfo->m_Symbol.get());
+      symbolInfo.definedTypeName = typeSymbol->m_SymbolName;
+    }
   }
   symbolInfo.isParam = true;
 
@@ -2523,6 +2800,12 @@ SymbolInfo Visitor::preVisit(TypeAST &typeAst) {
 
   symbolInfo.type = typeAst.m_TypeSpec;
   symbolInfo.isPrimitive = typeAst.m_IsPrimitiveType;
+  if (typeAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED &&
+      typeAst.m_Symbol != nullptr &&
+      typeAst.m_Symbol->m_ExprKind == ExprKind::SymbolExpr) {
+    auto *typeSymbol = static_cast<SymbolAST *>(typeAst.m_Symbol.get());
+    symbolInfo.definedTypeName = typeSymbol->m_SymbolName;
+  }
 
   return symbolInfo;
 }
@@ -2541,6 +2824,50 @@ SymbolInfo Visitor::preVisit(FixAST &fixAst) {
     this->m_LastFixExpr = false;
   }
 
+  return symbolInfo;
+}
+
+SymbolInfo Visitor::preVisit(StructAST &structAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.symbolName = structAst.m_Name;
+  symbolInfo.definedTypeName = structAst.m_Name;
+  symbolInfo.begin = structAst.m_SemLoc.begin;
+  symbolInfo.end = structAst.m_SemLoc.end;
+  symbolInfo.line = structAst.m_SemLoc.line;
+  symbolInfo.type = TypeSpecifier::SPEC_DEFINED;
+
+  StructInfo info;
+  info.name = structAst.m_Name;
+  for (const auto &field : structAst.m_Fields) {
+    if (info.fieldIndexes.count(field.name) != 0) {
+      SymbolInfo fieldSymbol = symbolInfo;
+      fieldSymbol.symbolName = field.name;
+      this->m_TypeErrorMessages.emplace_back(
+          "Redefinition of struct field '" + field.name + "'", fieldSymbol);
+      continue;
+    }
+
+    if (field.type == TypeSpecifier::SPEC_DEFINED &&
+        field.indirectionLevel == 0) {
+      if (field.definedTypeName == structAst.m_Name) {
+        SymbolInfo fieldSymbol = symbolInfo;
+        fieldSymbol.symbolName = field.name;
+        this->m_TypeErrorMessages.emplace_back(
+            "Struct cannot contain itself by value", fieldSymbol);
+      } else if (m_TypeChecking &&
+                 this->m_TypeTable.count(field.definedTypeName) == 0) {
+        SymbolInfo fieldSymbol = symbolInfo;
+        fieldSymbol.symbolName = field.name;
+        this->m_TypeErrorMessages.emplace_back(
+            "Unknown type '" + field.definedTypeName + "'", fieldSymbol);
+      }
+    }
+
+    info.fieldIndexes[field.name] = info.fields.size();
+    info.fields.push_back(field);
+  }
+
+  StructTable[info.name] = std::move(info);
   return symbolInfo;
 }
 

@@ -1,0 +1,26 @@
+// expected: pass
+// expected-exit: 12
+
+struct Point {
+  int32 x;
+  int32 y;
+}
+
+sum(Point p) :: int32 {
+  ret p.x + p.y;
+}
+
+make_point() :: Point {
+  Point p;
+  p.x = 2;
+  p.y = 5;
+  ret p;
+}
+
+main() :: int32 {
+  Point p;
+  p.x = 4;
+  p.y = 3;
+  Point q = make_point();
+  ret sum(p) + q.y;
+}

@@ -1,0 +1,24 @@
+// expected: pass
+// expected-exit: 9
+
+struct Point {
+  int32 x;
+  int32 y;
+
+  length() :: int32 {
+    ret self.x + self.y;
+  }
+
+  move_x(int32 dx) :: void {
+    self.x += dx;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Point p;
+  p.x = 2;
+  p.y = 3;
+  p.move_x(4);
+  ret p.length();
+}

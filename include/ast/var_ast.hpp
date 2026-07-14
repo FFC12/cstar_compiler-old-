@@ -89,6 +89,9 @@ class VarAST : public IAST {
 
   void setVisibility(VisibilitySpecifier& vis) { this->m_VisibilitySpec = vis; }
 
+  [[nodiscard]] TypeSpecifier typeSpec() const { return m_TypeSpec; }
+  [[nodiscard]] const ASTNode& typeName() const { return m_Typename; }
+
   SymbolInfo acceptBefore(Visitor& visitor) override {
     return visitor.preVisit(*this);
   }

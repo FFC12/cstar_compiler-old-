@@ -10,7 +10,6 @@ static bool IsProposalOnlyTopLevel(TokenKind kind) {
     case PROTOCOL:
     case STATE:
     case WITH:
-    case STRUCT:
     case TRAIT:
     case MACRO:
     case CONSTRUCTOR:
@@ -111,6 +110,141 @@ void CStarParser::parseLinkageBlock(
 
   expected(TokenKind::RBRACK);
   this->advance();
+  skipTopLevelTrivia();
+  if (is(TokenKind::SEMICOLON)) {
+    this->advance();
+  }
+}
+
+StructFieldInfo CStarParser::parseStructField() {
+  DeclarationModifiers modifiers = parseDeclarationModifiers(false);
+  if (modifiers.isStatic) {
+    ParserError("static struct members are not implemented yet",
+                prevTokenInfo());
+  }
+
+  StructFieldInfo field;
+  field.isPublic = modifiers.access == ACCESS_PUBLIC;
+
+  if (!isType(currentTokenInfo()) && !is(TokenKind::IDENT)) {
+    ParserError("Expected field type in struct declaration",
+                currentTokenInfo());
+  }
+
+  if (is(TokenKind::IDENT)) {
+    field.type = TypeSpecifier::SPEC_DEFINED;
+    field.definedTypeName = currentTokenStr();
+  } else {
+    field.type = typeSpecifierOf(currentTokenInfo());
+  }
+  this->advance();
+
+  while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
+    const bool currentPointerIsUnique =
+        this->currentTokenKind() == TokenKind::XOR;
+    field.indirectionLevel = advancePointerType(currentPointerIsUnique);
+    if (currentPointerIsUnique) {
+      field.isUnique = true;
+    }
+  }
+
+  if (is(TokenKind::AND)) {
+    field.indirectionLevel = 1;
+    field.isRef = true;
+    this->advance();
+  }
+
+  expected(TokenKind::IDENT);
+  field.name = currentTokenStr();
+  this->advance();
+
+  if (is(TokenKind::EQUAL) || is(TokenKind::TYPEINF)) {
+    ParserError("struct field initializers are not implemented yet",
+                currentTokenInfo());
+  }
+
+  expected(TokenKind::SEMICOLON);
+  this->advance();
+  return field;
+}
+
+void CStarParser::parseStructDecl(DeclarationModifiers declarationModifiers) {
+  if (declarationModifiers.linkage == VisibilitySpecifier::VIS_IMPORT ||
+      declarationModifiers.linkage == VisibilitySpecifier::VIS_EXPORT) {
+    ParserError("struct visibility uses public/private, not import/export",
+                currentTokenInfo());
+  }
+  if (declarationModifiers.isStatic) {
+    ParserError("static struct declarations are not implemented yet",
+                currentTokenInfo());
+  }
+
+  auto posInfo = currentTokenInfo().getTokenPositionInfo();
+  size_t begin = posInfo.begin;
+  size_t line = posInfo.line;
+
+  this->advance();
+  expected(TokenKind::IDENT);
+  auto structName = currentTokenStr();
+  this->advance();
+
+  if (is(TokenKind::LT) || is(TokenKind::FROM) || is(TokenKind::WITH)) {
+    ParserError(
+        "generic/attribute/trait-bound struct syntax is proposal-only; use "
+        "`struct Name { field; ... }` for the current MVP",
+        currentTokenInfo());
+  }
+
+  expected(TokenKind::LBRACK);
+  this->advance();
+
+  std::vector<StructFieldInfo> fields;
+  std::vector<ASTNode> methods;
+  while (!is(TokenKind::RBRACK) && !is(TokenKind::_EOF)) {
+    skipTopLevelTrivia();
+    if (is(TokenKind::RBRACK)) {
+      break;
+    }
+
+    if (is(TokenKind::CONSTRUCTOR) || is(TokenKind::DESTRUCTOR) ||
+        is(TokenKind::ALLOCATOR)) {
+      ParserError("struct lifetime hooks are not implemented yet",
+                  currentTokenInfo());
+    }
+
+    bool outOfSize = false;
+    auto nextToken = nextTokenInfo(outOfSize).getTokenKind();
+    if (!outOfSize && is(TokenKind::IDENT) &&
+        (nextToken == TokenKind::LPAREN ||
+         nextToken == TokenKind::COLONCOLON ||
+         nextToken == TokenKind::LBRACK)) {
+      DeclarationModifiers methodModifiers;
+      methodModifiers.access = declarationModifiers.access;
+      const auto astSizeBeforeMethod = m_AST.size();
+      funcDecl(methodModifiers, false, structName);
+      while (m_AST.size() > astSizeBeforeMethod) {
+        methods.push_back(std::move(m_AST.back()));
+        m_AST.pop_back();
+      }
+      continue;
+    }
+
+    fields.push_back(parseStructField());
+  }
+
+  expected(TokenKind::RBRACK);
+  posInfo = currentTokenInfo().getTokenPositionInfo();
+  SemanticLoc semLoc(begin, posInfo.end, line);
+  this->advance();
+
+  auto structAst =
+      std::make_unique<StructAST>(structName, std::move(fields),
+                                  declarationModifiers.access, semLoc);
+  this->m_AST.emplace_back(std::move(structAst));
+  for (auto &method : methods) {
+    this->m_AST.emplace_back(std::move(method));
+  }
+
   skipTopLevelTrivia();
   if (is(TokenKind::SEMICOLON)) {
     this->advance();
@@ -238,6 +372,11 @@ void CStarParser::translationUnit() {
           parseDeclarationModifiers(false);
 
       skipTopLevelTrivia();
+      if (is(TokenKind::STRUCT)) {
+        parseStructDecl(declarationModifiers);
+        continue;
+      }
+
       if ((declarationModifiers.linkage == VisibilitySpecifier::VIS_IMPORT ||
            declarationModifiers.linkage == VisibilitySpecifier::VIS_EXPORT) &&
           (is(TokenKind::LBRACK) || is(TokenKind::FROM))) {

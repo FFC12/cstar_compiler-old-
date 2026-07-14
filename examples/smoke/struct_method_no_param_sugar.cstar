@@ -1,0 +1,16 @@
+// expected: pass
+// expected-exit: 6
+
+struct Counter {
+  int32 value;
+
+  read :: int32 {
+    ret self.value;
+  }
+}
+
+main() :: int32 {
+  Counter c;
+  c.value = 6;
+  ret c.read();
+}

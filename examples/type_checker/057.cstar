@@ -1,0 +1,11 @@
+// expected: fail
+// expected-code: CST2001
+
+struct Node {
+  Node child;
+}
+
+main() :: int32 {
+  Node n;
+  ret 0;
+}

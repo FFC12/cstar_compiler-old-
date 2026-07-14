@@ -17,6 +17,22 @@ struct TypeCheckerInfo {
   bool isCompatibleVal =  true;
 };
 
+struct StructFieldInfo {
+  std::string name;
+  TypeSpecifier type = TypeSpecifier::SPEC_VOID;
+  std::string definedTypeName;
+  size_t indirectionLevel = 0;
+  bool isUnique = false;
+  bool isRef = false;
+  bool isPublic = false;
+};
+
+struct StructInfo {
+  std::string name;
+  std::vector<StructFieldInfo> fields;
+  std::map<std::string, size_t> fieldIndexes;
+};
+
 // This is using for pipelining informations
 // also it contains type informations as well.
 struct SymbolInfo {
@@ -56,6 +72,7 @@ struct SymbolInfo {
                             // symbol1
   std::map<size_t, std::string> ptrAliases;
   std::string symbolName;
+  std::string definedTypeName;
   std::string assocFuncName;  // if it's global, then no assoc. func.
   TypeSpecifier type = TypeSpecifier::SPEC_VOID;
   SymbolScope symbolScope = SymbolScope::IfSt;

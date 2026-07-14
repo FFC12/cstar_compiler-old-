@@ -79,6 +79,7 @@ class ParamAST;
 class RetAST;
 class ScalarOrLiteralAST;
 class SymbolAST;
+class StructAST;
 class TypeAST;
 class UnaryOpAST;
 class FixAST;
@@ -149,6 +150,7 @@ class Visitor {
   std::vector<llvm::Value*> m_Indices{};
   std::vector<std::pair<std::string,bool>> m_IndicesAsStr{};
   llvm::Type* m_LastType = nullptr;
+  std::string m_LastDefinedTypeName;
   std::map<std::string, llvm::AllocaInst*> m_LocalVarsOnScope;
   std::map<std::string, llvm::Type*> m_ReferenceParamValueTypes;
   std::map<std::string, llvm::Type*> m_ArrayParamValueTypes;
@@ -199,6 +201,7 @@ class Visitor {
 
   void typeCheckerScopeHandler(std::unique_ptr<IAST>& node);
   SymbolAST* symbolFromMoveSource(IAST* node) const;
+  IAST* methodCallReceiver(IAST* node) const;
   std::string resolveFunctionCallName(IAST* node, SymbolInfo& symbolInfo,
                                       bool emitDiagnostics);
 
@@ -207,6 +210,8 @@ class Visitor {
   static GlobalSymbolInfoList GlobalSymbolTable;
   static LocalSymbolInfoList LocalSymbolTable;
   static FunctionSignatureTable FunctionTable;
+  static std::map<std::string, StructInfo> StructTable;
+  static std::map<std::string, llvm::StructType*> LLVMStructTypes;
   static std::set<std::string> ModuleAliases;
   static size_t SymbolId, ScopeId;
   static std::unique_ptr<llvm::IRBuilder<>> Builder;
@@ -235,6 +240,7 @@ class Visitor {
   ValuePtr visit(TypeAST& typeAst);
   ValuePtr visit(ScalarOrLiteralAST& scalarAst);
   ValuePtr visit(SymbolAST& symbolAst);
+  ValuePtr visit(StructAST& structAst);
   ValuePtr visit(FixAST& fixAst);
   llvm::Function* declareFunction(FuncAST& funcAst);
 
@@ -254,6 +260,7 @@ class Visitor {
   SymbolInfo preVisit(TypeAST& typeAst);
   SymbolInfo preVisit(ScalarOrLiteralAST& scalarAst);
   SymbolInfo preVisit(SymbolAST& symbolAst);
+  SymbolInfo preVisit(StructAST& structAst);
   SymbolInfo preVisit(FixAST& fixAst);
 
   void finalizeCodegen();

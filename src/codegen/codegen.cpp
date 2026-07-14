@@ -479,6 +479,13 @@ void CStarCodegen::codegen() {
 
   for (auto& ast : m_AST) {
     if (ast->getASTKind() == ASTKind::Decl &&
+        ast->getDeclKind() == DeclKind::StructDecl) {
+      ast->accept(visitor);
+    }
+  }
+
+  for (auto& ast : m_AST) {
+    if (ast->getASTKind() == ASTKind::Decl &&
         (ast->getDeclKind() == DeclKind::FuncDecl ||
          ast->getDeclKind() == DeclKind::ImportFuncDecl ||
          ast->getDeclKind() == DeclKind::ExportFuncDecl)) {

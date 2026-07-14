@@ -13,6 +13,7 @@
 #include <ast/param_ast.hpp>
 #include <ast/ret_ast.hpp>
 #include <ast/scalar_ast.hpp>
+#include <ast/struct_ast.hpp>
 #include <ast/symbol_ast.hpp>
 #include <ast/type_ast.hpp>
 #include <ast/unary_op_ast.hpp>
@@ -60,6 +61,7 @@ class CStarParser {
   bool isLinkageMark(const TokenInfo& token);
   bool isDeclarationModifier(const TokenInfo& token);
   DeclarationModifiers parseDeclarationModifiers(bool localScope);
+  StructFieldInfo parseStructField();
 
   // INCLUDE, INCLUDE INVOLVED
   bool isPackageMark(const TokenInfo& token);
@@ -234,6 +236,7 @@ class CStarParser {
   void translationUnit();
   void parseIncludeDirective();
   void parseLinkageBlock(VisibilitySpecifier visibilitySpecifier);
+  void parseStructDecl(DeclarationModifiers declarationModifiers);
   std::string parseLinkSource();
   void registerNativeLinkLibrary(const std::string& library);
   void skipTopLevelTrivia();
@@ -267,7 +270,10 @@ class CStarParser {
 
   // function.cpp
   void funcDecl(DeclarationModifiers declarationModifiers,
-                bool forceForwardDecl = false);
+                bool forceForwardDecl = false,
+                const std::string& methodOwner = "");
+  ASTNode advanceDefinedType();
+  ASTNode advanceFieldAccessChain(size_t begin, size_t line);
   void advanceParams(std::vector<ASTNode>& params, bool isForwardDecl);
   void advanceScope(std::vector<ASTNode>& scope);
 
