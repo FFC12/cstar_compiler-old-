@@ -84,12 +84,24 @@ std::vector<std::string> CStarCodegen::backendTargetArgs() const {
   return {"-target", targetTriple};
 }
 
+static void appendDefaultNativeLibrarySearchPaths(std::vector<std::string>& args) {
+#ifdef __APPLE__
+  for (const char* path : {"/opt/homebrew/lib", "/usr/local/lib"}) {
+    if (std::filesystem::is_directory(path)) {
+      args.emplace_back(std::string("-L") + path);
+    }
+  }
+#endif
+}
+
 std::string CStarCodegen::nativeLinkArgument(const std::string& library) {
   if (library.empty()) {
     return {};
   }
 
-  if (library.rfind("-l", 0) == 0 || library.rfind("-framework", 0) == 0) {
+  if (library.rfind("-l", 0) == 0 || library.rfind("-L", 0) == 0 ||
+      library.rfind("-F", 0) == 0 || library.rfind("-Wl,", 0) == 0 ||
+      library.rfind("-framework", 0) == 0) {
     return library;
   }
 
@@ -413,6 +425,7 @@ void CStarCodegen::build() {
     dynamicArgs.insert(dynamicArgs.end(), targetArgs.begin(), targetArgs.end());
     dynamicArgs.insert(dynamicArgs.end(),
                        {"-shared", irFilename, "-o", dynamicLibFilename});
+    appendDefaultNativeLibrarySearchPaths(dynamicArgs);
     for (const auto& library : m_NativeLinkLibraries) {
       auto arg = nativeLinkArgument(library);
       if (!arg.empty()) {
@@ -432,6 +445,7 @@ void CStarCodegen::build() {
   std::vector<std::string> linkArgs{clangPath};
   linkArgs.insert(linkArgs.end(), targetArgs.begin(), targetArgs.end());
   linkArgs.insert(linkArgs.end(), {irFilename, "-o", exeFilename});
+  appendDefaultNativeLibrarySearchPaths(linkArgs);
   for (const auto& library : m_NativeLinkLibraries) {
     auto arg = nativeLinkArgument(library);
     if (!arg.empty()) {

@@ -1,53 +1,41 @@
 # C* Syntax VS Code Extension
 
-Bu klasor, `.cstar` dosyalari icin VS Code syntax highlighting ve temel editor ayarlarini ekler.
+Bu paket, `.cstar` dosyalari icin VS Code syntax highlighting ve temel editor ayarlarini saglar.
 
 ## Kapsam
 
-- `.cstar` dosya eslestirmesi
-- `//` ve `/* */` yorumlari
-- String, char, sayi ve sabit renklendirme
-- C* primitive tipleri, pointer/reference/operator tokenlari
-- `ret`, `if`, `elif`, `loop`, `include`, `import`, `export`, `attribute`, `prototype`, `enum`, `struct`, `trait`, `policy`, `macro` gibi cekirdek ve proposal keyword'leri
-- `@directive`, `#directive`, `$func`, `$line`, `$0` gibi meta/directive sembolleri
-- Bracket matching ve auto-closing pairs
+- module yuzeyi: `include`, `as`, `import from`, `export`
+- visibility ve storage: `public`, `private`, `static`, `const`, `nomove`
+- ownership: `ref`, `deref`, `move`, `new`, `shared new`, `drop`, `strong_count`
+- lifecycle: `struct`, `constructor`, `destructor`, static ve instance erisimleri
+- sozlesmeler: `trait`, `with`, `protocol`, `attribute`, `macro`, `operator`
+- kontrol akisi: `if`, `elif`, `else`, `loop`, `for in`, `break`, `continue`, `ret`
+- native interop: C string/char escape'leri, `printf` placeholder'lari ve variadic `...`
+- operatorler: `::`, `.`, `:=`, `.=` ve sembolik aritmetik/karsilastirma/mantiksal operatorler
+
+Sembolik operatorler `punctuation.operator.*` scope'lariyla renklendirilir; bu sayede temalar
+normal C* operatorlerini hata veya diagnostic token'i gibi gostermek zorunda kalmaz.
 
 ## Gelistirme modunda calistirma
 
-1. VS Code'da bu klasoru ac:
-
-   ```powershell
-   code vscode-cstar-syntax
-   ```
-
-2. `F5` ile Extension Development Host baslat.
-3. Acilan yeni VS Code penceresinde bir `.cstar` dosyasi ac.
-
-## Lokal kurulum
-
-VS Code extension klasorune kopyalayarak kullanabilirsin:
-
-```powershell
-$target = "$env:USERPROFILE\.vscode\extensions\cstar-project.cstar-syntax-0.1.0"
-New-Item -ItemType Directory -Force -Path $target
-Copy-Item -Recurse -Force .\vscode-cstar-syntax\* $target
+```bash
+code vscode-cstar-syntax
 ```
 
-Sonra VS Code'u yeniden baslat.
+Sonra `F5` ile Extension Development Host ac ve bir `.cstar` dosyasi yukle.
 
 ## VSIX paketleme
 
-`vsce` kurulu degilse:
-
-```powershell
-npm install -g @vscode/vsce
-```
-
-Paket olustur:
-
-```powershell
+```bash
 cd vscode-cstar-syntax
-vsce package
+npx --yes @vscode/vsce package --allow-missing-repository --out cstar-syntax-0.1.0.vsix
 ```
 
-Olusan `.vsix` dosyasini VS Code'da `Extensions: Install from VSIX...` komutu ile kurabilirsin.
+## VSIX kurulum
+
+```bash
+code --install-extension cstar-syntax-0.1.0.vsix
+```
+
+Bu paket yalniz syntax/editor destegi icerir. Semantic diagnostic, completion ve navigation
+ayri bir C* language server yuzeyine aittir.

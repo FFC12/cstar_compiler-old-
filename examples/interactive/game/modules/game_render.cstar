@@ -1,0 +1,50 @@
+include "game_types.cstar"
+
+public draw_object(FallingObject objectValue) :: void {
+  uint64 color = make_green();
+  int32 kind = objectValue.kind;
+  if (kind != 1) {
+    color = make_red();
+  }
+
+  DrawCircle(objectValue.x, objectValue.y, cast<float32>(objectValue.radius), color);
+  ret;
+}
+
+public draw_paddle(Paddle paddle) :: void {
+  DrawRectangle(paddle.x, paddle.y, paddle.width, paddle.height, make_brown());
+  DrawRectangle(paddle.x, paddle.y + paddle.height - 4, paddle.width, 4, make_yellow());
+  ret;
+}
+
+public draw_hud(int32 score, int32 frame) :: void {
+  DrawRectangle(0, 0, screen_width(), 54, make_panel());
+  DrawText("C* Falling Objects", 18, 16, 20, make_text());
+  DrawText(TextFormat("score: %d", score), 250, 18, 18, make_green());
+  DrawText(TextFormat("frame: %d", frame), 360, 18, 18, make_text());
+  DrawText("mouse or A/W/left: left    D/right: right    ESC: quit", 470, 18, 14, make_text());
+  ret;
+}
+
+public draw_game_over(int32 score) :: void {
+  DrawRectangle(112, 170, 536, 150, make_panel());
+  DrawText("GAME OVER", 285, 196, 32, make_red());
+  DrawText(TextFormat("final score: %d", score), 292, 242, 20, make_text());
+  DrawText("Red object touched the paddle. Press ESC or close the window.", 166, 282, 16, make_text());
+  ret;
+}
+
+public render_frame(Paddle paddle, FallingObject a, FallingObject b, FallingObject c, int32 score, int32 frame, int32 gameOver) :: void {
+  BeginDrawing();
+  ClearBackground(make_background());
+  draw_hud(score, frame);
+  draw_object(a);
+  draw_object(b);
+  draw_object(c);
+  draw_paddle(paddle);
+  if (gameOver == 1) {
+    draw_game_over(score);
+  }
+  EndDrawing();
+  ret;
+}

@@ -1,74 +1,57 @@
 <!doctype html>
-<html lang="tr" data-theme="dark">
+<html lang="tr" class="theme-dark">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>C* Programlama Dili Kitabı</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>C* Dil Kitabı</title>
   <style>
     :root {
-      color-scheme: dark light;
+      color-scheme: dark;
       --bg: #0d1117;
-      --surface: #151b23;
-      --surface-2: #1f2937;
+      --panel: #111827;
+      --panel-2: #161f2e;
       --text: #e6edf3;
-      --muted: #9aa7b2;
-      --border: #30363d;
-      --accent: #2f81f7;
-      --accent-2: #3fb950;
-      --accent-3: #d29922;
-      --danger: #f85149;
-      --code-bg: #0b1220;
-      --code-text: #dbeafe;
-      --nav-width: 292px;
-      --radius: 8px;
-      --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+      --muted: #9da7b3;
+      --line: #303946;
+      --accent: #7dd3fc;
+      --accent-2: #a7f3d0;
+      --warn: #facc15;
+      --code-bg: #071018;
+      --shadow: 0 22px 70px rgba(0, 0, 0, .32);
+      --max: 1180px;
     }
 
-    [data-theme="light"] {
+    html.theme-light {
       color-scheme: light;
       --bg: #f6f8fa;
-      --surface: #ffffff;
-      --surface-2: #eef2f7;
-      --text: #1f2328;
+      --panel: #ffffff;
+      --panel-2: #eef3f8;
+      --text: #17202a;
       --muted: #57606a;
-      --border: #d0d7de;
+      --line: #d0d7de;
       --accent: #0969da;
       --accent-2: #1a7f37;
-      --accent-3: #9a6700;
-      --danger: #cf222e;
-      --code-bg: #0d1117;
-      --code-text: #e6edf3;
-      --shadow: 0 12px 32px rgba(27, 31, 36, 0.12);
+      --warn: #9a6700;
+      --code-bg: #f1f5f9;
+      --shadow: 0 18px 48px rgba(31, 41, 55, .12);
     }
 
-    * {
-      box-sizing: border-box;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: var(--bg);
       color: var(--text);
+      font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    a {
-      color: var(--accent);
-      text-decoration: none;
-    }
-
-    a:hover {
-      text-decoration: underline;
-    }
+    a { color: inherit; text-decoration: none; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
 
     .shell {
-      min-height: 100vh;
       display: grid;
-      grid-template-columns: var(--nav-width) minmax(0, 1fr);
+      grid-template-columns: 292px minmax(0, 1fr);
+      min-height: 100vh;
     }
 
     aside {
@@ -76,395 +59,220 @@
       top: 0;
       height: 100vh;
       overflow: auto;
-      border-right: 1px solid var(--border);
-      background: var(--surface);
-      padding: 20px 16px;
+      border-right: 1px solid var(--line);
+      background: color-mix(in srgb, var(--panel) 88%, var(--bg));
+      padding: 24px 18px;
     }
 
     .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+      display: grid;
+      gap: 8px;
+      padding: 12px 10px 18px;
+      border-bottom: 1px solid var(--line);
       margin-bottom: 18px;
     }
 
-    .brand-mark {
-      width: 38px;
-      height: 38px;
-      border-radius: 8px;
-      display: grid;
-      place-items: center;
-      color: white;
-      background: linear-gradient(135deg, #2f81f7, #3fb950);
-      font-weight: 900;
-      letter-spacing: 0;
-    }
+    .brand strong { font-size: 1.35rem; letter-spacing: .02em; }
+    .brand span { color: var(--muted); font-size: .92rem; }
 
-    .brand strong {
-      display: block;
-      font-size: 16px;
-      line-height: 1.2;
-    }
-
-    .brand span {
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .search {
-      width: 100%;
-      height: 38px;
-      border: 1px solid var(--border);
-      background: var(--bg);
-      color: var(--text);
-      border-radius: 8px;
-      padding: 0 12px;
-      outline: none;
-      margin: 4px 0 16px;
-    }
-
-    nav {
-      display: grid;
-      gap: 2px;
-      font-size: 14px;
-    }
-
-    nav a {
-      color: var(--muted);
-      padding: 7px 9px;
-      border-radius: 6px;
-      text-decoration: none;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    nav a:hover,
-    nav a.active {
-      color: var(--text);
-      background: var(--surface-2);
-      text-decoration: none;
-    }
-
-    main {
-      min-width: 0;
-    }
-
-    .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      height: 58px;
+    .tools {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 0 28px;
-      border-bottom: 1px solid var(--border);
-      background: color-mix(in srgb, var(--bg) 86%, transparent);
-      backdrop-filter: blur(14px);
-    }
-
-    .topbar .crumb {
-      color: var(--muted);
-      font-size: 14px;
+      gap: 8px;
+      margin: 14px 0 4px;
     }
 
     button {
-      border: 1px solid var(--border);
-      background: var(--surface);
+      border: 1px solid var(--line);
+      background: var(--panel-2);
       color: var(--text);
-      height: 36px;
-      border-radius: 8px;
-      padding: 0 12px;
+      border-radius: 7px;
+      padding: 8px 10px;
       font: inherit;
       cursor: pointer;
     }
 
-    button:hover {
-      border-color: var(--accent);
+    nav a {
+      display: block;
+      padding: 8px 10px;
+      border-radius: 7px;
+      color: var(--muted);
+      font-size: .94rem;
     }
 
-    .content {
-      max-width: 1080px;
-      margin: 0 auto;
-      padding: 40px 28px 80px;
+    nav a:hover { background: var(--panel-2); color: var(--text); }
+
+    main {
+      min-width: 0;
+      padding: 42px 34px 80px;
+    }
+
+    .hero, section {
+      max-width: var(--max);
+      margin: 0 auto 24px;
     }
 
     .hero {
-      min-height: calc(100vh - 98px);
+      min-height: 430px;
       display: grid;
       align-content: center;
-      gap: 34px;
-      padding-bottom: 30px;
-      border-bottom: 1px solid var(--border);
+      gap: 22px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 48px;
     }
 
-    .hero h1 {
-      font-size: clamp(44px, 7vw, 92px);
-      line-height: 0.95;
-      margin: 0;
+    .eyebrow {
+      color: var(--accent-2);
+      text-transform: uppercase;
+      letter-spacing: .14em;
+      font-weight: 700;
+      font-size: .78rem;
+    }
+
+    h1, h2, h3 {
+      line-height: 1.12;
       letter-spacing: 0;
-    }
-
-    .hero p {
-      max-width: 740px;
-      color: var(--muted);
-      font-size: 20px;
       margin: 0;
     }
 
-    .hero-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .signal {
-      border: 1px solid var(--border);
-      background: var(--surface);
-      border-radius: var(--radius);
-      padding: 16px;
-      min-height: 126px;
-      box-shadow: var(--shadow);
-    }
-
-    .signal b {
-      display: block;
-      margin-bottom: 8px;
-      color: var(--text);
-    }
-
-    .signal span {
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    section {
-      scroll-margin-top: 78px;
-      padding: 56px 0;
-      border-bottom: 1px solid var(--border);
+    h1 {
+      max-width: 900px;
+      font-size: clamp(2.8rem, 8vw, 6.8rem);
     }
 
     h2 {
-      font-size: 32px;
-      line-height: 1.15;
-      margin: 0 0 18px;
-      letter-spacing: 0;
+      margin-top: 46px;
+      padding-top: 26px;
+      border-top: 1px solid var(--line);
+      font-size: clamp(1.7rem, 3vw, 2.7rem);
     }
 
     h3 {
-      font-size: 21px;
-      margin: 30px 0 10px;
+      margin-top: 28px;
+      font-size: 1.25rem;
     }
 
-    p {
-      margin: 0 0 16px;
-    }
+    p { margin: 12px 0; color: var(--muted); }
+    strong { color: var(--text); }
 
     .lead {
-      color: var(--muted);
-      font-size: 18px;
-      max-width: 820px;
+      max-width: 850px;
+      font-size: clamp(1.1rem, 2vw, 1.35rem);
+      color: var(--text);
     }
 
-    .grid-2 {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      margin: 22px 0;
-    }
-
-    .grid-3 {
+    .grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
+      gap: 14px;
       margin: 22px 0;
     }
 
-    .panel {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--surface);
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
       padding: 18px;
-    }
-
-    .panel h3 {
-      margin-top: 0;
-    }
-
-    .panel p,
-    .panel li {
-      color: var(--muted);
-    }
-
-    .tag-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 18px 0;
-    }
-
-    .tag {
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--muted);
-      border-radius: 999px;
-      padding: 4px 10px;
-      font-size: 13px;
-    }
-
-    .callout {
-      border-left: 4px solid var(--accent);
-      background: var(--surface);
-      padding: 16px 18px;
-      border-radius: 0 var(--radius) var(--radius) 0;
-      margin: 22px 0;
-    }
-
-    .callout.warn {
-      border-left-color: var(--accent-3);
-    }
-
-    .callout.ok {
-      border-left-color: var(--accent-2);
-    }
-
-    .callout.danger {
-      border-left-color: var(--danger);
-    }
-
-    code,
-    pre {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-    }
-
-    :not(pre) > code {
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      padding: 1px 5px;
-      font-size: 0.92em;
-    }
-
-    pre {
-      position: relative;
-      overflow: auto;
-      background: var(--code-bg);
-      color: var(--code-text);
-      border-radius: var(--radius);
-      padding: 18px;
-      border: 1px solid #263244;
-      line-height: 1.55;
-      font-size: 14px;
       box-shadow: var(--shadow);
     }
 
-    pre[data-title]::before {
-      content: attr(data-title);
-      display: block;
-      color: #8b949e;
-      border-bottom: 1px solid #263244;
-      margin: -18px -18px 14px;
-      padding: 10px 18px;
-      font-size: 12px;
+    .card b { display: block; margin-bottom: 6px; }
+
+    pre {
+      margin: 16px 0 22px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--code-bg);
+      padding: 18px;
+      color: var(--text);
+      font-size: .93rem;
+      line-height: 1.58;
     }
 
-    .kw { color: #ff7b72; }
-    .ty { color: #79c0ff; }
-    .fn { color: #d2a8ff; }
-    .cm { color: #8b949e; }
-    .st { color: #a5d6ff; }
-    .op { color: #ffa657; }
-    .nu { color: #79c0ff; }
+    code {
+      color: var(--text);
+      background: color-mix(in srgb, var(--panel-2) 72%, transparent);
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      border-radius: 5px;
+      padding: .1rem .32rem;
+    }
+
+    pre code {
+      background: transparent;
+      border: 0;
+      padding: 0;
+    }
+
+    .note {
+      border-left: 3px solid var(--accent);
+      background: color-mix(in srgb, var(--panel-2) 72%, transparent);
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      color: var(--text);
+    }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 18px 0;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      margin: 18px 0 26px;
       overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: table;
     }
 
-    th,
-    td {
-      border-bottom: 1px solid var(--border);
-      padding: 12px;
+    th, td {
       text-align: left;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
       vertical-align: top;
     }
 
-    th {
-      background: var(--surface);
-    }
+    th { background: var(--panel-2); color: var(--text); }
+    td { color: var(--muted); }
 
-    td {
-      color: var(--muted);
-    }
-
-    tr:last-child td {
-      border-bottom: 0;
-    }
-
-    .flow {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+    .tocline {
+      display: flex;
+      flex-wrap: wrap;
       gap: 10px;
-      margin: 24px 0;
+      margin: 22px 0;
     }
 
-    .flow div {
-      border: 1px solid var(--border);
-      background: var(--surface);
-      border-radius: var(--radius);
-      padding: 14px;
-      min-height: 82px;
-    }
-
-    .flow b {
-      display: block;
-      color: var(--accent);
-      margin-bottom: 6px;
+    .tocline span {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--muted);
+      background: var(--panel);
+      font-size: .9rem;
     }
 
     footer {
+      max-width: var(--max);
+      margin: 52px auto 0;
       color: var(--muted);
-      padding-top: 34px;
+      border-top: 1px solid var(--line);
+      padding-top: 22px;
     }
 
-    .hidden {
-      display: none !important;
-    }
-
-    @media (max-width: 960px) {
-      .shell {
-        grid-template-columns: 1fr;
-      }
-
+    @media (max-width: 980px) {
+      .shell { display: block; }
       aside {
         position: relative;
-        width: 100%;
         height: auto;
         border-right: 0;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--line);
       }
-
       nav {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        columns: 2;
       }
+      main { padding: 28px 18px 60px; }
+      .grid { grid-template-columns: 1fr; }
+    }
 
-      .hero {
-        min-height: auto;
-        padding-top: 22px;
-      }
-
-      .hero-grid,
-      .grid-2,
-      .grid-3,
-      .flow {
-        grid-template-columns: 1fr;
-      }
+    @media (max-width: 640px) {
+      nav { columns: 1; }
+      table { display: block; overflow-x: auto; }
     }
   </style>
 </head>
@@ -472,685 +280,433 @@
   <div class="shell">
     <aside>
       <div class="brand">
-        <div class="brand-mark">C*</div>
-        <div>
-          <strong>C* Kitabı</strong>
-          <span>Sistem programlama dili</span>
+        <strong>C*</strong>
+        <span>Sistem programlama dili el kitabı</span>
+        <div class="tools">
+          <button id="themeButton" type="button">Tema</button>
         </div>
       </div>
-      <input id="search" class="search" type="search" placeholder="Bölüm ara">
-      <nav id="toc">
+      <nav aria-label="Kitap bölümleri">
         <a href="#baslangic">Başlangıç</a>
-        <a href="#felsefe">Dil Felsefesi</a>
-        <a href="#program">İlk Program</a>
-        <a href="#cekirdek">Çalışan Çekirdek</a>
-        <a href="#tipler">Tip Sistemi</a>
-        <a href="#degiskenler">Değişkenler</a>
+        <a href="#soz-dizimi">Söz Dizimi</a>
+        <a href="#tipler">Tipler ve Literaller</a>
         <a href="#fonksiyonlar">Fonksiyonlar</a>
-        <a href="#ifade">İfadeler</a>
+        <a href="#moduller">Modüller</a>
+        <a href="#standart">Standart Kütüphane</a>
         <a href="#kontrol">Kontrol Akışı</a>
-        <a href="#array">Array</a>
-        <a href="#pointer">Pointer ve Reference</a>
-        <a href="#ownership">Ownership</a>
-        <a href="#qualifier">Qualifier</a>
-        <a href="#cast">Cast</a>
-        <a href="#struct">Struct ve Trait</a>
-        <a href="#protocol">Protocol</a>
-        <a href="#allocator">Allocator</a>
-        <a href="#async">Async ve Thread Safety</a>
-        <a href="#macro">Macro ve Attribute</a>
-        <a href="#paket">Paket ve Import</a>
-        <a href="#diagnostic">Diagnostic</a>
-        <a href="#stdlib">Standart Kütüphane</a>
-        <a href="#stil">Kod Stili</a>
-        <a href="#referans">Hızlı Referans</a>
+        <a href="#diziler">Diziler</a>
+        <a href="#sahiplik">Sahiplik ve Pointer</a>
+        <a href="#struct">Struct Yaşam Döngüsü</a>
+        <a href="#trait">Trait ve Operatörler</a>
+        <a href="#native">Native Bağlantı</a>
+        <a href="#diagnostic">Diagnostic Modeli</a>
       </nav>
     </aside>
 
     <main>
-      <div class="topbar">
-        <div class="crumb">C* Programlama Dili Kitabı</div>
-        <button id="themeToggle" type="button">Gündüz modu</button>
-      </div>
+      <header class="hero" id="baslangic">
+        <div class="eyebrow">C* Language Book</div>
+        <h1>Modern C++ hissini sistem dili disipliniyle birleştiren C*.</h1>
+        <p class="lead">
+          C*, açık ownership, thread-safe shared pointer, modül görünürlüğü, struct yaşam döngüsü,
+          native CRT bağlantısı ve LLVM tabanlı üretim akışıyla düşük seviye kontrolü okunabilir
+          bir dil yüzeyinde toplar.
+        </p>
+        <div class="tocline">
+          <span>LLVM backend</span>
+          <span>public/private module surface</span>
+          <span>unique/shared ownership</span>
+          <span>constructor/destructor/drop</span>
+          <span>variadic import</span>
+          <span>trait conformance</span>
+        </div>
+      </header>
 
-      <div class="content">
-        <header id="baslangic" class="hero">
-          <div>
-            <h1>C* Programlama Dili</h1>
-            <p>C*; C ve C++'ın sistem programlama gücünü, modern ownership, typestate, explicit allocator ve thread-safe shared pointer modeliyle daha okunur bir yüzeye taşımayı amaçlayan bir dildir.</p>
-          </div>
-          <div class="hero-grid">
-            <div class="signal"><b>LLVM tabanlı</b><span>Programlar LLVM IR'a iner, sonra Clang backend ile native binary üretilir.</span></div>
-            <div class="signal"><b>Ownership odaklı</b><span>`^` unique pointer, `*` atomic shared handle, `move`, `:=` ve `nomove` ile açık akış.</span></div>
-            <div class="signal"><b>Typestate</b><span>`protocol` değerlerin hangi güvenli durumda olduğunu derleme zamanında ifade eder.</span></div>
-            <div class="signal"><b>Sistem dili</b><span>Allocator, destructor, async boundary ve thread-safety maliyeti görünür tasarlanır.</span></div>
-          </div>
-        </header>
+      <section>
+        <h2>Felsefe</h2>
+        <p>
+          C* kodu varsayılan olarak açık, yerel ve tahmin edilebilir davranır. Bir sembol public
+          yapılmadığı sürece modül dışına taşmaz; bir değer taşınmadığı sürece sahipliği değişmez;
+          native bir fonksiyon import edilmediği sürece linker yüzeyine girmez. Dilin temel kuralı:
+          <strong>maliyet görünür, lifetime belirgin, interop kontrollü</strong>.
+        </p>
+        <div class="grid">
+          <div class="card"><b>Stack önce gelir</b><p>Constructor var olan storage'ı initialize eder. Allocation ayrı bir operatör/lifecycle yüzeyidir.</p></div>
+          <div class="card"><b>Ownership tiptedir</b><p><code>^</code> unique sahiplik, <code>*</code> atomic shared sahiplik, <code>ref</code> ödünç referans semantiğidir.</p></div>
+          <div class="card"><b>Modül yüzeyi nettir</b><p><code>include</code> kaynak görünürlüğü, <code>import/export</code> linker/ABI yüzeyi, <code>public/private</code> erişim kuralıdır.</p></div>
+        </div>
 
-        <section id="felsefe">
-          <h2>Dil Felsefesi</h2>
-          <p class="lead">C* sade bir C alternatifi değil; kaynak yönetimini, thread boundary geçişlerini ve state güvenliğini dilin doğal gramerine alan modern bir sistem dili tasarımıdır.</p>
-          <div class="grid-3">
-            <div class="panel">
-              <h3>Açık maliyet</h3>
-              <p>Atomic shared count, async boundary, allocator seçimi ve unsafe cast gibi maliyetli kararlar kodda görünür olmalıdır.</p>
-            </div>
-            <div class="panel">
-              <h3>Akıllı ama saklamayan</h3>
-              <p>Derleyici pointer lifetime ve typestate konusunda yardımcı olur; gizli policy hook veya beklenmeyen runtime dispatch üretmez.</p>
-            </div>
-            <div class="panel">
-              <h3>C++ kadar güçlü</h3>
-              <p>Dil; RAII, move semantics, custom allocator, async/task ve thread safety hedeflerini daha okunur bir yüzeye taşır.</p>
-            </div>
-          </div>
-          <div class="flow">
-            <div><b>Lexer</b><span>Keyword ve token akışı</span></div>
-            <div><b>Parser</b><span>AST ve gramer</span></div>
-            <div><b>Pass 0</b><span>Sembol tabloları</span></div>
-            <div><b>Pass 1</b><span>Semantic/type check</span></div>
-            <div><b>Codegen</b><span>LLVM IR ve native çıktı</span></div>
-          </div>
-        </section>
+        <h3>Derleme</h3>
+        <pre><code class="language-bash">cmake -S . -B build
+cmake --build build
+./build/cstar examples/smoke/local_int.cstar --run</code></pre>
+        <p>
+          Compiler varsayılan olarak executable üretir; <code>--run</code> çıktıyı çalıştırır,
+          LLVM IR ve assembly ara çıktıları <code>.cstar-out</code> altında gözlemlenir.
+        </p>
+      </section>
 
-        <section id="program">
-          <h2>İlk Program</h2>
-          <p>C* programları C benzeri bloklar ve `ret` ile okunur. Fonksiyon dönüş tipi `::` ile yazılır.</p>
-          <pre data-title="minimal.cstar"><code><span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-    <span class="kw">ret</span> <span class="nu">0</span>;
+      <section id="soz-dizimi">
+        <h2>Söz Dizimi</h2>
+        <p>
+          C* ifade dilinde <code>::</code> dönüş tipi veya static/module erişimi için, <code>.</code>
+          instance alan/metot erişimi için kullanılır. Satır sonu expression devamını bozmaz; parantez,
+          virgül, operator ve initializer bağlamlarında newline doğal whitespace kabul edilir.
+        </p>
+        <pre><code class="language-cstar">main() :: int32 {
+  int32 a = 10;
+  int32 b = 20;
+  int32 total = a
+              + b;
+
+  if total == 30 {
+    ret 0;
+  }
+
+  ret 1;
 }</code></pre>
-          <p>Dönüş tipi yazılmazsa fonksiyon `void` kabul edilir. `main() :: int32` process exit code üretmek için önerilen biçimdir.</p>
-          <pre data-title="void return"><code><span class="fn">log_done</span>() <span class="op">::</span> <span class="ty">void</span> {
-    <span class="kw">ret</span>;
+
+        <table>
+          <thead><tr><th>Yüzey</th><th>Anlam</th></tr></thead>
+          <tbody>
+            <tr><td><code>=</code></td><td>Normal initialization veya assignment.</td></tr>
+            <tr><td><code>:=</code></td><td>Ownership/move niyetini görünür yapan initialization yüzeyi.</td></tr>
+            <tr><td><code>.=</code></td><td>Dynamic/provability gap olan policy bağlamlarında açık hook assignment.</td></tr>
+            <tr><td><code>::</code></td><td>Dönüş tipi, module/static erişim ve constructor-style type call ayracı.</td></tr>
+            <tr><td><code>...</code></td><td>Variadic parametre: yalnız son parametre olarak geçerlidir.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="tipler">
+        <h2>Tipler ve Literaller</h2>
+        <p>
+          Primitive tipler explicit genişlik taşır: <code>int8</code>, <code>int16</code>,
+          <code>int32</code>, <code>int64</code>, unsigned karşılıkları, <code>isize</code>,
+          <code>usize</code>, <code>float32</code>, <code>float64</code>, <code>bool</code>,
+          <code>char</code> ve <code>void</code>. C ABI için <code>char*</code> ve
+          <code>const char*</code> raw string yüzeyi korunur.
+        </p>
+        <pre><code class="language-cstar">main() :: int32 {
+  const char* title = "C*";
+  char letter = 'A';
+  int64 count = 922337203685477580;
+  float64 ratio = 0.75;
+  bool ok = true;
+
+  ret 0;
+}</code></pre>
+      </section>
+
+      <section id="fonksiyonlar">
+        <h2>Fonksiyonlar</h2>
+        <p>
+          Fonksiyon adı parametre listesinden önce gelir, dönüş tipi <code>::</code> sonrasında
+          yazılır. Named param syntax belgelenir; ABI ve çağrı lowering aşamasında parametre
+          sırası korunur. <code>ret</code> her dönüşü açık hale getirir.
+        </p>
+        <pre><code class="language-cstar">sum(int32 left, int32 right) :: int32 {
+  ret left + right;
 }
 
-<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-    <span class="fn">log_done</span>();
-    <span class="kw">ret</span> <span class="nu">0</span>;
+main() :: int32 {
+  int32 value = sum(20, 22);
+  ret value - 42;
 }</code></pre>
-        </section>
 
-        <section id="cekirdek">
-          <h2>Çalışan Çekirdek Haritası</h2>
-          <p class="lead">`examples/smoke/` dizini dilin bugün kırılmadan çalışan sözleşmesini tutar. Her dosya küçük bir davranışı kilitler; yeni özellikler önce burada küçük bir örnekle kanıtlanır.</p>
-          <div class="grid-2">
-            <div class="panel">
-              <h3>Temel değerler ve ifadeler</h3>
-              <p>`minimal`, `local_int`, `global_variable`, `uninitialized_local`, `void_return`, `char_literal`, `float32_arithmetic`, `float64_arithmetic`, `bool_literal`, `binary_expr`, `comparison_expr`, `not_equal_expr`, `logical_expr`, `assignment`, `assignment_cast`, `cast_numeric`, `as_cast_numeric`.</p>
-            </div>
-            <div class="panel">
-              <h3>Fonksiyonlar</h3>
-              <p>`function_call`, `function_call_initializer`, `function_call_statement`, `function_call_cast_argument`, `forward_function_call`, `function_call_symbol_argument`, `function_call_pointer_argument`.</p>
-            </div>
-            <div class="panel">
-              <h3>Kontrol akışı ve döngü</h3>
-              <p>`if_statement`, `if_else_statement`, `if_elif_else_statement`, `nested_if_statement`, `if_fallthrough_statement`, `if_condition_scalar_conversion`, `if_condition_pointer_conversion`, `loop_while_statement`, `loop_false_skip`, `loop_nested_if_statement`, `loop_pointer_condition`, `loop_break_statement`, `loop_continue_statement`, `loop_break_continue_nested_if`, `loop_nested_loop_continue`, `loop_range_statement`, `loop_range_break_continue`.</p>
-            </div>
-            <div class="panel">
-              <h3>Array ve iterasyon</h3>
-              <p>`array_element_read`, `array_element_assignment`, `array_element_shortcut_assignment`, `array_param_read`, `array_param_write`, `loop_array_iterable`, `loop_array_indexed_iterable`, `loop_array_param_iterable`, `multidim_array_read`, `multidim_array_assignment`, `multidim_array_shortcut_assignment`, `multidim_array_dynamic_index`, `multidim_array_param_read`, `multidim_array_param_write`.</p>
-            </div>
-            <div class="panel">
-              <h3>Pointer, qualifier ve ownership</h3>
-              <p>`pointer_variable_initializer`, `pointer_return`, `pointer_from_pointer_initializer`, `dereference_assignment`, `dereference_assignment_shortcut`, `multi_level_dereference_read`, `multi_level_dereference_assignment`, `const_value`, `const_pointer`, `constref_param`, `constptr_param`, `constptr_pointer`, `readonly_param`, `readonly_pointer`, `readonly_multi_level_pointer`, `reference_param`, `shared_pointer_*`, `unique_pointer_*`, `nomove_unique_param_read`.</p>
-            </div>
-            <div class="panel">
-              <h3>Native ve module</h3>
-              <p>`import_function_abs`, `import_function_named_param`, `import_function_from_crt`, `import_block_function`, `import_block_from_crt`, `export_block_from_module`, `include_module_function` ve `modules/math_module.cstar` import/export/include/module alias davranışını korur.</p>
-            </div>
-          </div>
-          <p>`examples/interactive/` ise kullanıcı girdisi ve terminal runtime'ını zorlayan daha büyük programları tutar: calculator, stress örnekleri, raw input kullanan snake ve frame render eden donut gibi.</p>
-        </section>
-
-        <section id="tipler">
-          <h2>Tip Sistemi</h2>
-          <p class="lead">C* statik tipli bir dildir. Primitive tipler açık bit genişliğiyle yazılabilir; mimariye bağlı alias'lar da vardır.</p>
-          <table>
-            <thead><tr><th>Kategori</th><th>Tipler</th><th>Not</th></tr></thead>
-            <tbody>
-              <tr><td>Integer</td><td><code>int8 int16 int32 int64 int</code></td><td>`int` platform kararına göre genişler.</td></tr>
-              <tr><td>Unsigned</td><td><code>uint8 uint16 uint32 uint64 uint128 uint</code></td><td>Binary protokol ve low-level işler için açık genişlik önerilir.</td></tr>
-              <tr><td>Size</td><td><code>isize usize</code></td><td>Pointer boyutlu aritmetik ve container API'leri için.</td></tr>
-              <tr><td>Float</td><td><code>float32 float64 float</code></td><td>`float` platform alias'ı olarak düşünülebilir.</td></tr>
-              <tr><td>Diğer</td><td><code>bool char uchar void any</code></td><td>`any` genel tasarımda var, ileri type system ile anlam kazanır.</td></tr>
-            </tbody>
-          </table>
-          <pre data-title="primitive değerler"><code><span class="ty">int32</span> count = <span class="nu">42</span>;
-<span class="ty">float64</span> ratio = <span class="nu">0.5</span>;
-<span class="ty">char</span> letter = <span class="st">'C'</span>;
-<span class="ty">bool</span> ready = <span class="kw">true</span>;</code></pre>
-        </section>
-
-        <section id="degiskenler">
-          <h2>Değişkenler ve Atama</h2>
-          <p>Değişken deklarasyonu açık tip ile başlar. Lokal primitive değerler initializer alabilir; initializer yoksa primitive çekirdekte zero-init davranışı tanımlıdır.</p>
-          <pre data-title="değişkenler"><code><span class="ty">int32</span> x = <span class="nu">7</span>;
-<span class="ty">int32</span> y;
-y = x + <span class="nu">3</span>;
-y += <span class="nu">2</span>;
-y <<= <span class="nu">1</span>;</code></pre>
-          <p>Global değişkenler, module visibility ve native linkage yüzeyi de dilin parçasıdır. Modifier yazılmayan module declaration private kabul edilir; `public` include edilen dosyadan dışarı açılan API'yi seçer.</p>
-          <pre data-title="visibility"><code><span class="kw">public</span> <span class="kw">static</span> <span class="ty">int32</span> counter = <span class="nu">0</span>;
-<span class="kw">import</span> <span class="fn">puts</span>(<span class="kw">constptr</span> <span class="ty">char</span>*) <span class="op">::</span> <span class="ty">int32</span>;
-<span class="kw">export</span> <span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> { <span class="kw">ret</span> <span class="nu">0</span>; }</code></pre>
-          <p>Native import bildirimi ABI için yalnızca tipi ister; parametre adı okunabilirlik için opsiyoneldir.</p>
-          <pre data-title="native import"><code><span class="kw">import</span> <span class="fn">abs</span>(<span class="ty">int32</span>) <span class="op">::</span> <span class="ty">int32</span>;
-<span class="kw">import</span> <span class="fn">abs</span>(<span class="ty">int32</span> value) <span class="op">::</span> <span class="ty">int32</span>;</code></pre>
-        </section>
-
-        <section id="fonksiyonlar">
-          <h2>Fonksiyonlar</h2>
-          <p>Fonksiyonlar C benzeri parametre listesiyle tanımlanır. Dönüş tipi `::` sonrasında gelir.</p>
-          <pre data-title="function_call.cstar"><code><span class="fn">add</span>(<span class="ty">int32</span> a, <span class="ty">int32</span> b) <span class="op">::</span> <span class="ty">int32</span> {
-    <span class="kw">ret</span> a + b;
+        <h3>Variadic imza</h3>
+        <p>
+          Variadic parametre <code>...</code> ile yazılır ve yalnız son parametre olabilir. Bu yüzey
+          özellikle CRT fonksiyonları ve printf/scanf uyumlu standard library için kullanılır.
+        </p>
+        <pre><code class="language-cstar">import from "std:crt" {
+  printf(const char* fmt, ...) :: int32;
 }
 
-<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-    <span class="kw">ret</span> <span class="fn">add</span>(<span class="nu">1</span>, <span class="nu">2</span>);
+main() :: int32 {
+  printf("answer=%d ratio=%f\n", 42, 0.5);
+  ret 0;
 }</code></pre>
-          <div class="callout ok">
-            C*'ta fonksiyon parametreleri yalnızca tip kontrolü değil, ownership transfer sözleşmesi de taşır. `int32^` by-value parametre açık `move` ister; `int32*` shared parametre atomic retain yapabilir.
-          </div>
-        </section>
+      </section>
 
-        <section id="ifade">
-          <h2>İfadeler ve Operatörler</h2>
-          <p>Arithmetic, comparison ve logical expression'lar C ailesine yakın okunur. Karşılaştırmalar `bool/i1` sonuç üretir ve hedef tipe cast edilebilir.</p>
-          <pre data-title="expression"><code><span class="ty">int32</span> a = <span class="nu">10</span> + <span class="nu">20</span> * <span class="nu">3</span>;
-<span class="ty">bool</span> ok = a >= <span class="nu">30</span> && a != <span class="nu">0</span>;
-<span class="ty">int32</span> selected = ok ? a : <span class="nu">1</span>;</code></pre>
-          <p>Unary operator yüzeyi sistem programlama için geniş tutulmuştur.</p>
-          <div class="tag-row">
-            <span class="tag">ref</span><span class="tag">deref</span><span class="tag">move</span><span class="tag">sizeof</span><span class="tag">typeof</span><span class="tag">!</span><span class="tag">~</span>
-          </div>
-        </section>
+      <section id="moduller">
+        <h2>Modüller</h2>
+        <p>
+          <code>include</code> bir C* dosyasını derleme birimine dahil eder. <code>as</code> alias
+          kullanıldığında erişim module namespace üzerinden yapılır. Varsayılan görünürlük
+          <code>private</code>, dış yüzey <code>public</code> ile tanımlıdır.
+          <code>import</code> ve <code>export</code> visibility değildir; linker ve ABI sözleşmesidir.
+        </p>
+        <pre><code class="language-cstar">// modules/math.cstar
+public static base :: int32 = 10;
 
-        <section id="kontrol">
-          <h2>Kontrol Akışı</h2>
-          <p>`if / elif / else` doğrudan blok üretir. Condition expression integer, float veya pointer değerlerden branch condition'a çevrilebilir.</p>
-          <pre data-title="if_elif_else_statement.cstar"><code><span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-    <span class="kw">if</span> (<span class="nu">0</span>) {
-        <span class="kw">ret</span> <span class="nu">1</span>;
-    } <span class="kw">elif</span> (<span class="nu">1</span>) {
-        <span class="kw">ret</span> <span class="nu">3</span>;
-    } <span class="kw">else</span> {
-        <span class="kw">ret</span> <span class="nu">2</span>;
+public add(int32 value) :: int32 {
+  ret base + value;
+}
+
+// main.cstar
+include "modules/math.cstar" as math;
+
+main() :: int32 {
+  ret math::add(32);
+}</code></pre>
+
+        <p class="note">
+          <code>static</code> modül seviyesinde tek storage/tek sembol davranışıdır. Public static
+          değişkenler alias edilmiş modülden <code>module::name</code> ile okunur ve yazılır.
+        </p>
+      </section>
+
+      <section id="standart">
+        <h2>Standart Kütüphane</h2>
+        <p>
+          <code>std/core.cstar</code>, CRT import yüzeyini C* kodundan kullanılabilir küçük bir çekirdek
+          API'ye bağlar. Print/read işlemleri compiler builtin'i değildir; normal C* modülü olarak
+          include edilir.
+        </p>
+        <pre><code class="language-cstar">include "../../std/core.cstar" as core;
+
+main() :: int32 {
+  core::core_print("name: ");
+  char* name = core::core_read_string();
+
+  core::core_print("score: ");
+  int32 score = core::core_read_i32();
+
+  core::core_print(name);
+  core::core_print(" -> ");
+  core::core_print_i32(score);
+  core::core_print("\n");
+  ret 0;
+}</code></pre>
+      </section>
+
+      <section id="kontrol">
+        <h2>Kontrol Akışı</h2>
+        <p>
+          <code>if / elif / else</code> blokları expression-style karmaşıklık yerine açık blok
+          semantiği taşır. <code>loop</code> sonsuz döngüdür; <code>break</code> ve
+          <code>continue</code> nested bloklarda doğru hedefe lower edilir.
+        </p>
+        <pre><code class="language-cstar">main() :: int32 {
+  int32 i = 0;
+  int32 total = 0;
+
+  loop {
+    i = i + 1;
+    if i == 3 {
+      continue;
+    } elif i > 6 {
+      break;
     }
+    total = total + i;
+  }
+
+  ret total;
 }</code></pre>
-          <p>`loop` tasarımı hem while benzeri hem iterable/range benzeri kullanıma ayrılır.</p>
-          <pre data-title="loop proposal"><code><span class="kw">loop</span>(ready) {
-    <span class="fn">tick</span>();
+      </section>
+
+      <section id="diziler">
+        <h2>Diziler</h2>
+        <p>
+          Tek boyutlu ve çok boyutlu diziler sabit boyut bilgisini tip yüzeyinde taşır.
+          Çok boyutlu initializer, şekli görünür kılan nested tuple notasyonuyla yazılır.
+        </p>
+        <pre><code class="language-cstar">main() :: int32 {
+  int32 values[4] = (1, 2, 3, 4);
+  int32 matrix[2:3] = (
+    (1, 2, 3),
+    (4, 5, 6)
+  );
+
+  int32 sum = 0;
+  for item in values {
+    sum = sum + item;
+  }
+
+  ret matrix[1:2] + sum;
+}</code></pre>
+      </section>
+
+      <section id="sahiplik">
+        <h2>Sahiplik ve Pointer</h2>
+        <p>
+          C* pointer yüzeyi raw pointer alışkanlığını sahiplik tipleriyle ayırır.
+          <code>^</code> unique pointer taşınabilir ama kopyalanamaz; <code>*</code> shared pointer
+          atomic reference count ile thread-safe paylaşılır. <code>move</code> sahiplik transferini,
+          <code>nomove</code> ödünç okuma niyetini ifade eder.
+        </p>
+        <pre><code class="language-cstar">struct Box {
+  int32 value;
+
+  constructor(int32 value) {
+    self.value = value;
+  }
 }
 
-<span class="kw">loop</span>(i, value <span class="kw">in</span> values) {
-    <span class="fn">print</span>(i, value);
-}</code></pre>
-        </section>
-
-        <section id="array">
-          <h2>Array</h2>
-          <p>Array boyutları `[]` içinde yazılır. Çok boyutlu array için boyutlar ve indexler `:` ile ayrılır; initializer ise dilin okunur proposal biçimine sadık kalarak katmanlı parantez kullanır.</p>
-          <pre data-title="array_param_write.cstar"><code><span class="fn">write_first</span>(<span class="ty">int32</span>[<span class="nu">2</span>] arr) <span class="op">::</span> <span class="ty">void</span> {
-  arr[<span class="nu">0</span>] = <span class="nu">9</span>;
-  <span class="kw">ret</span>;
+take(Box^ item) :: int32 {
+  ret item.value;
 }
 
-<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-  <span class="ty">int32</span> values[<span class="nu">2</span>] = (<span class="nu">4</span>, <span class="nu">5</span>);
-  <span class="fn">write_first</span>(values);
-  <span class="kw">ret</span> values[<span class="nu">0</span>];
+main() :: int32 {
+  Box^ owned = new Box(7);
+  int32 a = take(move owned);
+
+  Box* sharedValue = shared new Box(11);
+  Box* copy = sharedValue;
+  int64 refs = strong_count(sharedValue);
+
+  ret a + copy.value + cast<int32>(refs);
 }</code></pre>
-          <pre data-title="multidim_array_read.cstar"><code><span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-  <span class="ty">int32</span> matrix[<span class="nu">2</span>:<span class="nu">3</span>] = ((<span class="nu">1</span>, <span class="nu">2</span>, <span class="nu">3</span>),
-                            (<span class="nu">4</span>, <span class="nu">5</span>, <span class="nu">6</span>));
-  <span class="kw">ret</span> matrix[<span class="nu">1</span>:<span class="nu">1</span>];
-}</code></pre>
-          <pre data-title="multidim_array_dynamic_index.cstar"><code><span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-  <span class="ty">int32</span> matrix[<span class="nu">2</span>:<span class="nu">3</span>] = ((<span class="nu">1</span>, <span class="nu">2</span>, <span class="nu">3</span>),
-                            (<span class="nu">4</span>, <span class="nu">5</span>, <span class="nu">6</span>));
-  <span class="ty">int32</span> row = <span class="nu">1</span>;
-  <span class="ty">int32</span> col = <span class="nu">2</span>;
-  <span class="kw">ret</span> matrix[row:col];
-}</code></pre>
-          <p>Parametre olarak tek ve çok boyutlu array geçirilebilir. Sabit indexler compile-time uyarı verebilir; dynamic indexler LLVM tarafında linearized GEP'e indirilir. Parser newline continuation'a dayanıklıdır: initializer, function call, binary expression ve `arr[1:\n2]` gibi formlar satır bölünce bozulmaz.</p>
-        </section>
+      </section>
 
-        <section id="pointer">
-          <h2>Pointer ve Reference</h2>
-          <p>C* iki pointer ailesiyle düşünür: `*` shareable pointer, `^` unique ownership pointer. `ref` adres alır, `deref` hedef değeri okur/yazar.</p>
-          <pre data-title="pointer basics"><code><span class="ty">int32</span> value = <span class="nu">7</span>;
-<span class="ty">int32</span>* shared = <span class="kw">ref</span> value;
-<span class="ty">int32</span>^ unique = <span class="kw">ref</span> value;
+      <section id="struct">
+        <h2>Struct Yaşam Döngüsü</h2>
+        <p>
+          Struct alan, method, constructor, destructor ve scope-exit drop semantiğini tek modelde
+          toplar. Constructor allocation yapmaz; var olan storage'ı geçerli object haline getirir.
+          Destructor object'in iç kaynaklarını kapatır. Normal kullanıcı kodu destructor'ı method gibi
+          çağırmaz; erken bırakma için <code>drop</code>, olağan yaşam sonu için scope-exit kullanılır.
+        </p>
+        <pre><code class="language-cstar">struct FileHandle {
+  int32 fd;
 
-<span class="kw">deref</span> shared = <span class="nu">8</span>;
-<span class="op">*</span>unique = <span class="nu">9</span>;</code></pre>
-          <p>Reference parametreler çağıranın storage'ına alias olur ve çağrı tarafında açık `ref` ister.</p>
-          <pre data-title="reference parameter"><code><span class="fn">write_ref</span>(<span class="ty">int32</span>& value) <span class="op">::</span> <span class="ty">void</span> {
-  value = <span class="nu">7</span>;
-  <span class="kw">ret</span>;
-}
+  constructor(int32 fd) {
+    self.fd = fd;
+  }
 
-<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-  <span class="ty">int32</span> value = <span class="nu">1</span>;
-  <span class="fn">write_ref</span>(<span class="kw">ref</span> value);
-  <span class="kw">ret</span> value;
-}</code></pre>
-        </section>
-
-        <section id="ownership">
-          <h2>Ownership</h2>
-          <p class="lead">Ownership modeli C*'ın kalbi. `*` paylaşılan handle, `^` tekil sahipliktir. Copy, move ve function boundary davranışı dilden okunur.</p>
-          <div class="grid-2">
-            <div class="panel">
-              <h3>Shared `*`</h3>
-              <p>Raw pointer ABI değildir. `{ data, strong }` handle'ı taşır. Copy atomic retain, overwrite release, `move` transfer anlamına gelir.</p>
-            </div>
-            <div class="panel">
-              <h3>Unique `^`</h3>
-              <p>Copy yasaktır. Ownership `:=` veya `move` ile aktarılır. Moved source yeniden initialize edilmeden kullanılamaz.</p>
-            </div>
-          </div>
-          <pre data-title="shared pointer count"><code><span class="fn">observe</span>(<span class="ty">int32</span>* pointer) <span class="op">::</span> <span class="ty">int32</span> {
-  <span class="kw">ret</span> <span class="fn">strong_count</span>(pointer) <span class="kw">as</span> <span class="ty">int32</span>;
-}
-
-<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-  <span class="ty">int32</span> value = <span class="nu">4</span>;
-  <span class="ty">int32</span>* source = <span class="kw">ref</span> value;
-  <span class="kw">ret</span> <span class="fn">observe</span>(source); <span class="cm">// strong_count == 2</span>
-}</code></pre>
-          <pre data-title="unique return move"><code><span class="fn">forward</span>(<span class="ty">int32</span>^ pointer) <span class="op">::</span> <span class="ty">int32</span>^ {
-  <span class="kw">ret</span> <span class="kw">move</span> pointer;
-}
-
-<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-  <span class="ty">int32</span> value = <span class="nu">9</span>;
-  <span class="ty">int32</span>^ source = <span class="kw">ref</span> value;
-  <span class="ty">int32</span>^ target = <span class="fn">forward</span>(<span class="kw">move</span> source);
-  <span class="kw">ret</span> <span class="kw">deref</span> target;
-}</code></pre>
-          <h3>`nomove`</h3>
-          <p>`nomove` bir type qualifier değil, parametre seviyesinde ownership-flow kısıtıdır. Parametre okunabilir, fakat fonksiyon gövdesinde tekrar taşınamaz.</p>
-          <pre data-title="nomove_unique_param_read.cstar"><code><span class="fn">read_nomove</span>(<span class="kw">nomove</span> <span class="ty">int32</span>^ pointer) <span class="op">::</span> <span class="ty">int32</span> {
-  <span class="kw">ret</span> <span class="kw">deref</span> pointer;
-}
-
-<span class="cm">// Hatalı:</span>
-<span class="cm">// int32^ moved := pointer;</span>
-<span class="cm">// ret move pointer;</span></code></pre>
-        </section>
-
-        <section id="qualifier">
-          <h2>Qualifier Sistemi</h2>
-          <p>Qualifier'lar pointer ve reference güvenliğini ifade eder. C* bu kısmı pointer seviyelerine açılabilecek metadata olarak tasarlar.</p>
-          <table>
-            <thead><tr><th>Qualifier</th><th>Anlam</th><th>Örnek</th></tr></thead>
-            <tbody>
-              <tr><td><code>const</code></td><td>Final target value salt-okunur.</td><td><code>const int32* p</code></td></tr>
-              <tr><td><code>constptr</code></td><td>Pointer adresi sabit, hedef yazılabilir.</td><td><code>constptr int32* p</code></td></tr>
-              <tr><td><code>constref</code></td><td>Reference salt-okunur alias gibi davranır.</td><td><code>constref int32& x</code></td></tr>
-              <tr><td><code>readonly</code></td><td>Adres ve hedef değer katı salt-okunur.</td><td><code>readonly int32* p</code></td></tr>
-            </tbody>
-          </table>
-          <pre data-title="readonly param"><code><span class="fn">read_through</span>(<span class="kw">readonly</span> <span class="ty">int32</span>* pointer) <span class="op">::</span> <span class="ty">int32</span> {
-  <span class="kw">ret</span> <span class="kw">deref</span> pointer;
-}
-
-<span class="cm">// Hatalı:</span>
-<span class="cm">// deref pointer = 2;</span></code></pre>
-        </section>
-
-        <section id="cast">
-          <h2>Cast</h2>
-          <p>C* safe ve unsafe cast'i ayırır. `cast<T>(expr)` ve `expr as T` safe cast yoludur. Pointer/value kategori geçişleri ve qualifier stripping reddedilir.</p>
-          <pre data-title="safe cast"><code><span class="ty">int32</span> a = <span class="nu">4.5</span> <span class="kw">as</span> <span class="ty">int32</span>;
-<span class="ty">int32</span> b = <span class="fn">cast</span>&lt;<span class="ty">int32</span>&gt;(<span class="nu">5.8</span>);</code></pre>
-          <p>`unsafe_cast<T>` açıkça daha tehlikeli dönüşümler içindir.</p>
-          <pre data-title="unsafe cast"><code><span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-    <span class="ty">int32</span>* p = <span class="fn">unsafe_cast</span>&lt;<span class="ty">int32</span>*&gt;(<span class="nu">1</span>);
-    <span class="kw">if</span> (p) { <span class="kw">ret</span> <span class="nu">7</span>; }
-    <span class="kw">ret</span> <span class="nu">1</span>;
-}</code></pre>
-          <div class="callout danger">`unsafe_cast` dilin kaçış kapısıdır. Kullanımı kod incelemesinde görünür olmalı; implicit pointer/value geçişi tasarım dışıdır.</div>
-        </section>
-
-        <section id="struct">
-          <h2>Struct, Trait ve Enum</h2>
-          <p class="lead">C* user-defined type sistemini `struct`, `trait`, `enum` ve `with` ile kurar. Struct layout taşır, trait ise compile-time capability contract üretir.</p>
-          <pre data-title="struct core"><code><span class="kw">struct</span> Point {
-    <span class="ty">int32</span> x;
-    <span class="ty">int32</span> y;
-}
-
-<span class="kw">struct</span> Line {
-    Point start;
-    Point end;
-}
-
-<span class="fn">sum</span>(Point p) <span class="op">::</span> <span class="ty">int32</span> {
-    <span class="kw">ret</span> p.x + p.y;
-}
-
-<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-    Line line;
-    line.start.x = 3;
-    line.start.y = 4;
-    line.end.x = 5;
-    line.end.y += 1;
-    <span class="kw">ret</span> <span class="fn">sum</span>(line.start) + line.end.x + line.end.y;
-}</code></pre>
-          <pre data-title="value operator"><code><span class="kw">struct</span> Vec2 {
-    <span class="ty">int32</span> x;
-    <span class="ty">int32</span> y;
-
-    <span class="fn">constructor</span>(<span class="ty">int32</span> x, <span class="ty">int32</span> y) {
-        self.x = x;
-        self.y = y;
+  destructor() {
+    if self.fd >= 0 {
+      // native close surface burada çağrılır
+      self.fd = -1;
     }
+  }
 
-    <span class="kw">operator</span> +(Vec2 rhs) <span class="op">::</span> Vec2 {
-        Vec2 result = Vec2(self.x + rhs.x, self.y + rhs.y);
-        <span class="kw">ret</span> result;
-    }
-}</code></pre>
-          <pre data-title="struct and trait"><code><span class="kw">trait</span> Allocator {
-    <span class="fn">alloc</span>(<span class="ty">usize</span> bytes, <span class="ty">usize</span> align) <span class="op">::</span> <span class="ty">void</span>*;
-    <span class="fn">free</span>(<span class="ty">void</span>* ptr, <span class="ty">usize</span> bytes, <span class="ty">usize</span> align) <span class="op">::</span> <span class="ty">void</span>;
+  valid() :: bool {
+    ret self.fd >= 0;
+  }
 }
 
-<span class="kw">struct</span> ArenaAllocator <span class="kw">with</span> Allocator {
-    <span class="ty">void</span>* begin;
-    <span class="ty">usize</span> capacity;
-    <span class="ty">usize</span> offset;
+main() :: int32 {
+  FileHandle handle = FileHandle(3);
+  if handle.valid() {
+    drop handle;
+  }
+  ret 0;
 }</code></pre>
-          <p>Trait runtime interface değildir; varsayılan yön compile-time capability contract ve static dispatch'tir. `struct T with Trait` eksik methodları compile-time diagnostic yapar. Runtime dispatch gerekiyorsa bu açık bir `dyn Trait` modeliyle seçilir.</p>
-        </section>
 
-        <section id="protocol">
-          <h2>Protocol ve Typestate</h2>
-          <p>`protocol`, bir değerin hangi state'te güvenli olduğunu ifade eder. Eski `policy for T` modeli yerine canonical yön budur.</p>
-          <pre data-title="FileState protocol"><code><span class="kw">protocol</span> FileState <span class="kw">for</span> FileHandle {
-    <span class="kw">state</span> closed, opened;
+        <p>
+          Static methodlar tipe aittir ve <code>Type::method()</code> ile çağrılır. Instance alan ve
+          method erişimi <code>.</code> kullanır; <code>::</code> pointer field erişimi değildir.
+        </p>
+      </section>
 
-    default closed;
-
-    closed <span class="op">-&gt;</span> opened <span class="op">::</span> <span class="fn">open</span>();
-    opened <span class="op">-&gt;</span> closed <span class="op">::</span> <span class="fn">close</span>();
-
-    <span class="fn">read</span>() <span class="op">::</span> !closed;
-    <span class="fn">write</span>(<span class="kw">const</span> <span class="ty">char</span>* data) <span class="op">::</span> !closed;
-
-    scope_exit <span class="op">::</span> closed;
-}</code></pre>
-          <p>`dynamic protocol` runtime tag gerektiren provability gap durumları içindir. `.=` yalnızca bu açık runtime path için anlamlıdır.</p>
-          <pre data-title="dynamic protocol"><code><span class="kw">dynamic protocol</span> ConnectionState <span class="kw">for</span> Connection {
-    <span class="kw">state</span> idle, sending, failed;
-    idle <span class="op">-&gt;</span> sending <span class="op">::</span> <span class="fn">send</span>();
-    sending <span class="op">-&gt;</span> failed <span class="op">::</span> <span class="fn">timeout</span>();
+      <section id="trait">
+        <h2>Trait ve Operatörler</h2>
+        <p>
+          Trait, bir struct'ın karşılaması gereken method sözleşmesini tanımlar. Conformance açık
+          <code>with</code> yüzeyiyle okunur; dispatch static ve tip güvenlidir. Değer operatörleri
+          struct içinde açık operator methodlarıyla tanımlanır.
+        </p>
+        <pre><code class="language-cstar">trait Scorable {
+  score() :: int32;
 }
 
-conn <span class="op">.=</span> <span class="fn">try_send</span>();
-<span class="kw">if</span> (conn <span class="kw">is</span> failed) { <span class="kw">break</span>; }</code></pre>
-        </section>
+struct Meter with Scorable {
+  int32 value;
 
-        <section id="allocator">
-          <h2>Allocator, Constructor ve Destructor</h2>
-          <p>Allocation bir protocol hook değildir. Constructor var olan storage'ı initialize eder; `new` compiler-recognized allocation operator'dır. Normal kullanımda destructor scope-exit ile çalışır; erken release gerektiğinde `drop value;` değeri kapatır ve tekrar kullanımı compile-time diagnostic yapar.</p>
-          <pre data-title="resource type"><code><span class="kw">struct</span> Meter {
-    <span class="ty">int32</span> value;
+  constructor(int32 value) {
+    self.value = value;
+  }
 
-    <span class="fn">constructor</span>(<span class="ty">int32</span> initial) {
-        self.value = initial;
-    }
+  score() :: int32 {
+    ret self.value;
+  }
 
-    <span class="fn">destructor</span>() {
-        <span class="fn">print</span>(<span class="st">"drop meter\n"</span>);
-    }
+  operator +(Meter other) :: Meter {
+    ret Meter(self.value + other.value);
+  }
+
+  operator ==(Meter other) :: bool {
+    ret self.value == other.value;
+  }
 }
 
-<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-    Meter local = Meter(<span class="nu">7</span>);
-    Meter^ owned = <span class="kw">new</span> Meter(<span class="nu">9</span>);
-    Meter* shared = <span class="kw">shared</span> <span class="kw">new</span> Meter(<span class="nu">11</span>);
-
-    <span class="kw">drop</span> owned;
-    <span class="kw">drop</span> shared;
-    <span class="kw">ret</span> local.value;
+main() :: int32 {
+  Meter a = Meter(10);
+  Meter b = Meter(32);
+  Meter c = a + b;
+  ret c.score();
 }</code></pre>
-          <pre data-title="allocator new"><code><span class="kw">trait</span> Allocator {
-    <span class="fn">alloc</span>(<span class="ty">usize</span> bytes, <span class="ty">usize</span> align) <span class="op">::</span> <span class="ty">void</span>*;
-    <span class="fn">free</span>(<span class="ty">void</span>* ptr, <span class="ty">usize</span> bytes, <span class="ty">usize</span> align) <span class="op">::</span> <span class="ty">void</span>;
+      </section>
+
+      <section id="native">
+        <h2>Native Bağlantı</h2>
+        <p>
+          Native dünya <code>import from</code> bloklarıyla dile alınır. CRT sembolleri
+          <code>"std:crt"</code> kaynağından, platform kütüphanesi sembolleri literal library adıyla
+          import edilir. Export ise C* fonksiyonunu dış linker yüzeyine açar.
+        </p>
+        <pre><code class="language-cstar">import from "std:crt" {
+  abs(int32 value) :: int32;
+  printf(const char* fmt, ...) :: int32;
 }
 
-<span class="fn">create_in_arena</span>(ArenaAllocator& arena) <span class="op">::</span> Meter^ {
-    Meter^ owned = <span class="kw">new</span>(arena) Meter(<span class="nu">42</span>);
-    <span class="kw">ret</span> <span class="kw">move</span> owned;
+export distance(int32 value) :: int32 {
+  ret abs(value);
 }</code></pre>
-          <div class="callout ok">Allocator, destructor ve protocol birlikte çalışır ama aynı şey değildir: layout struct'ta, allocation allocator'da, lifetime constructor/destructor'da, state safety protocol'dadır.</div>
-        </section>
+        <p>
+          Normal executable üretiminde kullanılmayan export yüzeyi diagnostic verebilir; library emit
+          akışında export edilen semboller ABI sözleşmesinin parçasıdır.
+        </p>
+      </section>
 
-        <section id="async">
-          <h2>Async, Await ve Thread Safety</h2>
-          <p>Async/task boundary, ownership boundary olarak kabul edilir. `Send` ve `Sync` runtime vtable değil, trait/capability marker'dır.</p>
-          <pre data-title="async boundary"><code><span class="kw">trait</span> Send {}
-<span class="kw">trait</span> Sync {}
-
-<span class="fn">consume_on_worker</span>(<span class="ty">int32</span>^ owned) <span class="kw">async</span> <span class="op">::</span> <span class="ty">int32</span> {
-    <span class="kw">ret</span> <span class="kw">deref</span> owned;
+      <section id="diagnostic">
+        <h2>Diagnostic Modeli</h2>
+        <p>
+          Compiler, dil tasarımına ait kuralları parse sonrasında semantic analizde doğrular:
+          private sembolün modül dışından kullanımı, variadic parametrenin son sırada olmaması,
+          moved/dropped değerin tekrar kullanımı, trait conformance eksikleri, shared/unique pointer
+          assignment kuralları ve static erişim hataları açık hata mesajları üretir.
+        </p>
+        <pre><code class="language-cstar">struct Token {
+  int32 id;
+  constructor(int32 id) { self.id = id; }
 }
 
-<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-    <span class="ty">int32</span> value = <span class="nu">7</span>;
-    <span class="ty">int32</span>^ owned = <span class="kw">ref</span> value;
-    <span class="ty">int32</span> result = <span class="kw">await</span> <span class="fn">consume_on_worker</span>(<span class="kw">move</span> owned);
-    <span class="kw">ret</span> result;
+main() :: int32 {
+  Token t = Token(1);
+  drop t;
+
+  // Burada t artık dropped state'tedir; sonraki kullanım diagnostic üretir.
+  ret t.id;
 }</code></pre>
-          <ul>
-            <li>`T^` task boundary'den yalnızca açık `move` ile geçer.</li>
-            <li>`T*` boundary'de atomic retain/copy veya açık `move` kullanır.</li>
-            <li>`await` suspension point'tir; ownership checkpoint gibi davranır.</li>
-          </ul>
-        </section>
+        <p class="note">
+          C* için “çalıştı ama belirsizdi” kabul edilebilir bir hedef değildir. Dil, güvenli sistem
+          programlama için davranışı görünür yapar ve yanlış lifetime/visibility kullanımını erken
+          durdurur.
+        </p>
+      </section>
 
-        <section id="macro">
-          <h2>Macro, Attribute ve Directive</h2>
-          <p>Metaprogramming yüzeyi üç katmana ayrılır: attribute compile-time capability/reflectivity, macro kaynak dönüşümü, directive ise function/statement wrapping.</p>
-          <pre data-title="attribute and macro"><code><span class="kw">attribute</span> Area&lt;T&gt; {
-    <span class="fn">area</span>($0, $1) <span class="op">-&gt;</span> T <span class="kw">match</span> {
-        <span class="st">'Triangle'</span>: $0 * $1 / <span class="nu">2</span>,
-        <span class="st">'Square'</span>: $0 * $1,
-        _: <span class="fn">cterror</span>(<span class="st">"invalid type"</span>)
-    }
-}
-
-<span class="kw">macro</span> triangle_area(x, y) {
-    x * y / <span class="nu">2</span>;
-}</code></pre>
-          <p>Macro expansion görünür, kaynak konumu izlenebilir ve debug edilebilir olmalıdır. Protocol gizli hook zinciri değildir.</p>
-        </section>
-
-        <section id="paket">
-          <h2>Paket, Import ve Linkage</h2>
-          <p>Paket sistemi `include`, `public`, `import`, `export`, `from` ve `as` etrafında tasarlanır. `import`/`export` native veya library linkage yüzeyidir; module visibility değildir. Bugünkü compiler native import/export imzalarını LLVM external declaration'a, local `.cstar` include dosyalarında ise `public` deklarasyonları aynı compilation unit'e indirir.</p>
-          <pre data-title="include proposal"><code><span class="kw">include</span> involved {
-    <span class="st">'ML'</span>,
-    <span class="st">'X'</span>,
-    <span class="st">'Y'</span>,
-}
-
-<span class="kw">include</span> <span class="st">"std:math:PI"</span> <span class="kw">as</span> PI;
-
-<span class="kw">include</span> <span class="st">"modules/math_module.cstar"</span> <span class="kw">as</span> math;
-
-<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
-    <span class="kw">ret</span> math.<span class="fn">add_from_module</span>(<span class="nu">2</span>, <span class="nu">5</span>);
-}</code></pre>
-          <pre data-title="module surface"><code><span class="cm"># modules/math_module.cstar</span>
-<span class="kw">public</span> <span class="fn">add_from_module</span>(<span class="ty">int32</span> a, <span class="ty">int32</span> b) <span class="op">::</span> <span class="ty">int32</span> {
-    <span class="kw">ret</span> a + b;
-}
-
-<span class="fn">hidden_helper</span>() <span class="op">::</span> <span class="ty">int32</span> {
-    <span class="kw">ret</span> <span class="nu">1</span>;
-}</code></pre>
-          <pre data-title="native import/export"><code><span class="kw">import</span> <span class="fn">abs</span>(<span class="ty">int32</span>) <span class="op">::</span> <span class="ty">int32</span>;
-<span class="kw">import</span> <span class="fn">abs</span>(<span class="ty">int32</span> value) <span class="op">::</span> <span class="ty">int32</span>;
-<span class="kw">import</span> <span class="fn">abs</span>(<span class="ty">int32</span> value) <span class="op">::</span> <span class="ty">int32</span> <span class="kw">from</span> <span class="st">"std:crt"</span>;
-
-<span class="kw">export</span> <span class="fn">sin</span>(<span class="ty">float64</span> x) <span class="op">::</span> <span class="ty">float64</span> <span class="kw">from</span> <span class="st">"std:math"</span>;
-
-<span class="kw">import</span> <span class="kw">from</span> <span class="st">"std:crt"</span> {
-    <span class="fn">abs</span>(<span class="ty">int32</span> value) <span class="op">::</span> <span class="ty">int32</span>;
-}</code></pre>
-          <pre data-title="library output"><code><span class="cm"># static library</span>
-cstar math.cstar --emit=staticlib
-
-<span class="cm"># dynamic library</span>
-cstar math.cstar --emit=dynamiclib
-
-<span class="cm"># normal executable</span>
-cstar app.cstar --run</code></pre>
-          <p>`from "m"` gibi kısa native library adları Unix/macOS tarafında `-lm` olur. `.lib`, `.a`, `.so`, `.dylib` ve path değerleri doğrudan linker'a geçer. `std:math` ve `std:crt` gibi logical module adları linker argümanına çevrilmez; bunlar package namespace tasarımı için saklanır. Local include tarafında private module üyeleri alias üzerinden çağrılamaz; public API `public` ile seçilir. Executable build sırasında ana dosyada `export` varsa compiler uyarı üretir; başka modüllere ABI açılacaksa static veya dynamic library emit seçilmelidir.</p>
-        </section>
-
-        <section id="diagnostic">
-          <h2>Diagnostic Sistemi</h2>
-          <p>C* diagnostic sistemi hata sınıflarını kodlarla ayırır. Test dosyaları `expected-code` ile doğru sınıfı sabitler.</p>
-          <table>
-            <thead><tr><th>Kod</th><th>Anlam</th></tr></thead>
-            <tbody>
-              <tr><td><code>CST1001</code></td><td>Parser syntax / proposal diagnostic</td></tr>
-              <tr><td><code>CST2100</code></td><td>Qualifier mismatch</td></tr>
-              <tr><td><code>CST2101</code></td><td>Invalid qualifier/type combination</td></tr>
-              <tr><td><code>CST2102</code></td><td>Const assignment</td></tr>
-              <tr><td><code>CST2103</code></td><td>Constptr pointer reassignment</td></tr>
-              <tr><td><code>CST2104</code></td><td>Readonly assignment</td></tr>
-              <tr><td><code>CST2105</code></td><td>Ownership / move semantic</td></tr>
-            </tbody>
-          </table>
-          <pre data-title="type checker test"><code><span class="cm">// expected: diagnostic</span>
-<span class="cm">// expected-code: CST2105</span>
-
-<span class="fn">forward</span>(<span class="kw">nomove</span> <span class="ty">int32</span>^ pointer) <span class="op">::</span> <span class="ty">int32</span>^ {
-  <span class="kw">ret</span> <span class="kw">move</span> pointer;
-}</code></pre>
-        </section>
-
-        <section id="stdlib">
-          <h2>Standart Kütüphane Yönü</h2>
-          <p>Bugünün çekirdeğinde `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `read_key()` ve `strong_count(ptr)` gibi built-in'ler vardır. I/O çağrıları compiler içindeki native runtime katmanından CRT/POSIX yüzeyine indirilir; final dilde bu yüzey stdlib/native interop ABI'sine bağlanır.</p>
-          <pre data-title="builtins"><code><span class="fn">print</span>(<span class="st">"hello\n"</span>);
-<span class="ty">int64</span> value = <span class="fn">input_int</span>();
-<span class="fn">print</span>(<span class="fn">input_string</span>());
-<span class="fn">clear_screen</span>();
-<span class="fn">flush_output</span>();
-<span class="fn">sleep_ms</span>(<span class="num">60</span>);
-<span class="fn">enable_raw_input</span>();
-<span class="ty">int32</span> key = <span class="fn">read_key</span>();
-<span class="fn">disable_raw_input</span>();
-<span class="ty">int64</span> count = <span class="fn">strong_count</span>(shared);</code></pre>
-        </section>
-
-        <section id="stil">
-          <h2>Kod Stili</h2>
-          <div class="grid-2">
-            <div class="panel">
-              <h3>İyi C*</h3>
-              <ul>
-                <li>Bit genişliği kritikse `int32`, `uint64` gibi açık tip yaz.</li>
-                <li>Ownership transferde `move` veya `:=` kullan.</li>
-                <li>Readonly ve constptr ayrımını API sözleşmesinde göster.</li>
-                <li>Unsafe cast'i küçük scope'ta ve gerekçeli kullan.</li>
-              </ul>
-            </div>
-            <div class="panel">
-              <h3>Kaçınılacaklar</h3>
-              <ul>
-                <li>Unique pointer'ı plain copy gibi taşımaya çalışma.</li>
-                <li>Protocol'ü allocator veya error hook yerine kullanma.</li>
-                <li>`dynamic protocol` maliyetini gizleme.</li>
-                <li>`nomove` parametreyi başka fonksiyona relay etme.</li>
-              </ul>
-            </div>
-          </div>
-        </section>
-
-        <section id="referans">
-          <h2>Hızlı Referans</h2>
-          <pre data-title="cheat sheet"><code><span class="cm">// function</span>
-name(<span class="ty">int32</span> a) <span class="op">::</span> <span class="ty">int32</span> { <span class="kw">ret</span> a; }
-
-<span class="cm">// pointer</span>
-<span class="ty">int32</span>* shared = <span class="kw">ref</span> value;
-<span class="ty">int32</span>^ unique = <span class="kw">ref</span> value;
-target <span class="op">:=</span> source;
-target = <span class="kw">move</span> source;
-
-<span class="cm">// qualifier</span>
-<span class="kw">const</span> <span class="ty">int32</span>* read_target;
-<span class="kw">constptr</span> <span class="ty">int32</span>* fixed_address;
-<span class="kw">readonly</span> <span class="ty">int32</span>* read_all;
-<span class="kw">nomove</span> <span class="ty">int32</span>^ no_relay;
-
-<span class="cm">// cast</span>
-value <span class="kw">as</span> <span class="ty">int32</span>;
-<span class="fn">cast</span>&lt;<span class="ty">int32</span>&gt;(value);
-<span class="fn">unsafe_cast</span>&lt;<span class="ty">int32</span>*&gt;(<span class="nu">1</span>);
-
-<span class="cm">// multidim array</span>
-<span class="ty">int32</span> matrix[<span class="nu">2</span>:<span class="nu">3</span>] = ((<span class="nu">1</span>, <span class="nu">2</span>, <span class="nu">3</span>), (<span class="nu">4</span>, <span class="nu">5</span>, <span class="nu">6</span>));
-matrix[row:col];
-
-<span class="cm">// module/native</span>
-<span class="kw">include</span> <span class="st">"modules/math_module.cstar"</span> <span class="kw">as</span> math;
-math.<span class="fn">add_from_module</span>(<span class="nu">2</span>, <span class="nu">5</span>);
-<span class="kw">import</span> <span class="fn">abs</span>(<span class="ty">int32</span> value) <span class="op">::</span> <span class="ty">int32</span> <span class="kw">from</span> <span class="st">"std:crt"</span>;
-<span class="kw">export</span> <span class="fn">api</span>() <span class="op">::</span> <span class="ty">int32</span> { <span class="kw">ret</span> <span class="nu">0</span>; }
-
-<span class="cm">// protocol</span>
-<span class="kw">protocol</span> FileState <span class="kw">for</span> FileHandle { <span class="kw">state</span> closed, opened; }</code></pre>
-          <footer>
-            Bu kitap C* dilinin ilk bütünlüklü anlatımı olarak hazırlanmıştır. Mevcut kaynaklar, örnekler ve proposal dosyaları temel alınarak dil tamamlanmış bir tasarım gibi anlatılmıştır.
-          </footer>
-        </section>
-      </div>
+      <footer>
+        C* kitabı, dilin referans yüzeyini tek bir okuma akışında toplar: syntax, modül sistemi,
+        native bağlantı, ownership, struct lifecycle, trait conformance ve diagnostic modeli aynı
+        tasarım çizgisinin parçalarıdır.
+      </footer>
     </main>
   </div>
 
   <script>
     const root = document.documentElement;
-    const toggle = document.getElementById('themeToggle');
-    const storedTheme = localStorage.getItem('cstar-book-theme');
-    if (storedTheme) {
-      root.dataset.theme = storedTheme;
+    const button = document.getElementById('themeButton');
+    const stored = localStorage.getItem('cstar-book-theme');
+    if (stored === 'light' || stored === 'dark') {
+      root.className = `theme-${stored}`;
     }
-    function syncToggle() {
-      toggle.textContent = root.dataset.theme === 'dark' ? 'Gündüz modu' : 'Gece modu';
-    }
-    syncToggle();
-    toggle.addEventListener('click', () => {
-      root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
-      localStorage.setItem('cstar-book-theme', root.dataset.theme);
-      syncToggle();
-    });
-
-    const links = Array.from(document.querySelectorAll('#toc a'));
-    const sections = links.map(link => document.querySelector(link.getAttribute('href'))).filter(Boolean);
-    const observer = new IntersectionObserver(entries => {
-      entries.forEach(entry => {
-        if (!entry.isIntersecting) return;
-        links.forEach(link => link.classList.toggle('active', link.getAttribute('href') === '#' + entry.target.id));
-      });
-    }, { rootMargin: '-20% 0px -70% 0px', threshold: 0.01 });
-    sections.forEach(section => observer.observe(section));
-
-    const search = document.getElementById('search');
-    search.addEventListener('input', () => {
-      const query = search.value.trim().toLocaleLowerCase('tr');
-      links.forEach(link => {
-        const text = link.textContent.toLocaleLowerCase('tr');
-        link.classList.toggle('hidden', query.length > 0 && !text.includes(query));
-      });
+    button.addEventListener('click', () => {
+      const light = root.classList.contains('theme-light');
+      root.className = light ? 'theme-dark' : 'theme-light';
+      localStorage.setItem('cstar-book-theme', light ? 'dark' : 'light');
     });
   </script>
 </body>

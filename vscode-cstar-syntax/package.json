@@ -17,6 +17,11 @@
     "syntax",
     "highlighting"
   ],
+  "files": [
+    "README.md",
+    "language-configuration.json",
+    "syntaxes/cstar.tmLanguage.json"
+  ],
   "contributes": {
     "languages": [
       {

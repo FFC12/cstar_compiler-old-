@@ -1,0 +1,94 @@
+// Raylib C ABI binding for the C* interactive game.
+// Install raylib and link with -lraylib to run this example.
+//
+// On macOS arm64 clang lowers raylib's small Color struct by value as i64.
+// Keep this binding ABI-shaped and pass packed RGBA values directly.
+
+import from "-lraylib" {
+  InitWindow(int32 width, int32 height, const char* title) :: void;
+  WindowShouldClose() :: bool;
+  CloseWindow() :: void;
+  SetTargetFPS(int32 fps) :: void;
+  BeginDrawing() :: void;
+  EndDrawing() :: void;
+  ClearBackground(uint64 color) :: void;
+  DrawRectangle(int32 posX, int32 posY, int32 width, int32 height, uint64 color) :: void;
+  DrawCircle(int32 centerX, int32 centerY, float32 radius, uint64 color) :: void;
+  DrawText(const char* text, int32 posX, int32 posY, int32 fontSize, uint64 color) :: void;
+  TextFormat(const char* text, ...) :: const char*;
+  IsKeyDown(int32 key) :: bool;
+  IsKeyPressed(int32 key) :: bool;
+  GetMouseX() :: int32;
+}
+
+public screen_width() :: int32 {
+  ret 760;
+}
+
+public screen_height() :: int32 {
+  ret 520;
+}
+
+public key_escape() :: int32 {
+  ret 256;
+}
+
+public key_right() :: int32 {
+  ret 262;
+}
+
+public key_left() :: int32 {
+  ret 263;
+}
+
+public key_a() :: int32 {
+  ret 65;
+}
+
+public key_d() :: int32 {
+  ret 68;
+}
+
+public key_w() :: int32 {
+  ret 87;
+}
+
+public key_r() :: int32 {
+  ret 82;
+}
+
+public color_rgba(int32 red, int32 green, int32 blue, int32 alpha) :: uint64 {
+  uint64 r = cast<uint64>(red);
+  uint64 g = cast<uint64>(green) * 256;
+  uint64 b = cast<uint64>(blue) * 65536;
+  uint64 a = cast<uint64>(alpha) * 16777216;
+  ret r + g + b + a;
+}
+
+public make_background() :: uint64 {
+  ret color_rgba(18, 20, 24, 255);
+}
+
+public make_panel() :: uint64 {
+  ret color_rgba(35, 39, 47, 255);
+}
+
+public make_text() :: uint64 {
+  ret color_rgba(237, 242, 247, 255);
+}
+
+public make_green() :: uint64 {
+  ret color_rgba(66, 211, 146, 255);
+}
+
+public make_red() :: uint64 {
+  ret color_rgba(236, 78, 78, 255);
+}
+
+public make_brown() :: uint64 {
+  ret color_rgba(126, 75, 37, 255);
+}
+
+public make_yellow() :: uint64 {
+  ret color_rgba(245, 203, 92, 255);
+}

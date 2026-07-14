@@ -1641,7 +1641,13 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
       break;
     }
     case B_TER: {
+      if (lhs == nullptr || rhs == nullptr || binaryOpAst.m_Extra == nullptr) {
+        return nullptr;
+      }
       auto extra = binaryOpAst.m_Extra->accept(*this);
+      if (extra == nullptr) {
+        return nullptr;
+      }
       if (lhs->getType()->getIntegerBitWidth() != 1) {
         lhs = Builder->CreateIntCast(lhs, Builder->getInt1Ty(), false);
       }

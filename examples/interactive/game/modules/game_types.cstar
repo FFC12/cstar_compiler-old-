@@ -1,0 +1,221 @@
+include "raylib.cstar"
+
+public struct Paddle {
+  int32 x;
+  int32 y;
+  int32 width;
+  int32 height;
+  int32 speed;
+
+  constructor() {
+    self.x = 0;
+    self.y = 0;
+    self.width = 96;
+    self.height = 18;
+    self.speed = 9;
+    ret;
+  }
+
+  center() :: int32 {
+    ret self.x + (self.width / 2);
+  }
+}
+
+public struct FallingObject {
+  int32 x;
+  int32 y;
+  int32 radius;
+  int32 speed;
+  int32 kind;
+
+  constructor() {
+    self.x = 0;
+    self.y = 0;
+    self.radius = 14;
+    self.speed = 3;
+    self.kind = 1;
+    ret;
+  }
+
+}
+
+public struct ScoreBoard {
+  int32 score;
+  int32 misses;
+
+  constructor() {
+    self.score = 0;
+    self.misses = 0;
+    ret;
+  }
+
+  value() :: int32 {
+    ret self.score;
+  }
+
+  operator +(ScoreBoard rhs) :: ScoreBoard {
+    ScoreBoard next;
+    next.score = self.score + rhs.score;
+    next.misses = self.misses + rhs.misses;
+    ret next;
+  }
+}
+
+public struct GameSnapshot {
+  int32 frame;
+  int32 running;
+  int32 gameOver;
+
+  constructor() {
+    self.frame = 0;
+    self.running = 1;
+    self.gameOver = 0;
+    ret;
+  }
+}
+
+public make_paddle() :: Paddle {
+  int32 startX = (screen_width() / 2) - 48;
+  int32 startY = screen_height() - 46;
+  Paddle paddle;
+  paddle.x = startX;
+  paddle.y = startY;
+  paddle.width = 96;
+  paddle.height = 18;
+  paddle.speed = 9;
+  ret paddle;
+}
+
+public lane_x(int32 lane) :: int32 {
+  int32 usable = screen_width() - 120;
+  ret 60 + ((lane * usable) / 5);
+}
+
+public object_kind(int32 frame, int32 slot) :: int32 {
+  int32 seed = ((frame / 23) + (slot * 7)) % 5;
+  if (seed == 0) {
+    ret 2;
+  }
+  ret 1;
+}
+
+public make_object(int32 frame, int32 slot) :: FallingObject {
+  int32 lane = ((frame / 17) + (slot * 2) + 1) % 5;
+  int32 x = lane_x(lane);
+  int32 y = 0 - ((slot + 1) * 92);
+  int32 speed = 3 + ((frame + slot) % 4);
+  int32 kind = object_kind(frame, slot);
+  FallingObject objectValue;
+  objectValue.x = x;
+  objectValue.y = y;
+  objectValue.radius = 14;
+  objectValue.speed = speed;
+  objectValue.kind = kind;
+  ret objectValue;
+}
+
+public clamp_paddle(Paddle paddle) :: Paddle {
+  int32 nextX = paddle.x;
+  int32 nextY = paddle.y;
+  int32 nextWidth = paddle.width;
+  int32 nextHeight = paddle.height;
+  int32 nextSpeed = paddle.speed;
+  if (nextX < 0) {
+    nextX = 0;
+  }
+  int32 edge = nextX + nextWidth;
+  int32 limit = screen_width();
+  if (edge > limit) {
+    nextX = limit - nextWidth;
+  }
+  Paddle next;
+  next.x = nextX;
+  next.y = nextY;
+  next.width = nextWidth;
+  next.height = nextHeight;
+  next.speed = nextSpeed;
+  ret next;
+}
+
+public update_paddle(Paddle paddle) :: Paddle {
+  int32 nextX = paddle.x;
+  int32 nextY = paddle.y;
+  int32 nextWidth = paddle.width;
+  int32 nextHeight = paddle.height;
+  int32 nextSpeed = paddle.speed;
+  if (IsKeyDown(key_a()) || IsKeyDown(key_left()) || IsKeyDown(key_w())) {
+    nextX -= nextSpeed;
+  }
+  if (IsKeyDown(key_d()) || IsKeyDown(key_right())) {
+    nextX += nextSpeed;
+  }
+
+  int32 mouseX = GetMouseX();
+  if (mouseX >= 0) {
+    if (mouseX <= screen_width()) {
+      nextX = mouseX - (nextWidth / 2);
+    }
+  }
+
+  Paddle next;
+  next.x = nextX;
+  next.y = nextY;
+  next.width = nextWidth;
+  next.height = nextHeight;
+  next.speed = nextSpeed;
+  ret clamp_paddle(next);
+}
+
+public update_object(FallingObject objectValue) :: FallingObject {
+  FallingObject next;
+  next.x = objectValue.x;
+  next.y = objectValue.y;
+  next.radius = objectValue.radius;
+  next.speed = objectValue.speed;
+  next.kind = objectValue.kind;
+  next.y += next.speed;
+  ret next;
+}
+
+public reset_object(FallingObject objectValue, int32 frame, int32 slot) :: FallingObject {
+  FallingObject generated = make_object(frame, slot);
+  FallingObject next;
+  next.x = generated.x;
+  next.y = generated.y;
+  next.radius = generated.radius;
+  next.speed = generated.speed;
+  next.kind = generated.kind;
+  next.y = 0 - ((slot + 1) * 70);
+  ret next;
+}
+
+public object_bottom(FallingObject objectValue) :: int32 {
+  ret objectValue.y + objectValue.radius;
+}
+
+public object_top(FallingObject objectValue) :: int32 {
+  ret objectValue.y - objectValue.radius;
+}
+
+public paddle_hit(Paddle paddle, FallingObject objectValue) :: int32 {
+  int32 left = paddle.x;
+  int32 right = paddle.x + paddle.width;
+  int32 top = paddle.y;
+  int32 bottom = paddle.y + paddle.height;
+  int32 ox = objectValue.x;
+  int32 oy = objectValue.y;
+
+  if (ox < left) {
+    ret 0;
+  }
+  if (ox > right) {
+    ret 0;
+  }
+  if (object_bottom(objectValue) < top) {
+    ret 0;
+  }
+  if (object_top(objectValue) > bottom) {
+    ret 0;
+  }
+  ret 1;
+}

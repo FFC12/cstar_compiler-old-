@@ -439,21 +439,27 @@ param_again:
               typeQualifier, semLoc, isNoMove);
           params.emplace_back(std::move(param));
         } else {
-          if (!isForwardDecl) {
-            auto type = this->advanceDefinedType();
+          auto type = this->advanceDefinedType();
 
+          if (!isForwardDecl) {
             expected(TokenKind::IDENT);
             symbol0 = this->advanceSymbol();
-
-            size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
-            auto semLoc = SemanticLoc(beginLoc, endLoc, line);
-
-            auto param = std::make_unique<ParamAST>(
-                std::move(symbol0), nullptr, std::move(type),
-                std::vector<ASTNode>(), false, false, false, false, false,
-                typeQualifier, semLoc, isNoMove);
-            params.emplace_back(std::move(param));
+          } else if (is(TokenKind::IDENT)) {
+            symbol0 = this->advanceSymbol();
           }
+
+          size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
+          auto semLoc = SemanticLoc(beginLoc, endLoc, line);
+          if (isForwardDecl && symbol0 == nullptr) {
+            symbol0 = std::make_unique<SymbolAST>(
+                "__cstar_param" + std::to_string(params.size()), semLoc);
+          }
+
+          auto param = std::make_unique<ParamAST>(
+              std::move(symbol0), nullptr, std::move(type),
+              std::vector<ASTNode>(), false, false, false, false, false,
+              typeQualifier, semLoc, isNoMove);
+          params.emplace_back(std::move(param));
         }
       }
     }

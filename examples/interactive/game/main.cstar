@@ -1,0 +1,85 @@
+// expected: interactive
+
+include "modules/game_render.cstar"
+
+award_green(int32 score) :: int32 {
+  ret score + 1;
+}
+
+main() :: int32 {
+  InitWindow(screen_width(), screen_height(), "C* Falling Objects");
+  SetTargetFPS(60);
+
+  Paddle paddle = make_paddle();
+  FallingObject objectA = make_object(0, 0);
+  FallingObject objectB = make_object(40, 1);
+  FallingObject objectC = make_object(80, 2);
+  int32 score = 0;
+  int32 frame = 0;
+  int32 running = 1;
+  int32 gameOver = 0;
+
+  loop (running == 1) {
+    if (WindowShouldClose()) {
+      running = 0;
+    }
+    if (IsKeyPressed(key_escape())) {
+      running = 0;
+    }
+
+    if (gameOver == 0) {
+      paddle = update_paddle(paddle);
+
+      objectA = update_object(objectA);
+      objectB = update_object(objectB);
+      objectC = update_object(objectC);
+
+      if (paddle_hit(paddle, objectA) == 1) {
+        int32 kindA = objectA.kind;
+        if (kindA == 1) {
+          score = award_green(score);
+          objectA = reset_object(objectA, frame + 31, 0);
+        } else {
+          gameOver = 1;
+        }
+      }
+
+      if (paddle_hit(paddle, objectB) == 1) {
+        int32 kindB = objectB.kind;
+        if (kindB == 1) {
+          score = award_green(score);
+          objectB = reset_object(objectB, frame + 47, 1);
+        } else {
+          gameOver = 1;
+        }
+      }
+
+      if (paddle_hit(paddle, objectC) == 1) {
+        int32 kindC = objectC.kind;
+        if (kindC == 1) {
+          score = award_green(score);
+          objectC = reset_object(objectC, frame + 61, 2);
+        } else {
+          gameOver = 1;
+        }
+      }
+
+      if (objectA.y > screen_height() + 24) {
+        objectA = reset_object(objectA, frame + 19, 0);
+      }
+      if (objectB.y > screen_height() + 24) {
+        objectB = reset_object(objectB, frame + 29, 1);
+      }
+      if (objectC.y > screen_height() + 24) {
+        objectC = reset_object(objectC, frame + 37, 2);
+      }
+
+      frame += 1;
+    }
+
+    render_frame(paddle, objectA, objectB, objectC, score, frame, gameOver);
+  }
+
+  CloseWindow();
+  ret score;
+}
