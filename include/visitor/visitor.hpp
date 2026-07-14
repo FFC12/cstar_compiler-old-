@@ -202,6 +202,7 @@ class Visitor {
   void typeCheckerScopeHandler(std::unique_ptr<IAST>& node);
   SymbolAST* symbolFromMoveSource(IAST* node) const;
   IAST* methodCallReceiver(IAST* node) const;
+  bool constructorInitializer(VarAST& varAst, std::string& constructorName);
   std::string resolveFunctionCallName(IAST* node, SymbolInfo& symbolInfo,
                                       bool emitDiagnostics);
 

@@ -185,6 +185,16 @@ examples/smoke/struct_field_read.cstar
 examples/smoke/struct_field_assignment.cstar
 examples/smoke/struct_function_param_return.cstar
 examples/smoke/struct_nested_field.cstar
+examples/smoke/struct_method_self.cstar
+examples/smoke/struct_method_no_param_sugar.cstar
+examples/smoke/struct_constructor_default.cstar
+examples/smoke/struct_constructor_args.cstar
+examples/smoke/struct_unique_pointer_field_method.cstar
+examples/smoke/struct_shared_pointer_field_method.cstar
+examples/smoke/struct_scope_method_receiver.cstar
+examples/smoke/struct_destructor_method.cstar
+examples/smoke/struct_pointer_destructor_method.cstar
+examples/smoke/struct_static_new_factory.cstar
 ```
 
 Interactive örnek:
@@ -218,7 +228,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Her zaman yeşil kalması gereken küçük çalışan compiler çekirdeği.
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
-- Güncel durumda module helper dosyaları hariç 98/98 dosya başarılı.
+- Güncel durumda module helper dosyaları hariç 106/106 dosya başarılı.
 
 `examples/type_checker/`:
 
@@ -226,7 +236,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Exit code `1` çoğu dosya için kabul edilebilir diagnostic olabilir.
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
-- Güncel durumda `-ExpectDiagnostics` ile 59/59 dosya kontrollü diagnostic üretiyor, crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 64/64 dosya kontrollü diagnostic üretiyor, crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -1072,6 +1082,47 @@ Durum:
   - `examples/smoke/struct_method_no_param_sugar.cstar`
 - Unknown method controlled diagnostic üretir:
   - `examples/type_checker/058.cstar`
+- Constructor/function call ayrımı MVP'si tamamlandı:
+  - `constructor(args) { ... }` struct body içinde parse edilir.
+  - Constructor internal olarak `StructName.constructor(self&, ...)` fonksiyonuna iner.
+  - `StructName value = StructName(args);` local initializer zero-init storage oluşturup constructor'ı o storage üzerinde çağırır.
+  - Constructor initializer yalnız local by-value struct için açıktır.
+  - Constructor yoksa controlled diagnostic üretilir.
+  - `examples/smoke/struct_constructor_default.cstar`
+  - `examples/smoke/struct_constructor_args.cstar`
+  - `examples/type_checker/059.cstar`
+- Pointer/shared handle receiver ve field access MVP'si tamamlandı:
+  - `Point^ owned = ref p; owned.x` unique pointer pointee alanına iner.
+  - `Counter* shared = ref c; shared.value` compiler-owned shared handle içindeki data pointer'a iner.
+  - `owned.method(args)` ve `shared.method(args)` receiver'ı auto-deref edip implicit `self&` parametresine pointee adresini geçirir.
+  - Shared handle copy/assignment atomic retain/release davranışını korur; struct field/method erişimi bu handle üstünden raw pointer fallback'e düşmez.
+  - `examples/smoke/struct_unique_pointer_field_method.cstar`
+  - `examples/smoke/struct_shared_pointer_field_method.cstar`
+  - `examples/smoke/struct_scope_method_receiver.cstar`
+  - `examples/type_checker/060.cstar`
+- Static struct method MVP'si tamamlandı:
+  - `static method(...)` struct body içinde implicit `self` almadan parse edilir.
+  - `Type::method(args)` yalnız static struct method çağrısıdır.
+  - Instance çağrıları için `value.method(args)`, `owned.method(args)` ve `shared.method(args)` kullanılır.
+  - `value::method(args)` / `Type::non_static(args)` controlled diagnostic üretir.
+  - `examples/smoke/struct_scope_method_receiver.cstar`
+  - `examples/type_checker/062.cstar`
+- Static `new` factory MVP'si tamamlandı:
+  - `new` struct içinde lifecycle factory adı olarak ayrıldı.
+  - `new` static olmak zorundadır ve `Type::new(args)` formuyla çağrılır.
+  - İlk MVP'de `new` aynı struct type'ını by-value döndürür; heap allocation/control-block bağlama allocator aşamasına kaldı.
+  - Non-static `new` controlled semantic diagnostic üretir.
+  - `examples/smoke/struct_static_new_factory.cstar`
+  - `examples/type_checker/063.cstar`
+- Explicit destructor method MVP'si tamamlandı:
+  - `destructor(...) { ... }` struct body içinde method olarak parse edilir.
+  - Internal lowering normal method modeliyle `StructName.destructor(self&, ...)` fonksiyonuna iner.
+  - `value.destructor()` ve `ptr.destructor()` explicit çağrı olarak çalışır.
+  - Otomatik scope-exit çağrısı, ownership release ve allocator/new entegrasyonu bu MVP'nin parçası değildir.
+  - `allocator` hook'u trait/allocator aşamasına kadar controlled parser diagnostic üretir.
+  - `examples/smoke/struct_destructor_method.cstar`
+  - `examples/smoke/struct_pointer_destructor_method.cstar`
+  - `examples/type_checker/061.cstar`
 - `trait`, `protocol`, `dynamic protocol` ve ileri lifetime keyword'leri için controlled proposal diagnostic korunur.
 - Eski `policy for T { ... }` runtime hook modeli ve `policy protocol` çift isimli form superseded kabul edildi.
 - Ana yön `protocol Name for Type { ... }`: compile-time typestate/state contract.
@@ -1081,11 +1132,8 @@ Durum:
 
 Kalan:
 
-- Constructor/function call ayrımını çöz.
-- Pointer/shared handle field access kararını netleştir:
-  - `ptr.field`
-  - `ptr::method`
-- Shared `*` handle ve unique `^` ile struct lifetime entegrasyonu.
+- Heap allocation/control-block layout'u `new`/allocator sistemiyle birleştir.
+- Shared `*` handle ve unique `^` ile otomatik struct lifetime/release entegrasyonu.
 - `protocol` parser tasarımı:
   - `protocol FileState for FileHandle { ... }`
   - `state closed, opened;`
@@ -1127,6 +1175,11 @@ Tamamlanan:
   - `examples/type_checker/053.cstar`
 - Non-static function call semantic diagnostic üretir:
   - `examples/type_checker/054.cstar`
+- Struct-level static method MVP'si tamamlandı:
+  - `static name(...)` / `static name :: type` struct body içinde self'siz method üretir.
+  - `Type::name(args)` static method çağrısına iner.
+  - `examples/smoke/struct_scope_method_receiver.cstar`
+  - `examples/type_checker/062.cstar`
 
 Kalan:
 
@@ -1156,16 +1209,48 @@ Tamamlanan:
   - `examples/smoke/struct_method_self.cstar`
   - `examples/smoke/struct_method_no_param_sugar.cstar`
   - `examples/type_checker/058.cstar`
+- Constructor/function call ayrımı MVP'si:
+  - `constructor(args) { ... }`
+  - `StructName value = StructName(args);`
+  - implicit constructor `self&`
+  - local by-value struct initializer lowering
+  - `examples/smoke/struct_constructor_default.cstar`
+  - `examples/smoke/struct_constructor_args.cstar`
+  - `examples/type_checker/059.cstar`
+- Pointer/shared handle field access ve method receiver MVP'si:
+  - `ptr.field` unique `^` ve shared `*` struct handle'larında pointee alanına iner.
+  - `ptr.method(args)` unique/shared receiver'ı implicit `self&` için pointee adresine indirger.
+  - `examples/smoke/struct_unique_pointer_field_method.cstar`
+  - `examples/smoke/struct_shared_pointer_field_method.cstar`
+  - `examples/smoke/struct_scope_method_receiver.cstar`
+  - `examples/type_checker/060.cstar`
+- Static struct method MVP'si:
+  - `static method(...)`
+  - `Type::method(args)`
+  - `::` instance receiver için kullanılmaz.
+  - `examples/smoke/struct_scope_method_receiver.cstar`
+  - `examples/type_checker/062.cstar`
+- Static `new` factory MVP'si:
+  - `static new(...) :: Type`
+  - `Type::new(args)`
+  - non-static `new` diagnostic
+  - `examples/smoke/struct_static_new_factory.cstar`
+  - `examples/type_checker/063.cstar`
+- Explicit destructor method MVP'si:
+  - `destructor(...) { ... }`
+  - `value.destructor()`
+  - `ptr.destructor()`
+  - `examples/smoke/struct_destructor_method.cstar`
+  - `examples/smoke/struct_pointer_destructor_method.cstar`
+  - `examples/type_checker/061.cstar`
 
 Kalan:
 
-- Pointer/shared handle field access kararını netleştir:
-  - `ptr.field`
-  - `ptr::method`
-- Constructor/new/allocator entegrasyonu.
-- Shared `*` handle ve unique `^` ile struct lifetime entegrasyonu.
+- Heap allocation/control-block layout'u `new`/allocator sistemiyle birleştir.
+- Otomatik destructor/scope-exit lowering.
+- Shared `*` handle ve unique `^` ile otomatik struct lifetime/release entegrasyonu.
 - `syntax.cstar` içindeki `struct Shape<T> from Area<T>` formunu ilk MVP'de parse etmeye çalışma; önce field/method struct çekirdeği, sonra attribute binding.
-- `constructor`/`destructor` scope-exit, shared retain/release ve custom allocator modeliyle aynı lifetime planına bağlanmalı.
+- Constructor MVP local by-value struct initializer için çalışır; `new`/allocator, destructor/scope-exit, shared retain/release ve custom allocator modeli aynı lifetime planına bağlanmalı.
 
 ### 7.3 Trait
 
@@ -1259,10 +1344,10 @@ main() :: int32 {
 }
 ```
 
-Parser/AST, StructTable metadata, LLVM `StructType`, zero-init storage, by-value param/return, nested field GEP zinciri, method/self lowering ve direct self-by-value diagnostic doğrulandı.
+Parser/AST, StructTable metadata, LLVM `StructType`, zero-init storage, by-value param/return, nested field GEP zinciri, method/self lowering, constructor initializer MVP'si ve direct self-by-value diagnostic doğrulandı.
 
 Sıradaki teknik iş:
 
-- Aşama 7'de constructor/function call ayrımını ve `constructor` hook parsing/lowering kararını netleştirmek.
-- Ardından constructor/new/allocator entegrasyonunu shared/unique lifetime modeliyle bağlamak.
+- Aşama 7'de pointer/shared handle field access ve method receiver kararını netleştirmek.
+- Ardından `new`/allocator ve destructor/scope-exit entegrasyonunu shared/unique lifetime modeliyle bağlamak.
 - Sonra `trait` requirement table ve `protocol` parser/flow tasarımına geçmek.

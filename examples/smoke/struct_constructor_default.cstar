@@ -1,0 +1,18 @@
+// expected: pass
+// expected-exit: 7
+
+struct Point {
+  int32 x;
+  int32 y;
+
+  constructor() {
+    self.x = 3;
+    self.y = 4;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Point p = Point();
+  ret p.x + p.y;
+}

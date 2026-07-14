@@ -1,0 +1,13 @@
+// expected: fail
+// expected-code: CST2001
+
+struct Meter {
+  new() :: Meter {
+    Meter meter;
+    ret meter;
+  }
+}
+
+main() :: int32 {
+  ret 0;
+}

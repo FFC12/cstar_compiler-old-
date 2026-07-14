@@ -1,0 +1,22 @@
+// expected: pass
+// expected-exit: 0
+
+struct Resource {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+    ret;
+  }
+
+  destructor() {
+    self.value = 0;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Resource resource = Resource(9);
+  resource.destructor();
+  ret resource.value;
+}

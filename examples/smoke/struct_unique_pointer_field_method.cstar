@@ -1,0 +1,26 @@
+// expected: pass
+// expected-exit: 14
+
+struct Point {
+  int32 x;
+  int32 y;
+
+  constructor(int32 a, int32 b) {
+    self.x = a;
+    self.y = b;
+    ret;
+  }
+
+  move_y(int32 dy) {
+    self.y += dy;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Point p = Point(4, 5);
+  Point^ owned = ref p;
+  owned.x += 2;
+  owned.move_y(3);
+  ret owned.x + owned.y;
+}

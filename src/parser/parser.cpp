@@ -116,8 +116,8 @@ void CStarParser::parseLinkageBlock(
   }
 }
 
-StructFieldInfo CStarParser::parseStructField() {
-  DeclarationModifiers modifiers = parseDeclarationModifiers(false);
+StructFieldInfo CStarParser::parseStructField(
+    DeclarationModifiers modifiers) {
   if (modifiers.isStatic) {
     ParserError("static struct members are not implemented yet",
                 prevTokenInfo());
@@ -206,22 +206,23 @@ void CStarParser::parseStructDecl(DeclarationModifiers declarationModifiers) {
       break;
     }
 
-    if (is(TokenKind::CONSTRUCTOR) || is(TokenKind::DESTRUCTOR) ||
-        is(TokenKind::ALLOCATOR)) {
-      ParserError("struct lifetime hooks are not implemented yet",
+    DeclarationModifiers memberModifiers = parseDeclarationModifiers(false);
+
+    if (is(TokenKind::ALLOCATOR)) {
+      ParserError("struct allocator hooks require the allocator/trait phase",
                   currentTokenInfo());
     }
 
     bool outOfSize = false;
     auto nextToken = nextTokenInfo(outOfSize).getTokenKind();
-    if (!outOfSize && is(TokenKind::IDENT) &&
+    if (!outOfSize &&
+        (is(TokenKind::IDENT) || is(TokenKind::CONSTRUCTOR) ||
+         is(TokenKind::DESTRUCTOR)) &&
         (nextToken == TokenKind::LPAREN ||
          nextToken == TokenKind::COLONCOLON ||
          nextToken == TokenKind::LBRACK)) {
-      DeclarationModifiers methodModifiers;
-      methodModifiers.access = declarationModifiers.access;
       const auto astSizeBeforeMethod = m_AST.size();
-      funcDecl(methodModifiers, false, structName);
+      funcDecl(memberModifiers, false, structName);
       while (m_AST.size() > astSizeBeforeMethod) {
         methods.push_back(std::move(m_AST.back()));
         m_AST.pop_back();
@@ -229,7 +230,7 @@ void CStarParser::parseStructDecl(DeclarationModifiers declarationModifiers) {
       continue;
     }
 
-    fields.push_back(parseStructField());
+    fields.push_back(parseStructField(memberModifiers));
   }
 
   expected(TokenKind::RBRACK);

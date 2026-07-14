@@ -1182,6 +1182,21 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
           storage = CreateLoad(storage, slotType,
                                symbol->m_SymbolName + ".ref.field");
         }
+        if (info.type == TypeSpecifier::SPEC_DEFINED && !info.isRef &&
+            info.indirectionLevel > 0) {
+          if (IsSharedPointerSymbol(info)) {
+            auto *handle = Builder->CreateLoad(GetSharedPointerTy(), storage,
+                                               symbol->m_SymbolName + ".sp");
+            storage = ExtractSharedPointerData(handle);
+          } else {
+            auto *pointerType = GetType(info.type, info.indirectionLevel);
+            storage = Builder->CreateLoad(pointerType, storage,
+                                          symbol->m_SymbolName + ".ptr");
+          }
+          info.indirectionLevel = 0;
+          info.isUnique = false;
+          info.isRef = false;
+        }
         return {storage, GetSymbolLLVMType(info), info, symbol->m_SymbolName};
       }
 
@@ -1649,6 +1664,95 @@ ValuePtr Visitor::visit(VarAST &varAst) {
 
   if (varAst.m_RHS != nullptr) {
     llvm::GlobalVariable *globVar = nullptr;
+    std::string constructorName;
+    if (constructorInitializer(varAst, constructorName)) {
+      if (!varAst.m_IsLocal) {
+        assert(false && "Constructor initializer requires local storage.");
+      }
+
+      value = llvm::ConstantAggregateZero::get(type);
+      auto *storage = llvm::dyn_cast<llvm::AllocaInst>(
+          CreateLocalVariable(varAst.m_Name, type, value));
+      m_LocalVarsOnScope[varAst.m_Name] = storage;
+
+      auto *call = static_cast<FuncCallAST *>(varAst.m_RHS.get());
+      std::vector<IAST *> argNodes;
+      auto collectArgs = [&](auto &self, IAST *node) -> void {
+        if (node == nullptr) {
+          return;
+        }
+
+        if (node->m_ExprKind == ExprKind::BinOp) {
+          auto *binOp = static_cast<BinaryOpAST *>(node);
+          if (binOp->m_BinOpKind == BinOpKind::B_COMM) {
+            self(self, binOp->m_LHS.get());
+            self(self, binOp->m_RHS.get());
+            return;
+          }
+        }
+
+        argNodes.push_back(node);
+      };
+      collectArgs(collectArgs, call->m_Args.get());
+
+      auto *function = Visitor::Module->getFunction(constructorName);
+      if (function == nullptr) {
+        assert(false && "Constructor function must be declared before use.");
+      }
+
+      std::vector<llvm::Value *> args;
+      args.push_back(storage);
+      auto signatureIt = FunctionTable.find(constructorName);
+      llvm::Type *previousType = m_LastType;
+      bool previousSigned = m_LastSigned;
+
+      for (size_t i = 0; i < argNodes.size(); ++i) {
+        const size_t paramIndex = i + 1;
+        auto *paramType = function->getFunctionType()->getParamType(paramIndex);
+        const SymbolInfo *paramInfo =
+            signatureIt != FunctionTable.end() &&
+                    paramIndex < signatureIt->second.params.size()
+                ? &signatureIt->second.params[paramIndex]
+                : nullptr;
+
+        m_LastType = paramType;
+        m_LastSigned = true;
+
+        if (paramInfo != nullptr && paramInfo->isRef &&
+            argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
+          auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
+          auto *argStorage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                         argSymbol->m_SymbolName);
+          if (argStorage == nullptr) {
+            assert(false && "Reference argument storage was not found.");
+          }
+
+          auto referenceParam =
+              m_ReferenceParamValueTypes.find(argSymbol->m_SymbolName);
+          if (referenceParam != m_ReferenceParamValueTypes.end()) {
+            auto *slotType = GetPointeeType(argStorage);
+            argStorage = CreateLoad(argStorage, slotType,
+                                    argSymbol->m_SymbolName + ".ref.arg");
+          }
+          args.push_back(argStorage);
+          continue;
+        }
+
+        auto *argValue = argNodes[i]->accept(*this);
+        argValue = CastValueToType(argValue, paramType, m_LastSigned);
+        args.push_back(argValue);
+      }
+
+      m_LastType = previousType;
+      m_LastSigned = previousSigned;
+      Builder->CreateCall(function, args);
+      this->m_LastVarDecl = false;
+      this->m_LastType = nullptr;
+      this->m_LastDefinedTypeName.clear();
+      this->m_LastSigned = false;
+      return storage;
+    }
+
     if (!varAst.m_IsLocal && varAst.m_RHS->m_ExprKind == BinOp &&
         !m_LastInitializerList) {
       llvm::Constant *constant = nullptr;
@@ -1830,6 +1934,22 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
           auto *slotType = GetPointeeType(symbolStorage);
           symbolStorage = CreateLoad(symbolStorage, slotType,
                                      symbol->m_SymbolName + ".ref.field");
+        }
+        if (info.type == TypeSpecifier::SPEC_DEFINED && !info.isRef &&
+            info.indirectionLevel > 0) {
+          if (IsSharedPointerSymbol(info)) {
+            auto *handle = Builder->CreateLoad(GetSharedPointerTy(),
+                                               symbolStorage,
+                                               symbol->m_SymbolName + ".sp");
+            symbolStorage = ExtractSharedPointerData(handle);
+          } else {
+            auto *pointerType = GetType(info.type, info.indirectionLevel);
+            symbolStorage = Builder->CreateLoad(
+                pointerType, symbolStorage, symbol->m_SymbolName + ".ptr");
+          }
+          info.indirectionLevel = 0;
+          info.isUnique = false;
+          info.isRef = false;
         }
         return {symbolStorage, GetSymbolLLVMType(info), info,
                 symbol->m_SymbolName};
@@ -2316,6 +2436,8 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     argNodes.push_back(node);
   };
   collectArgs(collectArgs, funcCallAst.m_Args.get());
+  const bool hasImplicitMethodReceiver =
+      methodCallReceiver(funcCallAst.m_FuncSymbol.get()) != nullptr;
   if (auto *receiver = methodCallReceiver(funcCallAst.m_FuncSymbol.get())) {
     argNodes.insert(argNodes.begin(), receiver);
   }
@@ -2515,6 +2637,23 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
         auto *slotType = GetPointeeType(storage);
         storage = CreateLoad(storage, slotType,
                              argSymbol->m_SymbolName + ".ref.arg");
+      } else if (hasImplicitMethodReceiver && i == 0) {
+        auto receiverInfo = getSymbolInfo(argSymbol->m_SymbolName);
+        if (receiverInfo.type == TypeSpecifier::SPEC_DEFINED &&
+            receiverInfo.indirectionLevel > 0) {
+          if (IsSharedPointerSymbol(receiverInfo)) {
+            auto *handle = Builder->CreateLoad(
+                GetSharedPointerTy(), storage,
+                argSymbol->m_SymbolName + ".receiver.sp");
+            storage = ExtractSharedPointerData(handle);
+          } else {
+            auto *pointerType =
+                GetType(receiverInfo.type, receiverInfo.indirectionLevel);
+            storage = Builder->CreateLoad(
+                pointerType, storage,
+                argSymbol->m_SymbolName + ".receiver.ptr");
+          }
+        }
       }
       args.push_back(storage);
       continue;

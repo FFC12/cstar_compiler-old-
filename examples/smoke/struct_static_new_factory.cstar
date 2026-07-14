@@ -1,0 +1,21 @@
+// expected: pass
+// expected-exit: 12
+
+struct Meter {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+    ret;
+  }
+
+  static new(int32 raw) :: Meter {
+    Meter meter = Meter(raw + 5);
+    ret meter;
+  }
+}
+
+main() :: int32 {
+  Meter meter = Meter::new(7);
+  ret meter.value;
+}

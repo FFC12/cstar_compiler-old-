@@ -1,0 +1,16 @@
+// expected: fail
+// expected-code: CST2001
+
+struct Counter {
+  int32 value;
+
+  add(int32 amount) {
+    self.value += amount;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Counter::add(1);
+  ret 0;
+}

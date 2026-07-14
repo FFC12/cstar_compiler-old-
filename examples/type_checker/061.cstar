@@ -1,0 +1,13 @@
+// expected: fail
+// expected-code: CST1001
+
+struct Resource {
+  allocator() {
+    ret;
+  }
+}
+
+main() :: int32 {
+  Resource resource;
+  ret 0;
+}

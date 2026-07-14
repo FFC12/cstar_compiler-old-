@@ -1,0 +1,22 @@
+// expected: pass
+// expected-exit: 11
+
+struct Pair {
+  int32 left;
+  int32 right;
+
+  constructor(int32 a, int32 b) {
+    self.left = a;
+    self.right = b;
+    ret;
+  }
+
+  sum :: int32 {
+    ret self.left + self.right;
+  }
+}
+
+main() :: int32 {
+  Pair p = Pair(5, 6);
+  ret p.sum();
+}

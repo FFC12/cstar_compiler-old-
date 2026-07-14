@@ -1,0 +1,38 @@
+// expected: pass
+// expected-exit: 38
+
+struct Accumulator {
+  int32 value;
+
+  constructor(int32 start) {
+    self.value = start;
+    ret;
+  }
+
+  add(int32 amount) :: void {
+    self.value += amount;
+    ret;
+  }
+
+  read :: int32 {
+    ret self.value;
+  }
+
+  static bonus :: int32 {
+    ret 19;
+  }
+}
+
+main() :: int32 {
+  Accumulator value = Accumulator(4);
+  value.add(3);
+
+  Accumulator^ owned = ref value;
+  owned.add(5);
+
+  Accumulator* shared = ref value;
+  Accumulator* copy = shared;
+  copy.add(7);
+
+  ret shared.read() + Accumulator::bonus();
+}

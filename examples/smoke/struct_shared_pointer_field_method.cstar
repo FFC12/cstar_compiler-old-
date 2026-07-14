@@ -1,0 +1,25 @@
+// expected: pass
+// expected-exit: 12
+
+struct Counter {
+  int32 value;
+
+  constructor(int32 start) {
+    self.value = start;
+    ret;
+  }
+
+  add(int32 amount) {
+    self.value += amount;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Counter c = Counter(5);
+  Counter* shared = ref c;
+  Counter* copy = shared;
+  shared.value += 2;
+  copy.add(5);
+  ret shared.value;
+}

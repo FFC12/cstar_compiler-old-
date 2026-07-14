@@ -61,7 +61,7 @@ class CStarParser {
   bool isLinkageMark(const TokenInfo& token);
   bool isDeclarationModifier(const TokenInfo& token);
   DeclarationModifiers parseDeclarationModifiers(bool localScope);
-  StructFieldInfo parseStructField();
+  StructFieldInfo parseStructField(DeclarationModifiers modifiers);
 
   // INCLUDE, INCLUDE INVOLVED
   bool isPackageMark(const TokenInfo& token);

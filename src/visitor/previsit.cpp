@@ -27,14 +27,27 @@ static std::string SymbolStateKey(const SymbolInfo &symbolInfo) {
          std::to_string(symbolInfo.scopeLevel) + "#" + symbolInfo.symbolName;
 }
 
+static bool SplitStructMethodName(const std::string &name,
+                                  std::string &owner,
+                                  std::string &method) {
+  const auto dot = name.find('.');
+  if (dot == std::string::npos || dot == 0 || dot + 1 >= name.size()) {
+    return false;
+  }
+
+  owner = name.substr(0, dot);
+  method = name.substr(dot + 1);
+  return true;
+}
+
 IAST *Visitor::methodCallReceiver(IAST *node) const {
   if (node == nullptr || node->m_ExprKind != ExprKind::BinOp) {
     return nullptr;
   }
 
   auto *binOp = static_cast<BinaryOpAST *>(node);
-  if (binOp->m_BinOpKind != BinOpKind::B_DOT || binOp->m_LHS == nullptr ||
-      binOp->m_RHS == nullptr ||
+  if (binOp->m_BinOpKind != BinOpKind::B_DOT ||
+      binOp->m_LHS == nullptr || binOp->m_RHS == nullptr ||
       binOp->m_LHS->m_ExprKind != ExprKind::SymbolExpr ||
       binOp->m_RHS->m_ExprKind != ExprKind::SymbolExpr) {
     return nullptr;
@@ -46,6 +59,32 @@ IAST *Visitor::methodCallReceiver(IAST *node) const {
   }
 
   return binOp->m_LHS.get();
+}
+
+bool Visitor::constructorInitializer(VarAST &varAst,
+                                     std::string &constructorName) {
+  if (varAst.m_TypeSpec != TypeSpecifier::SPEC_DEFINED ||
+      varAst.m_IndirectLevel != 0 || varAst.m_RHS == nullptr ||
+      varAst.m_RHS->m_ExprKind != ExprKind::FuncCallExpr ||
+      varAst.m_Typename == nullptr ||
+      varAst.m_Typename->m_ExprKind != ExprKind::SymbolExpr) {
+    return false;
+  }
+
+  auto *typeSymbol = static_cast<SymbolAST *>(varAst.m_Typename.get());
+  auto *call = static_cast<FuncCallAST *>(varAst.m_RHS.get());
+  if (call->m_FuncSymbol == nullptr ||
+      call->m_FuncSymbol->m_ExprKind != ExprKind::SymbolExpr) {
+    return false;
+  }
+
+  auto *calledType = static_cast<SymbolAST *>(call->m_FuncSymbol.get());
+  if (calledType->m_SymbolName != typeSymbol->m_SymbolName) {
+    return false;
+  }
+
+  constructorName = typeSymbol->m_SymbolName + ".constructor";
+  return true;
 }
 
 static std::vector<TypeQualifier> BuildQualifierLevels(
@@ -592,6 +631,9 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
     auto rhsAsUnary = dynamic_cast<UnaryOpAST *>(varAst.m_RHS.get());
     const bool rhsIsMoveExpr =
         rhsAsUnary != nullptr && rhsAsUnary->m_UnaryOpKind == U_MOVE;
+    std::string constructorName;
+    const bool isConstructorInitializer =
+        constructorInitializer(varAst, constructorName);
 
     auto getPointerSource = [&](SymbolInfo &source) -> bool {
       SymbolAST *sourceSymbol = rhsAsSymbol;
@@ -646,12 +688,76 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
       }
     }
 
-    auto tempSymbolInfo = varAst.m_RHS->acceptBefore(*this);
-    if (markUniqueMoveSource) {
-      m_MovedUniqueSymbols.insert(SymbolStateKey(uniqueMoveSource));
-      m_MovedUniqueSymbols.erase(SymbolStateKey(symbolInfo));
-    } else if (symbolInfo.indirectionLevel > 0) {
-      m_MovedUniqueSymbols.erase(SymbolStateKey(symbolInfo));
+    if (isConstructorInitializer) {
+      if (!varAst.m_IsLocal) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Constructor initializer is only supported for local struct "
+            "variables",
+            symbolInfo);
+      }
+
+      auto signatureIt = FunctionTable.find(constructorName);
+      if (signatureIt == FunctionTable.end()) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Struct '" + symbolInfo.definedTypeName +
+                "' does not declare a constructor",
+            symbolInfo);
+      } else {
+        auto *call = static_cast<FuncCallAST *>(varAst.m_RHS.get());
+        std::vector<IAST *> argNodes;
+        auto collectArgs = [&](auto &self, IAST *node) -> void {
+          if (node == nullptr) {
+            return;
+          }
+
+          if (node->m_ExprKind == ExprKind::BinOp) {
+            auto *binOp = static_cast<BinaryOpAST *>(node);
+            if (binOp->m_BinOpKind == BinOpKind::B_COMM) {
+              self(self, binOp->m_LHS.get());
+              self(self, binOp->m_RHS.get());
+              return;
+            }
+          }
+
+          argNodes.push_back(node);
+        };
+        collectArgs(collectArgs, call->m_Args.get());
+
+        const auto expectedArgs =
+            signatureIt->second.params.empty()
+                ? 0
+                : signatureIt->second.params.size() - 1;
+        if (argNodes.size() != expectedArgs) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Constructor for '" + symbolInfo.definedTypeName + "' expects " +
+                  std::to_string(expectedArgs) + " argument(s), but " +
+                  std::to_string(argNodes.size()) + " provided",
+              symbolInfo);
+        } else {
+          for (size_t i = 0; i < argNodes.size(); ++i) {
+            const auto &param = signatureIt->second.params[i + 1];
+            m_LastSymbolInfo = param;
+            if (m_LastSymbolInfo.isRef) {
+              m_LastSymbolInfo.indirectionLevel += 1;
+            }
+            m_LastSymbolInfo.symbolId = m_SymbolId;
+            m_LastSymbolInfo.scopeId = m_ScopeId;
+            m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
+            m_ExpectedType = param.type;
+            m_DefinedTypeFlag = param.type == TypeSpecifier::SPEC_DEFINED;
+            argNodes[i]->acceptBefore(*this);
+          }
+        }
+      }
+    } else {
+      auto tempSymbolInfo = varAst.m_RHS->acceptBefore(*this);
+      symbolInfo.ptrAliases = std::move(tempSymbolInfo.ptrAliases);
+      if (markUniqueMoveSource) {
+        m_MovedUniqueSymbols.insert(SymbolStateKey(uniqueMoveSource));
+        m_MovedUniqueSymbols.erase(SymbolStateKey(symbolInfo));
+      } else if (symbolInfo.indirectionLevel > 0) {
+        m_MovedUniqueSymbols.erase(SymbolStateKey(symbolInfo));
+      }
     }
   } else {
     if (varAst.m_RHS != nullptr) {
@@ -711,6 +817,12 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
             lookup.end = symbol->m_SemLoc.end;
             lookup.line = symbol->m_SemLoc.line;
             symbolValidation(symbol->m_SymbolName, lookup, resolved);
+            if (resolved.type == TypeSpecifier::SPEC_DEFINED &&
+                resolved.indirectionLevel > 0) {
+              resolved.indirectionLevel = 0;
+              resolved.isUnique = false;
+              resolved.isRef = false;
+            }
             return resolved;
           }
 
@@ -900,10 +1012,8 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
 
         this->m_ExpectedType = matchedSymbol.type;
 
-        if (matchedSymbol.type == TypeSpecifier::SPEC_DEFINED) {
-          // definedTypeName...
-          this->m_DefinedTypeFlag = true;
-        }
+        this->m_DefinedTypeFlag =
+            matchedSymbol.type == TypeSpecifier::SPEC_DEFINED;
 
         this->m_LastBinOpHasAtLeastOnePtr = false;
         this->m_LastSymbolInfo = matchedSymbol;
@@ -1384,6 +1494,12 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
           lookup.end = symbol->m_SemLoc.end;
           lookup.line = symbol->m_SemLoc.line;
           symbolValidation(symbol->m_SymbolName, lookup, resolved);
+          if (resolved.type == TypeSpecifier::SPEC_DEFINED &&
+              resolved.indirectionLevel > 0) {
+            resolved.indirectionLevel = 0;
+            resolved.isUnique = false;
+            resolved.isRef = false;
+          }
           return resolved;
         }
 
@@ -1786,6 +1902,25 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
   symbolInfo.isExported = funcAst.m_IsExported;
   symbolInfo.isImported = funcAst.m_IsForwardDecl && !funcAst.m_IsExported;
 
+  std::string methodOwner;
+  std::string methodName;
+  if (SplitStructMethodName(funcAst.m_FuncName, methodOwner, methodName) &&
+      methodName == "new") {
+    if (!funcAst.m_IsStatic) {
+      this->m_TypeErrorMessages.emplace_back(
+          "struct 'new' factory must be static and called as '" +
+              methodOwner + "::new(...)'",
+          symbolInfo);
+    }
+
+    if (symbolInfo.type != TypeSpecifier::SPEC_DEFINED ||
+        symbolInfo.definedTypeName != methodOwner) {
+      this->m_TypeErrorMessages.emplace_back(
+          "struct 'new' factory must return '" + methodOwner + "'",
+          symbolInfo);
+    }
+  }
+
   if (m_TypeChecking) {
     const bool previousStaticFunction = m_CurrentFunctionIsStatic;
     m_CurrentFunctionIsStatic = funcAst.m_IsStatic;
@@ -2105,7 +2240,8 @@ std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
 
   if (node->m_ExprKind == ExprKind::BinOp) {
     auto *binOp = static_cast<BinaryOpAST *>(node);
-    if (binOp->m_BinOpKind == BinOpKind::B_DOT &&
+    if ((binOp->m_BinOpKind == BinOpKind::B_DOT ||
+         binOp->m_BinOpKind == BinOpKind::B_CCOL) &&
         binOp->m_LHS != nullptr && binOp->m_RHS != nullptr &&
         binOp->m_LHS->m_ExprKind == ExprKind::SymbolExpr &&
         binOp->m_RHS->m_ExprKind == ExprKind::SymbolExpr) {
@@ -2115,6 +2251,37 @@ std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
       symbolInfo.begin = member->m_SemLoc.begin;
       symbolInfo.end = member->m_SemLoc.end;
       symbolInfo.line = member->m_SemLoc.line;
+
+      if (binOp->m_BinOpKind == BinOpKind::B_CCOL) {
+        auto methodName = alias->m_SymbolName + "." + member->m_SymbolName;
+        if (emitDiagnostics) {
+          if (m_TypeTable.count(alias->m_SymbolName) == 0) {
+            this->m_TypeErrorMessages.emplace_back(
+                "`::` method calls require a type name on the left side",
+                symbolInfo);
+            return {};
+          }
+
+          auto signatureIt = FunctionTable.find(methodName);
+          if (signatureIt == FunctionTable.end()) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Struct '" + alias->m_SymbolName +
+                    "' has no static method '" + member->m_SymbolName + "'",
+                symbolInfo);
+            return {};
+          }
+
+          if (!signatureIt->second.returnType.isStatic) {
+            this->m_TypeErrorMessages.emplace_back(
+                "`::` can only call static struct methods; use '.' for "
+                "instance methods",
+                symbolInfo);
+            return {};
+          }
+        }
+
+        return methodName;
+      }
 
       if (ModuleAliases.count(alias->m_SymbolName) != 0) {
         return member->m_SymbolName;
@@ -2132,10 +2299,10 @@ std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
           return {};
         }
 
-        if (matchedReceiver.type != TypeSpecifier::SPEC_DEFINED ||
-            matchedReceiver.indirectionLevel != 0) {
+        if (matchedReceiver.type != TypeSpecifier::SPEC_DEFINED) {
           this->m_TypeErrorMessages.emplace_back(
-              "Method call receiver must be a struct value", receiverInfo);
+              "Method call receiver must be a struct value or pointer",
+              receiverInfo);
           return {};
         }
 
@@ -2153,8 +2320,7 @@ std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
       }
 
       auto receiverInfo = getSymbolInfo(alias->m_SymbolName);
-      if (receiverInfo.type == TypeSpecifier::SPEC_DEFINED &&
-          receiverInfo.indirectionLevel == 0) {
+      if (receiverInfo.type == TypeSpecifier::SPEC_DEFINED) {
         return receiverInfo.definedTypeName + "." + member->m_SymbolName;
       }
 

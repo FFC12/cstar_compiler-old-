@@ -36,18 +36,26 @@ ASTNode CStarParser::advanceDefinedType() {
 ASTNode CStarParser::advanceFieldAccessChain(size_t begin, size_t line) {
   ASTNode access = std::move(advanceSymbol());
 
-  while (is(TokenKind::DOT)) {
-    auto dotInfo = currentTokenInfo().getTokenPositionInfo();
-    std::string dotOp = currentTokenStr();
+  while (is(TokenKind::DOT) || is(TokenKind::COLONCOLON)) {
+    auto accessInfo = currentTokenInfo().getTokenPositionInfo();
+    auto binOpKind =
+        is(TokenKind::DOT) ? BinOpKind::B_DOT : BinOpKind::B_CCOL;
+    std::string accessOp = currentTokenStr();
     this->advance();
 
-    expected(TokenKind::IDENT);
-    auto fieldSymbol = std::move(advanceSymbol());
+    if (!is(TokenKind::IDENT) && !is(TokenKind::DESTRUCTOR)) {
+      expected(TokenKind::IDENT);
+    }
+    auto tokenPos = currentTokenInfo().getTokenPositionInfo();
+    auto memberLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
+    auto fieldSymbol =
+        std::make_unique<SymbolAST>(currentTokenStr(), memberLoc);
+    this->advance();
 
-    SemanticLoc fieldLoc(begin, dotInfo.end, line);
+    SemanticLoc fieldLoc(begin, accessInfo.end, line);
     access = std::make_unique<BinaryOpAST>(
-        std::move(access), std::move(fieldSymbol), nullptr, BinOpKind::B_DOT,
-        dotOp, fieldLoc);
+        std::move(access), std::move(fieldSymbol), nullptr, binOpKind,
+        accessOp, fieldLoc);
   }
 
   return access;
@@ -102,7 +110,14 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
     expected(TokenKind::LPAREN);
   }
 
-  if (!methodOwner.empty()) {
+  if (!methodOwner.empty() &&
+      declarationModifiers.isStatic &&
+      (sourceFuncName == "constructor" || sourceFuncName == "destructor")) {
+    ParserError("constructor/destructor methods cannot be static",
+                currentTokenInfo());
+  }
+
+  if (!methodOwner.empty() && !declarationModifiers.isStatic) {
     auto selfLoc = SemanticLoc(begin, begin + methodOwner.size(), line);
     auto selfSymbol = std::make_unique<SymbolAST>("self", selfLoc);
     auto selfTypeSymbol = std::make_unique<SymbolAST>(methodOwner, selfLoc);
@@ -468,7 +483,8 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
 
       if (isType(currentTokenInfo()) ||
           (!(is(TokenKind::PLUSPLUS) || is(TokenKind::MINUSMINUS)) &&
-           nextToken == TokenKind::IDENT) ||
+           (nextToken == TokenKind::IDENT || nextToken == TokenKind::STAR ||
+            nextToken == TokenKind::XOR || nextToken == TokenKind::AND)) ||
           (isTypeQualifier(prevTokenInfo()) && hasConstness)) {
         DeclarationModifiers localModifiers;
         localModifiers.linkage = VisibilitySpecifier::VIS_LOCAL;
@@ -480,7 +496,8 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
             "and requires the policy runtime semantics first",
             nextTokenInfo);
       } else if ((is(TokenKind::IDENT) || is(TokenKind::SELF)) &&
-                 nextToken == TokenKind::DOT) {
+                 (nextToken == TokenKind::DOT ||
+                  nextToken == TokenKind::COLONCOLON)) {
         auto fieldAccess = advanceFieldAccessChain(begin, line);
 
         if (is(TokenKind::LPAREN)) {
