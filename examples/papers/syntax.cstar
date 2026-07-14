@@ -29,7 +29,7 @@ import {
 }
 import glClearColor(float r,float g,float b,float a) :: void from "opengl32.lib";
 import from "myLibrary.lib" {
-    printf(char*) :: void;
+    printf(const char* fmt, ...) :: int32;
     callMe() :: void;
 }
 

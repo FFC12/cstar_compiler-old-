@@ -1,0 +1,70 @@
+import from "std:crt" {
+  printf(const char* fmt, ...) :: int32;
+  scanf(const char* fmt, ...) :: int32;
+  getchar() :: int32;
+}
+
+public static char core_input_buffer[256];
+
+public core_print(const char* text) :: void {
+  printf("%s", text);
+  ret;
+}
+
+public core_println(const char* text) :: void {
+  printf("%s\n", text);
+  ret;
+}
+
+public core_print_char(int32 ch) :: void {
+  printf("%c", ch);
+  ret;
+}
+
+public core_print_i64(int64 value) :: void {
+  printf("%lld", value);
+  ret;
+}
+
+public core_print_i32(int32 value) :: void {
+  printf("%d", value);
+  ret;
+}
+
+public core_print_f64(float64 value) :: void {
+  printf("%f", value);
+  ret;
+}
+
+public core_read_i64() :: int64 {
+  int32 ch = getchar();
+
+  loop (ch == 9 || ch == 10 || ch == 13 || ch == 32) {
+    ch = getchar();
+  }
+
+  int64 sign = 1;
+  if (ch == 45) {
+    sign = 0 - 1;
+    ch = getchar();
+  }
+
+  int64 value = 0;
+  loop (ch >= 48 && ch <= 57) {
+    value *= 10;
+    value += cast<int64>(ch - 48);
+    ch = getchar();
+  }
+
+  ret value * sign;
+}
+
+public core_read_i32() :: int32 {
+  int32 value = cast<int32>(core_read_i64());
+  ret value;
+}
+
+public core_read_string() :: char* {
+  scanf("%255s", core_input_buffer);
+  ret ref core_input_buffer[0];
+}

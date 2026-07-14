@@ -1,14 +1,16 @@
+include "../../std/core.cstar" as core
+
 // expected: interactive
 main() :: int32 {
-    print("C* calculator\n");
-    print("First number: ");
-    int64 left = input_int();
+    core.core_print("C* calculator\n");
+    core.core_print("First number: ");
+    int64 left = core.core_read_i64();
 
-    print("Second number: ");
-    int64 right = input_int();
+    core.core_print("Second number: ");
+    int64 right = core.core_read_i64();
 
-    print("Operation 1:+ 2:- 3:* 4:/: ");
-    int64 op = input_int();
+    core.core_print("Operation 1:+ 2:- 3:* 4:/: ");
+    int64 op = core.core_read_i64();
 
     int64 result = 0;
     if (op == 1) {
@@ -21,8 +23,8 @@ main() :: int32 {
         result = left / right;
     }
 
-    print("Result: ");
-    print(result);
-    print("\n");
+    core.core_print("Result: ");
+    core.core_print_i64(result);
+    core.core_print("\n");
     ret 0;
 }

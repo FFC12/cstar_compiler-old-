@@ -1,0 +1,10 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+sum(int32 first, ...) :: int32 {
+  ret first;
+}
+
+main() :: int32 {
+  ret sum(1, 2);
+}

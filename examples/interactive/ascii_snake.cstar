@@ -1,3 +1,5 @@
+include "../../std/core.cstar" as core
+
 // expected: interactive
 
 main() :: int32 {
@@ -23,63 +25,63 @@ main() :: int32 {
   int32 speed = 180;
   int32 quit = 0;
 
-  print("Welcome to C* ASCII Snake\n");
-  print("Name your snake: ");
-  print(input_string());
-  print("\n");
-  print("Speed in milliseconds, 60-1000 recommended: ");
-  speed = cast<int32>(input_int());
+  core.core_print("Welcome to C* ASCII Snake\n");
+  core.core_print("Name your snake: ");
+  core.core_print(core.core_read_string());
+  core.core_print("\n");
+  core.core_print("Speed in milliseconds, 60-1000 recommended: ");
+  speed = cast<int32>(core.core_read_i64());
   if (speed < 60) {
     speed = 60;
   } elif (speed > 1000) {
     speed = 1000;
   }
-  print("Eat '*', avoid walls and your body.\n");
-  print("Controls: WASD or arrow keys, q to quit.\n");
-  print("Press enter after the speed, then steer while it moves.\n");
+  core.core_print("Eat '*', avoid walls and your body.\n");
+  core.core_print("Controls: WASD or arrow keys, q to quit.\n");
+  core.core_print("Press enter after the speed, then steer while it moves.\n");
   sleep_ms(900);
 
   enable_raw_input();
 
   loop (alive == 1 && turn < 40) {
     clear_screen();
-    print("C* ASCII Snake\n");
-    print("turn: ");
-    print(turn);
-    print("  score: ");
-    print(score);
-    print("  length: ");
-    print(length);
-    print("\n");
-    print("Controls: WASD / arrows, q quits.\n");
-    print("########\n");
+    core.core_print("C* ASCII Snake\n");
+    core.core_print("turn: ");
+    core.core_print_i64(turn);
+    core.core_print("  score: ");
+    core.core_print_i64(score);
+    core.core_print("  length: ");
+    core.core_print_i64(length);
+    core.core_print("\n");
+    core.core_print("Controls: WASD / arrows, q quits.\n");
+    core.core_print("########\n");
 
     loop (row in [0, 6]) {
-      print("#");
+      core.core_print("#");
       loop (col in [0, 6]) {
         int32 x = cast<int32>(col);
         int32 y = cast<int32>(row);
 
         if (x == head_x && y == head_y) {
-          print("@");
+          core.core_print("@");
         } elif (x == food_x && y == food_y) {
-          print("*");
+          core.core_print("*");
         } elif (length > 1 && x == body1_x && y == body1_y) {
-          print("o");
+          core.core_print("o");
         } elif (length > 2 && x == body2_x && y == body2_y) {
-          print("o");
+          core.core_print("o");
         } elif (length > 3 && x == body3_x && y == body3_y) {
-          print("o");
+          core.core_print("o");
         } elif (length > 4 && x == body4_x && y == body4_y) {
-          print("o");
+          core.core_print("o");
         } else {
-          print(".");
+          core.core_print(".");
         }
       }
-      print("#\n");
+      core.core_print("#\n");
     }
 
-    print("########\n");
+    core.core_print("########\n");
     sleep_ms(speed);
 
     int32 key = read_key();
@@ -164,16 +166,16 @@ main() :: int32 {
   }
 
   disable_raw_input();
-  print("\nFinal board above.\n");
+  core.core_print("\nFinal board above.\n");
   if (quit == 1) {
-    print("Quit. Score: ");
+    core.core_print("Quit. Score: ");
   } elif (alive == 0) {
-    print("Game over. Score: ");
+    core.core_print("Game over. Score: ");
   } else {
-    print("Turn limit reached. Score: ");
+    core.core_print("Turn limit reached. Score: ");
   }
-  print(score);
-  print("\n");
+  core.core_print_i64(score);
+  core.core_print("\n");
 
   ret 0;
 }

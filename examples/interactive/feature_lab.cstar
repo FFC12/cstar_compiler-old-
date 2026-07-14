@@ -1,3 +1,5 @@
+include "../../std/core.cstar" as core
+
 // expected: interactive
 
 score_bonus(int32 base, int32 modifier) :: int32 {
@@ -32,33 +34,33 @@ choose_op(int32 left, int32 right, int32 op) :: int32 {
 
 classify(int32 value) :: int32 {
     if (value < 0) {
-        print("Result class: negative\n");
+        core.core_print("Result class: negative\n");
         ret 1;
     } elif (value == 0) {
-        print("Result class: zero\n");
+        core.core_print("Result class: zero\n");
         ret 2;
     } elif (value < 10) {
-        print("Result class: small positive\n");
+        core.core_print("Result class: small positive\n");
         ret 3;
     }
 
-    print("Result class: large positive\n");
+    core.core_print("Result class: large positive\n");
     ret 4;
 }
 
 main() :: int32 {
-    print("C* interactive feature lab\n");
-    print("--------------------------\n");
-    print("Operation: 1:+ 2:- 3:* 4:/\n");
+    core.core_print("C* interactive feature lab\n");
+    core.core_print("--------------------------\n");
+    core.core_print("Operation: 1:+ 2:- 3:* 4:/\n");
 
-    print("Left value: ");
-    int64 leftInput = input_int();
+    core.core_print("Left value: ");
+    int64 leftInput = core.core_read_i64();
 
-    print("Right value: ");
-    int64 rightInput = input_int();
+    core.core_print("Right value: ");
+    int64 rightInput = core.core_read_i64();
 
-    print("Operation: ");
-    int64 opInput = input_int();
+    core.core_print("Operation: ");
+    int64 opInput = core.core_read_i64();
 
     int32 left = cast<int32>(leftInput);
     int32 right = cast<int32>(rightInput);
@@ -88,21 +90,21 @@ main() :: int32 {
         sentinelFlag = 1;
     }
 
-    print("Raw result: ");
-    print(rawResult);
-    print("\n");
+    core.core_print("Raw result: ");
+    core.core_print_i64(rawResult);
+    core.core_print("\n");
 
-    print("Boosted result: ");
-    print(boosted);
-    print("\n");
+    core.core_print("Boosted result: ");
+    core.core_print_i64(boosted);
+    core.core_print("\n");
 
-    print("First stored score: ");
-    print(first);
-    print("\n");
+    core.core_print("First stored score: ");
+    core.core_print_i64(first);
+    core.core_print("\n");
 
-    print("Sentinel pointer flag: ");
-    print(sentinelFlag);
-    print("\n");
+    core.core_print("Sentinel pointer flag: ");
+    core.core_print_i64(sentinelFlag);
+    core.core_print("\n");
 
     int32 classCode = classify(rawResult);
     ret classCode;

@@ -14,13 +14,14 @@ class FuncAST : public IAST {
   bool m_IsForwardDecl;
   bool m_IsExported;
   bool m_IsStatic;
+  bool m_IsVariadic;
   AccessSpecifier m_Access;
 
  public:
   FuncAST(std::string funcName, ASTNode retType, std::vector<ASTNode>&& params,
           std::vector<ASTNode>&& scope, TypeQualifier retTypeQualifier,
           bool isForwardDecl, bool isExported, bool isStatic,
-          AccessSpecifier access, SemanticLoc semLoc)
+          bool isVariadic, AccessSpecifier access, SemanticLoc semLoc)
       : IAST(semLoc),
         m_FuncName(std::move(funcName)),
         m_RetType(std::move(retType)),
@@ -29,6 +30,7 @@ class FuncAST : public IAST {
         m_RetTypeQualifier(retTypeQualifier),
         m_IsExported(isExported),
         m_IsStatic(isStatic),
+        m_IsVariadic(isVariadic),
         m_Access(access),
         m_IsForwardDecl(isForwardDecl) {
     this->m_ASTKind = ASTKind::Decl;
@@ -52,6 +54,7 @@ class FuncAST : public IAST {
         std::cout << ",";
       }
     }
+    if (m_IsVariadic) std::cout << "...";
     std::cout << ")";
     if (m_RetType) {
       std::cout << " :: ";
@@ -73,6 +76,8 @@ class FuncAST : public IAST {
   SymbolInfo acceptBefore(Visitor& visitor) override {
     return visitor.preVisit(*this);
   }
+
+  bool isVariadic() const { return m_IsVariadic; }
 
   ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
 };

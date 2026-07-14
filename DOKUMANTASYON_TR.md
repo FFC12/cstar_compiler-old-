@@ -513,9 +513,10 @@ func2() {
 import printf(char*) :: void;
 import forwardDecl(const int*, constptr float*) :: void;
 import abs(int32 value) :: int32;
+import printf(const char* fmt, ...) :: int32;
 ```
 
-`import` fonksiyonlar forward declaration gibi ele alınıyor ve body yerine `;` bekleniyor. Parametre adı ABI için opsiyoneldir; `import abs(int32) :: int32;` ve `import abs(int32 value) :: int32;` aynı external imzaya iner. Basit native import çağrısı smoke suite içinde gerçek libc `abs` çağrısıyla doğrulanır. `from "lib"`, `import { ... }` ve `import from "lib" { ... }` formları parser/codegen akışına bağlıdır.
+`import` fonksiyonlar forward declaration gibi ele alınıyor ve body yerine `;` bekleniyor. Parametre adı ABI için opsiyoneldir; `import abs(int32) :: int32;` ve `import abs(int32 value) :: int32;` aynı external imzaya iner. C ABI variadic deklarasyon için `...` parametre listesinin sonunda kullanılabilir: `printf(const char* fmt, ...) :: int32;`. Fixed parametreler normal type-check alır; `...` tarafındaki argümanlar C ABI çağıran sözleşmesine bağlıdır. C* içinde variadic function body yazmak için `va_list`/`va_arg` modeli henüz ayrı tasarımdır. Basit native import çağrısı smoke suite içinde gerçek libc `abs` ve variadic `printf` çağrılarıyla doğrulanır. `from "lib"`, `import { ... }` ve `import from "lib" { ... }` formları parser/codegen akışına bağlıdır.
 
 ### 8.3 Parametre syntax'ı
 
@@ -797,6 +798,36 @@ int64 value = input_int();
 
 `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()` ve `read_key()` şu an compiler içindeki `NativeRuntime` katmanı üzerinden CRT/POSIX çağrılarına indiriliyor. `print(...)` `printf` kullanır. `input_int()` önce `scanf("%255s", ...)` ile token okur, sonra `atoll` ile `int64` üretir; sayı olmayan token consume edilir ve `0` değerine dönüşür. `input_string()` `scanf("%255s", ...)` ile whitespace'e kadar kısa string okur ve doğrudan `print(input_string())` gibi kullanılabilir. `clear_screen()` ANSI terminal temizleme dizisini yazar ve hemen flush eder; `flush_output()` frame tabanlı console renderlarında `fflush(NULL)` ile buffer'ı boşaltır. `sleep_ms(ms)` aktif konsol demoları için milisaniyeyi mikro saniyeye çevirip `usleep` çağırır. `enable_raw_input()` ve `disable_raw_input()` POSIX terminali non-canonical, non-blocking moda alıp geri toparlar; `read_key()` tuş yokken `-1`, tuş varken ASCII/escape byte değerini `int32` döndürür. String literal kaçışları için temel `\n`, `\t`, `\"`, `\\` decode ediliyor. Gerçek stdlib/native interop tasarımı büyüdükçe bu katman ABI bağlantı noktası olarak genişletilecek.
 
+İlk stdlib yüzeyi `std/core.cstar` dosyasıdır. Bu dosya compiler içi native binding eklemeden, normal C* module/import kurallarıyla CRT'den variadic `printf` ve `getchar` alır. Bugünkü API:
+
+```cstar
+include "../../std/core.cstar" as core
+
+main() :: int32 {
+  core.core_print("value: ");
+  core.core_print_i32(42);
+  core.core_print(" ");
+  core.core_print_f64(3.5);
+  core.core_print("\n");
+
+  int32 value = core.core_read_i32();
+  ret value;
+}
+```
+
+`core_print` metni `%s` formatı ile CRT `printf`'e geçirir; C-style literal escape'ler lexer tarafından decode edilir. `core_print_i32`, `core_print_i64` ve `core_print_f64` variadic `printf` üstünden `%d`, `%lld` ve `%f` formatlarını kullanır. `core_read_i32`/`core_read_i64` `getchar` ile whitespace atlayıp signed decimal integer parse eder. `core_read_string` şimdilik `public static char[256]` buffer ve `scanf("%255s", ...)` kullanır; whitespace'e kadar token okur ve `char*` döndürür. Bu yol aynı zamanda variadic array argument ve `ref arr[0]` C pointer codegen'ini doğrular. Doğrudan native variadic import da desteklenir:
+
+```cstar
+import from "std:crt" {
+  printf(const char* fmt, ...) :: int32;
+}
+
+main() :: int32 {
+  printf("value %s %d %lld %f\n", "x", cast<int32>(7), cast<int64>(99), 2.5);
+  ret 0;
+}
+```
+
 Interactive örnek:
 
 ```text
@@ -944,6 +975,8 @@ Codegen iki parçalı:
 - Native runtime builtin `sleep_ms(ms)` -> POSIX `usleep(ms * 1000)`.
 - Native runtime builtin `enable_raw_input()` / `disable_raw_input()` -> POSIX `stty` non-canonical/sane köprüsü.
 - Native runtime builtin `read_key()` -> CRT `getchar()` ile non-blocking key polling.
+- Stdlib MVP: `std/core.cstar` CRT import üstünden `core_print*` ve `core_read*` wrapper'larını sağlar; `examples/smoke/core_print_read.cstar` ile doğrulanır.
+- Native variadic import: `printf(const char* fmt, ...) :: int32` gibi C ABI vararg fonksiyonları LLVM vararg declaration/call olarak üretilir.
 - Binary arithmetic:
   - add/sub/mul/div/mod
   - bitwise and/or/xor

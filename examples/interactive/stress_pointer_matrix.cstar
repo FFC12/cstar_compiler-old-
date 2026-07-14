@@ -1,3 +1,5 @@
+include "../../std/core.cstar" as core
+
 // expected: interactive
 
 fold3(int32 first, int32 second, int32 third) :: int32 {
@@ -28,32 +30,32 @@ constptr_mark(constptr int32* value, int32 guard) :: int32 {
 
 score_gate(int32 score, int32 guard) :: int32 {
     if (score == guard) {
-        print("gate: exact\n");
+        core.core_print("gate: exact\n");
         ret 1;
     } elif (score > guard) {
-        print("gate: above\n");
+        core.core_print("gate: above\n");
         ret 2;
     }
 
-    print("gate: below\n");
+    core.core_print("gate: below\n");
     ret 3;
 }
 
 main() :: int32 {
-    print("C* pointer matrix stress\n");
-    print("matrix name: ");
-    print(input_string());
-    print("\n");
-    print("cell 0: ");
-    int64 aInput = input_int();
-    print("cell 1: ");
-    int64 bInput = input_int();
-    print("cell 2: ");
-    int64 cInput = input_int();
-    print("delta: ");
-    int64 deltaInput = input_int();
-    print("guard: ");
-    int64 guardInput = input_int();
+    core.core_print("C* pointer matrix stress\n");
+    core.core_print("matrix name: ");
+    core.core_print(core.core_read_string());
+    core.core_print("\n");
+    core.core_print("cell 0: ");
+    int64 aInput = core.core_read_i64();
+    core.core_print("cell 1: ");
+    int64 bInput = core.core_read_i64();
+    core.core_print("cell 2: ");
+    int64 cInput = core.core_read_i64();
+    core.core_print("delta: ");
+    int64 deltaInput = core.core_read_i64();
+    core.core_print("guard: ");
+    int64 guardInput = core.core_read_i64();
 
     int32 a = cast<int32>(aInput);
     int32 b = cast<int32>(bInput);
@@ -89,21 +91,21 @@ main() :: int32 {
         unsafeFlag = 1;
     }
 
-    print("spread: ");
-    print(spread);
-    print("\n");
-    print("readonly: ");
-    print(readonlyValue);
-    print("\n");
-    print("constptr: ");
-    print(constptrValue);
-    print("\n");
-    print("shared count: ");
-    print(count);
-    print("\n");
-    print("unsafe flag: ");
-    print(unsafeFlag);
-    print("\n");
+    core.core_print("spread: ");
+    core.core_print_i64(spread);
+    core.core_print("\n");
+    core.core_print("readonly: ");
+    core.core_print_i64(readonlyValue);
+    core.core_print("\n");
+    core.core_print("constptr: ");
+    core.core_print_i64(constptrValue);
+    core.core_print("\n");
+    core.core_print("shared count: ");
+    core.core_print_i64(count);
+    core.core_print("\n");
+    core.core_print("unsafe flag: ");
+    core.core_print_i64(unsafeFlag);
+    core.core_print("\n");
 
     ret score_gate(target, guard);
 }

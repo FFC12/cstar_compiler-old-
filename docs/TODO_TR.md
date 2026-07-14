@@ -90,7 +90,25 @@ Tamamlanan dil/codegen parçaları:
   - `read_key()` CRT `getchar()` ile tuş yokken `-1`, tuş varken `int32` byte değeri döndürür; WASD/ok tuşu oyunları için geçici native runtime yüzeyi.
   - String literal kaçışları için temel `\n`, `\t`, `\"`, `\\` decode ediliyor.
   - `char*` / `const char*` CRT/string ABI'si raw C pointer olarak korunur; string literal `const char*` parametreye ve include edilen module fonksiyonlarına geçebilir.
+  - Variadic native import/call eklendi:
+    - `printf(const char* fmt, ...) :: int32;`
+    - `...` parametre listesinin sonunda yer alır.
+    - LLVM function declaration `isVarArg=true` üretilir.
+    - Fixed parametreler normal type-check alır; `...` argümanları C ABI çağıran sorumluluğundadır.
+    - C* içinde variadic function body yazmak henüz yoktur; bu yüzey native import/export ABI içindir.
+  - `std/core.cstar` ilk gerçek stdlib dosyası olarak eklendi:
+    - `import from "std:crt"` ile variadic `printf` ve `getchar` bağlar.
+    - `core_print`, `core_println`, `core_print_char`, `core_print_i32`, `core_print_i64`, `core_print_f64`, `core_read_i32`, `core_read_i64`, `core_read_string` sağlar.
+    - Sayı/float yazdırma artık CRT `printf` formatları üstünden yapılır.
+    - `core_read_string` geçici `public static char[256]` buffer + `scanf("%255s", ...)` kullanır; gerçek string type/dynamic buffer gelince değiştirilecek stdlib noktasıdır.
+    - `examples/smoke/core_print_read.cstar` include alias + CRT import + read/write smoke doğrulamasıdır.
+    - `examples/smoke/core_read_string.cstar` CRT `scanf` + variadic array argument + `ref arr[0]` C pointer dönüşünü doğrular.
+    - `examples/smoke/import_variadic_printf.cstar` doğrudan `printf("%s %d %lld %f", ...)` ABI doğrulamasıdır.
+  - Function call ownership codegen'i `char*`/`const char*` parametrelerini shared pointer gibi retain etmeyecek şekilde düzeltildi; CRT string ABI raw pointer kalır.
+  - `ref arr[index]` codegen'i eklendi; array element adresi C ABI pointer olarak alınabilir.
+  - Variadic array symbol argument codegen'i array value yerine storage pointer geçirir; `scanf("%255s", buffer)` çalışır.
   - Bu katman ileride stdlib/native interop ABI'sinin bağlanacağı giriş noktasıdır.
+  - Açık takip: `va_list`/`va_arg` gibi C* içinde variadic body yazma modeli ayrı dil tasarımı gerektirir.
 
 Çalışan smoke seti:
 
@@ -1023,6 +1041,10 @@ Tamamlanan:
   - Import parametre adı ABI için opsiyonel; semantic pass imzayı korur ama forward deklarasyon parametresini local symbol gibi kaydetmez.
 - `import func(...) :: type from "lib";` parse edilir ve native link metadata'sına taşınır.
 - `import { ... }` ve `import from "lib" { ... }` blokları parse/codegen akışına bağlı.
+- C ABI variadic import/call tamamlandı:
+  - `import from "std:crt" { printf(const char* fmt, ...) :: int32; }`
+  - `...` yalnız parametre listesinin sonunda geçerlidir.
+  - Eksik fixed parametre diagnostic üretir.
 - `export func(...) :: type from "module";` ve `export from "module" { ... }` forward declaration olarak parse edilir.
 - `export area<Circle>(...) :: type;` gibi generic function attribute syntax'ı declaration yüzeyinde parse edilir.
 - Executable üretirken ana dosyada `export` varsa warning üretilir; `--emit=staticlib` veya `--emit=dynamiclib` önerilir.

@@ -1,38 +1,53 @@
+include "../../../../std/core.cstar" as core
+
 public banner() :: void {
-  print("C* capability project\n");
-  print("--------------------\n");
+  core.core_print("C* capability project\n");
+  core.core_print("--------------------\n");
   ret;
 }
 
 public prompt_name() :: void {
-  print("agent name: ");
+  core.core_print("agent name: ");
   ret;
 }
 
 public prompt_health() :: void {
-  print("health: ");
+  core.core_print("health: ");
   ret;
 }
 
 public prompt_energy() :: void {
-  print("energy: ");
+  core.core_print("energy: ");
   ret;
 }
 
 public prompt_rank() :: void {
-  print("rank: ");
+  core.core_print("rank: ");
   ret;
 }
 
 public prompt_delta() :: void {
-  print("delta: ");
+  core.core_print("delta: ");
   ret;
 }
 
 public print_metric(const char* label, int32 value) :: void {
-  print(label);
-  print(": ");
-  print(value);
-  print("\n");
+  core.core_print(label);
+  core.core_print(": ");
+  core.core_print_i32(value);
+  core.core_print("\n");
   ret;
+}
+
+public print_text(const char* text) :: void {
+  core.core_print(text);
+  ret;
+}
+
+public read_i64() :: int64 {
+  ret core.core_read_i64();
+}
+
+public read_string() :: char* {
+  ret core.core_read_string();
 }

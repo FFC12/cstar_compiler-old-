@@ -1,3 +1,5 @@
+include "../../std/core.cstar" as core
+
 // expected: interactive
 
 abs32(int32 value) :: int32 {
@@ -56,35 +58,35 @@ shared_pressure(int32* metric) :: int32 {
 
 classify_score(int32 score) :: int32 {
     if (score < 20) {
-        print("class: cold\n");
+        core.core_print("class: cold\n");
         ret 1;
     } elif (score < 50) {
-        print("class: warm\n");
+        core.core_print("class: warm\n");
         ret 2;
     } elif (score < 80) {
-        print("class: hot\n");
+        core.core_print("class: hot\n");
         ret 3;
     }
 
-    print("class: critical\n");
+    core.core_print("class: critical\n");
     ret 4;
 }
 
 main() :: int32 {
-    print("C* stress decision engine\n");
-    print("scenario name: ");
-    print(input_string());
-    print("\n");
-    print("seed: ");
-    int64 seedInput = input_int();
-    print("left: ");
-    int64 leftInput = input_int();
-    print("right: ");
-    int64 rightInput = input_int();
-    print("mode 1:+ 2:- 3:* 4:/: ");
-    int64 modeInput = input_int();
-    print("weight: ");
-    int64 weightInput = input_int();
+    core.core_print("C* stress decision engine\n");
+    core.core_print("scenario name: ");
+    core.core_print(core.core_read_string());
+    core.core_print("\n");
+    core.core_print("seed: ");
+    int64 seedInput = core.core_read_i64();
+    core.core_print("left: ");
+    int64 leftInput = core.core_read_i64();
+    core.core_print("right: ");
+    int64 rightInput = core.core_read_i64();
+    core.core_print("mode 1:+ 2:- 3:* 4:/: ");
+    int64 modeInput = core.core_read_i64();
+    core.core_print("weight: ");
+    int64 weightInput = core.core_read_i64();
 
     int32 seed = cast<int32>(seedInput);
     int32 left = cast<int32>(leftInput);
@@ -121,24 +123,24 @@ main() :: int32 {
         sentinelFlag = 1;
     }
 
-    print("raw: ");
-    print(raw);
-    print("\n");
-    print("bounded: ");
-    print(bounded);
-    print("\n");
-    print("final: ");
-    print(finalScore);
-    print("\n");
-    print("shared pressure: ");
-    print(pressure);
-    print("\n");
-    print("nomove read: ");
-    print(nomoveRead);
-    print("\n");
-    print("sentinel: ");
-    print(sentinelFlag);
-    print("\n");
+    core.core_print("raw: ");
+    core.core_print_i64(raw);
+    core.core_print("\n");
+    core.core_print("bounded: ");
+    core.core_print_i64(bounded);
+    core.core_print("\n");
+    core.core_print("final: ");
+    core.core_print_i64(finalScore);
+    core.core_print("\n");
+    core.core_print("shared pressure: ");
+    core.core_print_i64(pressure);
+    core.core_print("\n");
+    core.core_print("nomove read: ");
+    core.core_print_i64(nomoveRead);
+    core.core_print("\n");
+    core.core_print("sentinel: ");
+    core.core_print_i64(sentinelFlag);
+    core.core_print("\n");
 
     ret classify_score(finalScore);
 }

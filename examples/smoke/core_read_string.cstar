@@ -1,0 +1,12 @@
+// expected: pass
+// expected-exit: 6
+
+include "../../std/core.cstar" as core
+
+main() :: int32 {
+  char* name = core.core_read_string();
+  core.core_print("name ");
+  core.core_print(name);
+  core.core_print("\n");
+  ret 6;
+}

@@ -1,0 +1,11 @@
+// expected: pass
+// expected-exit: 5
+
+import from "std:crt" {
+  printf(const char* fmt, ...) :: int32;
+}
+
+main() :: int32 {
+  printf("variadic %s %d %lld %f\n", "printf", cast<int32>(7), cast<int64>(99), 2.5);
+  ret 5;
+}

@@ -62,6 +62,8 @@ void CStarCodegen::pass0() {
         SymbolInfoList symbolInfoList;
         FunctionSignature signature;
         signature.returnType = tempSymbolInfo;
+        signature.isVariadic =
+            static_cast<FuncAST *>(ast.get())->isVariadic();
         for (auto& symbolInfo : preVisitor.getSymbolInfoList()) {
           if (symbolInfo.isParam) {
             signature.params.push_back(symbolInfo);

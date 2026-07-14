@@ -1,18 +1,20 @@
+include "../../std/core.cstar" as core
+
 // expected: interactive
 
 print_shade(int32 shade) :: void {
   if (shade == 0) {
-    print(" ");
+    core.core_print(" ");
   } elif (shade == 1) {
-    print(".");
+    core.core_print(".");
   } elif (shade == 2) {
-    print(":");
+    core.core_print(":");
   } elif (shade == 3) {
-    print("*");
+    core.core_print("*");
   } elif (shade == 4) {
-    print("O");
+    core.core_print("O");
   } else {
-    print("@");
+    core.core_print("@");
   }
 }
 
@@ -83,14 +85,14 @@ main() :: int32 {
   int32 shade = 0;
   loop (tick < 64) {
     clear_screen();
-    print("C* ASCII rotating donut\n");
-    print("frame: ");
-    print(tick);
-    print("\n\n");
+    core.core_print("C* ASCII rotating donut\n");
+    core.core_print("frame: ");
+    core.core_print_i64(tick);
+    core.core_print("\n\n");
 
     int32 phase = tick % 4;
     loop (row in [0, 12]) {
-      print("    ");
+      core.core_print("    ");
       loop (col in [0, 26]) {
         r = cast<int32>(row);
         c = cast<int32>(col);
@@ -108,11 +110,11 @@ main() :: int32 {
 
         print_shade(shade);
       }
-      print("\n");
+      core.core_print("\n");
     }
 
-    print("\n");
-    print("matrix[12:26] + nested loops + shade palette\n");
+    core.core_print("\n");
+    core.core_print("matrix[12:26] + nested loops + shade palette\n");
     flush_output();
     sleep_ms(80);
     tick += 1;

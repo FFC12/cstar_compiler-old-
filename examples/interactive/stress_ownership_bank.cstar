@@ -1,3 +1,5 @@
+include "../../std/core.cstar" as core
+
 // expected: interactive
 
 normalize_amount(int32 value) :: int32 {
@@ -40,32 +42,32 @@ inspect_receipt(nomove int32^ receipt) :: int32 {
 
 risk_band(int32 total, int32 pressure) :: int32 {
     if (total < 50) {
-        print("risk: low liquidity\n");
+        core.core_print("risk: low liquidity\n");
         ret 1 + pressure;
     } elif (total < 200) {
-        print("risk: balanced\n");
+        core.core_print("risk: balanced\n");
         ret 2 + pressure;
     }
 
-    print("risk: high liquidity\n");
+    core.core_print("risk: high liquidity\n");
     ret 3 + pressure;
 }
 
 main() :: int32 {
-    print("C* ownership bank stress\n");
-    print("ledger name: ");
-    print(input_string());
-    print("\n");
-    print("account A: ");
-    int64 aInput = input_int();
-    print("account B: ");
-    int64 bInput = input_int();
-    print("account C: ");
-    int64 cInput = input_int();
-    print("transfer A->B: ");
-    int64 firstInput = input_int();
-    print("transfer B->C: ");
-    int64 secondInput = input_int();
+    core.core_print("C* ownership bank stress\n");
+    core.core_print("ledger name: ");
+    core.core_print(core.core_read_string());
+    core.core_print("\n");
+    core.core_print("account A: ");
+    int64 aInput = core.core_read_i64();
+    core.core_print("account B: ");
+    int64 bInput = core.core_read_i64();
+    core.core_print("account C: ");
+    int64 cInput = core.core_read_i64();
+    core.core_print("transfer A->B: ");
+    int64 firstInput = core.core_read_i64();
+    core.core_print("transfer B->C: ");
+    int64 secondInput = core.core_read_i64();
 
     int32 accountA = cast<int32>(aInput);
     int32 accountB = cast<int32>(bInput);
@@ -101,24 +103,24 @@ main() :: int32 {
     int32^ finalReceipt = ref finalReceiptValue;
     int32 consumed = consume_receipt(move finalReceipt);
 
-    print("A: ");
-    print(accountA);
-    print("\n");
-    print("B: ");
-    print(accountB);
-    print("\n");
-    print("C: ");
-    print(accountC);
-    print("\n");
-    print("moved total: ");
-    print(movedAB + movedBC);
-    print("\n");
-    print("shared pressure: ");
-    print(pressure);
-    print("\n");
-    print("receipt: ");
-    print(consumed);
-    print("\n");
+    core.core_print("A: ");
+    core.core_print_i64(accountA);
+    core.core_print("\n");
+    core.core_print("B: ");
+    core.core_print_i64(accountB);
+    core.core_print("\n");
+    core.core_print("C: ");
+    core.core_print_i64(accountC);
+    core.core_print("\n");
+    core.core_print("moved total: ");
+    core.core_print_i64(movedAB + movedBC);
+    core.core_print("\n");
+    core.core_print("shared pressure: ");
+    core.core_print_i64(pressure);
+    core.core_print("\n");
+    core.core_print("receipt: ");
+    core.core_print_i64(consumed);
+    core.core_print("\n");
 
     ret risk_band(snapshot[5], pressure);
 }

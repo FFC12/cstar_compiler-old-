@@ -94,6 +94,7 @@ struct SymbolInfo {
 struct FunctionSignature {
   SymbolInfo returnType;
   std::vector<SymbolInfo> params;
+  bool isVariadic = false;
 };
 
 using FunctionSignatureTable = std::map<std::string, FunctionSignature>;

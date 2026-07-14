@@ -1307,7 +1307,7 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
             // type qualifier of the variable decl
             const bool readingConstValueThroughPointer =
                 matchedSymbol.isConstVal && m_LastDereferenced;
-            if ((matchedSymbol.isConstVal != m_LastSymbolInfo.isConstVal) &&
+            if ((matchedSymbol.isConstVal && !m_LastSymbolInfo.isConstVal) &&
                 matchedSymbol.indirectionLevel != 0 &&
                 !readingConstValueThroughPointer) {
               if (this->m_LastRetExpr) {
@@ -1999,6 +1999,13 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
   symbolInfo.isStatic = funcAst.m_IsStatic;
   symbolInfo.isExported = funcAst.m_IsExported;
   symbolInfo.isImported = funcAst.m_IsForwardDecl && !funcAst.m_IsExported;
+
+  if (funcAst.m_IsVariadic && !funcAst.m_IsForwardDecl) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Variadic parameter marker '...' is currently supported only for "
+        "native import/export declarations",
+        symbolInfo);
+  }
 
   std::string methodOwner;
   std::string methodName;
@@ -2792,10 +2799,14 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
         "static function cannot call non-static function '" + funcName + "'",
         symbolInfo);
   }
-  if (signature.params.size() != argNodes.size()) {
+  if ((!signature.isVariadic && signature.params.size() != argNodes.size()) ||
+      (signature.isVariadic && argNodes.size() < signature.params.size())) {
     this->m_TypeErrorMessages.emplace_back(
         "Function '" + funcName + "' expects " +
-            std::to_string(signature.params.size()) + " argument(s), but " +
+            (signature.isVariadic
+                 ? "at least " + std::to_string(signature.params.size())
+                 : std::to_string(signature.params.size())) +
+            " argument(s), but " +
             std::to_string(argNodes.size()) + " provided",
         symbolInfo);
     return signature.returnType;
@@ -2825,6 +2836,21 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
   };
 
   for (size_t i = 0; i < argNodes.size(); ++i) {
+    const bool isVariadicArg = i >= signature.params.size();
+    if (isVariadicArg) {
+      if (argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
+        auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
+        SymbolInfo argInfo;
+        SymbolInfo matchedSymbol;
+        argInfo.symbolName = argSymbol->m_SymbolName;
+        argInfo.begin = argSymbol->m_SemLoc.begin;
+        argInfo.end = argSymbol->m_SemLoc.end;
+        argInfo.line = argSymbol->m_SemLoc.line;
+        symbolValidation(argSymbol->m_SymbolName, argInfo, matchedSymbol);
+      }
+      continue;
+    }
+
     m_LastSymbolInfo = signature.params[i];
     if (m_LastSymbolInfo.isRef) {
       m_LastSymbolInfo.indirectionLevel += 1;

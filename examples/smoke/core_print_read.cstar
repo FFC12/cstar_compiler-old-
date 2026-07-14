@@ -1,0 +1,18 @@
+include "../../std/core.cstar" as core
+
+main() :: int32 {
+  core.core_print("core text ");
+  core.core_print_i32(7);
+  core.core_print(" ");
+  core.core_print_i64(123456789);
+  core.core_print(" ");
+  core.core_print_f64(3.5);
+  core.core_print("\n");
+
+  int32 value = core.core_read_i32();
+  core.core_print("read ");
+  core.core_print_i32(value);
+  core.core_print("\n");
+
+  ret value;
+}

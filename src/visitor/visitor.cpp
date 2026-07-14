@@ -2644,7 +2644,7 @@ llvm::Function *Visitor::declareFunction(FuncAST &funcAst) {
                      retType->m_IsUniquePtr, retType->m_IsRef,
                      retDefinedTypeName),
       paramLayout.hasParams() ? paramLayout.irTypes : std::vector<llvm::Type *>(),
-      false);
+      funcAst.m_IsVariadic);
 
   auto linkage = funcAst.m_IsStatic ? llvm::Function::InternalLinkage
                                     : llvm::Function::ExternalLinkage;
@@ -2892,7 +2892,10 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     assert(false && "Function must be declared before it is called.");
   }
 
-  if (function->arg_size() != argNodes.size()) {
+  const bool isVariadic = function->getFunctionType()->isVarArg();
+  const size_t fixedArgCount = function->arg_size();
+  if ((!isVariadic && fixedArgCount != argNodes.size()) ||
+      (isVariadic && argNodes.size() < fixedArgCount)) {
     assert(false && "Function call argument count mismatch.");
   }
 
@@ -2902,7 +2905,9 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
   auto signatureIt = FunctionTable.find(funcName);
 
   for (size_t i = 0; i < argNodes.size(); ++i) {
-    llvm::Type *paramType = function->getFunctionType()->getParamType(i);
+    const bool isVariadicArg = i >= fixedArgCount;
+    llvm::Type *paramType =
+        isVariadicArg ? nullptr : function->getFunctionType()->getParamType(i);
     const SymbolInfo *paramInfo =
         signatureIt != FunctionTable.end() && i < signatureIt->second.params.size()
             ? &signatureIt->second.params[i]
@@ -2942,10 +2947,9 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     const bool argIsMove =
         argUnary != nullptr && argUnary->m_UnaryOpKind == U_MOVE;
     const bool paramIsShared =
-        paramInfo != nullptr && paramInfo->indirectionLevel > 0 &&
-        !paramInfo->isUnique && !paramInfo->isRef;
+        paramInfo != nullptr && IsSharedPointerSymbol(*paramInfo);
 
-    if (paramInfo != nullptr && paramInfo->isRef &&
+    if (!isVariadicArg && paramInfo != nullptr && paramInfo->isRef &&
         argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
       auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
       auto *storage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
@@ -2982,8 +2986,24 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
       continue;
     }
 
-    llvm::Value *argValue = argNodes[i]->accept(*this);
-    argValue = CastValueToType(argValue, paramType, m_LastSigned);
+    llvm::Value *argValue = nullptr;
+    if (isVariadicArg && argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *varArgSymbol = static_cast<SymbolAST *>(argNodes[i]);
+      auto varArgInfo = getSymbolInfo(varArgSymbol->m_SymbolName);
+      if (varArgInfo.isSubscriptable) {
+        argValue = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                               varArgSymbol->m_SymbolName);
+        if (argValue == nullptr) {
+          assert(false && "Variadic array argument storage was not found.");
+        }
+      }
+    }
+    if (argValue == nullptr) {
+      argValue = argNodes[i]->accept(*this);
+    }
+    if (!isVariadicArg) {
+      argValue = CastValueToType(argValue, paramType, m_LastSigned);
+    }
     if (paramIsShared && argSymbol != nullptr && !argIsMove) {
       RetainSharedPointer(argValue);
     }
@@ -3583,6 +3603,51 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
   }
 
   if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_REF) {
+    if (unaryOpAst.m_Node != nullptr &&
+        unaryOpAst.m_Node->m_ExprKind == ExprKind::BinOp) {
+      auto *binary = static_cast<BinaryOpAST *>(unaryOpAst.m_Node.get());
+      if (binary->m_BinOpKind == B_ARRS &&
+          binary->m_LHS->m_ExprKind == ExprKind::SymbolExpr) {
+        auto *arraySymbol = static_cast<SymbolAST *>(binary->m_LHS.get());
+        auto *arrayStorage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                         arraySymbol->m_SymbolName);
+        if (arrayStorage == nullptr) {
+          assert(false && "'ref' array operand was not found.");
+        }
+
+        m_LastArrayIndex = true;
+        auto *baseAddress = binary->m_LHS->accept(*this);
+        m_LastArrayIndex = false;
+
+        auto *previousType = m_LastType;
+        bool previousSigned = m_LastSigned;
+        m_LastType = Builder->getInt64Ty();
+        m_LastSigned = true;
+        auto *rawIndex = binary->m_RHS->accept(*this);
+        m_LastType = previousType;
+        m_LastSigned = previousSigned;
+
+        std::vector<llvm::Value *> indexes = {CastArrayIndex(rawIndex)};
+        auto symbolInfo = getSymbolInfo(arraySymbol->m_SymbolName);
+        auto *arrayType = GetPointeeType(baseAddress);
+        if (!arrayType->isArrayTy()) {
+          auto arrayParamType =
+              m_ArrayParamValueTypes.find(arraySymbol->m_SymbolName);
+          if (arrayParamType != m_ArrayParamValueTypes.end()) {
+            arrayType = arrayParamType->second;
+          }
+        }
+        std::vector<llvm::Value *> idxList = {
+            llvm::ConstantInt::get(Builder->getInt64Ty(), 0),
+            CreateLinearArrayIndex(indexes, symbolInfo.arrayDimensions)};
+        value = Builder->CreateInBoundsGEP(arrayType, baseAddress, idxList,
+                                           arraySymbol->m_SymbolName + ".ref");
+        m_LastType = value->getType();
+        m_LastSigned = IsSigned(symbolInfo.type);
+        return value;
+      }
+    }
+
     if (unaryOpAst.m_Node == nullptr ||
         unaryOpAst.m_Node->m_ExprKind != ExprKind::SymbolExpr) {
       assert(false && "'ref' currently expects a symbol operand.");

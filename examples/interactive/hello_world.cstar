@@ -1,5 +1,7 @@
+include "../../std/core.cstar" as core
+
 
 main() :: int {
-    print("Hello world\n");
+    core.core_print("Hello world\n");
     ret 0;
 }

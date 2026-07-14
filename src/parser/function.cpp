@@ -143,12 +143,13 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
   }
 
   std::vector<ASTNode> params{};
+  bool isVariadic = false;
   const bool hasParamList = is(TokenKind::LPAREN);
   if (hasParamList) {
     // '('
     this->advance();
 
-    advanceParams(params, isForwardDecl);
+    advanceParams(params, isForwardDecl, isVariadic);
 
     expected(TokenKind::RPAREN);
 
@@ -253,14 +254,25 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
   auto func = std::make_unique<FuncAST>(
       funcName, std::move(returnType), std::move(params), std::move(scope),
       retTypeQualifier, isForwardDecl, isExported,
-      declarationModifiers.isStatic, declarationModifiers.access, semLoc);
+      declarationModifiers.isStatic, isVariadic, declarationModifiers.access,
+      semLoc);
 
   this->m_AST.emplace_back(std::move(func));
 }
 
 void CStarParser::advanceParams(std::vector<ASTNode>& params,
-                                bool isForwardDecl) {
+                                bool isForwardDecl, bool& isVariadic) {
 param_again:
+  if (is(TokenKind::TRIPLET)) {
+    isVariadic = true;
+    this->advance();
+    if (!is(TokenKind::RPAREN)) {
+      ParserError("Variadic marker '...' must be the last parameter",
+                  currentTokenInfo());
+    }
+    return;
+  }
+
   ASTNode typeNode;
   TypeQualifier typeQualifier = TypeQualifier::Q_NONE;
   bool isNoMove = false;
@@ -454,6 +466,10 @@ param_again:
   if (is(TokenKind::COMMA)) {
     // skip ','
     this->advance();
+    if (isVariadic) {
+      ParserError("Unexpected parameter after variadic marker '...'",
+                  currentTokenInfo());
+    }
     goto param_again;
   }
 }

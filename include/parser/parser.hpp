@@ -278,7 +278,8 @@ class CStarParser {
                 const std::string& methodOwner = "");
   ASTNode advanceDefinedType();
   ASTNode advanceFieldAccessChain(size_t begin, size_t line);
-  void advanceParams(std::vector<ASTNode>& params, bool isForwardDecl);
+  void advanceParams(std::vector<ASTNode>& params, bool isForwardDecl,
+                     bool& isVariadic);
   void advanceScope(std::vector<ASTNode>& scope);
 
   // branch.cpp

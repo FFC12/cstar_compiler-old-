@@ -4,13 +4,14 @@ Interactive demo for current language features:
 
 - `include ... as ...` module aliases
 - CRT import through a module
+- `std/core.cstar` print/read helpers
 - public module functions and static module state
 - `struct`, `constructor`, `destructor`, `drop`
 - `trait` conformance
 - value operator overload
 - unique and shared ownership pointers
 - reference parameters and pointer writes
-- interactive `input_string()` / `input_int()` / `print(...)`
+- interactive `core_read_string()` / `core_read_i64()` / `core_print*()` through the terminal module
 
 Run from the repository root:
 

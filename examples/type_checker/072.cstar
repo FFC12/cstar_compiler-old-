@@ -1,0 +1,11 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+import from "std:crt" {
+  printf(const char* fmt, ...) :: int32;
+}
+
+main() :: int32 {
+  printf();
+  ret 0;
+}
