@@ -265,8 +265,8 @@ consume_on_worker(int32^ owned) async :: int32 {
     ret deref owned;
 }
 
-observe_on_worker(readonly int32* shared) async :: int32 {
-    ret deref shared;
+observe_on_worker(readonly int32* shared_value) async :: int32 {
+    ret deref shared_value;
 }
 
 inspect_without_relay(nomove int32^ owned) :: int32 {
@@ -284,10 +284,10 @@ inspect_without_relay(nomove int32^ owned) :: int32 {
 thread_boundary_example() :: int32 {
     int32 value = 7;
     int32^ owned = ref value;
-    int32* shared = ref value;
+    int32* shared_value = ref value;
 
     int32 a = await consume_on_worker(move owned);
-    int32 b = await observe_on_worker(shared);
+    int32 b = await observe_on_worker(shared_value);
 
     // Rejected:
     //

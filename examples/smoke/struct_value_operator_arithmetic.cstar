@@ -1,0 +1,43 @@
+// expected: pass
+// expected-exit: 14
+
+struct Score {
+  int32 value;
+
+  constructor(int32 value) {
+    self.value = value;
+  }
+
+  operator -(Score rhs) :: Score {
+    Score result = Score(self.value - rhs.value);
+    ret result;
+  }
+
+  operator *(Score rhs) :: Score {
+    Score result = Score(self.value * rhs.value);
+    ret result;
+  }
+
+  operator /(Score rhs) :: Score {
+    Score result = Score(self.value / rhs.value);
+    ret result;
+  }
+
+  operator %(Score rhs) :: Score {
+    Score result = Score(self.value % rhs.value);
+    ret result;
+  }
+}
+
+main() :: int32 {
+  Score a = Score(20);
+  Score b = Score(6);
+  Score two = Score(2);
+  Score three = Score(3);
+  Score five = Score(5);
+  Score c = a - b;
+  Score d = c * two;
+  Score e = d / three;
+  Score f = d % five;
+  ret e.value + f.value;
+}

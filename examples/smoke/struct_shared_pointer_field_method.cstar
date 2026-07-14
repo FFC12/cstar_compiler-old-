@@ -17,9 +17,9 @@ struct Counter {
 
 main() :: int32 {
   Counter c = Counter(5);
-  Counter* shared = ref c;
-  Counter* copy = shared;
-  shared.value += 2;
+  Counter* sharedValue = ref c;
+  Counter* copy = sharedValue;
+  sharedValue.value += 2;
   copy.add(5);
-  ret shared.value;
+  ret sharedValue.value;
 }

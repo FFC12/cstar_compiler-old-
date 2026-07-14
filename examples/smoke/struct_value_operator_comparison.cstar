@@ -1,0 +1,63 @@
+// expected: pass
+// expected-exit: 6
+
+struct Rank {
+  int32 value;
+
+  constructor(int32 value) {
+    self.value = value;
+  }
+
+  operator ==(Rank rhs) :: bool {
+    ret self.value == rhs.value;
+  }
+
+  operator !=(Rank rhs) :: bool {
+    ret self.value != rhs.value;
+  }
+
+  operator <(Rank rhs) :: bool {
+    ret self.value < rhs.value;
+  }
+
+  operator <=(Rank rhs) :: bool {
+    ret self.value <= rhs.value;
+  }
+
+  operator >(Rank rhs) :: bool {
+    ret self.value > rhs.value;
+  }
+
+  operator >=(Rank rhs) :: bool {
+    ret self.value >= rhs.value;
+  }
+}
+
+main() :: int32 {
+  Rank low = Rank(2);
+  Rank sameLow = Rank(2);
+  Rank high = Rank(7);
+  Rank sameHigh = Rank(7);
+  int32 score = 0;
+
+  if (low == sameLow) {
+    score += 1;
+  }
+  if (low != high) {
+    score += 1;
+  }
+  if (low < high) {
+    score += 1;
+  }
+  if (low <= sameLow) {
+    score += 1;
+  }
+  if (high > low) {
+    score += 1;
+  }
+  if (high >= sameHigh) {
+    score += 1;
+  }
+
+  ret score;
+}

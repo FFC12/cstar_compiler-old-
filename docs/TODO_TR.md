@@ -1079,13 +1079,12 @@ Kalan:
 
 ## Aşama 7 - User-defined Types
 
-Proposal hedefleri:
+Proposal hedefleri ve kapsam kararı:
 
 - `struct`
 - `trait`
-- `protocol`
-- `dynamic protocol`
 - custom allocator benzeri fikirler.
+- `protocol` / `dynamic protocol`: state-flow ve runtime tag gerektirdiği için Aşama 8+ ileri proposal kapsamına taşındı; Aşama 7 çıkışında keyword rezervasyonu ve controlled diagnostic yeterlidir.
 
 Durum:
 
@@ -1187,17 +1186,21 @@ Durum:
   - Struct data inheritance yoktur; layout reuse composition ile yapılır.
   - Dynamic dispatch yalnız açık `dyn Trait` yüzeyiyle mümkündür.
 
-Kalan:
+Son kontrol ve ileri takip:
 
-- User-defined value operator overloading genişletmeleri:
-  - MVP `operator +`, `-`, `*`, `/`, `%`, comparison operator'larını struct method ABI'siyle destekler.
-  - `operator index` ve zengin overload resolution ileride genişletilecek.
+- User-defined value operator overloading MVP'si tamamlandı:
+  - `operator +`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `<=`, `>` ve `>=` struct method ABI'siyle çalışır.
+  - `examples/smoke/struct_value_operator_add.cstar`
+  - `examples/smoke/struct_value_operator_arithmetic.cstar`
+  - `examples/smoke/struct_value_operator_comparison.cstar`
   - lifecycle/ownership operator'larının user overload olarak reddi diagnostic ile korunur.
+  - `examples/type_checker/067.cstar`
+- `operator index` ve zengin overload resolution Aşama 8+ ileri operator tasarımına taşındı.
 - Allocator-backed shared control-block layout ileride tek runtime layout contract'ına taşınacak:
   - Bugünkü MVP data allocation için explicit allocator'ı kullanır.
   - Shared strong-count metadata default runtime allocation ile oluşturulur.
   - Failure policy explicit signature/effect modeline bağlanacak.
-- `protocol` parser tasarımı:
+- `protocol` parser/flow tasarımı Aşama 8+ ileri proposal olarak kaldı:
   - `protocol FileState for FileHandle { ... }`
   - `state closed, opened;`
   - `default closed;`
@@ -1216,7 +1219,7 @@ Kalan:
   - return type state match.
   - moved pointer ile state taşınması.
   - `scope_exit` required state diagnostic.
-- `dynamic protocol`:
+- `dynamic protocol` Aşama 8+ ileri proposal olarak kaldı:
   - explicit runtime tag field.
   - `.=` için görünür/desugar edilebilir switch lowering.
   - hidden hook/table/dispatch yok.
@@ -1327,11 +1330,11 @@ Tamamlanan:
 
 Kalan:
 
-- User-defined value operator overloading genişletmeleri:
-  - MVP `operator +`, `-`, `*`, `/`, `%`, comparison operator'larını struct method ABI'siyle destekler.
-  - `operator index` ve zengin overload resolution ileride genişletilecek.
-  - lifecycle/ownership operator'ları compiler-reserved kalır.
-  - `operator new/delete/move/copy/drop` user overload olarak diagnostic üretir.
+- Bu alt aşamada açık MVP maddesi kalmadı.
+
+İleri takip:
+
+- `operator index` ve zengin overload resolution Aşama 8+ operator tasarımına taşındı.
 - Struct data inheritance eklenmeyecek:
   - `extends` yok.
   - layout reuse composition.
@@ -1355,13 +1358,21 @@ Tamamlanan:
 
 Kalan:
 
+- Bu alt aşamada açık MVP maddesi kalmadı.
+
+İleri takip:
+
 - Dynamic dispatch implicit değildir; monomorphized/static dispatch varsayılan.
-- Açık dynamic dispatch için `dyn Trait` grammar/ABI:
+- Açık dynamic dispatch için `dyn Trait` grammar/ABI Aşama 8+ ileri proposal olarak kaldı:
   - explicit trait object representation.
   - vtable/runtime maliyeti görünür olacak.
   - `with Trait` otomatik `dyn Trait` üretmeyecek.
+  - Bugün `dyn` keyword'ü proposal diagnostic üretir:
+    - `examples/type_checker/074.cstar`
 - Generic bound syntax proposal'ı.
 - Allocation failure eski policy hook yerine explicit `except`/`throw` veya result-like dönüş modeliyle tasarlanmalı.
+- `protocol`/`dynamic protocol` grammar ve flow analysis Aşama 8+ ileri proposal olarak kaldı:
+  - `examples/type_checker/075.cstar`
 
 ## Aşama 8 - Metaprogramming ve İleri Proposal
 

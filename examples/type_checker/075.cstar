@@ -1,0 +1,9 @@
+// expected: diagnostic
+// expected-code: CST1001
+
+protocol FileState for FileHandle {
+}
+
+main() :: int32 {
+  ret 0;
+}

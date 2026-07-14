@@ -2577,6 +2577,9 @@ std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
         receiverInfo.end = alias->m_SemLoc.end;
         receiverInfo.line = alias->m_SemLoc.line;
         auto receiverName = alias->m_SymbolName;
+        m_LastSymbolInfo.symbolId = m_SymbolId;
+        m_LastSymbolInfo.scopeId = m_ScopeId;
+        m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
         if (!symbolValidation(receiverName, receiverInfo, matchedReceiver)) {
           return {};
         }
@@ -2837,6 +2840,10 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
 
   for (size_t i = 0; i < argNodes.size(); ++i) {
     const bool isVariadicArg = i >= signature.params.size();
+    if (hasImplicitMethodReceiver && i == 0 && signature.params[i].isRef) {
+      continue;
+    }
+
     if (isVariadicArg) {
       if (argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
         auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);

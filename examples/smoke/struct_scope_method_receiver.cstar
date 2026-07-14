@@ -30,9 +30,9 @@ main() :: int32 {
   Accumulator^ owned = ref value;
   owned.add(5);
 
-  Accumulator* shared = ref value;
-  Accumulator* copy = shared;
+  Accumulator* sharedValue = ref value;
+  Accumulator* copy = sharedValue;
   copy.add(7);
 
-  ret shared.read() + Accumulator::bonus();
+  ret sharedValue.read() + Accumulator::bonus();
 }

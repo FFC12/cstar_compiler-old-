@@ -131,8 +131,8 @@ create_meter() :: Meter^ {
 }
 
 create_shared_meter() :: Meter* {
-    Meter* shared = shared new Meter(7);
-    ret shared;
+    Meter* shared_meter = shared new Meter(7);
+    ret shared_meter;
 }
 
 create_meter_in_arena(ArenaAllocator& arena) :: Meter^ {
@@ -188,7 +188,7 @@ struct ArenaAllocator with Allocator {
 //
 // Shared lowering:
 //
-//   Meter* shared = shared new(arena) Meter(7);
+//   Meter* shared_meter = shared new(arena) Meter(7);
 //
 // Compiler sorumluluğu:
 //
@@ -196,7 +196,7 @@ struct ArenaAllocator with Allocator {
 //       runtime.shared_alloc(sizeof(Meter), alignof(Meter), ref arena);
 //   Meter& slot = cb.data_as<Meter>();
 //   slot.constructor(7);
-//   Meter* shared = runtime.attach_shared<Meter>(cb);
+//   Meter* shared_meter = runtime.attach_shared<Meter>(cb);
 //
 // Ref-count sıfıra indiğinde:
 //
