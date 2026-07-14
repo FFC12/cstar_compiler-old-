@@ -36,6 +36,12 @@ llvm::FunctionCallee NativeRuntime::usleep() {
   return m_Module.getOrInsertFunction("usleep", type);
 }
 
+llvm::FunctionCallee NativeRuntime::fflush() {
+  auto* type = llvm::FunctionType::get(m_Builder.getInt32Ty(), {i8PtrTy()},
+                                       false);
+  return m_Module.getOrInsertFunction("fflush", type);
+}
+
 llvm::FunctionCallee NativeRuntime::system() {
   auto* type = llvm::FunctionType::get(m_Builder.getInt32Ty(), {i8PtrTy()},
                                        false);
@@ -96,7 +102,13 @@ llvm::Value* NativeRuntime::emitInputString() {
 }
 
 llvm::Value* NativeRuntime::emitClearScreen() {
-  return m_Builder.CreateCall(printf(), {globalStringPtr("\033[2J\033[H")});
+  m_Builder.CreateCall(printf(), {globalStringPtr("\033[2J\033[H")});
+  return emitFlushOutput();
+}
+
+llvm::Value* NativeRuntime::emitFlushOutput() {
+  return m_Builder.CreateCall(
+      fflush(), {llvm::ConstantPointerNull::get(i8PtrTy())});
 }
 
 llvm::Value* NativeRuntime::emitSleepMs(llvm::Value* milliseconds,

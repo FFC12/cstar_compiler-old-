@@ -1930,6 +1930,15 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
+  if (funcSymbol->m_SymbolName == "flush_output") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'flush_output' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_VOID;
+    return symbolInfo;
+  }
+
   if (funcSymbol->m_SymbolName == "sleep_ms") {
     if (argNodes.size() != 1) {
       this->m_TypeErrorMessages.emplace_back(
@@ -2241,7 +2250,13 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
 
     symbolInfo.definedTypenamePair = std::make_pair(leftOne, rightOne);
   } else {
-    symbolInfo = paramAst.m_Symbol0->acceptBefore(*this);
+    if (paramAst.m_Symbol0 != nullptr) {
+      symbolInfo = paramAst.m_Symbol0->acceptBefore(*this);
+    } else {
+      symbolInfo.begin = paramAst.m_SemLoc.begin;
+      symbolInfo.end = paramAst.m_SemLoc.end;
+      symbolInfo.line = paramAst.m_SemLoc.line;
+    }
   }
 
   auto typeInfo = dynamic_cast<TypeAST *>(paramAst.m_TypeNode.get());

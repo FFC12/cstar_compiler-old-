@@ -128,6 +128,8 @@ param_again:
 
       // get the param name
       symbol0 = this->advanceSymbol();
+    } else if (is(TokenKind::IDENT)) {
+      symbol0 = this->advanceSymbol();
     }
 
     size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
@@ -163,6 +165,8 @@ param_again:
         expected(TokenKind::IDENT);
         // get the param name
         symbol0 = std::move(this->advanceSymbol());
+      } else if (is(TokenKind::IDENT)) {
+        symbol0 = std::move(this->advanceSymbol());
       }
 
       size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
@@ -179,6 +183,8 @@ param_again:
         // get the param name
         if (!isForwardDecl) {
           expected(TokenKind::IDENT);
+          symbol0 = this->advanceSymbol();
+        } else if (is(TokenKind::IDENT)) {
           symbol0 = this->advanceSymbol();
         }
 

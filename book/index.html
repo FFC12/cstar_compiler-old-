@@ -600,6 +600,9 @@ y <<= <span class="nu">1</span>;</code></pre>
           <pre data-title="visibility"><code><span class="kw">static</span> <span class="ty">int32</span> counter = <span class="nu">0</span>;
 <span class="kw">import</span> <span class="fn">puts</span>(<span class="kw">constptr</span> <span class="ty">char</span>*) <span class="op">::</span> <span class="ty">int32</span>;
 <span class="kw">export</span> <span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> { <span class="kw">ret</span> <span class="nu">0</span>; }</code></pre>
+          <p>Native import bildirimi ABI için yalnızca tipi ister; parametre adı okunabilirlik için opsiyoneldir.</p>
+          <pre data-title="native import"><code><span class="kw">import</span> <span class="fn">abs</span>(<span class="ty">int32</span>) <span class="op">::</span> <span class="ty">int32</span>;
+<span class="kw">import</span> <span class="fn">abs</span>(<span class="ty">int32</span> value) <span class="op">::</span> <span class="ty">int32</span>;</code></pre>
         </section>
 
         <section id="fonksiyonlar">
@@ -885,6 +888,7 @@ conn <span class="op">.=</span> <span class="fn">try_send</span>();
 <span class="kw">import</span> <span class="fn">glClearColor</span>(<span class="ty">float</span> r, <span class="ty">float</span> g, <span class="ty">float</span> b, <span class="ty">float</span> a) <span class="op">::</span> <span class="ty">void</span> <span class="kw">from</span> <span class="st">"opengl32.lib"</span>;
 
 <span class="kw">export</span> <span class="fn">sin</span>(<span class="ty">float64</span> x) <span class="op">::</span> <span class="ty">float64</span> <span class="kw">from</span> <span class="st">"std:math"</span>;</code></pre>
+          <p>Derleyicinin bugünkü çalışan alt kümesi `import func(...) :: type;` formunu external C çağrısına indirir; `from "lib"` çözümlemesi paket/linker aşamasında tamamlanacaktır.</p>
         </section>
 
         <section id="diagnostic">
@@ -912,11 +916,12 @@ conn <span class="op">.=</span> <span class="fn">try_send</span>();
 
         <section id="stdlib">
           <h2>Standart Kütüphane Yönü</h2>
-          <p>Bugünün çekirdeğinde `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `sleep_ms(ms)`, `read_key()` ve `strong_count(ptr)` gibi built-in'ler vardır. I/O çağrıları compiler içindeki native runtime katmanından CRT/POSIX yüzeyine indirilir; final dilde bu yüzey stdlib/native interop ABI'sine bağlanır.</p>
+          <p>Bugünün çekirdeğinde `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `read_key()` ve `strong_count(ptr)` gibi built-in'ler vardır. I/O çağrıları compiler içindeki native runtime katmanından CRT/POSIX yüzeyine indirilir; final dilde bu yüzey stdlib/native interop ABI'sine bağlanır.</p>
           <pre data-title="builtins"><code><span class="fn">print</span>(<span class="st">"hello\n"</span>);
 <span class="ty">int64</span> value = <span class="fn">input_int</span>();
 <span class="fn">print</span>(<span class="fn">input_string</span>());
 <span class="fn">clear_screen</span>();
+<span class="fn">flush_output</span>();
 <span class="fn">sleep_ms</span>(<span class="num">60</span>);
 <span class="fn">enable_raw_input</span>();
 <span class="ty">int32</span> key = <span class="fn">read_key</span>();

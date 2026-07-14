@@ -16,6 +16,7 @@ class NativeRuntime {
   llvm::Value* emitInputInt();
   llvm::Value* emitInputString();
   llvm::Value* emitClearScreen();
+  llvm::Value* emitFlushOutput();
   llvm::Value* emitSleepMs(llvm::Value* milliseconds, bool isSigned);
   llvm::Value* emitEnableRawInput();
   llvm::Value* emitDisableRawInput();
@@ -30,6 +31,7 @@ class NativeRuntime {
   llvm::FunctionCallee scanf();
   llvm::FunctionCallee atoll();
   llvm::FunctionCallee usleep();
+  llvm::FunctionCallee fflush();
   llvm::FunctionCallee system();
   llvm::FunctionCallee getchar();
   llvm::Constant* globalStringPtr(llvm::StringRef value,

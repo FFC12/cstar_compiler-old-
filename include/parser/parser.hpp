@@ -245,7 +245,9 @@ class CStarParser {
                VisibilitySpecifier visibilitySpecifier, bool definedType,
                bool isLocal, std::vector<ASTNode>* scope = nullptr);
   DeclKind getDeclKind(VisibilitySpecifier visibilitySpecifier);
-  ASTNode initializer();
+  ASTNode initializer(bool isArrayInitializer = false);
+  ASTNode advanceArrayInitializerElement();
+  ASTNode advanceArrayInitializerList();
   bool advanceTypeSubscript(std::vector<ASTNode>&);
   ASTNode initializerList();
   size_t advancePointerType(bool isUniquePtr);

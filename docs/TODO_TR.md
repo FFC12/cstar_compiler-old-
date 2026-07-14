@@ -84,6 +84,7 @@ Tamamlanan dil/codegen parçaları:
   - `input_int()` token bazlı `scanf("%255s", ...)` + `atoll` ile `int64` döndürür; sayı olmayan token consume edilir ve `0` olur.
   - `input_string()` CRT `scanf("%255s", ...)` çağrısına indiriliyor ve doğrudan `print(input_string())` gibi kullanılabilen kısa C string pointer döndürür.
   - `clear_screen()` ANSI terminal temizleme escape'ine indiriliyor; aktif console demoları için MVP yüzey.
+  - `flush_output()` CRT `fflush(NULL)` çağrısına indiriliyor; frame tabanlı terminal renderlarında output buffer'ını hemen boşaltır.
   - `sleep_ms(ms)` POSIX `usleep(ms * 1000)` çağrısına indiriliyor; ileride platform-neutral stdlib/native interop altında standartlaştırılacak.
   - `enable_raw_input()` / `disable_raw_input()` POSIX `stty` üzerinden non-canonical, non-blocking terminal modunu açıp kapatır.
   - `read_key()` CRT `getchar()` ile tuş yokken `-1`, tuş varken `int32` byte değeri döndürür; WASD/ok tuşu oyunları için geçici native runtime yüzeyi.
@@ -122,6 +123,8 @@ examples/smoke/function_call_cast_argument.cstar
 examples/smoke/forward_function_call.cstar
 examples/smoke/function_call_symbol_argument.cstar
 examples/smoke/function_call_pointer_argument.cstar
+examples/smoke/import_function_abs.cstar
+examples/smoke/import_function_named_param.cstar
 examples/smoke/const_value.cstar
 examples/smoke/const_pointer.cstar
 examples/smoke/reference_param.cstar
@@ -167,6 +170,7 @@ examples/smoke/loop_continue_statement.cstar
 examples/smoke/loop_break_continue_nested_if.cstar
 examples/smoke/loop_nested_loop_continue.cstar
 examples/smoke/multidim_array_assignment.cstar
+examples/smoke/multidim_array_dynamic_index.cstar
 examples/smoke/multidim_array_param_read.cstar
 examples/smoke/multidim_array_param_write.cstar
 examples/smoke/multidim_array_read.cstar
@@ -204,7 +208,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Her zaman yeşil kalması gereken küçük çalışan compiler çekirdeği.
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
-- Güncel durumda 83/83 dosya başarılı.
+- Güncel durumda 86/86 dosya başarılı.
 
 `examples/type_checker/`:
 
@@ -577,7 +581,12 @@ Tamamlanan:
 - Forward declaration call:
   - Tamamlandı: `foo` çağrıldığı noktadan sonra tanımlansa da codegen çalışıyor.
 - Import/forward declaration call:
-  - `import puts(constptr char*) :: int32;`
+  - Tamamlandı: basit native import bildirimi ve external call codegen.
+  - İsimsiz ABI parametresi: `import abs(int32) :: int32;`
+  - İsimli proposal/doküman formu: `import abs(int32 value) :: int32;`
+  - Smoke:
+    - `examples/smoke/import_function_abs.cstar`
+    - `examples/smoke/import_function_named_param.cstar`
 
 ### 2.2 Parametre Codegen
 
@@ -878,6 +887,7 @@ Tamamlanan:
   - `examples/smoke/multidim_array_read.cstar`
   - `examples/smoke/multidim_array_assignment.cstar`
   - `examples/smoke/multidim_array_shortcut_assignment.cstar`
+  - `examples/smoke/multidim_array_dynamic_index.cstar`
 - Çok boyutlu array parametre read/write smoke:
   - `examples/smoke/multidim_array_param_read.cstar`
   - `examples/smoke/multidim_array_param_write.cstar`
@@ -970,7 +980,10 @@ TODO:
   - `include involved { ... }`
   - `include { ... }`
   - `include "module" as alias`
-- Basit `import func(...) :: type;` call codegen ile bağlanmalı.
+- Basit `import func(...) :: type;` call codegen ile bağlandı.
+  - `import abs(int32) :: int32;`
+  - `import abs(int32 value) :: int32;`
+  - Import parametre adı ABI için opsiyonel; semantic pass imzayı korur ama forward deklarasyon parametresini local symbol gibi kaydetmez.
 - `from "lib"` syntax sonra.
 
 ## Aşama 7 - User-defined Types

@@ -63,7 +63,7 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
   if (is(TokenKind::EQUAL) || is(TokenKind::TYPEINF)) {
     isMoveInit = is(TokenKind::TYPEINF);
     // advance the value or expression..
-    rhs = std::move(this->initializer());
+    rhs = std::move(this->initializer(arrayFlag));
 
     // rhs->debugNode();
     // std::cout << std::endl;
@@ -154,21 +154,113 @@ bool CStarParser::advanceTypeSubscript(std::vector<ASTNode>& arrayDimensions) {
   return arrayFlag;
 }
 
-ASTNode CStarParser::initializer() {
-  /*  // '{'
-  bool outOfSize = false;
-  auto nextToken = nextTokenInfo(outOfSize).getTokenKind();
-  if (outOfSize) {
-    ParserError(
-        "Unexpected token " + std::string(tokenToStr(currentTokenKind())),
-        currentTokenInfo());
+static bool IsInitializerTrivia(TokenKind kind) {
+  return kind == TokenKind::COMMENT || kind == TokenKind::LINEFEED;
+}
+
+ASTNode CStarParser::advanceArrayInitializerElement() {
+  while (IsInitializerTrivia(currentTokenKind())) {
+    this->advance();
   }
 
-  if (nextToken == TokenKind::LBRACK) {
-    // advance '{'
+  if (is(TokenKind::LPAREN)) {
+    return advanceArrayInitializerList();
+  }
+
+  if (is(TokenKind::SCALARD) || is(TokenKind::SCALARI) ||
+      is(TokenKind::LETTER) || is(TokenKind::LITERAL) || is(TokenKind::TRUE) ||
+      is(TokenKind::FALSE)) {
+    return advanceConstantOrLiteral();
+  }
+
+  if (is(TokenKind::IDENT)) {
+    return advanceSymbol();
+  }
+
+  ParserError("Unexpected token '" + currentTokenInfo().getTokenAsStr() +
+                  "' in array initializer",
+              currentTokenInfo());
+  return nullptr;
+}
+
+ASTNode CStarParser::advanceArrayInitializerList() {
+  auto openToken = currentTokenInfo();
+  expected(TokenKind::LPAREN);
+  this->advance();
+
+  ASTNode result = nullptr;
+  while (true) {
+    while (IsInitializerTrivia(currentTokenKind())) {
+      this->advance();
+    }
+
+    if (is(TokenKind::RPAREN)) {
+      break;
+    }
+
+    if (is(TokenKind::_EOF) || is(TokenKind::SEMICOLON)) {
+      ParserError("Array initializer is missing ')'", openToken);
+    }
+
+    auto element = advanceArrayInitializerElement();
+    if (element == nullptr) {
+      ParserError("Array initializer element expected", currentTokenInfo());
+    }
+
+    if (result == nullptr) {
+      result = std::move(element);
+    } else {
+      auto lhsBegin = result->getSemLoc().begin;
+      auto tokenPos = currentTokenInfo().getTokenPositionInfo();
+      auto semLoc = SemanticLoc(lhsBegin, tokenPos.end, tokenPos.line);
+      std::string op = ",";
+      result = std::make_unique<BinaryOpAST>(
+          std::move(result), std::move(element), nullptr, BinOpKind::B_COMM,
+          op, semLoc);
+    }
+
+    while (IsInitializerTrivia(currentTokenKind())) {
+      this->advance();
+    }
+
+    if (is(TokenKind::COMMA)) {
+      this->advance();
+      continue;
+    }
+
+    if (is(TokenKind::RPAREN)) {
+      break;
+    }
+
+    ParserError("Unexpected token '" + currentTokenInfo().getTokenAsStr() +
+                    "' in array initializer; expected ',' or ')'",
+                currentTokenInfo());
+  }
+
+  expected(TokenKind::RPAREN);
+  this->advance();
+
+  if (result == nullptr) {
+    ParserError("Array initializer cannot be empty", openToken);
+  }
+
+  return result;
+}
+
+ASTNode CStarParser::initializer(bool isArrayInitializer) {
+  if (isArrayInitializer) {
     this->advance();
-    return std::move(this->initializerList());
-  }*/
+    while (IsInitializerTrivia(currentTokenKind())) {
+      this->advance();
+    }
+
+    if (is(TokenKind::LPAREN)) {
+      return advanceArrayInitializerList();
+    }
+
+    ParserError("Array initializer must use parenthesized values",
+                currentTokenInfo());
+  }
 
   return std::move(this->expression(false));
 }

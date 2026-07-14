@@ -134,7 +134,7 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu
 - geçici `print(...)` builtin
 - geçici `input_int()` builtin
 - geçici `input_string()` builtin
-- geçici `clear_screen()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()` ve `read_key()` konsol builtin'leri
+- geçici `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()` ve `read_key()` konsol builtin'leri
 - `if`, `if/else`, `if/elif/else`, nested if ve branch fallthrough
 - `int`, `float` ve pointer condition conversion
 - while-style `loop (condition)`, nested `if` içinde loop ve pointer condition loop
@@ -474,9 +474,10 @@ func2() {
 ```cstar
 import printf(char*) :: void;
 import forwardDecl(const int*, constptr float*) :: void;
+import abs(int32 value) :: int32;
 ```
 
-`import` fonksiyonlar forward declaration gibi ele alınıyor ve body yerine `;` bekleniyor.
+`import` fonksiyonlar forward declaration gibi ele alınıyor ve body yerine `;` bekleniyor. Parametre adı ABI için opsiyoneldir; `import abs(int32) :: int32;` ve `import abs(int32 value) :: int32;` aynı external imzaya iner. Basit native import çağrısı smoke suite içinde gerçek libc `abs` çağrısıyla doğrulanır. `from "lib"` ve blok import syntax'ı proposal seviyesinde kalır.
 
 ### 8.3 Parametre syntax'ı
 
@@ -756,7 +757,7 @@ print(42);
 int64 value = input_int();
 ```
 
-`print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()` ve `read_key()` şu an compiler içindeki `NativeRuntime` katmanı üzerinden CRT/POSIX çağrılarına indiriliyor. `print(...)` `printf` kullanır. `input_int()` önce `scanf("%255s", ...)` ile token okur, sonra `atoll` ile `int64` üretir; sayı olmayan token consume edilir ve `0` değerine dönüşür. `input_string()` `scanf("%255s", ...)` ile whitespace'e kadar kısa string okur ve doğrudan `print(input_string())` gibi kullanılabilir. `clear_screen()` ANSI terminal temizleme dizisini yazar; `sleep_ms(ms)` aktif konsol demoları için milisaniyeyi mikro saniyeye çevirip `usleep` çağırır. `enable_raw_input()` ve `disable_raw_input()` POSIX terminali non-canonical, non-blocking moda alıp geri toparlar; `read_key()` tuş yokken `-1`, tuş varken ASCII/escape byte değerini `int32` döndürür. String literal kaçışları için temel `\n`, `\t`, `\"`, `\\` decode ediliyor. Gerçek stdlib/native interop tasarımı büyüdükçe bu katman ABI bağlantı noktası olarak genişletilecek.
+`print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()` ve `read_key()` şu an compiler içindeki `NativeRuntime` katmanı üzerinden CRT/POSIX çağrılarına indiriliyor. `print(...)` `printf` kullanır. `input_int()` önce `scanf("%255s", ...)` ile token okur, sonra `atoll` ile `int64` üretir; sayı olmayan token consume edilir ve `0` değerine dönüşür. `input_string()` `scanf("%255s", ...)` ile whitespace'e kadar kısa string okur ve doğrudan `print(input_string())` gibi kullanılabilir. `clear_screen()` ANSI terminal temizleme dizisini yazar ve hemen flush eder; `flush_output()` frame tabanlı console renderlarında `fflush(NULL)` ile buffer'ı boşaltır. `sleep_ms(ms)` aktif konsol demoları için milisaniyeyi mikro saniyeye çevirip `usleep` çağırır. `enable_raw_input()` ve `disable_raw_input()` POSIX terminali non-canonical, non-blocking moda alıp geri toparlar; `read_key()` tuş yokken `-1`, tuş varken ASCII/escape byte değerini `int32` döndürür. String literal kaçışları için temel `\n`, `\t`, `\"`, `\\` decode ediliyor. Gerçek stdlib/native interop tasarımı büyüdükçe bu katman ABI bağlantı noktası olarak genişletilecek.
 
 Interactive örnek:
 
@@ -901,6 +902,7 @@ Codegen iki parçalı:
 - Native runtime builtin `input_int()` -> CRT `scanf("%255s")` + `atoll`.
 - Native runtime builtin `input_string()` -> CRT `scanf("%255s")`.
 - Native runtime builtin `clear_screen()` -> ANSI clear/home escape.
+- Native runtime builtin `flush_output()` -> CRT `fflush(NULL)`.
 - Native runtime builtin `sleep_ms(ms)` -> POSIX `usleep(ms * 1000)`.
 - Native runtime builtin `enable_raw_input()` / `disable_raw_input()` -> POSIX `stty` non-canonical/sane köprüsü.
 - Native runtime builtin `read_key()` -> CRT `getchar()` ile non-blocking key polling.
@@ -975,7 +977,7 @@ import from "myLibrary.lib" {
 export sin(float64 x) :: float64 from "std:math";
 ```
 
-Mevcut parser yalnızca basit `import func(...) :: type;` formuna yakın.
+Mevcut compiler basit `import func(...) :: type;` formunu parser, semantic signature ve LLVM external call codegen boyunca destekler. Parametre adı opsiyoneldir; `import abs(int32) :: int32;` ve `import abs(int32 value) :: int32;` smoke suite içinde gerçek native çağrıyla doğrulanır. `from "lib"` çözümlemesi ve blok import henüz proposal seviyesindedir.
 
 ### 15.3 Attribute/metaprogramming
 
@@ -1168,7 +1170,7 @@ main(int argc, char** argv) :: int {
 }
 ```
 
-Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, scalar/dereference/tek ve çok boyutlu array assignment, `ret expr`, primitive function call, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()`, `read_key()`, temel `if/elif/else`, while-style `loop`, range loop, array iterable loop, `break` ve `continue` akışıdır. Genel sequence iterable ve qualifier-heavy bölümler hâlâ ayrı MVP adımı gerektirir.
+Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, scalar/dereference/tek ve çok boyutlu array assignment, `ret expr`, primitive function call, basit `import func(...) :: type;` native call, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()`, `read_key()`, temel `if/elif/else`, while-style `loop`, range loop, array iterable loop, `break` ve `continue` akışıdır. Genel sequence iterable ve qualifier-heavy bölümler hâlâ ayrı MVP adımı gerektirir.
 
 ## 17. Bilinen Sorunlar ve Teknik Riskler
 

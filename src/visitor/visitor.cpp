@@ -1080,11 +1080,22 @@ static llvm::Value *FindStorage(std::map<std::string, llvm::AllocaInst*> &locals
 ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
   llvm::Value *value = nullptr, *rhs, *lhs;
 
-  if (binaryOpAst.m_BinOpKind == B_ARRS) m_LastArrayIndex = true;
-  lhs = binaryOpAst.m_LHS->accept(*this);
+  if (binaryOpAst.m_BinOpKind == B_ARRS) {
+    m_LastArrayIndex = true;
+    lhs = binaryOpAst.m_LHS->accept(*this);
 
-  rhs = binaryOpAst.m_RHS->accept(*this);
-  if (binaryOpAst.m_BinOpKind == B_ARRS) m_LastArrayIndex = false;
+    auto *previousType = m_LastType;
+    bool previousSigned = m_LastSigned;
+    m_LastArrayIndex = false;
+    m_LastType = Builder->getInt64Ty();
+    m_LastSigned = true;
+    rhs = binaryOpAst.m_RHS->accept(*this);
+    m_LastType = previousType;
+    m_LastSigned = previousSigned;
+  } else {
+    lhs = binaryOpAst.m_LHS->accept(*this);
+    rhs = binaryOpAst.m_RHS->accept(*this);
+  }
 
   // NSW (No Signed Wrap) and NUW(No Unsigned Wrap)
   switch (binaryOpAst.m_BinOpKind) {
@@ -1240,7 +1251,6 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
       // rhs and you have to use it as index for GEP
       // but if it's symbol or any binary op then you have to
       // call m_RHS->accept before...
-      this->m_LastArrayIndex = true;
       if (lhs != nullptr) {
         m_Indices.push_back(lhs);
       }
@@ -1248,7 +1258,6 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
       if (rhs != nullptr) {
         m_Indices.push_back(rhs);
       }
-      this->m_LastArrayIndex = false;
       // value = Builder->CreateInBoundsGEP(m_LastType, )
       break;
     }
@@ -2105,6 +2114,13 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
       assert(false && "Builtin 'clear_screen' does not accept arguments.");
     }
     return nativeRuntime.emitClearScreen();
+  }
+
+  if (funcSymbol->m_SymbolName == "flush_output") {
+    if (!argNodes.empty()) {
+      assert(false && "Builtin 'flush_output' does not accept arguments.");
+    }
+    return nativeRuntime.emitFlushOutput();
   }
 
   if (funcSymbol->m_SymbolName == "sleep_ms") {

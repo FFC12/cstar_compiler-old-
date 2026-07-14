@@ -34,6 +34,10 @@ void CStarCodegen::pass0() {
             signature.params.push_back(symbolInfo);
           }
 
+          if (symbolInfo.symbolName.empty()) {
+            continue;
+          }
+
           bool isGlobShadowing = false;
           if (redefinitionCheck(m_GlobalSymbols, symbolInfo)) {
             isGlobShadowing = true;
