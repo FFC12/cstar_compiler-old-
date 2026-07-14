@@ -1,0 +1,8 @@
+// expected: pass
+// expected-exit: 7
+
+include "modules/math_module.cstar" as math
+
+main() :: int32 {
+  ret math.add_from_module(2, 5);
+}

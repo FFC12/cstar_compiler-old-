@@ -21,6 +21,7 @@
 #include <cassert>
 #include <deque>
 #include <diagnostics/diagnostic.hpp>
+#include <filesystem>
 #include <lexer/lexer.hpp>
 #include <memory>
 #include <parser/hint_qualifier.hpp>
@@ -28,6 +29,7 @@
 #include <parser/type_specifiers.hpp>
 #include <parser/visibility_specifiers.hpp>
 #include <queue>
+#include <string>
 
 class CStarParser {
   PrecedenceInfoTable m_PrecTableUnary, m_PrecTableBinary, m_PrecTableCast;
@@ -38,6 +40,9 @@ class CStarParser {
   TokenInfo m_PrevToken;
   std::vector<TokenInfo> m_TokenStream;
   std::vector<ASTNode> m_AST;
+  std::vector<std::string> m_NativeLinkLibraries;
+  std::vector<std::filesystem::path> m_SourceIncludes;
+  std::vector<std::string> m_ModuleAliases;
   bool m_ErrorFlag;
   bool m_ParsingEndingFlag;
   time_t m_StartTime;
@@ -225,6 +230,11 @@ class CStarParser {
 
   // parser.cpp
   void translationUnit();
+  void parseIncludeDirective();
+  void parseLinkageBlock(VisibilitySpecifier visibilitySpecifier);
+  std::string parseLinkSource();
+  void registerNativeLinkLibrary(const std::string& library);
+  void skipTopLevelTrivia();
   ShortcutOp typeOfShortcutOp(const TokenInfo& token);
   Type typeOf(const TokenInfo& token);
   TypeQualifier typeQualifierOf(const TokenInfo& tokenInfo);
@@ -254,7 +264,8 @@ class CStarParser {
   TypeSpecifier typeSpecifierOf(const TokenInfo& tokenInfo);
 
   // function.cpp
-  void funcDecl(VisibilitySpecifier visibilitySpecifier);
+  void funcDecl(VisibilitySpecifier visibilitySpecifier,
+                bool forceForwardDecl = false);
   void advanceParams(std::vector<ASTNode>& params, bool isForwardDecl);
   void advanceScope(std::vector<ASTNode>& scope);
 
@@ -312,8 +323,8 @@ class CStarParser {
     addToPrecTable(OpType::OP_UNARY, MINUSMINUS, 15, true);
 
     // member access operators
-    addToPrecTable(OpType::OP_BINARY, DOT, 14, true);
-    addToPrecTable(OpType::OP_BINARY, ARROW, 14, true);
+    addToPrecTable(OpType::OP_BINARY, DOT, 16, true);
+    addToPrecTable(OpType::OP_BINARY, ARROW, 16, true);
 
     // inceremental or decremental operator as prefix
     // we handle this in the isOperator check manually
@@ -389,6 +400,21 @@ class CStarParser {
   void parse();
   void ownedAST(std::vector<ASTNode>& newOwner) {
     newOwner = std::move(this->m_AST);
+  }
+
+  [[nodiscard]] const std::vector<std::string>& nativeLinkLibraries()
+      const noexcept {
+    return m_NativeLinkLibraries;
+  }
+
+  [[nodiscard]] const std::vector<std::filesystem::path>& sourceIncludes()
+      const noexcept {
+    return m_SourceIncludes;
+  }
+
+  [[nodiscard]] const std::vector<std::string>& moduleAliases()
+      const noexcept {
+    return m_ModuleAliases;
   }
 };
 

@@ -9,7 +9,9 @@
 #include <filesystem>
 #include <map>
 #include <parser/parser.hpp>
+#include <set>
 #include <string>
+#include <vector>
 #include <visitor/visitor.hpp>
 
 #define ENABLE_CODEGEN
@@ -18,6 +20,8 @@ enum class CStarEmitKind {
   IR,
   Assembly,
   Object,
+  StaticLibrary,
+  DynamicLibrary,
   Executable,
 };
 
@@ -51,13 +55,20 @@ class CStarCodegen {
   size_t m_WarningCount = 0;
 
   std::string m_Filename;
+  std::filesystem::path m_InputPath;
   std::filesystem::path m_OutputDir;
+  std::vector<std::string> m_NativeLinkLibraries;
+  std::vector<std::string> m_ModuleAliases;
   CStarCodegenOptions m_Options;
 
   static std::string quoteCommandArg(const std::string& arg);
   static std::string resolveBackendClangPath();
   static std::string resolveTargetTriple();
+  static std::string resolveArchiveToolPath();
   std::vector<std::string> backendTargetArgs() const;
+  static std::string nativeLinkArgument(const std::string& library);
+  void appendIncludedSource(const std::filesystem::path& includePath,
+                            std::set<std::filesystem::path>& seen);
   int runCommand(const std::vector<std::string>& args,
                  bool reportBackendFailure = true) const;
 

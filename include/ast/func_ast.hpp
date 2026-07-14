@@ -27,8 +27,8 @@ class FuncAST : public IAST {
         m_IsExported(isExported),
         m_IsForwardDecl(isForwardDecl) {
     this->m_ASTKind = ASTKind::Decl;
-    this->m_DeclKind = isForwardDecl ? DeclKind::ImportFuncDecl
-                                     : (isExported ? DeclKind::ExportFuncDecl
+    this->m_DeclKind = isExported ? DeclKind::ExportFuncDecl
+                                  : (isForwardDecl ? DeclKind::ImportFuncDecl
                                                    : DeclKind::FuncDecl);
   }
 

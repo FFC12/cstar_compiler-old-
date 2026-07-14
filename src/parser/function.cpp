@@ -1,8 +1,10 @@
 #include <parser/parser.hpp>
 
-void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
+void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier,
+                           bool forceForwardDecl) {
   auto funcName = currentTokenStr();
-  bool isForwardDecl = visibilitySpecifier == VisibilitySpecifier::VIS_IMPORT;
+  bool isForwardDecl =
+      forceForwardDecl || visibilitySpecifier == VisibilitySpecifier::VIS_IMPORT;
   bool isExported = visibilitySpecifier == VisibilitySpecifier::VIS_EXPORT;
 
   auto posInfo = currentTokenInfo().getTokenPositionInfo();
@@ -11,6 +13,19 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
 
   // advance the name
   this->advance();
+
+  if (is(TokenKind::LT)) {
+    this->advance();
+    if (isType(currentTokenInfo())) {
+      auto ignoredType = this->advanceType();
+    } else if (is(TokenKind::IDENT)) {
+      auto ignoredSymbol = this->advanceSymbol();
+    } else {
+      ParserError("Expected type attribute after '<'", currentTokenInfo());
+    }
+    expected(TokenKind::GT);
+    this->advance();
+  }
 
   expected(TokenKind::LPAREN);
 
@@ -60,6 +75,17 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier) {
     SemanticLoc semLoc = SemanticLoc(posInfo.begin, posInfo.end, posInfo.line);
     returnType = std::make_unique<TypeAST>(TypeSpecifier::SPEC_VOID, nullptr,
                                            false, true, false, 0, semLoc);
+  }
+
+  skipTopLevelTrivia();
+  if (is(TokenKind::FROM)) {
+    auto library = parseLinkSource();
+    registerNativeLinkLibrary(library);
+    isForwardDecl = true;
+  }
+
+  if (isExported && is(TokenKind::SEMICOLON)) {
+    isForwardDecl = true;
   }
 
   std::vector<ASTNode> scope{};
@@ -134,6 +160,10 @@ param_again:
 
     size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
     auto semLoc = SemanticLoc(beginLoc, endLoc, line);
+    if (isForwardDecl && symbol0 == nullptr) {
+      symbol0 = std::make_unique<SymbolAST>(
+          "__cstar_param" + std::to_string(params.size()), semLoc);
+    }
     auto param =
         std::make_unique<ParamAST>(std::move(symbol0), nullptr, std::move(type),
                                    std::move(arrayDimensions), arrayFlag, true,
@@ -171,6 +201,10 @@ param_again:
 
       size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
       auto semLoc = SemanticLoc(beginLoc, endLoc, line);
+      if (isForwardDecl && symbol0 == nullptr) {
+        symbol0 = std::make_unique<SymbolAST>(
+            "__cstar_param" + std::to_string(params.size()), semLoc);
+      }
 
       auto param = std::make_unique<ParamAST>(
           std::move(symbol0), nullptr, std::move(type),
@@ -200,6 +234,10 @@ param_again:
 
         size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
         auto semLoc = SemanticLoc(beginLoc, endLoc, line);
+        if (isForwardDecl && symbol0 == nullptr) {
+          symbol0 = std::make_unique<SymbolAST>(
+              "__cstar_param" + std::to_string(params.size()), semLoc);
+        }
 
         auto param = std::make_unique<ParamAST>(
             std::move(symbol0), nullptr, std::move(type),

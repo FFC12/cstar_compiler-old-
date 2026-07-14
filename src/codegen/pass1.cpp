@@ -3,6 +3,7 @@
 GlobalSymbolInfoList Visitor::GlobalSymbolTable{};
 LocalSymbolInfoList Visitor::LocalSymbolTable{};
 FunctionSignatureTable Visitor::FunctionTable{};
+std::set<std::string> Visitor::ModuleAliases{};
 
 // Type checking..
 // Every type can be checked from symbolLists

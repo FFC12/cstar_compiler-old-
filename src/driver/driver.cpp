@@ -13,6 +13,8 @@ void showUsage(std::ostream& out) {
       << "  --emit-llvm               Alias for --emit=ir\n"
       << "  --emit-asm                Alias for --emit=asm\n"
       << "  --build-exe               Alias for --emit=exe\n"
+      << "  --emit-staticlib          Alias for --emit=staticlib\n"
+      << "  --emit-dynamiclib         Alias for --emit=dynamiclib\n"
       << "  --run                     Run generated executable after build\n"
       << "  --no-run                  Do not run generated executable\n"
       << "  --output-dir <path>       Write generated files into this directory\n"
@@ -32,6 +34,16 @@ static bool parseEmitKind(const std::string& value, CStarEmitKind& emitKind) {
   }
   if (value == "obj" || value == "object" || value == "o") {
     emitKind = CStarEmitKind::Object;
+    return true;
+  }
+  if (value == "staticlib" || value == "static" || value == "lib" ||
+      value == "a") {
+    emitKind = CStarEmitKind::StaticLibrary;
+    return true;
+  }
+  if (value == "dynamiclib" || value == "dylib" || value == "shared" ||
+      value == "so") {
+    emitKind = CStarEmitKind::DynamicLibrary;
     return true;
   }
   if (value == "exe" || value == "bin" || value == "executable") {
@@ -84,6 +96,16 @@ bool parseArgs(int argc, char** argv, DriverArgs& args) {
 
     if (arg == "--build-exe") {
       args.codegenOptions.emitKind = CStarEmitKind::Executable;
+      continue;
+    }
+
+    if (arg == "--emit-staticlib") {
+      args.codegenOptions.emitKind = CStarEmitKind::StaticLibrary;
+      continue;
+    }
+
+    if (arg == "--emit-dynamiclib") {
+      args.codegenOptions.emitKind = CStarEmitKind::DynamicLibrary;
       continue;
     }
 

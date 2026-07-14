@@ -84,6 +84,27 @@ $env:CSTAR_CLANG = "C:\Path\To\clang.exe"
 
 Target triple CMake configure sırasında `clang -dumpmachine` ile üretilir ve LLVM module'a yazılır.
 
+## Emit Modları
+
+```bash
+./build/cstar file.cstar --emit=ir
+./build/cstar file.cstar --emit=asm
+./build/cstar file.cstar --emit=obj
+./build/cstar file.cstar --emit=staticlib
+./build/cstar file.cstar --emit=dynamiclib
+./build/cstar file.cstar --emit=exe --run
+```
+
+Kısa alias'lar:
+
+- `--emit-llvm`
+- `--emit-asm`
+- `--emit-staticlib`
+- `--emit-dynamiclib`
+- `--build-exe`
+
+Static library üretimi object dosyasını `ar rcs` ile paketler. `CSTAR_AR` ortam değişkeni ile archive tool override edilebilir. Dynamic library üretimi backend clang `-shared` yolunu kullanır; macOS'ta `.dylib`, Linux'ta `.so`, Windows'ta `.dll` hedeflenir.
+
 ## Example Runner
 
 Varsayılan smoke suite:

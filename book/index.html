@@ -887,8 +887,12 @@ conn <span class="op">.=</span> <span class="fn">try_send</span>();
 
 <span class="kw">import</span> <span class="fn">glClearColor</span>(<span class="ty">float</span> r, <span class="ty">float</span> g, <span class="ty">float</span> b, <span class="ty">float</span> a) <span class="op">::</span> <span class="ty">void</span> <span class="kw">from</span> <span class="st">"opengl32.lib"</span>;
 
-<span class="kw">export</span> <span class="fn">sin</span>(<span class="ty">float64</span> x) <span class="op">::</span> <span class="ty">float64</span> <span class="kw">from</span> <span class="st">"std:math"</span>;</code></pre>
-          <p>Derleyicinin bugünkü çalışan alt kümesi `import func(...) :: type;` formunu external C çağrısına indirir; `from "lib"` çözümlemesi paket/linker aşamasında tamamlanacaktır.</p>
+<span class="kw">export</span> <span class="fn">sin</span>(<span class="ty">float64</span> x) <span class="op">::</span> <span class="ty">float64</span> <span class="kw">from</span> <span class="st">"std:math"</span>;
+
+<span class="kw">import</span> <span class="kw">from</span> <span class="st">"std:crt"</span> {
+    <span class="fn">abs</span>(<span class="ty">int32</span> value) <span class="op">::</span> <span class="ty">int32</span>;
+}</code></pre>
+          <p>Derleyicinin bugünkü çalışan alt kümesi `import/export ... from ...` ve blok deklarasyonlarını external çağrı imzasına indirir. Yerel `.cstar` include dosyaları ana compilation unit'e parse edilir ve alias function lookup çalışır: `math.add(...)` include edilen modüldeki `add` imzasına çözülür. Library ABI için `--emit=staticlib` ve `--emit=dynamiclib` kullanılır; executable build sırasında ana dosyadaki `export` deklarasyonları uyarı üretir.</p>
         </section>
 
         <section id="diagnostic">

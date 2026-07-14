@@ -1,0 +1,8 @@
+// expected: pass
+// expected-exit: 8
+
+import abs(int32 value) :: int32 from "std:crt";
+
+main() :: int32 {
+  ret abs(0 - 8);
+}

@@ -123,8 +123,13 @@ examples/smoke/function_call_cast_argument.cstar
 examples/smoke/forward_function_call.cstar
 examples/smoke/function_call_symbol_argument.cstar
 examples/smoke/function_call_pointer_argument.cstar
+examples/smoke/export_block_from_module.cstar
+examples/smoke/import_block_from_crt.cstar
+examples/smoke/import_block_function.cstar
 examples/smoke/import_function_abs.cstar
+examples/smoke/import_function_from_crt.cstar
 examples/smoke/import_function_named_param.cstar
+examples/smoke/include_module_function.cstar
 examples/smoke/const_value.cstar
 examples/smoke/const_pointer.cstar
 examples/smoke/reference_param.cstar
@@ -208,7 +213,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Her zaman yeşil kalması gereken küçük çalışan compiler çekirdeği.
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
-- Güncel durumda 86/86 dosya başarılı.
+- Güncel durumda 91/91 dosya başarılı.
 
 `examples/type_checker/`:
 
@@ -326,9 +331,11 @@ Tamamlananlar:
 - macOS/Homebrew LLVM akışında `arm64-apple-darwin*` vs `arm64-apple-macosx*` target ayrışması giderildi.
 - LLVM shared CMake target'ı varsa link'te component arşivleri yerine shared `LLVM` target'ı kullanılır; yoksa component fallback korunur.
 - CLI driver modları tamamlandı:
-  - `--emit=<ir|asm|obj|exe>`
+  - `--emit=<ir|asm|obj|staticlib|dynamiclib|exe>`
   - `--emit-llvm`
   - `--emit-asm`
+  - `--emit-staticlib`
+  - `--emit-dynamiclib`
   - `--build-exe`
   - `--run`
   - `--no-run`
@@ -970,21 +977,36 @@ Proposal hedefleri:
 - `import ... from "lib"`
 - `export ... from "module"`
 
-Mevcut kritik bug:
+Tamamlanan:
 
-- `include` branch'i parser içinde boş olduğu için infinite loop riski vardı; artık kontrollü diagnostic veriyor.
-
-TODO:
-
-- `include` için gerçek parser/AST tasarımı:
-  - `include involved { ... }`
-  - `include { ... }`
-  - `include "module" as alias`
+- `include` branch'i parser içinde boş olduğu için infinite loop riski vardı; artık gerçek grammar'a bağlı.
+- `include involved { ... }`, `include { ... }` ve `include "module" as alias` parse ediliyor.
+- Yerel `.cstar` include dosyaları ana compilation unit'e parse/merge ediliyor.
+  - `examples/smoke/include_module_function.cstar`
+  - `examples/smoke/modules/math_module.cstar`
 - Basit `import func(...) :: type;` call codegen ile bağlandı.
   - `import abs(int32) :: int32;`
   - `import abs(int32 value) :: int32;`
   - Import parametre adı ABI için opsiyonel; semantic pass imzayı korur ama forward deklarasyon parametresini local symbol gibi kaydetmez.
-- `from "lib"` syntax sonra.
+- `import func(...) :: type from "lib";` parse edilir ve native link metadata'sına taşınır.
+- `import { ... }` ve `import from "lib" { ... }` blokları parse/codegen akışına bağlı.
+- `export func(...) :: type from "module";` ve `export from "module" { ... }` forward declaration olarak parse edilir.
+- `export area<Circle>(...) :: type;` gibi generic function attribute syntax'ı declaration yüzeyinde parse edilir.
+- Executable üretirken ana dosyada `export` varsa warning üretilir; `--emit=staticlib` veya `--emit=dynamiclib` önerilir.
+- `--emit=staticlib` object + `ar rcs` ile static library üretir.
+- `--emit=dynamiclib` backend clang `-shared` ile platform dynamic library üretir.
+- `include ... as alias` function-call lookup'a bağlı:
+  - `math.add_from_module(...)`
+  - `examples/smoke/include_module_function.cstar`
+- Native link normalizasyonu:
+  - `"m"` -> Unix/macOS için `-lm`
+  - `"foo.lib"`, `.a`, `.so`, `.dylib` ve path değerleri doğrudan linker'a geçer
+  - `"std:math"` gibi logical module kaynakları linker argümanına çevrilmez
+
+Kalan:
+
+- Include edilen dosyada export-only görünürlük sınırı henüz uygulanmıyor; local `.cstar` include şimdilik AST merge modeliyle çalışıyor.
+- `struct`/user-defined type modül export/import davranışı Aşama 7 ile birlikte tasarlanacak.
 
 ## Aşama 7 - User-defined Types
 

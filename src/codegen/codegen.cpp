@@ -1,12 +1,16 @@
 #include <codegen/codegen.hpp>
 #include <cstar_config.hpp>
 
+#include <cstring>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/TargetParser/Triple.h>
+#include <memory>
+#include <parser/parser.hpp>
 #include <sstream>
+#include <string>
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
@@ -62,6 +66,15 @@ std::string CStarCodegen::resolveTargetTriple() {
   return CSTAR_TARGET_TRIPLE;
 }
 
+std::string CStarCodegen::resolveArchiveToolPath() {
+  if (const char* envAr = std::getenv("CSTAR_AR")) {
+    if (envAr[0] != '\0') {
+      return envAr;
+    }
+  }
+  return "ar";
+}
+
 std::vector<std::string> CStarCodegen::backendTargetArgs() const {
   std::string targetTriple = resolveTargetTriple();
   if (targetTriple.empty()) {
@@ -69,6 +82,34 @@ std::vector<std::string> CStarCodegen::backendTargetArgs() const {
   }
 
   return {"-target", targetTriple};
+}
+
+std::string CStarCodegen::nativeLinkArgument(const std::string& library) {
+  if (library.empty()) {
+    return {};
+  }
+
+  if (library.rfind("-l", 0) == 0 || library.rfind("-framework", 0) == 0) {
+    return library;
+  }
+
+  const auto path = std::filesystem::path(library);
+  const auto ext = path.extension().string();
+  if (library.find('/') != std::string::npos ||
+      library.find('\\') != std::string::npos || ext == ".a" ||
+      ext == ".so" || ext == ".dylib" || ext == ".lib") {
+    return library;
+  }
+
+  if (library.find(':') != std::string::npos) {
+    return {};
+  }
+
+#ifdef _WIN32
+  return library + ".lib";
+#else
+  return "-l" + library;
+#endif
 }
 
 int CStarCodegen::runCommand(const std::vector<std::string>& args,
@@ -105,12 +146,69 @@ int CStarCodegen::runCommand(const std::vector<std::string>& args,
   return exitCode;
 }
 
+void CStarCodegen::appendIncludedSource(
+    const std::filesystem::path& includePath,
+    std::set<std::filesystem::path>& seen) {
+  auto resolved = includePath;
+  if (resolved.is_relative()) {
+    resolved = m_InputPath.parent_path() / resolved;
+  }
+  resolved = std::filesystem::absolute(resolved).lexically_normal();
+
+  if (seen.count(resolved) > 0) {
+    return;
+  }
+  seen.insert(resolved);
+
+  std::ifstream file(resolved);
+  if (!file.is_open()) {
+    std::cerr << REDISH << "Cannot open included C* file: "
+              << resolved.string() << RES << std::endl;
+    exit(1);
+  }
+
+  std::stringstream ss;
+  ss << file.rdbuf();
+
+  auto realPathStr = resolved.string();
+  auto realPath = static_cast<char*>(std::malloc(realPathStr.size() + 1));
+  std::memcpy(realPath, realPathStr.c_str(), realPathStr.size() + 1);
+  const std::shared_ptr<char> realPathPtr(realPath, std::free);
+
+  CStarLexer lexer(ss.str(), realPathPtr);
+  CStarParser parser(std::move(lexer), false);
+  parser.parse();
+
+  for (const auto& library : parser.nativeLinkLibraries()) {
+    if (std::find(m_NativeLinkLibraries.begin(), m_NativeLinkLibraries.end(),
+                  library) == m_NativeLinkLibraries.end()) {
+      m_NativeLinkLibraries.push_back(library);
+    }
+  }
+  for (const auto& alias : parser.moduleAliases()) {
+    if (std::find(m_ModuleAliases.begin(), m_ModuleAliases.end(), alias) ==
+        m_ModuleAliases.end()) {
+      m_ModuleAliases.push_back(alias);
+    }
+  }
+
+  for (const auto& nestedInclude : parser.sourceIncludes()) {
+    appendIncludedSource(resolved.parent_path() / nestedInclude, seen);
+  }
+
+  std::vector<ASTNode> includedAST;
+  parser.ownedAST(includedAST);
+  m_AST.insert(m_AST.end(), std::make_move_iterator(includedAST.begin()),
+               std::make_move_iterator(includedAST.end()));
+}
+
 CStarCodegen::CStarCodegen(CStarParser&& parser, std::string& filepath,
                            CStarCodegenOptions options)
     : m_Parser(std::move(parser)), m_Options(std::move(options)) {
   time_t startTime = time(nullptr);
 
   m_MainContext = std::make_unique<llvm::LLVMContext>();
+  m_InputPath = std::filesystem::absolute(filepath);
   m_Filename = ExtractFilenameFromPath(filepath, "/");
   if (!m_Options.outputDir.empty()) {
     m_OutputDir = m_Options.outputDir;
@@ -147,7 +245,39 @@ CStarCodegen::~CStarCodegen() {
 
 void CStarCodegen::build() {
   this->m_Parser.parse();
+  m_NativeLinkLibraries = m_Parser.nativeLinkLibraries();
+  m_ModuleAliases = m_Parser.moduleAliases();
+  auto sourceIncludes = m_Parser.sourceIncludes();
   m_Parser.ownedAST(m_AST);
+  const auto primaryASTCount = m_AST.size();
+  std::set<std::filesystem::path> seenIncludes;
+  seenIncludes.insert(m_InputPath);
+  for (const auto& includePath : sourceIncludes) {
+    appendIncludedSource(includePath, seenIncludes);
+  }
+  Visitor::ModuleAliases.clear();
+  Visitor::ModuleAliases.insert(m_ModuleAliases.begin(), m_ModuleAliases.end());
+
+  bool hasExportedDecl = false;
+  SemanticLoc exportLoc(0, 0, 0);
+  for (size_t i = 0; i < primaryASTCount; ++i) {
+    const auto& ast = m_AST[i];
+    if (ast->getASTKind() == ASTKind::Decl &&
+        (ast->getDeclKind() == DeclKind::ExportFuncDecl ||
+         ast->getDeclKind() == DeclKind::ExportVarDecl)) {
+      hasExportedDecl = true;
+      exportLoc = ast->getSemLoc();
+      break;
+    }
+  }
+  if (hasExportedDecl && m_Options.emitKind == CStarEmitKind::Executable) {
+    m_Parser.ParserWarning(
+        "`export` marks library ABI visibility, but this build emits an "
+        "executable. Use --emit=staticlib or --emit=dynamiclib when exporting "
+        "symbols for another module.",
+        exportLoc.begin, exportLoc.end, exportLoc.line);
+    m_WarningCount += 1;
+  }
 
   auto exitOnSemanticFailure = [&]() {
     if (!m_SemAnalysisFailure) {
@@ -185,9 +315,17 @@ void CStarCodegen::build() {
 #ifdef _WIN32
   const auto objPath = m_OutputDir / (m_Filename + ".obj");
   const auto exePath = m_OutputDir / (m_Filename + ".exe");
+  const auto staticLibPath = m_OutputDir / ("lib" + m_Filename + ".lib");
+  const auto dynamicLibPath = m_OutputDir / (m_Filename + ".dll");
 #else
   const auto objPath = m_OutputDir / (m_Filename + ".o");
   const auto exePath = m_OutputDir / (m_Filename + ".out");
+  const auto staticLibPath = m_OutputDir / ("lib" + m_Filename + ".a");
+#ifdef __APPLE__
+  const auto dynamicLibPath = m_OutputDir / ("lib" + m_Filename + ".dylib");
+#else
+  const auto dynamicLibPath = m_OutputDir / ("lib" + m_Filename + ".so");
+#endif
 #endif
 
   std::ofstream outfile(irPath);
@@ -199,6 +337,8 @@ void CStarCodegen::build() {
   const auto asmFilename = asmPath.string();
   const auto objFilename = objPath.string();
   const auto exeFilename = exePath.string();
+  const auto staticLibFilename = staticLibPath.string();
+  const auto dynamicLibFilename = dynamicLibPath.string();
   auto targetArgs = backendTargetArgs();
 
   if (m_Options.emitKind == CStarEmitKind::IR) {
@@ -226,7 +366,7 @@ void CStarCodegen::build() {
     return;
   }
 
-  if (m_Options.emitKind == CStarEmitKind::Object) {
+  auto emitObject = [&]() {
     std::vector<std::string> emitObjectArgs{clangPath};
     emitObjectArgs.insert(emitObjectArgs.end(), targetArgs.begin(),
                           targetArgs.end());
@@ -235,9 +375,46 @@ void CStarCodegen::build() {
     if (runCommand(emitObjectArgs) != 0) {
       exit(1);
     }
+  };
 
+  if (m_Options.emitKind == CStarEmitKind::Object) {
+    emitObject();
     if (m_Options.stats || !m_Options.runAfterBuild) {
       std::cout << GRN << "Output: " << objFilename << RES << std::endl;
+    }
+    showStats(startTime, "Pass 2 (Codegen)");
+    return;
+  }
+
+  if (m_Options.emitKind == CStarEmitKind::StaticLibrary) {
+    emitObject();
+    if (runCommand({resolveArchiveToolPath(), "rcs", staticLibFilename,
+                    objFilename}) != 0) {
+      exit(1);
+    }
+    if (m_Options.stats || !m_Options.runAfterBuild) {
+      std::cout << GRN << "Output: " << staticLibFilename << RES << std::endl;
+    }
+    showStats(startTime, "Pass 2 (Codegen)");
+    return;
+  }
+
+  if (m_Options.emitKind == CStarEmitKind::DynamicLibrary) {
+    std::vector<std::string> dynamicArgs{clangPath};
+    dynamicArgs.insert(dynamicArgs.end(), targetArgs.begin(), targetArgs.end());
+    dynamicArgs.insert(dynamicArgs.end(),
+                       {"-shared", irFilename, "-o", dynamicLibFilename});
+    for (const auto& library : m_NativeLinkLibraries) {
+      auto arg = nativeLinkArgument(library);
+      if (!arg.empty()) {
+        dynamicArgs.push_back(arg);
+      }
+    }
+    if (runCommand(dynamicArgs) != 0) {
+      exit(1);
+    }
+    if (m_Options.stats || !m_Options.runAfterBuild) {
+      std::cout << GRN << "Output: " << dynamicLibFilename << RES << std::endl;
     }
     showStats(startTime, "Pass 2 (Codegen)");
     return;
@@ -246,6 +423,12 @@ void CStarCodegen::build() {
   std::vector<std::string> linkArgs{clangPath};
   linkArgs.insert(linkArgs.end(), targetArgs.begin(), targetArgs.end());
   linkArgs.insert(linkArgs.end(), {irFilename, "-o", exeFilename});
+  for (const auto& library : m_NativeLinkLibraries) {
+    auto arg = nativeLinkArgument(library);
+    if (!arg.empty()) {
+      linkArgs.push_back(arg);
+    }
+  }
   if (runCommand(linkArgs) != 0) {
     exit(1);
   }

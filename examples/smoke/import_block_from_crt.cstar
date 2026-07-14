@@ -1,0 +1,10 @@
+// expected: pass
+// expected-exit: 9
+
+import from "std:crt" {
+  abs(int32 value) :: int32;
+}
+
+main() :: int32 {
+  ret abs(0 - 9);
+}

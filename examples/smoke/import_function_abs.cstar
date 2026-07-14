@@ -1,7 +1,7 @@
 // expected: pass
 // expected-exit: 7
 
-import abs23(int32) :: int32;
+import abs(int32) :: int32;
 
 main() :: int32 {
   ret abs(0 - 7);

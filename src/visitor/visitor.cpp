@@ -2039,12 +2039,13 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
 }
 
 ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
-  if (funcCallAst.m_FuncSymbol == nullptr ||
-      funcCallAst.m_FuncSymbol->m_ExprKind != ExprKind::SymbolExpr) {
-    assert(false && "Function call target must be a symbol.");
+  SymbolInfo callSymbolInfo;
+  auto funcName =
+      resolveFunctionCallName(funcCallAst.m_FuncSymbol.get(), callSymbolInfo,
+                              false);
+  if (funcName.empty()) {
+    assert(false && "Function call target must resolve to a symbol.");
   }
-
-  auto *funcSymbol = static_cast<SymbolAST *>(funcCallAst.m_FuncSymbol.get());
   std::vector<IAST *> argNodes;
   auto collectArgs = [&](auto &self, IAST *node) -> void {
     if (node == nullptr) {
@@ -2066,7 +2067,7 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
   cstar::codegen::NativeRuntime nativeRuntime(*Visitor::Module,
                                               *Visitor::Builder);
 
-  if (funcSymbol->m_SymbolName == "print") {
+  if (funcName == "print") {
     llvm::Value *lastCall = nullptr;
     llvm::Type *previousType = m_LastType;
     bool previousSigned = m_LastSigned;
@@ -2087,7 +2088,7 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     return lastCall;
   }
 
-  if (funcSymbol->m_SymbolName == "input_int") {
+  if (funcName == "input_int") {
     if (!argNodes.empty()) {
       assert(false && "Builtin 'input_int' does not accept arguments.");
     }
@@ -2098,7 +2099,7 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     return value;
   }
 
-  if (funcSymbol->m_SymbolName == "input_string") {
+  if (funcName == "input_string") {
     if (!argNodes.empty()) {
       assert(false && "Builtin 'input_string' does not accept arguments.");
     }
@@ -2109,21 +2110,21 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     return bufferPtr;
   }
 
-  if (funcSymbol->m_SymbolName == "clear_screen") {
+  if (funcName == "clear_screen") {
     if (!argNodes.empty()) {
       assert(false && "Builtin 'clear_screen' does not accept arguments.");
     }
     return nativeRuntime.emitClearScreen();
   }
 
-  if (funcSymbol->m_SymbolName == "flush_output") {
+  if (funcName == "flush_output") {
     if (!argNodes.empty()) {
       assert(false && "Builtin 'flush_output' does not accept arguments.");
     }
     return nativeRuntime.emitFlushOutput();
   }
 
-  if (funcSymbol->m_SymbolName == "sleep_ms") {
+  if (funcName == "sleep_ms") {
     if (argNodes.size() != 1) {
       assert(false && "Builtin 'sleep_ms' expects one argument.");
     }
@@ -2140,21 +2141,21 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     return call;
   }
 
-  if (funcSymbol->m_SymbolName == "enable_raw_input") {
+  if (funcName == "enable_raw_input") {
     if (!argNodes.empty()) {
       assert(false && "Builtin 'enable_raw_input' does not accept arguments.");
     }
     return nativeRuntime.emitEnableRawInput();
   }
 
-  if (funcSymbol->m_SymbolName == "disable_raw_input") {
+  if (funcName == "disable_raw_input") {
     if (!argNodes.empty()) {
       assert(false && "Builtin 'disable_raw_input' does not accept arguments.");
     }
     return nativeRuntime.emitDisableRawInput();
   }
 
-  if (funcSymbol->m_SymbolName == "read_key") {
+  if (funcName == "read_key") {
     if (!argNodes.empty()) {
       assert(false && "Builtin 'read_key' does not accept arguments.");
     }
@@ -2165,7 +2166,7 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     return value;
   }
 
-  if (funcSymbol->m_SymbolName == "strong_count") {
+  if (funcName == "strong_count") {
     if (argNodes.size() != 1 ||
         argNodes[0]->m_ExprKind != ExprKind::SymbolExpr) {
       assert(false && "Builtin 'strong_count' expects one symbol argument.");
@@ -2186,7 +2187,7 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     return count;
   }
 
-  auto *function = Visitor::Module->getFunction(funcSymbol->m_SymbolName);
+  auto *function = Visitor::Module->getFunction(funcName);
   if (function == nullptr) {
     assert(false && "Function must be declared before it is called.");
   }
@@ -2198,7 +2199,7 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
   std::vector<llvm::Value *> args;
   llvm::Type *previousType = m_LastType;
   bool previousSigned = m_LastSigned;
-  auto signatureIt = FunctionTable.find(funcSymbol->m_SymbolName);
+  auto signatureIt = FunctionTable.find(funcName);
 
   for (size_t i = 0; i < argNodes.size(); ++i) {
     llvm::Type *paramType = function->getFunctionType()->getParamType(i);

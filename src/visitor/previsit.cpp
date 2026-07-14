@@ -1849,6 +1849,55 @@ SymbolInfo Visitor::preVisit(ContinueStmtAST &continueStmtAst) {
   return symbolInfo;
 }
 
+std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
+                                             bool emitDiagnostics) {
+  if (node == nullptr) {
+    return {};
+  }
+
+  if (node->m_ExprKind == ExprKind::SymbolExpr) {
+    auto *symbol = static_cast<SymbolAST *>(node);
+    symbolInfo.symbolName = symbol->m_SymbolName;
+    symbolInfo.begin = symbol->m_SemLoc.begin;
+    symbolInfo.end = symbol->m_SemLoc.end;
+    symbolInfo.line = symbol->m_SemLoc.line;
+    return symbol->m_SymbolName;
+  }
+
+  if (node->m_ExprKind == ExprKind::BinOp) {
+    auto *binOp = static_cast<BinaryOpAST *>(node);
+    if (binOp->m_BinOpKind == BinOpKind::B_DOT &&
+        binOp->m_LHS != nullptr && binOp->m_RHS != nullptr &&
+        binOp->m_LHS->m_ExprKind == ExprKind::SymbolExpr &&
+        binOp->m_RHS->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *alias = static_cast<SymbolAST *>(binOp->m_LHS.get());
+      auto *member = static_cast<SymbolAST *>(binOp->m_RHS.get());
+      symbolInfo.symbolName = member->m_SymbolName;
+      symbolInfo.begin = member->m_SemLoc.begin;
+      symbolInfo.end = member->m_SemLoc.end;
+      symbolInfo.line = member->m_SemLoc.line;
+
+      if (ModuleAliases.count(alias->m_SymbolName) == 0) {
+        if (emitDiagnostics) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Module alias '" + alias->m_SymbolName + "' was not declared",
+              symbolInfo);
+        }
+        return {};
+      }
+
+      return member->m_SymbolName;
+    }
+  }
+
+  if (emitDiagnostics) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Function call target must be a symbol or module alias member",
+        symbolInfo);
+  }
+  return {};
+}
+
 SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
   SymbolInfo symbolInfo;
 
@@ -1860,18 +1909,11 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
-  if (funcCallAst.m_FuncSymbol == nullptr ||
-      funcCallAst.m_FuncSymbol->m_ExprKind != ExprKind::SymbolExpr) {
-    this->m_TypeErrorMessages.emplace_back(
-        "Function call target must be a symbol", symbolInfo);
+  auto funcName =
+      resolveFunctionCallName(funcCallAst.m_FuncSymbol.get(), symbolInfo, true);
+  if (funcName.empty()) {
     return symbolInfo;
   }
-
-  auto *funcSymbol = static_cast<SymbolAST *>(funcCallAst.m_FuncSymbol.get());
-  symbolInfo.symbolName = funcSymbol->m_SymbolName;
-  symbolInfo.begin = funcSymbol->m_SemLoc.begin;
-  symbolInfo.end = funcSymbol->m_SemLoc.end;
-  symbolInfo.line = funcSymbol->m_SemLoc.line;
 
   std::vector<IAST *> argNodes;
   auto collectArgs = [&](auto &self, IAST *node) -> void {
@@ -1892,7 +1934,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
   };
   collectArgs(collectArgs, funcCallAst.m_Args.get());
 
-  if (funcSymbol->m_SymbolName == "print") {
+  if (funcName == "print") {
     if (argNodes.empty()) {
       this->m_TypeErrorMessages.emplace_back(
           "Builtin 'print' expects at least 1 argument", symbolInfo);
@@ -1901,7 +1943,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
-  if (funcSymbol->m_SymbolName == "input_int") {
+  if (funcName == "input_int") {
     if (!argNodes.empty()) {
       this->m_TypeErrorMessages.emplace_back(
           "Builtin 'input_int' does not accept arguments", symbolInfo);
@@ -1911,7 +1953,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
-  if (funcSymbol->m_SymbolName == "input_string") {
+  if (funcName == "input_string") {
     if (!argNodes.empty()) {
       this->m_TypeErrorMessages.emplace_back(
           "Builtin 'input_string' does not accept arguments", symbolInfo);
@@ -1921,7 +1963,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
-  if (funcSymbol->m_SymbolName == "clear_screen") {
+  if (funcName == "clear_screen") {
     if (!argNodes.empty()) {
       this->m_TypeErrorMessages.emplace_back(
           "Builtin 'clear_screen' does not accept arguments", symbolInfo);
@@ -1930,7 +1972,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
-  if (funcSymbol->m_SymbolName == "flush_output") {
+  if (funcName == "flush_output") {
     if (!argNodes.empty()) {
       this->m_TypeErrorMessages.emplace_back(
           "Builtin 'flush_output' does not accept arguments", symbolInfo);
@@ -1939,7 +1981,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
-  if (funcSymbol->m_SymbolName == "sleep_ms") {
+  if (funcName == "sleep_ms") {
     if (argNodes.size() != 1) {
       this->m_TypeErrorMessages.emplace_back(
           "Builtin 'sleep_ms' expects exactly 1 argument", symbolInfo);
@@ -1948,7 +1990,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
-  if (funcSymbol->m_SymbolName == "enable_raw_input") {
+  if (funcName == "enable_raw_input") {
     if (!argNodes.empty()) {
       this->m_TypeErrorMessages.emplace_back(
           "Builtin 'enable_raw_input' does not accept arguments", symbolInfo);
@@ -1957,7 +1999,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
-  if (funcSymbol->m_SymbolName == "disable_raw_input") {
+  if (funcName == "disable_raw_input") {
     if (!argNodes.empty()) {
       this->m_TypeErrorMessages.emplace_back(
           "Builtin 'disable_raw_input' does not accept arguments", symbolInfo);
@@ -1966,7 +2008,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
-  if (funcSymbol->m_SymbolName == "read_key") {
+  if (funcName == "read_key") {
     if (!argNodes.empty()) {
       this->m_TypeErrorMessages.emplace_back(
           "Builtin 'read_key' does not accept arguments", symbolInfo);
@@ -1976,7 +2018,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
-  if (funcSymbol->m_SymbolName == "strong_count") {
+  if (funcName == "strong_count") {
     if (argNodes.size() != 1) {
       this->m_TypeErrorMessages.emplace_back(
           "Builtin 'strong_count' expects exactly 1 argument", symbolInfo);
@@ -2002,10 +2044,10 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
-  auto signatureIt = FunctionTable.find(funcSymbol->m_SymbolName);
+  auto signatureIt = FunctionTable.find(funcName);
   if (signatureIt == FunctionTable.end()) {
     this->m_TypeErrorMessages.emplace_back(
-        "Function '" + funcSymbol->m_SymbolName + "' was not declared",
+        "Function '" + funcName + "' was not declared",
         symbolInfo);
     return symbolInfo;
   }
@@ -2013,7 +2055,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
   const auto &signature = signatureIt->second;
   if (signature.params.size() != argNodes.size()) {
     this->m_TypeErrorMessages.emplace_back(
-        "Function '" + funcSymbol->m_SymbolName + "' expects " +
+        "Function '" + funcName + "' expects " +
             std::to_string(signature.params.size()) + " argument(s), but " +
             std::to_string(argNodes.size()) + " provided",
         symbolInfo);
@@ -2197,10 +2239,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
   m_LastBinOpHasAtLeastOnePtr = previousLastBinOpHasPtr;
 
   symbolInfo = signature.returnType;
-  symbolInfo.symbolName = funcSymbol->m_SymbolName;
-  symbolInfo.begin = funcSymbol->m_SemLoc.begin;
-  symbolInfo.end = funcSymbol->m_SemLoc.end;
-  symbolInfo.line = funcSymbol->m_SemLoc.line;
+  symbolInfo.symbolName = funcName;
 
   if (callValueIsChecked && IsPrimitiveType(expectedCallResultType) &&
       IsPrimitiveType(symbolInfo.type) &&
@@ -2214,14 +2253,14 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     if (boolMismatch || expectedCallResultType == TypeSpecifier::SPEC_VOID ||
         symbolInfo.type == TypeSpecifier::SPEC_VOID) {
       this->m_TypeErrorMessages.emplace_back(
-          "Function '" + funcSymbol->m_SymbolName + "' returns '" +
+          "Function '" + funcName + "' returns '" +
               GetTypeStr(symbolInfo.type) + "', but '" +
               GetTypeStr(expectedCallResultType) + "' is expected",
           symbolInfo);
     } else if (expectedInteger && actualInteger &&
                LosslessCasting(expectedCallResultType, symbolInfo.type)) {
       this->m_TypeWarningMessages.emplace_back(
-          "Function '" + funcSymbol->m_SymbolName + "' returns '" +
+          "Function '" + funcName + "' returns '" +
               GetTypeStr(symbolInfo.type) + "', which is casting to '" +
               GetTypeStr(expectedCallResultType) +
               "'. Potential data loss might be occured!",

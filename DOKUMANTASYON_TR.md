@@ -477,7 +477,7 @@ import forwardDecl(const int*, constptr float*) :: void;
 import abs(int32 value) :: int32;
 ```
 
-`import` fonksiyonlar forward declaration gibi ele alınıyor ve body yerine `;` bekleniyor. Parametre adı ABI için opsiyoneldir; `import abs(int32) :: int32;` ve `import abs(int32 value) :: int32;` aynı external imzaya iner. Basit native import çağrısı smoke suite içinde gerçek libc `abs` çağrısıyla doğrulanır. `from "lib"` ve blok import syntax'ı proposal seviyesinde kalır.
+`import` fonksiyonlar forward declaration gibi ele alınıyor ve body yerine `;` bekleniyor. Parametre adı ABI için opsiyoneldir; `import abs(int32) :: int32;` ve `import abs(int32 value) :: int32;` aynı external imzaya iner. Basit native import çağrısı smoke suite içinde gerçek libc `abs` çağrısıyla doğrulanır. `from "lib"`, `import { ... }` ve `import from "lib" { ... }` formları parser/codegen akışına bağlıdır.
 
 ### 8.3 Parametre syntax'ı
 
@@ -962,7 +962,17 @@ include {
 include "std:math:PI" as PI
 ```
 
-Mevcut parser `include` token'ını package mark olarak görüyor ve gerçek include/package grammar'ı henüz uygulanmadığı için kontrollü diagnostic üretiyor. Eski infinite loop riski giderildi; `examples/papers/syntax.cstar` bu davranışı doğrulayan proposal örneği olarak kalıyor.
+Compiler artık `include involved { ... }`, `include { ... }` ve `include "module" as alias` formlarını gerçek grammar olarak parse eder. `include` hedefi `.cstar` ile biten yerel bir dosyaysa dosya ana compilation unit'e parse/merge edilir; böylece başka dosyadaki function deklarasyonları çağrılabilir.
+
+```cstar
+include "modules/math_module.cstar" as math
+
+main() :: int32 {
+    ret add_from_module(2, 5);
+}
+```
+
+`as` alias'ı function call lookup için çalışır; `math.add_from_module(...)` gibi alias member çağrısı include edilen module içindeki `add_from_module` imzasına çözülür. Export-only görünürlük sınırı henüz uygulanmaz; local include bugün AST merge modeliyle çalışır.
 
 ### 15.2 Import/export from library
 
@@ -975,9 +985,20 @@ import from "myLibrary.lib" {
 }
 
 export sin(float64 x) :: float64 from "std:math";
+export from "std:math" {
+    abs(int32 x) :: int32;
+}
 ```
 
-Mevcut compiler basit `import func(...) :: type;` formunu parser, semantic signature ve LLVM external call codegen boyunca destekler. Parametre adı opsiyoneldir; `import abs(int32) :: int32;` ve `import abs(int32 value) :: int32;` smoke suite içinde gerçek native çağrıyla doğrulanır. `from "lib"` çözümlemesi ve blok import henüz proposal seviyesindedir.
+Mevcut compiler `import func(...) :: type;`, `import func(...) :: type from "lib";`, `import { ... }`, `import from "lib" { ... }`, `export func(...) :: type from "module";` ve `export from "module" { ... }` formlarını parser, semantic signature ve LLVM external call codegen boyunca destekler. Parametre adı ABI için opsiyoneldir; `import abs(int32) :: int32;` ve `import abs(int32 value) :: int32;` aynı external imzaya iner.
+
+Native linker davranışı:
+
+- `"m"` gibi kısa isimler Unix/macOS tarafında `-lm` olur.
+- `"opengl32.lib"`, `.a`, `.so`, `.dylib` ve path içeren değerler doğrudan linker argümanı olarak geçer.
+- `"std:math"` ve `"std:crt"` gibi `:` içeren logical module adları linker argümanına çevrilmez; bunlar package/module namespace tasarımı için saklanır.
+
+Executable üretirken ana dosyada `export` deklarasyonu varsa compiler warning üretir; çünkü `export` library ABI görünürlüğüdür. Dış modüller için symbol üretilecekse `--emit=staticlib` veya `--emit=dynamiclib` kullanılmalıdır.
 
 ### 15.3 Attribute/metaprogramming
 
@@ -1199,7 +1220,7 @@ Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güve
 
 - MSVC tarafında gerçek LLVM kurulumu ile düzenli doğrulama yapılmalı.
 - MSYS2 LLVM ile Visual Studio generator'ı karıştırılmamalı.
-- CLI modları ayrıştırılıyor: `--emit=<ir|asm|obj|exe>`, `--emit-llvm`, `--emit-asm`, `--build-exe`, `--run`, `--no-run`, `--output-dir`, `--verbose` ve `--stats` desteklenir. İleri adım: `--emit=obj` yolunu clang driver yerine LLVM `TargetMachine` üzerinden üretmek.
+- CLI modları ayrıştırılıyor: `--emit=<ir|asm|obj|staticlib|dynamiclib|exe>`, `--emit-llvm`, `--emit-asm`, `--emit-staticlib`, `--emit-dynamiclib`, `--build-exe`, `--run`, `--no-run`, `--output-dir`, `--verbose` ve `--stats` desteklenir. Static library için object + `ar rcs`, dynamic library için backend clang `-shared` yolu kullanılır. İleri adım: object yolunu clang driver yerine LLVM `TargetMachine` üzerinden üretmek.
 
 ## 18. Devam Etmek İçin En Mantıklı Yol Haritası
 

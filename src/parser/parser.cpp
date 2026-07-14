@@ -1,5 +1,9 @@
 #include <parser/parser.hpp>
 
+#include <algorithm>
+#include <filesystem>
+#include <string>
+
 static bool IsProposalOnlyTopLevel(TokenKind kind) {
   switch (kind) {
     case DYNAMIC:
@@ -50,6 +54,152 @@ void CStarParser::parse() {
   this->parserStats();
 }
 
+void CStarParser::skipTopLevelTrivia() {
+  while (is(TokenKind::COMMENT) || is(TokenKind::LINEFEED)) {
+    this->advance();
+  }
+}
+
+void CStarParser::registerNativeLinkLibrary(const std::string& library) {
+  if (library.empty()) {
+    return;
+  }
+
+  if (std::find(m_NativeLinkLibraries.begin(), m_NativeLinkLibraries.end(),
+                library) == m_NativeLinkLibraries.end()) {
+    m_NativeLinkLibraries.push_back(library);
+  }
+}
+
+std::string CStarParser::parseLinkSource() {
+  expected(TokenKind::FROM);
+  this->advance();
+  skipTopLevelTrivia();
+
+  expected(TokenKind::LITERAL);
+  auto source = currentTokenStr();
+  this->advance();
+  return source;
+}
+
+void CStarParser::parseLinkageBlock(
+    VisibilitySpecifier visibilitySpecifier) {
+  std::string library;
+  if (is(TokenKind::FROM)) {
+    library = parseLinkSource();
+    registerNativeLinkLibrary(library);
+    skipTopLevelTrivia();
+  }
+
+  expected(TokenKind::LBRACK);
+  this->advance();
+
+  while (!is(TokenKind::RBRACK)) {
+    skipTopLevelTrivia();
+    if (is(TokenKind::RBRACK)) {
+      break;
+    }
+    expected(TokenKind::IDENT);
+    funcDecl(visibilitySpecifier, true);
+    if (!library.empty()) {
+      registerNativeLinkLibrary(library);
+    }
+    skipTopLevelTrivia();
+  }
+
+  expected(TokenKind::RBRACK);
+  this->advance();
+  skipTopLevelTrivia();
+  if (is(TokenKind::SEMICOLON)) {
+    this->advance();
+  }
+}
+
+void CStarParser::parseIncludeDirective() {
+  auto includeToken = currentTokenInfo();
+  this->advance();
+  skipTopLevelTrivia();
+
+  if (is(TokenKind::INVOLVED)) {
+    this->advance();
+    skipTopLevelTrivia();
+    expected(TokenKind::LBRACK);
+    this->advance();
+    while (!is(TokenKind::RBRACK)) {
+      skipTopLevelTrivia();
+      if (is(TokenKind::LITERAL) || is(TokenKind::LETTER) ||
+          is(TokenKind::IDENT)) {
+        this->advance();
+      } else if (!is(TokenKind::RBRACK)) {
+        ParserError("Expected include target", currentTokenInfo());
+      }
+
+      skipTopLevelTrivia();
+      if (is(TokenKind::COMMA)) {
+        this->advance();
+      }
+    }
+    this->advance();
+    skipTopLevelTrivia();
+    if (is(TokenKind::SEMICOLON)) {
+      this->advance();
+    }
+    return;
+  }
+
+  if (is(TokenKind::LBRACK)) {
+    this->advance();
+    while (!is(TokenKind::RBRACK)) {
+      skipTopLevelTrivia();
+      if (is(TokenKind::LITERAL) || is(TokenKind::LETTER)) {
+        auto includeName = currentTokenStr();
+        if (includeName.size() >= 6 &&
+            includeName.substr(includeName.size() - 6) == ".cstar") {
+          m_SourceIncludes.emplace_back(includeName);
+        }
+        this->advance();
+      } else if (!is(TokenKind::RBRACK)) {
+        ParserError("Expected include target", currentTokenInfo());
+      }
+
+      skipTopLevelTrivia();
+      if (is(TokenKind::COMMA)) {
+        this->advance();
+      }
+    }
+    this->advance();
+    skipTopLevelTrivia();
+    if (is(TokenKind::SEMICOLON)) {
+      this->advance();
+    }
+    return;
+  }
+
+  if (is(TokenKind::LITERAL) || is(TokenKind::LETTER)) {
+    auto includeName = currentTokenStr();
+    if (includeName.size() >= 6 &&
+        includeName.substr(includeName.size() - 6) == ".cstar") {
+      m_SourceIncludes.emplace_back(includeName);
+    }
+    this->advance();
+    skipTopLevelTrivia();
+    if (is(TokenKind::AS)) {
+      this->advance();
+      skipTopLevelTrivia();
+      expected(TokenKind::IDENT);
+      m_ModuleAliases.push_back(currentTokenStr());
+      this->advance();
+    }
+    skipTopLevelTrivia();
+    if (is(TokenKind::SEMICOLON)) {
+      this->advance();
+    }
+    return;
+  }
+
+  ParserError("Expected include target after 'include'", includeToken);
+}
+
 void CStarParser::translationUnit() {
   while (!this->m_ParsingEndingFlag) {
     // std::cout << this->m_CurrToken.getTokenAsStr() << "\n";
@@ -70,12 +220,8 @@ void CStarParser::translationUnit() {
     }
 
     if (isPackageMark(this->m_CurrToken)) {
-      ParserHint("Package/include syntax is part of the C* proposal, but it "
-                 "is not implemented in the compiler yet.",
-                 currentTokenInfo());
-      ParserError("Unexpected token '" + currentTokenInfo().getTokenAsStr() +
-                      "'",
-                  currentTokenInfo());
+      parseIncludeDirective();
+      continue;
     } else if (IsProposalOnlyTopLevel(currentTokenKind())) {
       ParserHint(
           "This keyword belongs to the C* proposal surface "
@@ -108,10 +254,42 @@ void CStarParser::translationUnit() {
         this->advance();
       }
 
+      skipTopLevelTrivia();
+      if ((visibilitySpecifier == VisibilitySpecifier::VIS_IMPORT ||
+           visibilitySpecifier == VisibilitySpecifier::VIS_EXPORT) &&
+          (is(TokenKind::LBRACK) || is(TokenKind::FROM))) {
+        parseLinkageBlock(visibilitySpecifier);
+        continue;
+      }
+
       bool outOfSize = false;
       auto nextToken = nextTokenInfo(outOfSize).getTokenKind();
       if (outOfSize) {
         ParserError("Unexpected token", currentTokenInfo());
+      }
+
+      if (is(TokenKind::IDENT) && nextToken == TokenKind::LT) {
+        bool genericFunc = false;
+        size_t lookahead = 2;
+        while (m_TokenIndex + lookahead < m_TokenStream.size()) {
+          auto kind = m_TokenStream[m_TokenIndex + lookahead].getTokenKind();
+          if (kind == TokenKind::GT) {
+            if (m_TokenIndex + lookahead + 1 < m_TokenStream.size() &&
+                m_TokenStream[m_TokenIndex + lookahead + 1].getTokenKind() ==
+                    TokenKind::LPAREN) {
+              genericFunc = true;
+            }
+            break;
+          }
+          if (kind == TokenKind::SEMICOLON || kind == TokenKind::LINEFEED ||
+              kind == TokenKind::_EOF) {
+            break;
+          }
+          lookahead += 1;
+        }
+        if (genericFunc) {
+          nextToken = TokenKind::LPAREN;
+        }
       }
 
       TypeQualifier typeQualifier = TypeQualifier::Q_NONE;

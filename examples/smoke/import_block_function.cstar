@@ -1,0 +1,10 @@
+// expected: pass
+// expected-exit: 6
+
+import {
+  abs(int32 value) :: int32;
+}
+
+main() :: int32 {
+  ret abs(0 - 6);
+}

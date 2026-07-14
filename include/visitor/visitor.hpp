@@ -198,12 +198,15 @@ class Visitor {
 
   void typeCheckerScopeHandler(std::unique_ptr<IAST>& node);
   SymbolAST* symbolFromMoveSource(IAST* node) const;
+  std::string resolveFunctionCallName(IAST* node, SymbolInfo& symbolInfo,
+                                      bool emitDiagnostics);
 
  public:
   // These are from pass0;
   static GlobalSymbolInfoList GlobalSymbolTable;
   static LocalSymbolInfoList LocalSymbolTable;
   static FunctionSignatureTable FunctionTable;
+  static std::set<std::string> ModuleAliases;
   static size_t SymbolId, ScopeId;
   static std::unique_ptr<llvm::IRBuilder<>> Builder;
   static std::unique_ptr<llvm::Module> Module;
