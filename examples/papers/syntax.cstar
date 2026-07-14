@@ -41,6 +41,16 @@ export from "std:math" {
     fabs(float32 x) :: float32;
 }
 
+// Module visibility is separate from import/export linkage.
+// Declarations are private by default; `public` exposes them through include/as.
+public static int32 moduleCounter = 0;
+public addFromModule(int32 a, int32 b) :: int32 {
+    ret a + b;
+}
+hiddenModuleHelper() :: int32 {
+    ret 1;
+}
+
 //This is the way of using features of Metaprogramming..
 attribute Area<T> {
     area($0,$1) -> T match {

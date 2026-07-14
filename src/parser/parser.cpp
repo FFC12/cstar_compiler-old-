@@ -100,7 +100,9 @@ void CStarParser::parseLinkageBlock(
       break;
     }
     expected(TokenKind::IDENT);
-    funcDecl(visibilitySpecifier, true);
+    DeclarationModifiers modifiers;
+    modifiers.linkage = visibilitySpecifier;
+    funcDecl(modifiers, true);
     if (!library.empty()) {
       registerNativeLinkLibrary(library);
     }
@@ -232,33 +234,14 @@ void CStarParser::translationUnit() {
                       std::string(tokenToStr(currentTokenKind())) + "'",
                   currentTokenInfo());
     } else {
-      VisibilitySpecifier visibilitySpecifier =
-          VisibilitySpecifier::VIS_DEFAULT;
-
-      // export(extern) | import (extern) | static | or by default they are
-      // external linkage
-      if (isLinkageMark(currentTokenInfo())) {
-        switch (currentTokenKind()) {
-          case IMPORT:
-            visibilitySpecifier = VisibilitySpecifier::VIS_IMPORT;
-            break;
-          case EXPORT:
-            visibilitySpecifier = VisibilitySpecifier::VIS_EXPORT;
-            break;
-          case STATIC:
-            visibilitySpecifier = VisibilitySpecifier::VIS_STATIC;
-            break;
-          default:
-            assert(false && "Unreacheable");
-        }
-        this->advance();
-      }
+      DeclarationModifiers declarationModifiers =
+          parseDeclarationModifiers(false);
 
       skipTopLevelTrivia();
-      if ((visibilitySpecifier == VisibilitySpecifier::VIS_IMPORT ||
-           visibilitySpecifier == VisibilitySpecifier::VIS_EXPORT) &&
+      if ((declarationModifiers.linkage == VisibilitySpecifier::VIS_IMPORT ||
+           declarationModifiers.linkage == VisibilitySpecifier::VIS_EXPORT) &&
           (is(TokenKind::LBRACK) || is(TokenKind::FROM))) {
-        parseLinkageBlock(visibilitySpecifier);
+        parseLinkageBlock(declarationModifiers.linkage);
         continue;
       }
 
@@ -320,13 +303,13 @@ void CStarParser::translationUnit() {
       // to resolved in next phase - Semantic Analysis- )
       if (this->isType(this->m_CurrToken) || is(TokenKind::IDENT)) {
         if (is(TokenKind::IDENT) && nextToken != TokenKind::LPAREN) {
-          varDecl(typeQualifier, visibilitySpecifier, is(TokenKind::IDENT),
+          varDecl(typeQualifier, declarationModifiers, is(TokenKind::IDENT),
                   false);
         } else if (is(TokenKind::IDENT) && nextToken == TokenKind::LPAREN) {
-          funcDecl(visibilitySpecifier);
+          funcDecl(declarationModifiers);
         } else {
           // if it's pointer type or something...
-          varDecl(typeQualifier, visibilitySpecifier, is(TokenKind::IDENT),
+          varDecl(typeQualifier, declarationModifiers, is(TokenKind::IDENT),
                   false);
         }
       } else {
@@ -458,11 +441,89 @@ bool CStarParser::isLinkageMark(const TokenInfo& token) {
   switch (token.getTokenKind()) {
     case EXPORT:  // extern
     case IMPORT:  // extern
-    case STATIC:  // static
       return true;
     default:
       return false;
   }
+}
+
+bool CStarParser::isDeclarationModifier(const TokenInfo& token) {
+  switch (token.getTokenKind()) {
+    case PUBLIC:
+    case PRIVATE:
+    case STATIC:
+    case EXPORT:
+    case IMPORT:
+      return true;
+    default:
+      return false;
+  }
+}
+
+DeclarationModifiers CStarParser::parseDeclarationModifiers(bool localScope) {
+  DeclarationModifiers modifiers;
+
+  while (isDeclarationModifier(currentTokenInfo())) {
+    switch (currentTokenKind()) {
+      case PUBLIC:
+        if (localScope) {
+          ParserError("'public' is only valid on module declarations",
+                      currentTokenInfo());
+        }
+        modifiers.access = ACCESS_PUBLIC;
+        break;
+      case PRIVATE:
+        if (localScope) {
+          ParserError("'private' is only valid on module declarations",
+                      currentTokenInfo());
+        }
+        modifiers.access = ACCESS_PRIVATE;
+        break;
+      case STATIC:
+        if (localScope) {
+          ParserError("'static' local declarations are not implemented yet",
+                      currentTokenInfo());
+        }
+        if (modifiers.linkage == VisibilitySpecifier::VIS_EXPORT ||
+            modifiers.linkage == VisibilitySpecifier::VIS_IMPORT) {
+          ParserError("'static' cannot be combined with import/export linkage",
+                      currentTokenInfo());
+        }
+        modifiers.isStatic = true;
+        if (modifiers.linkage == VisibilitySpecifier::VIS_DEFAULT) {
+          modifiers.linkage = VisibilitySpecifier::VIS_STATIC;
+        }
+        break;
+      case EXPORT:
+        if (localScope) {
+          ParserError("'export' is only valid on module declarations",
+                      currentTokenInfo());
+        }
+        if (modifiers.isStatic) {
+          ParserError("'export' cannot be combined with static linkage",
+                      currentTokenInfo());
+        }
+        modifiers.linkage = VisibilitySpecifier::VIS_EXPORT;
+        break;
+      case IMPORT:
+        if (localScope) {
+          ParserError("'import' is only valid on module declarations",
+                      currentTokenInfo());
+        }
+        if (modifiers.isStatic) {
+          ParserError("'import' cannot be combined with static linkage",
+                      currentTokenInfo());
+        }
+        modifiers.linkage = VisibilitySpecifier::VIS_IMPORT;
+        break;
+      default:
+        assert(false && "Unreachable declaration modifier");
+    }
+    this->advance();
+    skipTopLevelTrivia();
+  }
+
+  return modifiers;
 }
 
 bool CStarParser::isPackageMark(const TokenInfo& token) {

@@ -98,6 +98,8 @@ enum TokenKind {
   EXTERN,
   FROM,
   EXPORT,
+  PUBLIC,
+  PRIVATE,
   STATIC,
   CAST,
   UNSAFE_CAST,
@@ -515,6 +517,10 @@ class CStarLexer {
       return IMPORT;
     else if (ident == "export")
       return EXPORT;
+    else if (ident == "public")
+      return PUBLIC;
+    else if (ident == "private")
+      return PRIVATE;
     else if (ident == "static")
       return STATIC;
     else if (ident == "cast")
@@ -969,6 +975,10 @@ class CStarLexer {
         return "is";
       case CAST:
         return "cast";
+      case PUBLIC:
+        return "public";
+      case PRIVATE:
+        return "private";
       case UNSAFE_CAST:
         return "unsafe_cast";
       case AS:

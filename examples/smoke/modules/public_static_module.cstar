@@ -1,0 +1,5 @@
+public static int32 module_limit = 6;
+
+public static double_limit() :: int32 {
+  ret module_limit + module_limit;
+}

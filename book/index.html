@@ -483,6 +483,7 @@
         <a href="#baslangic">Başlangıç</a>
         <a href="#felsefe">Dil Felsefesi</a>
         <a href="#program">İlk Program</a>
+        <a href="#cekirdek">Çalışan Çekirdek</a>
         <a href="#tipler">Tip Sistemi</a>
         <a href="#degiskenler">Değişkenler</a>
         <a href="#fonksiyonlar">Fonksiyonlar</a>
@@ -569,6 +570,38 @@
 }</code></pre>
         </section>
 
+        <section id="cekirdek">
+          <h2>Çalışan Çekirdek Haritası</h2>
+          <p class="lead">`examples/smoke/` dizini dilin bugün kırılmadan çalışan sözleşmesini tutar. Her dosya küçük bir davranışı kilitler; yeni özellikler önce burada küçük bir örnekle kanıtlanır.</p>
+          <div class="grid-2">
+            <div class="panel">
+              <h3>Temel değerler ve ifadeler</h3>
+              <p>`minimal`, `local_int`, `global_variable`, `uninitialized_local`, `void_return`, `char_literal`, `float32_arithmetic`, `float64_arithmetic`, `bool_literal`, `binary_expr`, `comparison_expr`, `not_equal_expr`, `logical_expr`, `assignment`, `assignment_cast`, `cast_numeric`, `as_cast_numeric`.</p>
+            </div>
+            <div class="panel">
+              <h3>Fonksiyonlar</h3>
+              <p>`function_call`, `function_call_initializer`, `function_call_statement`, `function_call_cast_argument`, `forward_function_call`, `function_call_symbol_argument`, `function_call_pointer_argument`.</p>
+            </div>
+            <div class="panel">
+              <h3>Kontrol akışı ve döngü</h3>
+              <p>`if_statement`, `if_else_statement`, `if_elif_else_statement`, `nested_if_statement`, `if_fallthrough_statement`, `if_condition_scalar_conversion`, `if_condition_pointer_conversion`, `loop_while_statement`, `loop_false_skip`, `loop_nested_if_statement`, `loop_pointer_condition`, `loop_break_statement`, `loop_continue_statement`, `loop_break_continue_nested_if`, `loop_nested_loop_continue`, `loop_range_statement`, `loop_range_break_continue`.</p>
+            </div>
+            <div class="panel">
+              <h3>Array ve iterasyon</h3>
+              <p>`array_element_read`, `array_element_assignment`, `array_element_shortcut_assignment`, `array_param_read`, `array_param_write`, `loop_array_iterable`, `loop_array_indexed_iterable`, `loop_array_param_iterable`, `multidim_array_read`, `multidim_array_assignment`, `multidim_array_shortcut_assignment`, `multidim_array_dynamic_index`, `multidim_array_param_read`, `multidim_array_param_write`.</p>
+            </div>
+            <div class="panel">
+              <h3>Pointer, qualifier ve ownership</h3>
+              <p>`pointer_variable_initializer`, `pointer_return`, `pointer_from_pointer_initializer`, `dereference_assignment`, `dereference_assignment_shortcut`, `multi_level_dereference_read`, `multi_level_dereference_assignment`, `const_value`, `const_pointer`, `constref_param`, `constptr_param`, `constptr_pointer`, `readonly_param`, `readonly_pointer`, `readonly_multi_level_pointer`, `reference_param`, `shared_pointer_*`, `unique_pointer_*`, `nomove_unique_param_read`.</p>
+            </div>
+            <div class="panel">
+              <h3>Native ve module</h3>
+              <p>`import_function_abs`, `import_function_named_param`, `import_function_from_crt`, `import_block_function`, `import_block_from_crt`, `export_block_from_module`, `include_module_function` ve `modules/math_module.cstar` import/export/include/module alias davranışını korur.</p>
+            </div>
+          </div>
+          <p>`examples/interactive/` ise kullanıcı girdisi ve terminal runtime'ını zorlayan daha büyük programları tutar: calculator, stress örnekleri, raw input kullanan snake ve frame render eden donut gibi.</p>
+        </section>
+
         <section id="tipler">
           <h2>Tip Sistemi</h2>
           <p class="lead">C* statik tipli bir dildir. Primitive tipler açık bit genişliğiyle yazılabilir; mimariye bağlı alias'lar da vardır.</p>
@@ -596,8 +629,8 @@
 y = x + <span class="nu">3</span>;
 y += <span class="nu">2</span>;
 y <<= <span class="nu">1</span>;</code></pre>
-          <p>Global değişkenler ve visibility/storage yüzeyi de dilin parçasıdır.</p>
-          <pre data-title="visibility"><code><span class="kw">static</span> <span class="ty">int32</span> counter = <span class="nu">0</span>;
+          <p>Global değişkenler, module visibility ve native linkage yüzeyi de dilin parçasıdır. Modifier yazılmayan module declaration private kabul edilir; `public` include edilen dosyadan dışarı açılan API'yi seçer.</p>
+          <pre data-title="visibility"><code><span class="kw">public</span> <span class="kw">static</span> <span class="ty">int32</span> counter = <span class="nu">0</span>;
 <span class="kw">import</span> <span class="fn">puts</span>(<span class="kw">constptr</span> <span class="ty">char</span>*) <span class="op">::</span> <span class="ty">int32</span>;
 <span class="kw">export</span> <span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> { <span class="kw">ret</span> <span class="nu">0</span>; }</code></pre>
           <p>Native import bildirimi ABI için yalnızca tipi ister; parametre adı okunabilirlik için opsiyoneldir.</p>
@@ -656,7 +689,7 @@ y <<= <span class="nu">1</span>;</code></pre>
 
         <section id="array">
           <h2>Array</h2>
-          <p>Array boyutları `[]` içinde yazılır; çok boyut için `:` ayracı kullanılır. Tek boyutlu array okuma/yazma ve parametre geçişi çekirdekte çalışır.</p>
+          <p>Array boyutları `[]` içinde yazılır. Çok boyutlu array için boyutlar ve indexler `:` ile ayrılır; initializer ise dilin okunur proposal biçimine sadık kalarak katmanlı parantez kullanır.</p>
           <pre data-title="array_param_write.cstar"><code><span class="fn">write_first</span>(<span class="ty">int32</span>[<span class="nu">2</span>] arr) <span class="op">::</span> <span class="ty">void</span> {
   arr[<span class="nu">0</span>] = <span class="nu">9</span>;
   <span class="kw">ret</span>;
@@ -667,7 +700,19 @@ y <<= <span class="nu">1</span>;</code></pre>
   <span class="fn">write_first</span>(values);
   <span class="kw">ret</span> values[<span class="nu">0</span>];
 }</code></pre>
-          <div class="callout warn">Çok boyutlu array semantic'i tasarımın parçasıdır; ilk production modelde indexing/read/write ayrı aşamada tamamlanır.</div>
+          <pre data-title="multidim_array_read.cstar"><code><span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
+  <span class="ty">int32</span> matrix[<span class="nu">2</span>:<span class="nu">3</span>] = ((<span class="nu">1</span>, <span class="nu">2</span>, <span class="nu">3</span>),
+                            (<span class="nu">4</span>, <span class="nu">5</span>, <span class="nu">6</span>));
+  <span class="kw">ret</span> matrix[<span class="nu">1</span>:<span class="nu">1</span>];
+}</code></pre>
+          <pre data-title="multidim_array_dynamic_index.cstar"><code><span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
+  <span class="ty">int32</span> matrix[<span class="nu">2</span>:<span class="nu">3</span>] = ((<span class="nu">1</span>, <span class="nu">2</span>, <span class="nu">3</span>),
+                            (<span class="nu">4</span>, <span class="nu">5</span>, <span class="nu">6</span>));
+  <span class="ty">int32</span> row = <span class="nu">1</span>;
+  <span class="ty">int32</span> col = <span class="nu">2</span>;
+  <span class="kw">ret</span> matrix[row:col];
+}</code></pre>
+          <p>Parametre olarak tek ve çok boyutlu array geçirilebilir. Sabit indexler compile-time uyarı verebilir; dynamic indexler LLVM tarafında linearized GEP'e indirilir. Parser newline continuation'a dayanıklıdır: initializer, function call, binary expression ve `arr[1:\n2]` gibi formlar satır bölünce bozulmaz.</p>
         </section>
 
         <section id="pointer">
@@ -876,8 +921,8 @@ conn <span class="op">.=</span> <span class="fn">try_send</span>();
 
         <section id="paket">
           <h2>Paket, Import ve Linkage</h2>
-          <p>Paket sistemi `include`, `import`, `export`, `from` ve `as` etrafında tasarlanır.</p>
-          <pre data-title="package proposal"><code><span class="kw">include</span> involved {
+          <p>Paket sistemi `include`, `public`, `import`, `export`, `from` ve `as` etrafında tasarlanır. `import`/`export` native veya library linkage yüzeyidir; module visibility değildir. Bugünkü compiler native import/export imzalarını LLVM external declaration'a, local `.cstar` include dosyalarında ise `public` deklarasyonları aynı compilation unit'e indirir.</p>
+          <pre data-title="include proposal"><code><span class="kw">include</span> involved {
     <span class="st">'ML'</span>,
     <span class="st">'X'</span>,
     <span class="st">'Y'</span>,
@@ -885,14 +930,37 @@ conn <span class="op">.=</span> <span class="fn">try_send</span>();
 
 <span class="kw">include</span> <span class="st">"std:math:PI"</span> <span class="kw">as</span> PI;
 
-<span class="kw">import</span> <span class="fn">glClearColor</span>(<span class="ty">float</span> r, <span class="ty">float</span> g, <span class="ty">float</span> b, <span class="ty">float</span> a) <span class="op">::</span> <span class="ty">void</span> <span class="kw">from</span> <span class="st">"opengl32.lib"</span>;
+<span class="kw">include</span> <span class="st">"modules/math_module.cstar"</span> <span class="kw">as</span> math;
+
+<span class="fn">main</span>() <span class="op">::</span> <span class="ty">int32</span> {
+    <span class="kw">ret</span> math.<span class="fn">add_from_module</span>(<span class="nu">2</span>, <span class="nu">5</span>);
+}</code></pre>
+          <pre data-title="module surface"><code><span class="cm"># modules/math_module.cstar</span>
+<span class="kw">public</span> <span class="fn">add_from_module</span>(<span class="ty">int32</span> a, <span class="ty">int32</span> b) <span class="op">::</span> <span class="ty">int32</span> {
+    <span class="kw">ret</span> a + b;
+}
+
+<span class="fn">hidden_helper</span>() <span class="op">::</span> <span class="ty">int32</span> {
+    <span class="kw">ret</span> <span class="nu">1</span>;
+}</code></pre>
+          <pre data-title="native import/export"><code><span class="kw">import</span> <span class="fn">abs</span>(<span class="ty">int32</span>) <span class="op">::</span> <span class="ty">int32</span>;
+<span class="kw">import</span> <span class="fn">abs</span>(<span class="ty">int32</span> value) <span class="op">::</span> <span class="ty">int32</span>;
+<span class="kw">import</span> <span class="fn">abs</span>(<span class="ty">int32</span> value) <span class="op">::</span> <span class="ty">int32</span> <span class="kw">from</span> <span class="st">"std:crt"</span>;
 
 <span class="kw">export</span> <span class="fn">sin</span>(<span class="ty">float64</span> x) <span class="op">::</span> <span class="ty">float64</span> <span class="kw">from</span> <span class="st">"std:math"</span>;
 
 <span class="kw">import</span> <span class="kw">from</span> <span class="st">"std:crt"</span> {
     <span class="fn">abs</span>(<span class="ty">int32</span> value) <span class="op">::</span> <span class="ty">int32</span>;
 }</code></pre>
-          <p>Derleyicinin bugünkü çalışan alt kümesi `import/export ... from ...` ve blok deklarasyonlarını external çağrı imzasına indirir. Yerel `.cstar` include dosyaları ana compilation unit'e parse edilir ve alias function lookup çalışır: `math.add(...)` include edilen modüldeki `add` imzasına çözülür. Library ABI için `--emit=staticlib` ve `--emit=dynamiclib` kullanılır; executable build sırasında ana dosyadaki `export` deklarasyonları uyarı üretir.</p>
+          <pre data-title="library output"><code><span class="cm"># static library</span>
+cstar math.cstar --emit=staticlib
+
+<span class="cm"># dynamic library</span>
+cstar math.cstar --emit=dynamiclib
+
+<span class="cm"># normal executable</span>
+cstar app.cstar --run</code></pre>
+          <p>`from "m"` gibi kısa native library adları Unix/macOS tarafında `-lm` olur. `.lib`, `.a`, `.so`, `.dylib` ve path değerleri doğrudan linker'a geçer. `std:math` ve `std:crt` gibi logical module adları linker argümanına çevrilmez; bunlar package namespace tasarımı için saklanır. Local include tarafında private module üyeleri alias üzerinden çağrılamaz; public API `public` ile seçilir. Executable build sırasında ana dosyada `export` varsa compiler uyarı üretir; başka modüllere ABI açılacaksa static veya dynamic library emit seçilmelidir.</p>
         </section>
 
         <section id="diagnostic">
@@ -978,6 +1046,16 @@ target = <span class="kw">move</span> source;
 value <span class="kw">as</span> <span class="ty">int32</span>;
 <span class="fn">cast</span>&lt;<span class="ty">int32</span>&gt;(value);
 <span class="fn">unsafe_cast</span>&lt;<span class="ty">int32</span>*&gt;(<span class="nu">1</span>);
+
+<span class="cm">// multidim array</span>
+<span class="ty">int32</span> matrix[<span class="nu">2</span>:<span class="nu">3</span>] = ((<span class="nu">1</span>, <span class="nu">2</span>, <span class="nu">3</span>), (<span class="nu">4</span>, <span class="nu">5</span>, <span class="nu">6</span>));
+matrix[row:col];
+
+<span class="cm">// module/native</span>
+<span class="kw">include</span> <span class="st">"modules/math_module.cstar"</span> <span class="kw">as</span> math;
+math.<span class="fn">add_from_module</span>(<span class="nu">2</span>, <span class="nu">5</span>);
+<span class="kw">import</span> <span class="fn">abs</span>(<span class="ty">int32</span> value) <span class="op">::</span> <span class="ty">int32</span> <span class="kw">from</span> <span class="st">"std:crt"</span>;
+<span class="kw">export</span> <span class="fn">api</span>() <span class="op">::</span> <span class="ty">int32</span> { <span class="kw">ret</span> <span class="nu">0</span>; }
 
 <span class="cm">// protocol</span>
 <span class="kw">protocol</span> FileState <span class="kw">for</span> FileHandle { <span class="kw">state</span> closed, opened; }</code></pre>

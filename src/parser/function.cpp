@@ -1,11 +1,13 @@
 #include <parser/parser.hpp>
 
-void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier,
+void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
                            bool forceForwardDecl) {
   auto funcName = currentTokenStr();
   bool isForwardDecl =
-      forceForwardDecl || visibilitySpecifier == VisibilitySpecifier::VIS_IMPORT;
-  bool isExported = visibilitySpecifier == VisibilitySpecifier::VIS_EXPORT;
+      forceForwardDecl ||
+      declarationModifiers.linkage == VisibilitySpecifier::VIS_IMPORT;
+  bool isExported =
+      declarationModifiers.linkage == VisibilitySpecifier::VIS_EXPORT;
 
   auto posInfo = currentTokenInfo().getTokenPositionInfo();
   size_t begin = posInfo.begin;
@@ -106,7 +108,8 @@ void CStarParser::funcDecl(VisibilitySpecifier visibilitySpecifier,
 
   auto func = std::make_unique<FuncAST>(
       funcName, std::move(returnType), std::move(params), std::move(scope),
-      retTypeQualifier, isForwardDecl, isExported, semLoc);
+      retTypeQualifier, isForwardDecl, isExported,
+      declarationModifiers.isStatic, declarationModifiers.access, semLoc);
 
   this->m_AST.emplace_back(std::move(func));
 }
@@ -317,6 +320,10 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
     TypeQualifier typeQualifier = TypeQualifier::Q_NONE;
     bool hasConstness = false;
 
+    if (isDeclarationModifier(currentTokenInfo())) {
+      parseDeclarationModifiers(true);
+    }
+
     if (isTypeQualifier(currentTokenInfo())) {
       hasConstness = true;
       switch (currentTokenKind()) {
@@ -387,7 +394,9 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
           (!(is(TokenKind::PLUSPLUS) || is(TokenKind::MINUSMINUS)) &&
            nextToken == TokenKind::IDENT) ||
           (isTypeQualifier(prevTokenInfo()) && hasConstness)) {
-        varDecl(typeQualifier, VisibilitySpecifier::VIS_LOCAL,
+        DeclarationModifiers localModifiers;
+        localModifiers.linkage = VisibilitySpecifier::VIS_LOCAL;
+        varDecl(typeQualifier, localModifiers,
                 is(TokenKind::IDENT), true, &scope);
       } else if (nextToken == TokenKind::POLICY_ASSIGN) {
         ParserError(

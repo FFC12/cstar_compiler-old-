@@ -130,6 +130,7 @@ examples/smoke/import_function_abs.cstar
 examples/smoke/import_function_from_crt.cstar
 examples/smoke/import_function_named_param.cstar
 examples/smoke/include_module_function.cstar
+examples/smoke/include_module_public_static.cstar
 examples/smoke/const_value.cstar
 examples/smoke/const_pointer.cstar
 examples/smoke/reference_param.cstar
@@ -213,7 +214,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Her zaman yeşil kalması gereken küçük çalışan compiler çekirdeği.
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
-- Güncel durumda 91/91 dosya başarılı.
+- Güncel durumda 92/92 dosya başarılı.
 
 `examples/type_checker/`:
 
@@ -221,7 +222,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Exit code `1` çoğu dosya için kabul edilebilir diagnostic olabilir.
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
-- Güncel durumda `-ExpectDiagnostics` ile 52/52 dosya kontrollü diagnostic üretiyor, crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 55/55 dosya kontrollü diagnostic üretiyor, crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -287,6 +288,12 @@ examples/type_checker/045.cstar
 examples/type_checker/046.cstar
 examples/type_checker/047.cstar
 examples/type_checker/048.cstar
+examples/type_checker/049.cstar
+examples/type_checker/050.cstar
+examples/type_checker/051.cstar
+examples/type_checker/052.cstar
+examples/type_checker/053.cstar
+examples/type_checker/054.cstar
 ```
 
 Bu dosyalar parser/pass hattına giriyor ve semantic diagnostic üretebiliyor. Kritik semantic sınıflar `expected-code` etiketiyle doğrulanabilir.
@@ -308,7 +315,7 @@ Güncel sınıflandırma:
 - `examples/variables/000.cstar` artık generic function call/type attribute syntax'ını parse ediyor; kalan diagnostic'ler dosyanın proposal/stres örneği gibi aynı global sembolleri tekrar tanımlamasından geliyor.
 - `examples/variables/` güncel durumda 1 kontrollü diagnostic, 0 crash/assert.
 - `examples/papers/policy.cstar` policy syntax henüz parser'da olmadığı için parse diagnostic üretiyor.
-- `examples/papers/syntax.cstar` include syntax'ı için kontrollü `not implemented` diagnostic üretiyor; parser artık takılmıyor.
+- `examples/papers/syntax.cstar` artık include/import/export yüzeyini parse ediyor; ilk kontrollü diagnostic `attribute Area<T>` proposal alanında üretiliyor.
 - `examples/papers/` güncel durumda 2 kontrollü diagnostic, 0 crash/assert.
 
 ## Aşama 0 - Çalışma Zemini
@@ -357,8 +364,6 @@ Kalanlar:
   - `C:\Program Files\LLVM\lib\cmake\llvm` benzeri MSVC uyumlu LLVM kurulumu ile test edilecek.
   - MSYS2 LLVM paketleri MSVC linker ile karıştırılmayacak.
 - Example runner:
-  - Smoke default çalışır.
-  - Type-checker diagnostic/crash ayrımı yapar.
   - Her suite için beklenen durum manifest'i eklenecek.
 - Diagnostic sistemi:
   - Her semantic hata call-site'ı generic `CST2001` yerine özel hata kodlarına ayrılacak.
@@ -584,7 +589,8 @@ Tamamlanan:
   - Tamamlandı: explicit `cast<T>(expr)` ile function argument geçme.
   - Tamamlandı: tek seviyeli primitive pointer argümana `ref x` geçirme ve callee içinde `deref p` okuma için smoke/codegen MVP.
   - Tamamlandı: pointer return smoke (`identity(int32* p) :: int32*`).
-  - Kalan: qualifier argümanları ve array parametreleri.
+  - Tamamlandı: qualifier argümanları.
+  - Tamamlandı: tek ve çok boyutlu array parametreleri.
 - Forward declaration call:
   - Tamamlandı: `foo` çağrıldığı noktadan sonra tanımlansa da codegen çalışıyor.
 - Import/forward declaration call:
@@ -628,7 +634,7 @@ Tamamlanan:
   - `examples/type_checker/036.cstar`
   - `examples/type_checker/037.cstar`
 
-TODO: Bu alt aşamada açık madde kalmadı. Çok boyutlu array ve colon indexing Aşama 4'te ele alınacak.
+İleri aşama: Bu alt aşamada açık madde kalmadı. Çok boyutlu array ve colon indexing Aşama 4'te tamamlandı.
 
 ### 2.3 Cast
 
@@ -666,7 +672,7 @@ Tamamlanan:
   - `examples/type_checker/039.cstar`
   - `examples/type_checker/040.cstar`
 
-TODO: Bu alt aşamada açık madde kalmadı. Gerçek user-defined cast/conversion overload kuralları `struct`/`trait` sistemi geldikten sonra Aşama 7 altında tasarlanacak.
+İleri aşama: Bu alt aşamada açık madde kalmadı. Gerçek user-defined cast/conversion overload kuralları `struct`/`trait` sistemi geldikten sonra Aşama 7 altında tasarlanacak.
 
 ## Aşama 3 - Memory Model: Pointer, Reference, Qualifier
 
@@ -737,16 +743,11 @@ Tamamlanan:
   - `examples/type_checker/016.cstar`, `017.cstar`, `020.cstar`, `021.cstar`, `022.cstar`, `023.cstar`, `024.cstar`, `025.cstar`, `026.cstar`, `027.cstar`, `034.cstar`, `035.cstar`, `039.cstar` dosyaları `expected-code` ile doğrulanır.
 - `tools/run_examples.ps1` diagnostic suite'lerinde `expected-code` kontrolü yapar.
 
-TODO: Bu alt aşamada açık madde kalmadı. Ownership transfer ve lifetime başlıkları Aşama 3.2 altında takip edilecek.
+İleri aşama: Bu alt aşamada açık madde kalmadı. Ownership transfer ve lifetime başlıkları Aşama 3.2 altında takip edilecek.
 
 ### 3.2 Ownership Pointer `^`
 
 Durum: unique `^` ve shared `*` pointer ayrımı compiler çekirdeğinde gerçek semantik taşır.
-
-TODO:
-
-- Scope çıkışı/destructor lowering ile final strong-count release.
-- Heap allocation/control-block layout `new`/allocator sistemi ile birleştirilecek.
 
 Tamamlanan:
 
@@ -804,13 +805,12 @@ Tamamlanan:
 - `examples/type_checker/047.cstar`
 - `examples/type_checker/048.cstar`
 
+Kalan:
+
+- Scope çıkışı/destructor lowering ile final strong-count release.
+- Heap allocation/control-block layout `new`/allocator sistemi ile birleştirilecek.
+
 ### 3.3 Qualifier
-
-TODO:
-
-- Per-level qualifier syntax tasarımı:
-  - `const int32*` mevcut prefix syntax olarak korunur.
-  - Pointer seviyesine özel qualifier yazımı için proposal netleştirilecek.
 
 Tamamlanan:
 
@@ -866,6 +866,12 @@ Tamamlanan:
   - `examples/type_checker/025.cstar`
   - `examples/type_checker/026.cstar`
 
+Kalan:
+
+- Per-level qualifier syntax tasarımı:
+  - `const int32*` mevcut prefix syntax olarak korunur.
+  - Pointer seviyesine özel qualifier yazımı için proposal netleştirilecek.
+
 ## Aşama 4 - Arrays ve Indexing
 
 Durum: sabit boyutlu tek ve çok boyutlu array MVP tamamlandı.
@@ -906,7 +912,7 @@ Tamamlanan:
   - Delimiter içi veya operator/comma sonrası satır sonları expression devamı kabul edilir.
   - `((1, 2, 3),\n (4, 5, 6))`, `1 +\n2`, `func(a,\nb)` ve `arr[1:\n2]` smoke ile korunur.
 
-TODO: Bu aşamada açık MVP maddesi kalmadı. Slice/range indexing ve runtime bounds check ayrı ileri aşamaya taşındı.
+İleri aşama: Bu aşamada açık MVP maddesi kalmadı. Slice/range indexing ve runtime bounds check ayrı ileri aşamaya taşındı.
 
 ## Aşama 5 - Kontrol Akışı
 
@@ -923,7 +929,7 @@ Proposal hedefleri:
 - range:
   - `loop(i in [0, 100]) { ... }`
 
-TODO:
+Tamamlanan:
 
 - While-style MVP tamamlandı:
   - `examples/smoke/loop_while_statement.cstar`
@@ -945,7 +951,7 @@ TODO:
   - `examples/smoke/loop_array_indexed_iterable.cstar`
   - `examples/smoke/loop_array_param_iterable.cstar`
 
-TODO: Bu alt aşamada temel loop yüzeyi tamamlandı. Sequence/trait tabanlı genel iterable, reverse/step range ve bounds politikası ileride stdlib/trait aşamasına taşındı.
+İleri aşama: Bu alt aşamada temel loop yüzeyi tamamlandı. Sequence/trait tabanlı genel iterable, reverse/step range ve bounds politikası ileride stdlib/trait aşamasına taşındı.
 
 ### 5.2 Option / Match Benzeri Yapı
 
@@ -966,7 +972,7 @@ Tamamlanan:
 - Function body içinde `option` artık parser'ı takmaz; controlled proposal diagnostic üretir.
   - `examples/type_checker/051.cstar`
 
-TODO: Gerçek parser/AST/codegen `enum` ve temel user-defined type tasarımından sonra açılacak. Bu alt aşamada açık parser güvenlik/tasarım maddesi kalmadı.
+İleri aşama: Gerçek parser/AST/codegen `enum` ve temel user-defined type tasarımından sonra açılacak. Bu alt aşamada açık parser güvenlik/tasarım maddesi kalmadı.
 
 ## Aşama 6 - Import / Package / Native Interop
 
@@ -998,6 +1004,19 @@ Tamamlanan:
 - `include ... as alias` function-call lookup'a bağlı:
   - `math.add_from_module(...)`
   - `examples/smoke/include_module_function.cstar`
+- `public`/default-private module visibility MVP'si tamamlandı:
+  - `public` function/variable declaration'ları include edilen local module'den ana compilation unit'e açılır
+  - modifier yazılmayan declaration default private kabul edilir
+  - `import`/`export` visibility değil, native/linkage ABI yüzeyidir
+  - private module function'ına alias üzerinden erişim controlled diagnostic üretir
+  - `examples/type_checker/052.cstar`
+- Module-level `static` MVP'si tamamlandı:
+  - static function LLVM tarafında internal linkage alır
+  - static global variable internal linkage/storage davranışını korur
+  - static function non-static global symbol/function kullanamaz
+  - `examples/smoke/include_module_public_static.cstar`
+  - `examples/type_checker/053.cstar`
+  - `examples/type_checker/054.cstar`
 - Native link normalizasyonu:
   - `"m"` -> Unix/macOS için `-lm`
   - `"foo.lib"`, `.a`, `.so`, `.dylib` ve path değerleri doğrudan linker'a geçer
@@ -1005,8 +1024,9 @@ Tamamlanan:
 
 Kalan:
 
-- Include edilen dosyada export-only görünürlük sınırı henüz uygulanmıyor; local `.cstar` include şimdilik AST merge modeliyle çalışıyor.
-- `struct`/user-defined type modül export/import davranışı Aşama 7 ile birlikte tasarlanacak.
+- Bu aşamada açık MVP maddesi kalmadı.
+- Gerçek namespace/type module sistemi ve `struct`/user-defined type modül export/import davranışı Aşama 7 ile birlikte tasarlanacak.
+- Not: Bugünkü include modeli source-level public declaration merge yapar; public function body içinde private module helper lowering'i gerçek module object/scope modeliyle birlikte genişletilecek.
 
 ## Aşama 7 - User-defined Types
 
@@ -1030,7 +1050,7 @@ Durum:
 - `dynamic protocol` açık runtime maliyeti isteyen durumlar içindir.
 - `.=` token'ı parser'da tanınır, fakat yalnızca dynamic/provability-gap protocol lowering netleşince codegen'e alınacak; bugün proposal diagnostic üretir.
 
-TODO:
+Kalan:
 
 - Önce `struct` MVP tasarla.
 - Field layout + LLVM struct type.
@@ -1064,22 +1084,28 @@ TODO:
 
 Durum:
 
-- Lexer ve parser `static` token'ını global visibility/storage tarafında kısmen kabul eder.
-- Global `static` internal linkage benzeri davranır.
 - Local static, static member, init-order ve thread-safe static initialization yok.
 
-TODO:
+Tamamlanan:
 
-- `static` anlamlarını ayır:
-  - global internal linkage.
-  - local static storage duration.
-  - type/member static.
+- Lexer ve parser `static` token'ını module-level function/variable declaration modifier olarak kabul eder.
+- Global `static` internal linkage/storage davranışı alır.
+- Function-level `static` LLVM internal linkage alır.
+- Static function yalnızca static global state'e ve static function'lara erişebilir.
+- Non-static global erişimi semantic diagnostic üretir:
+  - `examples/type_checker/053.cstar`
+- Non-static function call semantic diagnostic üretir:
+  - `examples/type_checker/054.cstar`
+
+Kalan:
+
+- Local static storage duration.
 - Local static için one-time thread-safe init planı.
-- Function-level static ve method static grammar kararları.
+- Static member ve method/member static grammar kararları.
 
 ### 7.2 Struct
 
-TODO:
+Kalan:
 
 - `struct Name { field; ... }` parser/AST.
 - Field layout ve LLVM `StructType`.
@@ -1092,7 +1118,7 @@ TODO:
 
 ### 7.3 Trait
 
-TODO:
+Kalan:
 
 - `trait Name { ... }` parser/AST.
 - Trait requirement table.
@@ -1123,7 +1149,7 @@ Durum:
 - Parser `attribute` için controlled proposal diagnostic üretir.
 - AST/semantic yok.
 
-TODO:
+Kalan:
 
 - `attribute Name<T> { ... }` grammar'ını proposal olarak netleştir.
 - Attribute'ın trait'ten farkını yaz:
@@ -1141,7 +1167,7 @@ Durum:
 - `@` şu an unhandled.
 - Parser macro/directive AST yok.
 
-TODO:
+Kalan:
 
 - `macro name(args) { ... }` ile `#directive` ayrımını netleştir.
 - Macro expansion zamanı:
@@ -1157,31 +1183,33 @@ TODO:
 
 Tamamlanan son adım:
 
-- Forward declaration/codegen sıralaması düzeltildi:
+- Module visibility ve static declaration modifier ayrımı tamamlandı:
 
 ```text
-main() :: int32 {
-    ret add(1, 2);
+// math_module.cstar
+public add_from_module(int32 a, int32 b) :: int32 {
+    ret a + b;
 }
 
-add(int32 a, int32 b) :: int32 {
-    ret a + b;
+// app.cstar
+include "modules/math_module.cstar" as math
+
+main() :: int32 {
+    ret math.add_from_module(2, 5);
 }
 ```
 
-Semantic pass zaten fonksiyonu biliyordu; codegen tarafında bütün fonksiyon prototipleri body üretilmeden önce module'a ekleniyor.
+`import`/`export` linkage alanına çekildi; local module görünürlüğü `public`/default-private ile ayrıldı. Module-level `static` function/variable MVP'si de semantic ve codegen tarafında çalışıyor.
 
 Sıradaki teknik iş:
 
-- Kontrol akışı smoke:
+- Aşama 7'ye geçiş: önce küçük `struct` MVP.
 
 ```cstar
-main() :: int32 {
-    if (1) {
-        ret 1;
-    }
-    ret 0;
+struct Point {
+    int32 x;
+    int32 y;
 }
 ```
 
-Function call MVP genişledi. Argüman sayısı/tipi diagnostic'i ve forward declaration codegen desteği eklendi. Bir sonraki adım `if`/`else` için minimal smoke ve branch codegen stabilizasyonu.
+Öncelik parser/AST, field layout, LLVM `StructType`, field access ve constructor/new kararlarını birbirine karıştırmadan aşamalı açmak.

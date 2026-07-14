@@ -1,0 +1,8 @@
+// expected: pass
+// expected-exit: 12
+
+include "modules/public_static_module.cstar" as cfg
+
+main() :: int32 {
+  ret cfg.double_limit();
+}

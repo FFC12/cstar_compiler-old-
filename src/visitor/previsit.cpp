@@ -469,6 +469,13 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   symbolInfo.isRef = varAst.m_IsRef;
   symbolInfo.isUnique = varAst.m_IsUniquePtr;
   symbolInfo.isCastable = true;
+  symbolInfo.isPublic = varAst.m_AccessSpec == ACCESS_PUBLIC;
+  symbolInfo.isStatic = varAst.m_IsStatic ||
+                        varAst.m_VisibilitySpec == VisibilitySpecifier::VIS_STATIC;
+  symbolInfo.isExported =
+      varAst.m_VisibilitySpec == VisibilitySpecifier::VIS_EXPORT;
+  symbolInfo.isImported =
+      varAst.m_VisibilitySpec == VisibilitySpecifier::VIS_IMPORT;
   symbolInfo.qualifierLevels =
       BuildQualifierLevels(varAst.m_TypeQualifier, symbolInfo.indirectionLevel,
                            symbolInfo.isRef);
@@ -1549,8 +1556,14 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
   symbolInfo.begin = funcAst.m_SemLoc.begin;
   symbolInfo.end = funcAst.m_SemLoc.end;
   symbolInfo.line = funcAst.m_SemLoc.line;
+  symbolInfo.isPublic = funcAst.m_Access == ACCESS_PUBLIC;
+  symbolInfo.isStatic = funcAst.m_IsStatic;
+  symbolInfo.isExported = funcAst.m_IsExported;
+  symbolInfo.isImported = funcAst.m_IsForwardDecl && !funcAst.m_IsExported;
 
   if (m_TypeChecking) {
+    const bool previousStaticFunction = m_CurrentFunctionIsStatic;
+    m_CurrentFunctionIsStatic = funcAst.m_IsStatic;
     this->m_LastScopeSymbols = LocalSymbolTable[funcAst.m_FuncName];
     for (auto &param : funcAst.m_Params) {
       auto symbol = param->acceptBefore(*this);
@@ -1561,6 +1574,7 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
     for (auto &node : funcAst.m_Scope) {
       typeCheckerScopeHandler(node);
     }
+    m_CurrentFunctionIsStatic = previousStaticFunction;
   } else {
     for (auto &param : funcAst.m_Params) {
       auto symbol = param->acceptBefore(*this);
@@ -2053,6 +2067,12 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
   }
 
   const auto &signature = signatureIt->second;
+  if (m_TypeChecking && m_CurrentFunctionIsStatic &&
+      !signature.returnType.isStatic) {
+    this->m_TypeErrorMessages.emplace_back(
+        "static function cannot call non-static function '" + funcName + "'",
+        symbolInfo);
+  }
   if (signature.params.size() != argNodes.size()) {
     this->m_TypeErrorMessages.emplace_back(
         "Function '" + funcName + "' expects " +
@@ -2707,6 +2727,14 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
           "'" + symbolName + "' shadowing global variable", matchedSymbol);
     } else {
     }
+  }
+
+  if (m_TypeChecking && m_CurrentFunctionIsStatic && isGlobSymbol &&
+      !matchedSymbol.isStatic && !matchedSymbol.isImported) {
+    this->m_TypeErrorMessages.emplace_back(
+        "static function cannot access non-static global symbol '" +
+            symbolName + "'",
+        symbolInfo);
   }
 
   return true;

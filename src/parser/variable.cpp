@@ -1,7 +1,7 @@
 #include <parser/parser.hpp>
 
 void CStarParser::varDecl(TypeQualifier typeQualifier,
-                          VisibilitySpecifier visibilitySpecifier,
+                          DeclarationModifiers declarationModifiers,
                           bool isDefinedType, bool isLocal,
                           std::vector<ASTNode>* scope) {
   TypeSpecifier type = TypeSpecifier::SPEC_I8;
@@ -79,11 +79,13 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
     // ASTNode ast = std::unique_ptr<VarAST>(new VarAST(name, std::move(rhs),
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));
     auto ast = std::make_unique<VarAST>(
-        name, std::move(definedTypeSymbol), std::move(rhs), type, typeQualifier, visibilitySpecifier,
+        name, std::move(definedTypeSymbol), std::move(rhs), type, typeQualifier,
+        declarationModifiers.linkage, declarationModifiers.access,
+        declarationModifiers.isStatic,
         indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
         std::move(arrayDimensions), semLoc, isMoveInit);
 
-    ast->setDeclKind(getDeclKind(visibilitySpecifier));
+    ast->setDeclKind(getDeclKind(declarationModifiers.linkage));
 
     if (isLocal) {
       scope->emplace_back(std::move(ast));
@@ -103,11 +105,13 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
     // ASTNode ast = std::unique_ptr<VarAST>(new VarAST(name, std::move(rhs),
     // TypeSpecifier::SPEC_I8, VisibilitySpecifier::VIS_EXPORT));
     auto ast = std::make_unique<VarAST>(
-        name, std::move(definedTypeSymbol),std::move(rhs), type, typeQualifier, visibilitySpecifier,
+        name, std::move(definedTypeSymbol),std::move(rhs), type, typeQualifier,
+        declarationModifiers.linkage, declarationModifiers.access,
+        declarationModifiers.isStatic,
         indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
         std::move(arrayDimensions), semLoc, isMoveInit);
 
-    ast->setDeclKind(getDeclKind(visibilitySpecifier));
+    ast->setDeclKind(getDeclKind(declarationModifiers.linkage));
 
     this->advance();
     if (isLocal) {

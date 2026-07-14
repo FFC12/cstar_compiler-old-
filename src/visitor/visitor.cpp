@@ -1957,9 +1957,11 @@ llvm::Function *Visitor::declareFunction(FuncAST &funcAst) {
       paramLayout.hasParams() ? paramLayout.irTypes : std::vector<llvm::Type *>(),
       false);
 
-  auto *function =
-      llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
-                             funcAst.m_FuncName, *Visitor::Module);
+  auto linkage = funcAst.m_IsStatic ? llvm::Function::InternalLinkage
+                                    : llvm::Function::ExternalLinkage;
+  auto *function = llvm::Function::Create(functionType, linkage,
+                                          funcAst.m_FuncName,
+                                          *Visitor::Module);
   function->setCallingConv(llvm::CallingConv::C);
   return function;
 }

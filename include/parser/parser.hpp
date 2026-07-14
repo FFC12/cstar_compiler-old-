@@ -58,6 +58,8 @@ class CStarParser {
 
   // IMPORT, EXPORT, STATIC
   bool isLinkageMark(const TokenInfo& token);
+  bool isDeclarationModifier(const TokenInfo& token);
+  DeclarationModifiers parseDeclarationModifiers(bool localScope);
 
   // INCLUDE, INCLUDE INVOLVED
   bool isPackageMark(const TokenInfo& token);
@@ -252,7 +254,7 @@ class CStarParser {
 
   // variable.cpp
   void varDecl(TypeQualifier typeQualifier,
-               VisibilitySpecifier visibilitySpecifier, bool definedType,
+               DeclarationModifiers declarationModifiers, bool definedType,
                bool isLocal, std::vector<ASTNode>* scope = nullptr);
   DeclKind getDeclKind(VisibilitySpecifier visibilitySpecifier);
   ASTNode initializer(bool isArrayInitializer = false);
@@ -264,7 +266,7 @@ class CStarParser {
   TypeSpecifier typeSpecifierOf(const TokenInfo& tokenInfo);
 
   // function.cpp
-  void funcDecl(VisibilitySpecifier visibilitySpecifier,
+  void funcDecl(DeclarationModifiers declarationModifiers,
                 bool forceForwardDecl = false);
   void advanceParams(std::vector<ASTNode>& params, bool isForwardDecl);
   void advanceScope(std::vector<ASTNode>& scope);

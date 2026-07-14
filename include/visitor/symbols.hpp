@@ -39,6 +39,10 @@ struct SymbolInfo {
   bool isParam = false;
   bool isCastable = false;
   bool isNoMove = false;
+  bool isPublic = false;
+  bool isStatic = false;
+  bool isExported = false;
+  bool isImported = false;
 
   std::string value;
   std::vector<size_t> arrayDimensions;

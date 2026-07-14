@@ -112,6 +112,7 @@ class Visitor {
   SymbolInfoList m_LastScopeSymbols;
   SymbolInfo m_LastSymbolInfo;
   SymbolInfo m_LastFuncRetTypeInfo;
+  bool m_CurrentFunctionIsStatic = false;
 
   // Those are for if we're checking
   // some types which's pointing a address (ptr-type)

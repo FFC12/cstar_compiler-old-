@@ -1,0 +1,12 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+int32 global_counter = 3;
+
+static read_counter() :: int32 {
+  ret global_counter;
+}
+
+main() :: int32 {
+  ret read_counter();
+}

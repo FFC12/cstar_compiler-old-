@@ -13,11 +13,14 @@ class FuncAST : public IAST {
   TypeQualifier m_RetTypeQualifier;
   bool m_IsForwardDecl;
   bool m_IsExported;
+  bool m_IsStatic;
+  AccessSpecifier m_Access;
 
  public:
   FuncAST(std::string funcName, ASTNode retType, std::vector<ASTNode>&& params,
           std::vector<ASTNode>&& scope, TypeQualifier retTypeQualifier,
-          bool isForwardDecl, bool isExported, SemanticLoc semLoc)
+          bool isForwardDecl, bool isExported, bool isStatic,
+          AccessSpecifier access, SemanticLoc semLoc)
       : IAST(semLoc),
         m_FuncName(std::move(funcName)),
         m_RetType(std::move(retType)),
@@ -25,14 +28,20 @@ class FuncAST : public IAST {
         m_Scope(std::move(scope)),
         m_RetTypeQualifier(retTypeQualifier),
         m_IsExported(isExported),
+        m_IsStatic(isStatic),
+        m_Access(access),
         m_IsForwardDecl(isForwardDecl) {
     this->m_ASTKind = ASTKind::Decl;
     this->m_DeclKind = isExported ? DeclKind::ExportFuncDecl
                                   : (isForwardDecl ? DeclKind::ImportFuncDecl
                                                    : DeclKind::FuncDecl);
+    this->m_AccessSpecifier = access;
+    this->m_IsStaticDecl = isStatic;
   }
 
   void debugNode() override {
+    if (m_Access == ACCESS_PUBLIC) std::cout << "public ";
+    if (m_IsStatic) std::cout << "static ";
     if (m_IsForwardDecl) std::cout << "import ";
     if (m_IsExported) std::cout << "export ";
 

@@ -1,6 +1,7 @@
 #ifndef AST_HPP
 #define AST_HPP
 #include <iostream>
+#include <parser/visibility_specifiers.hpp>
 #include <visitor/visitor.hpp>
 
 enum ASTKind {
@@ -65,6 +66,8 @@ class IAST {
   ExprKind m_ExprKind;
   StmtKind m_StmtKind;
   DeclKind m_DeclKind;
+  AccessSpecifier m_AccessSpecifier = ACCESS_PRIVATE;
+  bool m_IsStaticDecl = false;
   SemanticLoc m_SemLoc;
 
  public:
@@ -82,6 +85,13 @@ class IAST {
   [[nodiscard]] ExprKind getExprKind() const { return this->m_ExprKind; }
   [[nodiscard]] ASTKind getASTKind() const { return this->m_ASTKind; }
   [[nodiscard]] DeclKind getDeclKind() const { return this->m_DeclKind; }
+  [[nodiscard]] AccessSpecifier getAccessSpecifier() const {
+    return this->m_AccessSpecifier;
+  }
+  [[nodiscard]] bool isPublicDecl() const {
+    return this->m_AccessSpecifier == ACCESS_PUBLIC;
+  }
+  [[nodiscard]] bool isStaticDecl() const { return this->m_IsStaticDecl; }
 };
 
 #include <memory>

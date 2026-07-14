@@ -92,7 +92,7 @@ VSCode F5/debug akışı için `.vscode` yapılandırmaları da eklendi.
 
 `expected-exit`, generated executable'ın process exit status değeridir. Yani `ret 7;` console'a `7` yazdırmaz; programın exit code'unu `7` yapar. Terminalde doğrudan `.exe` çalıştırıldığında Windows bu değeri ekrana basmaz, PowerShell tarafında `$LASTEXITCODE` ile görülür. Smoke runner bu değeri otomatik yakalar ve `[OK] ... (exit N)` şeklinde doğrular.
 
-Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu anda 77/77 başarılıdır:
+Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu anda 92/92 başarılıdır:
 
 - minimal program ve `ret expr`
 - `ret;` kullanan void fonksiyon çağrısı
@@ -114,6 +114,9 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu
 - `unsafe_cast<T>(expr)` ile integer -> pointer MVP
 - tek boyutlu array element read/write: `arr[0]`, `arr[0] = value`, `arr[0] += value`
 - tek boyutlu array parametre read/write: `read_second(int32[2] arr)`, `write_first(int32[2] arr)`
+- çok boyutlu array read/write/shortcut assignment: `int32 matrix[2:3] = ((1, 2, 3), (4, 5, 6))`, `matrix[1:2]`, `matrix[row:col]`
+- çok boyutlu array parametre read/write: `read_mid(int32[2:3] matrix)`, `write_mid(int32[2:3] matrix)`
+- newline continuation: array initializer, binary expression, function call ve multidim subscript satır bölünce bozulmaz
 - function call, forward function call, call statement
 - symbol argümanlı function call
 - tek seviyeli pointer argümanlı function call: `read_ptr(ref x)` ve callee içinde `deref p`
@@ -135,6 +138,15 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu
 - geçici `input_int()` builtin
 - geçici `input_string()` builtin
 - geçici `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()` ve `read_key()` konsol builtin'leri
+- native import/export:
+  - `import abs(int32) :: int32;`
+  - `import abs(int32 value) :: int32;`
+  - `import abs(int32 value) :: int32 from "std:crt";`
+  - `import { ... }`
+  - `import from "std:crt" { ... }`
+  - `export from "std:math" { ... }`
+- local module include, `public` visibility ve alias function lookup: `include "modules/math_module.cstar" as math`, `math.add_from_module(2, 5)`
+- public static module state/function smoke: `examples/smoke/include_module_public_static.cstar`
 - `if`, `if/else`, `if/elif/else`, nested if ve branch fallthrough
 - `int`, `float` ve pointer condition conversion
 - while-style `loop (condition)`, nested `if` içinde loop ve pointer condition loop
@@ -142,9 +154,9 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Bu set şu
 - range loop: `loop(i in [min, max])`
 - array iterable loop: `loop(value in arr)` ve `loop(index, value in arr)`
 
-`examples/type_checker/` seti şu anda 52/52 kontrollü diagnostic üretir; crash/assert beklenmez. `// expected-code: CSTNNNN` etiketi varsa runner beklenen diagnostic kodunu da doğrular. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, safe cast qualifier stripping reddini, user-defined cast controlled diagnostic'ini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` parametre/pointer adresi reassignment reddini, `readonly` parametre/pointer address/value assignment reddini, array parametreye scalar/farklı boyutlu array geçişi reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, function arg/return ownership transfer ihlallerini, `nomove` ownership-flow ihlallerini, `async`/`await` proposal diagnostic'ini, moved-after-use reddini, `.=` protocol proposal diagnostic'ini, loop dışı `break`/`continue` reddini ve `option` proposal diagnostic'ini kapsar.
+`examples/type_checker/` seti şu anda 55/55 kontrollü diagnostic üretir; crash/assert beklenmez. `// expected-code: CSTNNNN` etiketi varsa runner beklenen diagnostic kodunu da doğrular. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, safe cast qualifier stripping reddini, user-defined cast controlled diagnostic'ini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` parametre/pointer adresi reassignment reddini, `readonly` parametre/pointer address/value assignment reddini, array parametreye scalar/farklı boyutlu array geçişi reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, function arg/return ownership transfer ihlallerini, `nomove` ownership-flow ihlallerini, `async`/`await` proposal diagnostic'ini, moved-after-use reddini, `.=` protocol proposal diagnostic'ini, loop dışı `break`/`continue` reddini, `option` proposal diagnostic'ini, include edilen module içindeki private function erişimi reddini ve `static` function içinden non-static global/function erişimi reddini kapsar.
 
-`examples/functions/`, `examples/variables/` ve `examples/papers/` dizinleri hâlâ daha çok proposal/stres örnekleridir. Runner ile ayrı çalıştırılır; amaç hepsini bugün yeşil yapmak değil, dil geliştikçe buradan küçük MVP smoke'lar çıkarmaktır.
+`examples/functions/`, `examples/variables/` ve `examples/papers/` dizinleri hâlâ daha çok proposal/stres örnekleridir. Runner ile ayrı çalıştırılır; amaç hepsini bugün yeşil yapmak değil, dil geliştikçe buradan küçük MVP smoke'lar çıkarmaktır. `examples/interactive/` ise input, terminal kontrolü, raw input, frame render ve ownership stresini daha büyük programlarla dener.
 
 ## 4. Lexer: Tanınan Token ve Anahtar Kelimeler
 
@@ -159,7 +171,7 @@ ret, in, as,
 if, elif, else,
 ref, deref,
 include, involved, option, loop, default,
-from, import, export, static,
+from, import, export, public, private, static,
 cast, unsafe_cast, sizeof, typeof, move, async, await,
 dynamic, protocol, state,
 with, struct, trait, macro, constructor, destructor, allocator,
@@ -374,19 +386,29 @@ int32 arr[2:2] = ((0, 1), (2, 3));
 Shape^ shape = Triangle();
 ```
 
-Visibility/storage:
+Visibility/storage/linkage:
 
 ```cstar
+public int32 moduleVisible = 10;
 import externalFunc(int x) :: void;
 export main() :: int32 { ret 0; }
 static int globalCounter = 0;
 ```
 
-Mevcut parser global değişkenlerde `import`, `export`, `static` işaretlerini kabul ediyor.
+Mevcut parser module-level function ve variable deklarasyonlarında `public`, `private`, `static`, `import` ve `export` modifier'larını kabul eder.
+
+Visibility/linkage ayrımı:
+
+- `public`, include edilen local module'den dışarı açılan declaration'ı seçer.
+- Modifier yazılmayan declaration default olarak private kabul edilir.
+- `private` açıkça yazılabilir ama default ile aynıdır.
+- `import`/`export` visibility değildir; native/linkage ABI sınırı için kullanılır.
 
 `static` kararı:
 
-- Global scope'ta `static`, internal linkage/storage visibility anlamı taşır.
+- Global scope'ta `static`, internal linkage/storage duration anlamı taşır.
+- Static function LLVM tarafında internal linkage alır.
+- Static function yalnızca static global state'e ve static function'lara erişebilir; non-static global symbol/function kullanımı semantic diagnostic üretir.
 - Local static, static member, init-order ve thread-safe one-time initialization henüz yoktur.
 - `protocol` tarafında ayrıca `static` yazmaya gerek yoktur; protocol default olarak static/provable kabul edilir. Runtime state isteyen açıkça `dynamic protocol` yazmalıdır.
 
@@ -972,7 +994,7 @@ main() :: int32 {
 }
 ```
 
-`as` alias'ı function call lookup için çalışır; `math.add_from_module(...)` gibi alias member çağrısı include edilen module içindeki `add_from_module` imzasına çözülür. Export-only görünürlük sınırı henüz uygulanmaz; local include bugün AST merge modeliyle çalışır.
+`as` alias'ı function call lookup için çalışır; `math.add_from_module(...)` gibi alias member çağrısı include edilen module içindeki `public add_from_module` imzasına çözülür. Include edilen local module yalnızca `public` deklarasyonları ve gerekli native `import` forward deklarasyonlarını dışarı açar. Modifier yazılmayan declaration private kabul edilir ve alias üzerinden çağrılamaz; `examples/type_checker/052.cstar` bunu doğrular.
 
 ### 15.2 Import/export from library
 
@@ -1160,6 +1182,7 @@ Aşağıdaki syntax mevcut parser çekirdeğine en yakın güvenli alt kümedir:
 
 ```cstar
 import puts(constptr char*) :: int;
+include "modules/math_module.cstar" as math;
 
 static int globalCounter = 0;
 
@@ -1174,6 +1197,7 @@ main(int argc, char** argv) :: int {
     int z = x + y * 2;
 
     int values[2:2] = ((0,1),(2,3));
+    int32 item = math.add_from_module(2, 5);
 
     if (z > 10) {
         z += 1;
@@ -1191,14 +1215,13 @@ main(int argc, char** argv) :: int {
 }
 ```
 
-Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, scalar/dereference/tek ve çok boyutlu array assignment, `ret expr`, primitive function call, basit `import func(...) :: type;` native call, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()`, `read_key()`, temel `if/elif/else`, while-style `loop`, range loop, array iterable loop, `break` ve `continue` akışıdır. Genel sequence iterable ve qualifier-heavy bölümler hâlâ ayrı MVP adımı gerektirir.
+Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, scalar/dereference/tek ve çok boyutlu array assignment, çok boyutlu dynamic index, `ret expr`, primitive function call, `import/export/from` native/module declaration, local `.cstar` include, `public`/default-private module visibility MVP'si, module-level `static` function/variable MVP'si ve alias function lookup, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()`, `read_key()`, temel `if/elif/else`, while-style `loop`, range loop, array iterable loop, `break` ve `continue` akışıdır. Genel sequence iterable, gerçek namespace/type module sistemi ve struct/trait/protocol lowering hâlâ ayrı aşama gerektirir.
 
 ## 17. Bilinen Sorunlar ve Teknik Riskler
 
 ### 17.1 Parser bug/riskleri
 
-- `include` gerçek package sistemi olarak uygulanmadı; ancak parser artık bu syntax için kontrollü diagnostic üretir.
-- `initializerList()` fonksiyonu dönüş tipi `ASTNode` olmasına rağmen bazı yollarda return etmiyor.
+- `include` local `.cstar` dosyalarını public declaration olarak merge eder ve alias function lookup çalışır. Gerçek namespace/type module sistemi ve public function body içinde private helper lowering'i henüz tamamlanmadı.
 - Expression parser karmaşık state değişkenleriyle çalışıyor; nested generic/call/subscript/ternary kombinasyonları kırılgan.
 - Parser hata durumlarında hâlâ çoğunlukla tek diagnostic sonrası çıkıyor; recoverable diagnostics ayrı tasarlanmalı.
 

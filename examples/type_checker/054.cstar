@@ -1,0 +1,14 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+helper() :: int32 {
+  ret 1;
+}
+
+static read_helper() :: int32 {
+  ret helper();
+}
+
+main() :: int32 {
+  ret read_helper();
+}

@@ -1,0 +1,7 @@
+hidden_add(int32 a, int32 b) :: int32 {
+  ret a + b;
+}
+
+public public_add(int32 a, int32 b) :: int32 {
+  ret a + b;
+}

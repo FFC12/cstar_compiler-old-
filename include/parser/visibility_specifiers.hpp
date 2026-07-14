@@ -9,6 +9,21 @@
 */
 
 
-enum VisibilitySpecifier { VIS_EXPORT, VIS_IMPORT, VIS_STATIC, VIS_LOCAL, VIS_DEFAULT, VIS_NONE};
+enum VisibilitySpecifier {
+  VIS_EXPORT,
+  VIS_IMPORT,
+  VIS_STATIC,
+  VIS_LOCAL,
+  VIS_DEFAULT,
+  VIS_NONE
+};
+
+enum AccessSpecifier { ACCESS_PRIVATE, ACCESS_PUBLIC };
+
+struct DeclarationModifiers {
+  VisibilitySpecifier linkage = VIS_DEFAULT;
+  AccessSpecifier access = ACCESS_PRIVATE;
+  bool isStatic = false;
+};
 
 #endif

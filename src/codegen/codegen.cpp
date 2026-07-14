@@ -198,8 +198,17 @@ void CStarCodegen::appendIncludedSource(
 
   std::vector<ASTNode> includedAST;
   parser.ownedAST(includedAST);
-  m_AST.insert(m_AST.end(), std::make_move_iterator(includedAST.begin()),
-               std::make_move_iterator(includedAST.end()));
+  for (auto& node : includedAST) {
+    if (node == nullptr || node->getASTKind() != ASTKind::Decl) {
+      continue;
+    }
+
+    const auto declKind = node->getDeclKind();
+    if (node->isPublicDecl() || declKind == DeclKind::ImportFuncDecl ||
+        declKind == DeclKind::ImportVarDecl) {
+      m_AST.push_back(std::move(node));
+    }
+  }
 }
 
 CStarCodegen::CStarCodegen(CStarParser&& parser, std::string& filepath,
