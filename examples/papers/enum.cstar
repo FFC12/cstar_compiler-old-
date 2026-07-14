@@ -1,0 +1,130 @@
+// expected: diagnostic (proposal)
+//
+// C* ENUM / FLAGS / TAGGED DATA PROPOSAL
+// --------------------------------------
+// Enum is primarily a C ABI friendly scalar tag. Payload data uses explicit
+// tagged layout. `tagged` is syntax sugar for that explicit layout, not a hidden
+// heap allocation or runtime metadata system.
+
+// ---------------------------------------------------------------------
+// 1. Scalar enum
+// ---------------------------------------------------------------------
+
+enum Color : uint8 {
+    Red,
+    Green,
+    Blue,
+}
+
+favorite_color() :: Color {
+    ret Color.Green;
+}
+
+// Public/export ABI should require explicit repr like `: uint8`.
+
+// ---------------------------------------------------------------------
+// 2. Flags enum
+// ---------------------------------------------------------------------
+
+flags enum FileMode : uint32 {
+    Read    = 1,
+    Write   = 2,
+    Append  = 4,
+    Create  = 8,
+}
+
+open_flags() :: FileMode {
+    ret FileMode.Read | FileMode.Create;
+}
+
+// ---------------------------------------------------------------------
+// 3. Explicit tagged layout
+// ---------------------------------------------------------------------
+
+enum TokenKind : uint8 {
+    Identifier,
+    Integer,
+    Float,
+    End,
+}
+
+struct Token {
+    TokenKind kind;
+    const char* text;
+    usize text_len;
+    int64 int_value;
+    float64 float_value;
+}
+
+token_integer(int64 value) :: Token {
+    Token token;
+    token.kind = TokenKind.Integer;
+    token.int_value = value;
+    ret token;
+}
+
+token_score(Token& token) :: int32 {
+    option(token.kind) {
+        TokenKind.Identifier: {
+            ret 1;
+        },
+        TokenKind.Integer: {
+            ret 2;
+        },
+        TokenKind.Float: {
+            ret 3;
+        },
+        TokenKind.End: {
+            ret 0;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// 4. `tagged` sugar
+// ---------------------------------------------------------------------
+// This is readable syntax for the same `tag + explicit storage` model.
+
+tagged Packet : uint8 {
+    Ping {
+        uint32 nonce;
+    }
+
+    Data {
+        const char* bytes;
+        usize len;
+    }
+
+    Close
+}
+
+make_data(const char* bytes, usize len) :: Packet {
+    ret Packet.Data { bytes: bytes, len: len };
+}
+
+packet_size(Packet& packet) :: usize {
+    option(packet.tag) {
+        Packet.Ping: {
+            ret sizeof(uint32);
+        },
+        Packet.Data: {
+            ret packet.Data.len;
+        },
+        Packet.Close: {
+            ret 0;
+        }
+    }
+}
+
+// Desugar contract:
+//
+//   enum PacketTag : uint8 { Ping, Data, Close }
+//   struct Packet {
+//       PacketTag tag;
+//       // variant storage, ABI-visible alignment.
+//   }
+//
+// Variant field access like `packet.Data.len` is tag-aware checked access.
+// If pass1 can prove the tag, codegen emits direct field access. If not, the
+// first MVP can emit a diagnostic. Runtime checked access is a separate safety
+// feature, not hidden magic.

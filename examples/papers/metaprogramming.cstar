@@ -1,0 +1,146 @@
+// expected: diagnostic (proposal)
+//
+// C* METAPROGRAMMING / MACRO / ATTRIBUTE PROPOSAL
+// -----------------------------------------------
+// Compile-time generation must stay visible and debuggable. Macro is typed AST
+// substitution. Attribute is checked item/type transformation. Neither replaces
+// trait/protocol semantics.
+
+// ---------------------------------------------------------------------
+// 1. Macro
+// ---------------------------------------------------------------------
+// Macro parameter kinds:
+// - `expr`
+// - `stmt`
+// - `item`
+// - `type`
+// - `ident`
+// - `tokens` as an escape hatch, preferably delayed.
+//
+// Macro expansion is hygienic. Macro locals do not leak into caller scope.
+// Diagnostics must use source maps and point at the macro call site.
+
+macro clamp($value: expr, $min: expr, $max: expr) -> expr {
+    (($value) < ($min) ? ($min) : (($value) > ($max) ? ($max) : ($value)))
+}
+
+macro trace_scope($name: expr, $body: stmt) -> stmt {
+    print("enter: ", $name);
+    $body
+    print("leave: ", $name);
+}
+
+debug_example() :: void {
+    trace_scope("debug_example", {
+        print("working");
+    });
+}
+
+// ---------------------------------------------------------------------
+// 2. Compile-time config/preprocess
+// ---------------------------------------------------------------------
+// This is not C-style blind text replacement. Conditions read compiler config,
+// target info, features, and constant expressions.
+
+#if target.os == "windows" {
+    import Sleep(uint32 ms) :: void from "kernel32";
+} else {
+    import usleep(uint32 usec) :: int32 from "c";
+}
+
+#if !feature("simd") {
+    #warning "SIMD disabled; scalar fallback will be used"
+}
+
+#if build.mode == "release" && cfg("debug_assertions") {
+    #error "release build must not enable debug assertions"
+}
+
+max_fps() :: int32 {
+    #if cfg("game.max_fps") {
+        ret cfg_int("game.max_fps");
+    } else {
+        ret 60;
+    }
+}
+
+// ---------------------------------------------------------------------
+// 3. Attribute and reflection
+// ---------------------------------------------------------------------
+// Attribute surface:
+//
+//   attribute Name for <kind> { ... }
+//   @Name(args)
+//
+// First reflection surface:
+// - `name($item)`
+// - `fields($item)`
+// - `methods($item)`
+// - `has_attribute(item, Name)`
+// - `attribute_args(item, Name)`
+// - `sizeof(Type)` and `alignof(Type)` when compile-time known.
+//
+// Field metadata:
+// - `field.name`
+// - `field.type`
+// - `field.is_public`
+// - `field.qualifiers`
+// - `field.offset` when known.
+//
+// Method metadata:
+// - `method.name`
+// - `method.params`
+// - `method.return_type`
+// - `method.is_static`
+
+attribute ExportJson for struct {
+    $emit function to_json($item& value, StringBuilder& out) :: void {
+        #for field in fields($item) {
+            out.write(field.name);
+            out.write(":");
+            out.write(value.$field);
+        }
+        ret;
+    }
+}
+
+attribute DebugLayout for struct {
+    $emit function debug_layout() :: void {
+        print("type ", name($item), " size=", sizeof($item),
+              " align=", alignof($item));
+
+        #for field in fields($item) {
+            print("field ", field.name,
+                  " type=", field.type,
+                  " offset=", field.offset);
+        }
+
+        #for method in methods($item) {
+            print("method ", method.name,
+                  " returns=", method.return_type);
+        }
+
+        ret;
+    }
+}
+
+@ExportJson
+@DebugLayout
+struct PlayerProfile {
+    int32 id;
+    int32 score;
+}
+
+// Attribute limits:
+// - Cannot make a private field public.
+// - Cannot silently change layout.
+// - Cannot emit hidden runtime metadata.
+// - Cannot bypass trait/protocol conformance.
+// - Cannot freely rewrite function bodies; body rewrite is a separate macro
+//   capability and should be treated as more dangerous.
+//
+// Expansion order:
+// 1. Parse source items.
+// 2. Register item/field/method metadata.
+// 3. Expand attributes into new items.
+// 4. Run pass0/pass1 on both original and generated items.

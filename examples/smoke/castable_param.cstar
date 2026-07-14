@@ -1,0 +1,10 @@
+// expected: pass
+
+cast_is_possible(x bool, bool y) :: int32 {
+    int32 b = y;
+    ret b;
+}
+
+main() :: int32 {
+    ret cast_is_possible(false, true);
+}

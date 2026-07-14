@@ -1,0 +1,134 @@
+// expected: diagnostic (proposal)
+//
+// C* PROTOCOL / TYPESTATE PROPOSAL
+// --------------------------------
+// Protocol owns state safety. It does not allocate, dispatch, or hide runtime
+// hooks. The default protocol path is static/provable. Runtime fallback is
+// explicit with `dynamic protocol` and `.=` only.
+
+protocol FileState for FileHandle {
+    state closed, opened;
+
+    default closed;
+
+    closed -> opened :: open();
+    opened -> closed :: close();
+
+    read() :: !closed;
+    write(const char* data) :: !closed;
+    open(const char* path) :: !opened;
+
+    scope_exit opened -> closed :: close();
+}
+
+struct FileHandle {
+    void* native;
+
+    constructor() :: closed FileHandle^ {
+        self.native = nil;
+        ret self;
+    }
+
+    open(const char* path) :: opened FileHandle^ {
+        self.native = os_open(path);
+        ret self;
+    }
+
+    read() :: constptr char* {
+        ret os_read(self.native);
+    }
+
+    close() :: closed FileHandle^ {
+        os_close(self.native);
+        self.native = nil;
+        ret self;
+    }
+}
+
+// ---------------------------------------------------------------------
+// Scope-exit and except
+// ---------------------------------------------------------------------
+// `scope_exit A -> B :: method();` creates a cleanup edge on every scope exit:
+// `ret`, `throw`, `break`, `continue`, and lowered early exits.
+//
+// Cleanup transitions must be cleanup-safe. Once effects are implemented, these
+// transitions should be `noexcept`. Fallible cleanup must be explicit user code.
+
+enum IoError : uint16 {
+    None,
+    NotFound,
+    PermissionDenied,
+    Interrupted,
+}
+
+open_file(const char* path) except IoError :: opened FileHandle^ {
+    closed FileHandle^ file;
+
+    if (!os_exists(path)) {
+        throw IoError.NotFound;
+    }
+
+    file.open(path);
+    ret file;
+}
+
+read_header(const char* path) except IoError :: int32 {
+    opened FileHandle^ file := open_file(path);
+
+    if (!file_has_header(ref file)) {
+        // Compiler inserts `file.close()` on this throw edge.
+        throw IoError.Interrupted;
+    }
+
+    // Compiler inserts `file.close()` on this return edge too.
+    ret parse_header(ref file);
+}
+
+// ---------------------------------------------------------------------
+// Dynamic protocol
+// ---------------------------------------------------------------------
+// Dynamic protocols add one visible runtime discriminant to the resource
+// layout. `.=` is reserved for dynamic/provability-gap transitions.
+// No hidden hook table, no virtual dispatch, no implicit hashmap.
+
+dynamic protocol ConnectionState for Connection {
+    state idle, sending, failed;
+
+    default idle;
+
+    idle    -> sending :: send();
+    sending -> idle    :: ack();
+    sending -> failed  :: timeout();
+
+    send(const char* packet) :: !failed;
+}
+
+handle_connection(idle Connection^ conn) :: void {
+    loop(true) {
+        conn .= try_send(); // dynamic, tag-checked, visible desugar
+
+        if (conn is failed) {
+            break;
+        }
+    }
+}
+
+// Transparency rule:
+// `--show-desugar` must print synthesized `.=` checks and scope-exit cleanup
+// edges. Protocol behavior cannot hide in an uninspectable runtime table.
+
+// ---------------------------------------------------------------------
+// Multiple protocol states
+// ---------------------------------------------------------------------
+// Each protocol owns one named state slot. States compose orthogonally.
+//
+//   opened locked FileHandle^ file
+//
+// means:
+//
+//   FileState(file) == opened
+//   LockState(file) == locked
+//
+// It is not one combined enum. Cleanup order is reverse acquisition order.
+// If the compiler cannot prove the order, the programmer must write explicit
+// `defer` or method calls.

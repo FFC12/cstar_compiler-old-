@@ -1,33 +1,24 @@
 // expected: diagnostic (proposal)
 //
-// C* STRUCT / LIFECYCLE / OPERATOR PROPOSAL
-// -----------------------------------------
-// Bu dosya C* dilinde struct, constructor/destructor, `drop`, `new`,
-// allocator, operator overloading, trait ve layout reuse modelinin final
-// tasarım kararlarını belgeler.
+// C* STRUCT / LIFECYCLE / VALUE OPERATOR PROPOSAL
+// -----------------------------------------------
+// This file documents only concrete struct layout and value lifetime.
+// Allocation, protocol state, trait dispatch, enum/tagged data, macros, and
+// async are documented in their own paper files.
 //
-// Nihai kararlar:
-// - `struct` somut layout sahibidir.
-// - `constructor` var olan storage'ı initialize eder; allocation yapmaz.
-// - `destructor` object lifetime'ını kapatır; storage free etmez.
-// - `drop value;` erken release yüzeyidir ve değeri dropped state'e çeker.
-// - scope-exit by-value local değerlerin destructor'ını çağırır.
-// - `new` static method değildir; compiler-recognized allocation operator'dır.
-// - Kullanıcı `operator new` yazmaz; kullanıcı allocator sağlar.
-// - `new(allocator) Type(args)` compiler tarafından allocator + constructor +
-//   ownership runtime ile lower edilir.
-// - `trait` static conformance/capability ifade eder; data inheritance değildir.
-// - Layout reuse için varsayılan model composition'dır.
-// - Data inheritance bu proposal'ın parçası değildir.
-// - Dynamic dispatch yalnız açık `dyn Trait` yüzeyiyle mümkündür.
+// Decisions:
+// - `struct` owns concrete memory layout.
+// - `constructor` initializes existing storage; it does not allocate.
+// - `destructor` closes object lifetime; it does not free storage.
+// - `drop value;` is explicit early release.
+// - Scope-exit calls destructors for live by-value local values.
+// - `new` is not a method; it is a compiler-reserved allocation operator.
+// - User value operators are allowed only for value semantics.
+// - Struct data inheritance does not exist; use composition.
 
 // ---------------------------------------------------------------------
-// 1. Struct layout sahibidir
+// 1. Struct owns layout
 // ---------------------------------------------------------------------
-// Struct somut bellek layout'udur. Field'lar declaration sırasıyla yerleşir.
-// Compiler by-value, reference, unique ve shared ownership formlarının ABI
-// lowering'ini bilir. Struct, trait'ten field almaz ve gizli base class
-// taşımaz.
 
 struct Meter {
     int32 value;
@@ -38,8 +29,8 @@ struct Meter {
     }
 
     destructor() {
-        // Yalnızca bu object'in sahip olduğu resource'ları bırak.
-        // Storage free etmek destructor'ın görevi değildir.
+        // Release resources owned by this object only.
+        // Storage free belongs to the allocator/new runtime path.
         ret;
     }
 
@@ -49,16 +40,13 @@ struct Meter {
 }
 
 main() :: int32 {
-    Meter meter = Meter(7); // constructor local storage'ı initialize eder.
+    Meter meter = Meter(7);
     ret meter.read();
-} // scope-exit Meter.destructor(ref meter) çağırır.
+} // scope-exit calls Meter.destructor(ref meter)
 
 // ---------------------------------------------------------------------
-// 2. Constructor allocation değildir
+// 2. Constructor is not allocation
 // ---------------------------------------------------------------------
-// Constructor yalnızca var olan storage'ı geçerli object haline getirir.
-// Object'in stack, heap, arena, shared control-block veya foreign memory
-// üzerinde yaşadığı bilgisi constructor'a ait değildir.
 
 struct FileHandle {
     int32 fd;
@@ -91,150 +79,43 @@ open_file(const char* path) :: int32 {
     FileHandle file = FileHandle();
     file.open(path);
     ret file.fd;
-} // Hala açıksa destructor kapatır.
+} // destructor closes the file if it is still open
 
 // ---------------------------------------------------------------------
-// 3. `drop` normal erken release yüzeyidir
+// 3. Drop is explicit early release
 // ---------------------------------------------------------------------
-// Kullanıcı destructor'ı normal method gibi çağırmaz. Erken kapatma için
-// `drop value;` yazılır. Compiler destructor'ı çağırır, değeri dropped state'e
-// çeker ve tekrar kullanımda diagnostic üretir.
 
 close_now() :: int32 {
     FileHandle file = FileHandle();
     file.open("data.txt");
     drop file;
 
-    // ret file.fd; // hata: dropped-after-use
+    // ret file.fd; // diagnostic: dropped-after-use
     ret 0;
 }
 
-// Scope-exit hala ana cleanup modelidir. `drop` yalnız erken release gerekirken
-// kullanılır.
-
 // ---------------------------------------------------------------------
-// 4. `new` method değil allocation operator'dır
+// 4. `new` is compiler-reserved
 // ---------------------------------------------------------------------
-// `new` user-defined static method değildir. `Type::new(...)` canonical
-// lifecycle yüzeyi değildir. `new` compiler'ın tanıdığı allocation operator'dır.
+// Users do not write `new(...)` as an instance method or `Type::new(...)` as a
+// static factory. Heap allocation goes through the compiler operator:
 //
-// Operator şu işi yapar:
-// - allocator seçer.
-// - storage alır.
-// - constructor çağırır.
-// - unique/shared ownership handle üretir.
-// - failure politikasını signature veya effect sistemiyle görünür kılar.
+//   new Type(args)
+//   shared new Type(args)
+//   new(allocator) Type(args)
+//
+// See `allocator.cstar` for allocation customization.
 
 create_meter() :: Meter^ {
     Meter^ owned = new Meter(7);
     ret move owned;
 }
 
-create_shared_meter() :: Meter* {
-    Meter* shared_meter = shared new Meter(7);
-    ret shared_meter;
-}
-
-create_meter_in_arena(ArenaAllocator& arena) :: Meter^ {
-    Meter^ owned = new(arena) Meter(7);
-    ret move owned;
-}
-
 // ---------------------------------------------------------------------
-// 5. Allocation customization yalnız Allocator trait ile yapılır
+// 5. Value operator overloading
 // ---------------------------------------------------------------------
-// Kullanıcı `operator new`, `operator delete`, `operator shared_new` veya
-// `operator shared_delete` implement etmez. Bu hook'lar user surface değildir.
-// Allocation customization için tek kullanıcı yüzeyi allocator capability'dir.
-//
-// Compiler `new(allocator) Type(args)` ifadesini bu trait üzerinden lower eder.
-
-trait Allocator {
-    alloc(usize bytes, usize align) :: void*;
-    free(void* ptr, usize bytes, usize align) :: void;
-}
-
-struct ArenaAllocator with Allocator {
-    void* begin;
-    usize capacity;
-    usize offset;
-
-    alloc(usize bytes, usize align) :: void* {
-        ret arena_alloc(ref self, bytes, align);
-    }
-
-    free(void* ptr, usize bytes, usize align) :: void {
-        // Arena tasarımında free no-op olabilir.
-        // Bu davranış allocator seviyesinde açık ve inspectable kalır.
-        ret;
-    }
-}
-
-// Unique lowering:
-//
-//   Meter^ owned = new(arena) Meter(7);
-//
-// Compiler sorumluluğu:
-//
-//   void* raw = arena.alloc(sizeof(Meter), alignof(Meter));
-//   Meter& slot = unsafe_cast<Meter&>(raw);
-//   slot.constructor(7);
-//   Meter^ owned = runtime.attach_unique<Meter>(raw, ref arena);
-//
-// Drop/scope-exit sorumluluğu:
-//
-//   owned.destructor_payload();
-//   arena.free(raw, sizeof(Meter), alignof(Meter));
-//
-// Shared lowering:
-//
-//   Meter* shared_meter = shared new(arena) Meter(7);
-//
-// Compiler sorumluluğu:
-//
-//   SharedControlBlock* cb =
-//       runtime.shared_alloc(sizeof(Meter), alignof(Meter), ref arena);
-//   Meter& slot = cb.data_as<Meter>();
-//   slot.constructor(7);
-//   Meter* shared_meter = runtime.attach_shared<Meter>(cb);
-//
-// Ref-count sıfıra indiğinde:
-//
-//   slot.destructor();
-//   arena.free(cb, cb.total_size, alignof(SharedControlBlock));
-//
-// Buradaki runtime isimleri syntax değildir; compiler/runtime contract'ını
-// göstermek için yazılmıştır.
-
-// ---------------------------------------------------------------------
-// 6. Operator overloading kapsamı
-// ---------------------------------------------------------------------
-// Operator overloading yalnız value semantics için açıktır. Lifecycle,
-// allocation ve ownership operator'ları compiler-reserved kalır.
-//
-// User-defined operator olarak açık olan aile:
-// - operator +
-// - operator -
-// - operator *
-// - operator /
-// - operator %
-// - operator ==
-// - operator !=
-// - operator <
-// - operator <=
-// - operator >
-// - operator >=
-// - operator index
-//
-// Compiler-reserved olan aile:
-// - operator new
-// - operator delete
-// - operator move
-// - operator copy
-// - operator drop
-//
-// Reserved operator'ların davranışı trait/qualifier/ownership metadata'sından
-// türetilir; kullanıcı bunları method olarak overload edemez.
+// User-defined operators are for value semantics only. Lifecycle, allocation,
+// copy/move/drop, and ownership operators remain compiler-reserved.
 
 struct Vec2 {
     float32 x;
@@ -256,54 +137,15 @@ struct Vec2 {
     }
 }
 
-// Operator method'ları instance method'dur ve normal method gibi implicit
-// `self&` alır. Static operator yoktur; type-level construction için
-// constructor ve `new` operator'ı kullanılır.
-
-// ---------------------------------------------------------------------
-// 7. Trait static conformance'dır, inheritance değildir
-// ---------------------------------------------------------------------
-// Trait "bu type şu capability'yi sağlar" demektir. Field inject etmez,
-// layout değiştirmez ve object inheritance anlamına gelmez.
+// Allowed user operators:
+// + - * / % == != < <= > >= index
 //
-// `with Trait` static conformance check yapar. Varsayılan dispatch static /
-// monomorphized kabul edilir.
-
-trait Drawable {
-    draw(Canvas& canvas) :: void;
-}
-
-trait Area {
-    area() :: float32;
-}
-
-struct Circle with Drawable, Area {
-    float32 radius;
-
-    area() :: float32 {
-        ret 3.14159 * self.radius * self.radius;
-    }
-
-    draw(Canvas& canvas) :: void {
-        canvas.circle(self.radius);
-        ret;
-    }
-}
-
-render<T with Drawable>(T& item, Canvas& canvas) :: void {
-    item.draw(ref canvas);
-    ret;
-}
-
-// Circle, Drawable'dan field inherit etmez. Sadece Drawable contract'ını
-// sağladığı compile-time doğrulanır.
+// Reserved compiler operators:
+// new delete move copy drop
 
 // ---------------------------------------------------------------------
-// 8. Layout reuse composition ile yapılır
+// 6. Composition instead of data inheritance
 // ---------------------------------------------------------------------
-// C* struct data inheritance desteklemez. `extends` yoktur. Base class yoktur.
-// Layout reuse için composition kullanılır. Bu karar ABI'yi açık tutar,
-// constructor/destructor sırasını sadeleştirir ve trait'i temiz bırakır.
 
 struct Point {
     float32 x;
@@ -321,43 +163,5 @@ struct ColoredPoint {
     }
 }
 
-// Eğer polymorphism gerekiyorsa data inheritance değil, trait + explicit
-// `dyn Trait` kullanılır.
-
-// ---------------------------------------------------------------------
-// 9. Dynamic dispatch açık `dyn Trait` ile yapılır
-// ---------------------------------------------------------------------
-// Static trait conformance vtable değildir. Dynamic dispatch runtime
-// representation taşır, bu yüzden syntax'ta açık görünmelidir.
-
-trait Writer {
-    write(const char* data) :: void;
-}
-
-write_static<T with Writer>(T& writer, const char* data) :: void {
-    writer.write(data); // static / monomorphized call
-    ret;
-}
-
-write_dynamic(dyn Writer& writer, const char* data) :: void {
-    writer.write(data); // explicit trait object / vtable path
-    ret;
-}
-
-// `with Writer` hiçbir zaman otomatik `dyn Writer` üretmez.
-
-// ---------------------------------------------------------------------
-// 10. Final karar listesi
-// ---------------------------------------------------------------------
-// 1. Constructor/destructor lifecycle method'larıdır.
-// 2. Constructor allocation yapmaz.
-// 3. Destructor storage free etmez.
-// 4. Normal cleanup scope-exit, erken cleanup `drop value;` ile yapılır.
-// 5. `new` static method değildir; allocation operator'dır.
-// 6. Kullanıcı `operator new/delete/shared_new/shared_delete` yazmaz.
-// 7. Allocation customization yalnız `Allocator` trait ile yapılır.
-// 8. Compiler `new(allocator) Type(args)` lowering'ini synthesize eder.
-// 9. User-defined operator overloading yalnız value operator'ları içindir.
-// 10. Trait inheritance değildir; static capability/conformance'dır.
-// 11. Struct data inheritance yoktur; layout reuse composition ile yapılır.
-// 12. Dynamic dispatch yalnız açık `dyn Trait` ile yapılır.
+// If polymorphism is needed, use static `trait` conformance or explicit
+// `dynamic Trait`. Do not make data inheritance part of struct layout.

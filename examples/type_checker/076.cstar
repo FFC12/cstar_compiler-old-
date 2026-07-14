@@ -1,0 +1,11 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+cast_is_not_possible(x bool, bool y) :: void {
+    int32 a = x;
+    int32 b = y;
+}
+
+main() :: int32 {
+    ret 0;
+}

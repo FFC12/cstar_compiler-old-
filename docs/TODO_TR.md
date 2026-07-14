@@ -359,9 +359,9 @@ Güncel sınıflandırma:
 - `examples/functions/003.cstar` pass0 symbol/redefinition diagnostic üretiyor; artık pass1'e devam edip crash/non-1 üretmiyor.
 - `examples/variables/000.cstar` artık generic function call/type attribute syntax'ını parse ediyor; kalan diagnostic'ler dosyanın proposal/stres örneği gibi aynı global sembolleri tekrar tanımlamasından geliyor.
 - `examples/variables/` güncel durumda 1 kontrollü diagnostic, 0 crash/assert.
-- `examples/papers/policy.cstar` policy syntax henüz parser'da olmadığı için parse diagnostic üretiyor.
-- `examples/papers/syntax.cstar` artık include/import/export yüzeyini parse ediyor; ilk kontrollü diagnostic `attribute Area<T>` proposal alanında üretiliyor.
-- `examples/papers/` güncel durumda 2 kontrollü diagnostic, 0 crash/assert.
+- `examples/papers/policy.cstar` artık eski policy/hook fikrinin hangi ayrı concept dosyalarına bölündüğünü anlatan kısa concept map dosyasıdır.
+- `examples/papers/syntax.cstar` artık include/import/export ve genel syntax vitrini olarak tutuluyor; macro/metaprogramming/enum/protocol/concurrency proposal denemeleri canonical olarak concept dosyalarına ayrıldı.
+- `examples/papers/` altındaki proposal dosyaları bilinçli olarak mevcut compiler'da controlled diagnostic üretir; crash/assert kabul edilemez.
 
 ## Aşama 0 - Çalışma Zemini
 
@@ -660,6 +660,11 @@ Tamamlanan:
 - Parametre type mismatch negative test:
   - `examples/type_checker/010.cstar`
   - `examples/type_checker/013.cstar`
+- Parametre seviyesinde implicit cast izni syntax'ı:
+  - Tamamlandı: `bool y` formu primitive parametreyi implicit cast edilebilir kabul eder.
+  - Tamamlandı: `x bool` formu aynı primitive tipi taşır ama sembolün scope içinde implicit cast edilmesini yasaklar.
+  - Smoke: `examples/smoke/castable_param.cstar`
+  - Negative diagnostic: `examples/type_checker/076.cstar`
 - Tek seviyeli primitive pointer/ref parametre codegen smoke:
   - `examples/smoke/function_call_pointer_argument.cstar`
 - Primitive reference parametre codegen smoke:
@@ -1171,20 +1176,22 @@ Durum:
   - `examples/smoke/trait_struct_conformance.cstar`
   - `examples/type_checker/068.cstar`
   - `examples/type_checker/069.cstar`
-- `protocol`, `dynamic protocol`, `dyn Trait` ve ileri lifetime keyword'leri için controlled proposal diagnostic/rezervasyon korunur.
+- `protocol`, `dynamic protocol`, `dynamic Trait` ve ileri lifetime keyword'leri için controlled proposal diagnostic/rezervasyon korunur.
 - Eski `policy for T { ... }` runtime hook modeli ve `policy protocol` çift isimli form superseded kabul edildi.
 - Ana yön `protocol Name for Type { ... }`: compile-time typestate/state contract.
 - `static protocol` gereksizdir; static/provable davranış default kabul edilir.
 - `dynamic protocol` açık runtime maliyeti isteyen durumlar içindir.
 - `.=` token'ı parser'da tanınır, fakat yalnızca dynamic/provability-gap protocol lowering netleşince codegen'e alınacak; bugün proposal diagnostic üretir.
-- `examples/papers/struct.cstar` final struct/lifecycle proposal olarak eklendi:
+- `examples/papers/struct.cstar` final struct/lifecycle proposal olarak sadeleştirildi:
   - `new` static method değil, compiler-recognized allocation operator.
   - Kullanıcı `operator new/delete/shared_new/shared_delete` yazmaz.
-  - Allocation customization yalnız `Allocator` trait ile yapılır.
-  - Compiler `new(allocator) Type(args)` lowering'ini allocator + constructor + ownership runtime ile synthesize eder.
   - User-defined operator overloading yalnız value operator'ları içindir.
   - Struct data inheritance yoktur; layout reuse composition ile yapılır.
-  - Dynamic dispatch yalnız açık `dyn Trait` yüzeyiyle mümkündür.
+- Allocation customization artık canonical olarak `examples/papers/allocator.cstar` içindedir:
+  - Allocation customization yalnız `Allocator` trait ile yapılır.
+  - Compiler `new(allocator) Type(args)` lowering'ini allocator + constructor + ownership runtime ile synthesize eder.
+- Dynamic dispatch canonical olarak `examples/papers/trait.cstar` içindedir:
+  - Dynamic dispatch yalnız açık `dynamic Trait` yüzeyiyle mümkündür.
 
 Son kontrol ve ileri takip:
 
@@ -1206,11 +1213,12 @@ Son kontrol ve ileri takip:
   - `default closed;`
   - `closed -> opened :: open();`
   - `read() :: !closed;`
-  - `scope_exit :: closed;`
+  - `scope_exit opened -> closed :: close();`
 - Protocol state'lerini mevcut qualifier/state slot'una bağla:
   - `opened FileHandle^`
   - `closed FileHandle^`
   - `const opened FileHandle^`
+  - Çoklu protocol state slot'u: `opened locked FileHandle^` tek birleşik enum değil, protocol başına ayrı state bilgisidir.
 - Pass0 symbol/type table:
   - protocol adı, hedef type, state seti, default state.
   - transition table ve forbidden-call table.
@@ -1219,10 +1227,13 @@ Son kontrol ve ileri takip:
   - return type state match.
   - moved pointer ile state taşınması.
   - `scope_exit` required state diagnostic.
+  - `scope_exit A -> B :: method();` cleanup edge'lerinin `ret`, `throw`, `break`, `continue` yollarına eklenmesi.
+  - cleanup transition'larının cleanup-safe/noexcept olması; fallible cleanup için explicit user code zorunluluğu.
 - `dynamic protocol` Aşama 8+ ileri proposal olarak kaldı:
   - explicit runtime tag field.
   - `.=` için görünür/desugar edilebilir switch lowering.
   - hidden hook/table/dispatch yok.
+  - `--show-desugar` ile `.=` dynamic check ve scope-exit cleanup edge'leri gösterilmeli.
 - Eski `policy for T` örnekleri dokümanda “superseded legacy proposal” olarak tutulacak; compiler ana grammar'ına alınmayacak.
 
 ### 7.1 Static
@@ -1363,10 +1374,10 @@ Kalan:
 İleri takip:
 
 - Dynamic dispatch implicit değildir; monomorphized/static dispatch varsayılan.
-- Açık dynamic dispatch için `dyn Trait` grammar/ABI Aşama 8+ ileri proposal olarak kaldı:
+- Açık dynamic dispatch için `dynamic Trait` grammar/ABI Aşama 8+ ileri proposal olarak kaldı:
   - explicit trait object representation.
   - vtable/runtime maliyeti görünür olacak.
-  - `with Trait` otomatik `dyn Trait` üretmeyecek.
+  - `with Trait` otomatik `dynamic Trait` üretmeyecek.
   - Bugün `dyn` keyword'ü proposal diagnostic üretir:
     - `examples/type_checker/074.cstar`
 - Generic bound syntax proposal'ı.
@@ -1381,11 +1392,23 @@ Proposal'da görünen ama çok sonraya bırakılacak başlıklar:
 - `attribute`
 - directive/macro sistemi
 - `$` ve `#` tabanlı compile-time hook'lar
+- scalar enum / flags enum / explicit tagged layout
+- açık `dynamic Trait` trait-object ABI
 - `async` / `await`
 - `except` / `throw`
 - compile-time error/runtime error hook'ları
 
 Bu başlıklar çekirdek dil stabil olmadan uygulanmamalı.
+Canonical proposal örnekleri artık concept bazlı dosyalara ayrılmıştır:
+
+- `examples/papers/metaprogramming.cstar`: macro, directive, attribute, reflection.
+- `examples/papers/enum.cstar`: scalar enum, flags enum, explicit tagged layout.
+- `examples/papers/trait.cstar`: static trait ve açık dynamic trait object ABI.
+- `examples/papers/protocol.cstar`: typestate, dynamic protocol, `.=` ve scope-exit cleanup.
+- `examples/papers/allocator.cstar`: allocator capability ve `new` lowering.
+- `examples/papers/concurrency.cstar`: async/task ownership, `Send`/`Sync`, `nomove`.
+
+`examples/papers/struct.cstar` yalnız struct/lifecycle/value operator kararlarını taşır. `examples/papers/syntax.cstar` artık bu ileri denemeleri taşımıyor.
 
 ### 8.1 Attribute
 
@@ -1397,11 +1420,17 @@ Durum:
 
 Kalan:
 
-- `attribute Name<T> { ... }` grammar'ını proposal olarak netleştir.
+- `attribute Name for <kind> { ... }` grammar'ını parser/AST seviyesine indir.
 - Attribute'ın trait'ten farkını yaz:
   - trait: type capability/contract.
   - attribute: compile-time transformation/reflection helper.
-- `$0`, `$1`, `match`, `cterror` gibi compile-time expression yüzeyini tasarla.
+- Reflection yüzeyi:
+  - `name($item)`, `fields($item)`, `methods($item)`.
+  - field metadata: name/type/visibility/qualifier/offset.
+  - method metadata: name/params/return/static.
+  - `has_attribute(...)`, `attribute_args(...)`, `sizeof(Type)`, `alignof(Type)`.
+- `fields($item)`, `methods($item)`, `$emit`, `$item`, `#for`, `#error` gibi compile-time reflection/generation yüzeylerini uygula.
+- Attribute layout'u gizlice değiştirmemeli, private field'ı public yapmamalı, runtime metadata üretmemeli ve trait/protocol conformance'ı bypass etmemeli.
 - İlk MVP sadece parse + controlled diagnostic olmalı; expansion sonra.
 
 ### 8.2 Macro / Directive
@@ -1415,15 +1444,49 @@ Durum:
 
 Kalan:
 
-- `macro name(args) { ... }` ile `#directive` ayrımını netleştir.
+- `macro name($arg: kind, ...) -> expr|stmt|item|type { ... }` grammar'ını parser/AST seviyesine indir.
 - Macro expansion zamanı:
   - parse-time mı,
   - semantic-time mı,
   - IR-before-codegen mi?
 - Hijyen/hygiene kuralları.
 - Error reporting ve source span mapping.
-- `@directive` syntax'ı lexer'a alınacaksa token ve parser recovery tasarımı.
+- `#if`, `#warning`, `#error`, `cfg(...)`, `feature(...)`, `target.*` compile-time config yüzeyini tasarla.
 - Protocol ile macro/directive karıştırılmamalı; protocol gizli hook sistemi olmayacak.
+
+### 8.3 Enum / Explicit Tagged Layout
+
+Durum:
+
+- Lexer `enum` keyword'ünü tanır.
+- Parser enum AST/lowering yok.
+- `option` statement enum pattern matching için temel yüzey olarak kullanılacak.
+
+Kalan:
+
+- C-like enum grammar'ı: `enum Color : uint8 { Red, Green, Blue }`.
+- Flags enum grammar'ı: `flags enum FileMode : uint32 { Read = 1, Write = 2 }`.
+- Payload gereken durumda canonical model explicit `TokenKind + struct Token` layout'u olmalı.
+- `tagged Packet : uint8 { ... }` sugar'ı explicit `tag + storage` layout'una inecek şekilde tasarlanmalı.
+- Public/export ABI için enum repr zorunlu olmalı.
+- Exhaustiveness kontrolü `option(enum_value)` için yapılabilir; `_` default yeni value eklendiğinde warning üretmeli.
+
+### 8.4 Dynamic Trait Object
+
+Durum:
+
+- `trait` static conformance MVP çalışır.
+- `dyn` keyword'ü proposal diagnostic üretir; canonical yön kısa `dyn` değil `dynamic Trait`.
+- `with Trait` otomatik trait object üretmez.
+
+Kalan:
+
+- `dynamic Trait&`, `dynamic Trait*`, `dynamic Trait^` grammar'ı.
+- Representation contract: `{ data: void*, vtable: constptr TraitVTable* }`.
+- `dynamic ref value as Trait` / `dynamic move value as Trait` erase syntax'ı; yalnız value type trait'i sağlıyorsa legal.
+- Vtable method imzası üretimi ve dispatch lowering.
+- Ownership davranışı handle marker üzerinden ayrılmalı: borrowed `&`, shared `*`, unique `^`.
+- Public/export ABI için generated vtable struct ve data pointer repr'ı açık olmalı.
 
 ## Bir Sonraki En İyi Adım
 

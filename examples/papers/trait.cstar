@@ -1,0 +1,84 @@
+// expected: diagnostic (proposal)
+//
+// C* TRAIT / DYNAMIC TRAIT OBJECT PROPOSAL
+// ----------------------------------------
+// Trait is static capability conformance by default. Runtime dispatch exists
+// only through the explicit `dynamic Trait` surface.
+//
+// Decisions:
+// - Trait is not inheritance.
+// - Trait does not inject fields.
+// - `with Trait` checks static conformance.
+// - `with Trait` never creates `dynamic Trait` automatically.
+// - Dynamic dispatch is explicit and ABI-visible.
+
+trait Drawable {
+    draw(Canvas& canvas) :: void;
+}
+
+trait Area {
+    area() :: float32;
+}
+
+struct Circle with Drawable, Area {
+    float32 radius;
+
+    area() :: float32 {
+        ret 3.14159 * self.radius * self.radius;
+    }
+
+    draw(Canvas& canvas) :: void {
+        canvas.circle(self.radius);
+        ret;
+    }
+}
+
+render_static<T with Drawable>(T& item, Canvas& canvas) :: void {
+    item.draw(ref canvas); // monomorphized/static dispatch
+    ret;
+}
+
+// ---------------------------------------------------------------------
+// Dynamic trait object
+// ---------------------------------------------------------------------
+// `dynamic Trait&/*/^` combines runtime dispatch with the same ownership axis
+// used by ordinary values:
+//
+// - `dynamic Writer&`: borrowed trait object.
+// - `dynamic Writer*`: shared trait object, retain/release follows `*`.
+// - `dynamic Writer^`: unique trait object, move-only follows `^`.
+//
+// Representation contract:
+//
+//   dynamic Writer& = { data: void*, vtable: constptr WriterVTable* }
+
+trait Writer {
+    write(const char* data) :: void;
+}
+
+struct ConsoleWriter with Writer {
+    write(const char* data) :: void {
+        print(data);
+        ret;
+    }
+}
+
+write_dynamic(dynamic Writer& writer, const char* data) :: void {
+    writer.write(data); // explicit vtable dispatch
+    ret;
+}
+
+dynamic_example() :: int32 {
+    ConsoleWriter writer = ConsoleWriter();
+    dynamic Writer& erased = dynamic ref writer as Writer;
+
+    write_dynamic(ref erased, "hello dynamic writer");
+    ret 0;
+}
+
+// Erase rules:
+// - `dynamic ref value as Trait` is legal only if value's type satisfies Trait.
+// - `dynamic move value as Trait` creates a unique trait object and moves source.
+// - `unsafe_cast` cannot create a trait object; vtable correctness is compiler
+//   responsibility.
+// - Public/export ABI must spell the generated data/vtable representation.

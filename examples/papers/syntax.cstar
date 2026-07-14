@@ -51,43 +51,6 @@ hiddenModuleHelper() :: int32 {
     ret 1;
 }
 
-//This is the way of using features of Metaprogramming..
-attribute Area<T> {
-    area($0,$1) -> T match {
-        'Triangle': $0 * $1 / 2,
-        'Square': $0 * $1,
-        _: cterror("no this is not valid type")
-    }
-}
-
-attribute Area<Circle> {
-    area($0) -> 2 * math.PI * $0; 
-}
-
-//meta types for reflectivity
-attribute IsRef<T> {
-    is_ref($0) -> std.meta_ref($0);
-}
-
-
-//Classic macro needs
-macro print(str) {
-    std.out(str)
-}
-
-macro triangle_area(x,y) {
-    x * y / 2;
-}
-
-macro unique_vec(expr){
-    vector^ temp_vec = vector();
-    loop(i in expr){
-        temp_vec.push(i)
-    }
-    ret temp_vec;
-}
-
-
 //Attributing functions from Area (this is a compile-time trait/capability contract)
 struct Shape<T> with Area<T> { 
     float32 x;
@@ -116,33 +79,7 @@ struct Shape<T> with Area<T> {
     }
 }
 
-//This is inheritance just like in OOP (so the Triangle prototype is inheriting the Shape prototype)
-//prototypes are like classes but they are more powerful than classes and concept of behind it.
-//with a prototype, you can also create new primitive types for your needs and customize them
-//with attributes and traits. traits are using when if there's common and shared features between
-//prototypes. in that way your prototypes has not to be derived from each other possibly. and also
-//traits offers a strong type checking and flexibility with some equalities features(https://en.wikipedia.org/wiki/Partial_equivalence_relation)
-//just like in Rust and C++ but maybe in the better and stronger ways.
-prototype Triangle(Shape) {
-
-}
-
 a_func(int32, int); 
-
-
-enum Colors {
-	RED(int32),
-	GREEN(const char*),
-	BLUE(int32)
-}
-
-//enum can derive from a prototype
-//that means Colors will be acting like a enum but it will be 
-//also a struct which has only member variables of the base prototype it derived from.1
-enum Colors(Triangle) {
-	
-}
-
 
 example(int32& by_ref) :: void {
 
@@ -208,50 +145,14 @@ example6(readonly char* str) async :: any {
 }
 
 
-//built-in directive which'll be called while compiling the source code
-@compiler_hook()
-__greater_than_hook() :: void {
-
-}
-
-
-
-//This is directive defination here. It can or can't takes param.
-//If it takes params then its params must be matched with
-//the parameters of target function
-#this_function_may_throw_an_error(bool a_param) {
-    //$func, $line,, $col,
-    // this means function will be copied here
-    $func(a_param)::onexcept{
-        print("has thrown an error by function" + $func::name + " " + $line + " " + $col);
-    }::noexcept{
-
-    };
-}
-
-#pretend_integer_overflow -> k_of {
-    // ... some overflow magics here
-}
-
-//this is directive and can be used for functions or variables.
-//they are able to wrap the function or variable that qualified.
-//it's a thing between macro and try-catch statements. they can
-//expand and run on the run time.
-@this_function_may_throw_an_error
 example7(bool a_param) except :: int32 {
     // integer overflow occures but can be handled by compiler
     // note: k_of is a one-dim char pointer which is providing string base pointer of result just performed.
-    // 'safe_add' is a macro which is declared by standard library as a helper. It's making sum operations 
+    // 'safe_add' is declared by standard library as a helper. It's making sum operations 
     // based on string simply.
-    @pretend_integer_overflow -> k_of 
     int k = 1000000000000000000000 + 10000000000000000000000000000000000000; 
-    if(null(k_of)) {
-        safe_add(k_of, 10); 
-        print(k_of);
-    } else {
-        print(k);
-        throw;
-    } 
+    print(k);
+    throw;
 }
 
 main() :: int32 {

@@ -1,0 +1,74 @@
+// expected: diagnostic (proposal)
+//
+// C* CONCURRENCY / ASYNC / TASK OWNERSHIP PROPOSAL
+// ------------------------------------------------
+// Async/task boundaries reuse normal ownership rules, then add explicit
+// capability checks for crossing threads/tasks.
+//
+// Decisions:
+// - `async` marks a task/thread boundary effect.
+// - `await` marks a suspension/ownership checkpoint.
+// - `Send` and `Sync` are trait/capability markers, not runtime vtables.
+// - `T^` crosses a task boundary only with explicit `move`.
+// - `T*` crosses by atomic retain/copy, or by explicit `move`.
+// - `nomove` is a parameter-level ownership-flow modifier.
+// - `nomove` is not a protocol state and not a hidden policy hook.
+
+trait Send {}
+trait Sync {}
+
+consume_on_worker(int32^ owned) async :: int32 {
+    ret deref owned;
+}
+
+observe_on_worker(readonly int32* shared_value) async :: int32 {
+    ret deref shared_value;
+}
+
+inspect_without_relay(nomove int32^ owned) :: int32 {
+    int32 value = deref owned;
+
+    // Rejected:
+    //
+    // int32^ relayed := owned;
+    // ret consume_on_worker(move owned);
+
+    ret value;
+}
+
+thread_boundary_example() :: int32 {
+    int32 value = 7;
+    int32^ owned = ref value;
+    int32* shared_value = ref value;
+
+    int32 a = await consume_on_worker(move owned);
+    int32 b = await observe_on_worker(shared_value);
+
+    // Rejected:
+    //
+    // await consume_on_worker(owned);  // unique copy
+    // deref owned;                    // moved-after-use
+
+    ret a + b;
+}
+
+// Multithreaded runtime sketch:
+//
+// - By-value `^` transfer moves unique ownership into the task record.
+// - By-value `*` retains the shared handle into the task record.
+// - Borrowed `&` cannot cross task lifetime unless the compiler proves the
+//   parent scope outlives the child task, or a structured concurrency scope is
+//   used.
+// - `Send` controls movement to another task/thread.
+// - `Sync` controls shared reference from another task/thread.
+
+task_group_example(readonly int32* shared_value) async :: int32 {
+    // Proposal sketch:
+    //
+    // task_group group;
+    // group.spawn observe_on_worker(shared_value);
+    // int32 result = await group.join_sum();
+    // ret result;
+
+    ret await observe_on_worker(shared_value);
+}

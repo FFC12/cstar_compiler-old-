@@ -1,45 +1,69 @@
 // expected: diagnostic (proposal)
 //
-// C* PROTOCOL / ALLOCATOR PROPOSAL
-// --------------------------------
-// This file documents the direction after replacing the old hidden hook
-// idea with smaller, explicit systems.
+// C* POLICY SPLIT / CONCEPT MAP
+// -----------------------------
+// This file is intentionally small. It explains why the old "policy" idea was
+// split into separate language concepts.
 //
-// Decision:
-// - `protocol` owns typestate / state safety.
-// - `dynamic protocol` is the explicit runtime fallback.
-// - `allocator` / `Allocator` owns memory allocation strategy.
-// - constructor / destructor / defer own lifetime.
-// - `except` / `throw` / `Result`-like APIs own error handling.
+// Legacy problem:
+// The early policy idea tried to solve null/state checks, allocation, cleanup,
+// runtime hooks, error handling, and async boundaries with one mechanism. That
+// creates hidden costs and pushes the language toward hook tables/hashmaps.
 //
-// Legacy note:
-// The old hidden hook model mixed state validation, allocation, lifetime,
-// and error handling in one runtime mechanism. That model is superseded.
-// The useful ideas remain, but they move to the right layer.
+// Current decision:
+// - `struct` owns concrete memory layout and lifetime methods.
+// - `allocator` / `Allocator` owns allocation strategy.
+// - `protocol` owns typestate/state safety.
+// - `dynamic protocol` is the explicit runtime fallback for state checks.
+// - `trait` owns static capability/conformance.
+// - `dynamic Trait` owns explicit runtime dispatch.
+// - `enum` / `tagged` owns small tags and explicit tagged data layout.
+// - `attribute` / `macro` owns compile-time generation.
+// - `async` / task boundaries own concurrency effects.
+// - `except` / `throw` or result-like APIs own error flow.
+//
+// Files:
+// - `struct.cstar`: struct, constructor/destructor, drop, value operators.
+// - `allocator.cstar`: allocator trait and `new(allocator) Type(args)` lowering.
+// - `trait.cstar`: static trait conformance and explicit `dynamic Trait`.
+// - `protocol.cstar`: typestate, `.=` dynamic state checks, scope-exit cleanup.
+// - `enum.cstar`: scalar enum, flags enum, explicit tagged layout.
+// - `metaprogramming.cstar`: macro, attribute, compile-time reflection.
+// - `concurrency.cstar`: async/task ownership, Send/Sync, nomove boundary.
+//
+// Rule:
+// No hidden runtime hook table. If a feature has runtime cost, the source code
+// must show it, and `--show-desugar` must be able to explain it.
 
 // ---------------------------------------------------------------------
-// 1. Typestate: protocol
+// Example: the old single-policy idea decomposed into explicit pieces
 // ---------------------------------------------------------------------
-// A protocol produces user-defined states. These states live
-// in the same type slot as `const`, `readonly`, and future protocol states.
-// The default is static/provable. Do not write `static protocol`;
-// static is the default. Use `dynamic protocol` only when runtime
-// state is explicitly needed.
 
-protocol StringState for String {
-    state valid, null;
+struct FileHandle {
+    void* native;
 
-    default null;
+    constructor() {
+        self.native = nil;
+        ret;
+    }
 
-    null  -> valid :: new();
-    valid -> null  :: make_null();
-    valid -> null  :: destructor();
+    open(const char* path) :: void {
+        self.native = os_open(path);
+        ret;
+    }
 
-    append(const char* data) :: !null;
-    len() :: !null;
-    data() :: !null;
+    close() :: void {
+        if (self.native) {
+            os_close(self.native);
+            self.native = nil;
+        }
+        ret;
+    }
 
-    scope_exit :: null;
+    destructor() {
+        self.close();
+        ret;
+    }
 }
 
 protocol FileState for FileHandle {
@@ -52,274 +76,25 @@ protocol FileState for FileHandle {
 
     read() :: !closed;
     write(const char* data) :: !closed;
-    open(const char* path) :: !opened;
 
-    scope_exit :: closed;
+    scope_exit opened -> closed :: close();
 }
 
-// ---------------------------------------------------------------------
-// 2. Explicit runtime fallback: dynamic protocol
-// ---------------------------------------------------------------------
-// Dynamic protocols add one visible runtime discriminant to the
-// resource layout. `.=` is reserved for this explicit/provability-gap path.
-// It must desugar to inspectable code; no hidden hook table, no virtual
-// dispatch, no implicit hashmap.
+use_file(const char* path) except IoError :: int32 {
+    closed FileHandle file = FileHandle();
+    opened FileHandle^ opened := file.open(path);
 
-dynamic protocol ConnectionState for Connection {
-    state idle, sending, failed;
+    if (!file_has_header(ref opened)) {
+        // scope-exit closes `opened` before the throw leaves the scope.
+        throw IoError.Interrupted;
+    }
 
-    default idle;
-
-    idle    -> sending :: send();
-    sending -> idle    :: ack();
-    sending -> failed  :: timeout();
-
-    send(const char* packet) :: !failed;
+    ret parse_header(ref opened);
 }
 
-handle_connection(idle Connection^ conn) :: void {
-    loop(true) {
-        conn .= try_send();     // dynamic, tag-checked, visible desugar
-
-        if (conn is failed) {
-            break;
-        }
-    }
-}
-
-// ---------------------------------------------------------------------
-// 3. Allocation: allocator trait / allocator object
-// ---------------------------------------------------------------------
-// Allocation is not a protocol hook. It is a capability and a codegen contract.
-// The compiler can lower `new` through an allocator selected by the type,
-// by the scope, or explicitly by the call site.
-
-trait Allocator {
-    alloc(usize bytes, usize align) :: void*;
-    free(void* ptr, usize bytes, usize align) :: void;
-}
-
-struct SystemAllocator with Allocator {
-    alloc(usize bytes, usize align) :: void* {
-        ret os_alloc(bytes, align);
-    }
-
-    free(void* ptr, usize bytes, usize align) :: void {
-        os_free(ptr, bytes, align);
-    }
-}
-
-struct ArenaAllocator with Allocator {
-    void* begin;
-    usize capacity;
-    usize offset;
-
-    alloc(usize bytes, usize align) :: void* {
-        ret arena_alloc(ref self, bytes, align);
-    }
-
-    free(void* ptr, usize bytes, usize align) :: void {
-        // Arena free is a no-op by design.
-        ret;
-    }
-}
-
-// ---------------------------------------------------------------------
-// 4. Resource types: struct + constructor/destructor
-// ---------------------------------------------------------------------
-// Struct owns layout. Constructor/destructor own lifetime. Protocol
-// observes and validates state transitions, but does not allocate memory.
-
-struct String with Allocator {
-    char* buffer;
-    usize length;
-    usize capacity;
-
-    constructor() :: null String^ {
-        self.buffer = nil;
-        self.length = 0;
-        self.capacity = 0;
-        ret self;
-    }
-
-    new(const char* data, Allocator& allocator) :: valid String^ {
-        usize n = strlen(data);
-        self.buffer = allocator.alloc(n + 1, alignof(char));
-        memcpy(self.buffer, data, n + 1);
-        self.length = n;
-        self.capacity = n + 1;
-        ret self;
-    }
-
-    append(const char* data) :: valid String^ {
-        // Legal only when state is `valid`.
-        string_append(ref self, data);
-        ret self;
-    }
-
-    len() :: usize {
-        ret self.length;
-    }
-
-    data() :: constptr char* {
-        ret self.buffer;
-    }
-
-    make_null(Allocator& allocator) :: null String^ {
-        if (self.buffer) {
-            allocator.free(self.buffer, self.capacity, alignof(char));
-        }
-
-        self.buffer = nil;
-        self.length = 0;
-        self.capacity = 0;
-        ret self;
-    }
-
-    destructor(Allocator& allocator) :: null String^ {
-        ret self.make_null(ref allocator);
-    }
-}
-
-struct FileHandle {
-    void* native;
-
-    constructor() :: closed FileHandle^ {
-        self.native = nil;
-        ret self;
-    }
-
-    open(const char* path) :: opened FileHandle^ {
-        self.native = os_open(path);
-        ret self;
-    }
-
-    read() :: constptr char* {
-        ret os_read(self.native);
-    }
-
-    write(const char* data) :: opened FileHandle^ {
-        os_write(self.native, data);
-        ret self;
-    }
-
-    close() :: closed FileHandle^ {
-        os_close(self.native);
-        self.native = nil;
-        ret self;
-    }
-}
-
-// ---------------------------------------------------------------------
-// 5. Error handling is separate from protocol
-// ---------------------------------------------------------------------
-// Runtime errors are explicit effects, not hidden protocol hooks.
-// The exact final syntax is still open, but it should be visible in
-// signatures and call sites.
-
-enum IoError {
-    NotFound,
-    PermissionDenied,
-    Interrupted,
-}
-
-open_file(const char* path) except IoError :: opened FileHandle^ {
-    closed FileHandle^ file;
-
-    if (!os_exists(path)) {
-        throw IoError.NotFound;
-    }
-
-    file.open(path);
-    ret file;
-}
-
-read_all(opened FileHandle^ file) except IoError :: constptr char* {
-    ret file.read();
-}
-
-// ---------------------------------------------------------------------
-// 6. Concurrency boundary: async/task ownership
-// ---------------------------------------------------------------------
-// Async/task boundaries reuse the same ownership rules as by-value
-// function boundaries, but they also need capability markers.
-//
-// Decision:
-// - `async` marks a task/thread boundary effect.
-// - `await` marks a suspension/ownership checkpoint.
-// - `Send` and `Sync` are trait/capability markers, not runtime vtables.
-// - `T^` may cross a task boundary only with explicit `move`.
-// - `T*` may cross by atomic retain/copy, or by explicit `move`.
-// - `nomove` is a parameter-level ownership-flow modifier.
-// - `nomove` is not a protocol state and not a hidden policy hook.
-// - Plain unique copy across the boundary is illegal.
-//
-// Parser status:
-// `async` and `await` are reserved proposal keywords. The current compiler
-// emits controlled diagnostics until scheduler/coroutine lowering exists.
-
-trait Send {}
-trait Sync {}
-
-consume_on_worker(int32^ owned) async :: int32 {
-    ret deref owned;
-}
-
-observe_on_worker(readonly int32* shared_value) async :: int32 {
-    ret deref shared_value;
-}
-
-inspect_without_relay(nomove int32^ owned) :: int32 {
-    // Legal: read through the owned pointer.
-    int32 value = deref owned;
-
-    // Rejected:
-    //
-    // int32^ relayed := owned;
-    // ret consume_on_worker(move owned);
-
-    ret value;
-}
-
-thread_boundary_example() :: int32 {
-    int32 value = 7;
-    int32^ owned = ref value;
-    int32* shared_value = ref value;
-
-    int32 a = await consume_on_worker(move owned);
-    int32 b = await observe_on_worker(shared_value);
-
-    // Rejected:
-    //
-    // await consume_on_worker(owned);  // unique copy
-    // deref owned;                    // moved-after-use
-
-    ret a + b;
-}
-
-// ---------------------------------------------------------------------
-// 7. Usage
-// ---------------------------------------------------------------------
-
-main() :: int32 {
-    SystemAllocator allocator;
-
-    null String^ title;
-    valid String^ live_title := title.new("C* protocol", ref allocator);
-    live_title.append(" / allocator split");
-    print(live_title.data());
-    null String^ consumed := live_title.destructor(ref allocator);
-
-    closed FileHandle^ file;
-    opened FileHandle^ opened_file := file.open("notes.txt");
-    print(opened_file.read());
-    closed FileHandle^ closed_file := opened_file.close();
-
-    // The following should be rejected by pass1:
-    //
-    // live_title.append("use after destructor");
-    // closed_file.read();
-    // opened_file.open("double-open.txt");
-
-    ret 0;
-}
+// What this means:
+// - Struct owns fields and lifetime methods.
+// - Protocol proves open/closed state.
+// - `except` owns error flow.
+// - Scope-exit owns cleanup.
+// - No allocation hook, no hidden hashmap, no invisible runtime policy.

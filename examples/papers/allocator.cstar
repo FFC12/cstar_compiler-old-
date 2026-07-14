@@ -1,0 +1,94 @@
+// expected: diagnostic (proposal)
+//
+// C* ALLOCATOR / NEW LOWERING PROPOSAL
+// ------------------------------------
+// Allocation is not a protocol hook and not an overloadable operator family.
+// The user supplies allocator capability; the compiler owns `new` lowering.
+//
+// Decisions:
+// - Users do not implement `operator new/delete/shared_new/shared_delete`.
+// - `new Type(args)` selects default allocator/runtime.
+// - `new(allocator) Type(args)` uses an explicit allocator value.
+// - `shared new Type(args)` creates a shared ownership handle.
+// - Constructor initializes the storage after allocation.
+// - Destructor runs before storage is returned to the allocator.
+
+trait Allocator {
+    alloc(usize bytes, usize align) :: void*;
+    free(void* ptr, usize bytes, usize align) :: void;
+}
+
+struct ArenaAllocator with Allocator {
+    void* begin;
+    usize capacity;
+    usize offset;
+
+    alloc(usize bytes, usize align) :: void* {
+        ret arena_alloc(ref self, bytes, align);
+    }
+
+    free(void* ptr, usize bytes, usize align) :: void {
+        // Arena free can be no-op by design.
+        ret;
+    }
+}
+
+struct Meter {
+    int32 value;
+
+    constructor(int32 initial) {
+        self.value = initial;
+        ret;
+    }
+
+    destructor() {
+        ret;
+    }
+}
+
+create_meter_in_arena(ArenaAllocator& arena) :: Meter^ {
+    Meter^ owned = new(arena) Meter(7);
+    ret move owned;
+}
+
+create_shared_meter(ArenaAllocator& arena) :: Meter* {
+    Meter* shared_meter = shared new(arena) Meter(7);
+    ret shared_meter;
+}
+
+// Unique lowering sketch:
+//
+//   Meter^ owned = new(arena) Meter(7);
+//
+// Desugars to inspectable compiler/runtime steps:
+//
+//   void* raw = arena.alloc(sizeof(Meter), alignof(Meter));
+//   Meter& slot = unsafe_cast<Meter&>(raw);
+//   slot.constructor(7);
+//   Meter^ owned = runtime.attach_unique<Meter>(raw, ref arena);
+//
+// Drop/scope-exit:
+//
+//   owned.destructor_payload();
+//   arena.free(raw, sizeof(Meter), alignof(Meter));
+
+// Shared lowering sketch:
+//
+//   Meter* shared_meter = shared new(arena) Meter(7);
+//
+// Desugars to:
+//
+//   SharedControlBlock* cb =
+//       runtime.shared_alloc(sizeof(Meter), alignof(Meter), ref arena);
+//   Meter& slot = cb.data_as<Meter>();
+//   slot.constructor(7);
+//   Meter* shared_meter = runtime.attach_shared<Meter>(cb);
+//
+// Ref-count reaches zero:
+//
+//   slot.destructor();
+//   arena.free(cb, cb.total_size, alignof(SharedControlBlock));
+
+// Failure policy:
+// Allocation failure is not a hidden policy hook. It must be visible in the
+// signature/effect model, or expressed as an explicit result-like return value.

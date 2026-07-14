@@ -97,7 +97,16 @@ endif()
 
 if(WIN32 AND MINGW)
   get_filename_component(CSTAR_TOOLCHAIN_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
-  foreach(CSTAR_RUNTIME_DLL IN ITEMS libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll)
+  foreach(CSTAR_RUNTIME_DLL IN ITEMS
+    libgcc_s_seh-1.dll
+    libstdc++-6.dll
+    libwinpthread-1.dll
+    libffi-8.dll
+    libxml2-16.dll
+    zlib1.dll
+    libzstd.dll
+    libiconv-2.dll
+  )
     unset(CSTAR_RUNTIME_DLL_PATH CACHE)
     find_file(CSTAR_RUNTIME_DLL_PATH
       NAMES ${CSTAR_RUNTIME_DLL}
@@ -112,6 +121,26 @@ if(WIN32 AND MINGW)
       )
     endif()
   endforeach()
+
+  unset(CSTAR_LLVM_DLL_PATH CACHE)
+  find_file(CSTAR_LLVM_DLL_PATH
+    NAMES
+      "libLLVM-${LLVM_VERSION_MAJOR}.dll"
+      "LLVM-${LLVM_VERSION_MAJOR}.dll"
+      libLLVM.dll
+      LLVM.dll
+    HINTS
+      "${LLVM_TOOLS_BINARY_DIR}"
+      "${CSTAR_TOOLCHAIN_BIN_DIR}"
+    NO_DEFAULT_PATH
+  )
+  if(CSTAR_LLVM_DLL_PATH)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CSTAR_LLVM_DLL_PATH}"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    )
+  endif()
 endif()
 
 if(TARGET LLVM)
