@@ -57,7 +57,7 @@ Tamamlanan dil/codegen parçaları:
   - `flags enum FileMode : uint32 { Read = 1, Write = 2 }`
   - explicit bit value zorunlu.
   - değerler `0` veya power-of-two olmalı.
-  - bitwise `|`, `&`, `^`, `|=`, `&=`, `^=` çalışır.
+  - bitwise `|`, `&`, `^`, unary `~`, `|=`, `&=`, `^=` çalışır.
   - scalar enum bitwise kullanım, duplicate value ve repr overflow diagnostic üretir.
 - Basit arithmetic expression.
 - Integer ve floating point `+`, `-`, `*`, `/`, `%` codegen.
@@ -148,7 +148,7 @@ examples/smoke/modules/        # helper; runner skip eder
 Güncel smoke doğrulama sonucu:
 
 ```text
-Toplam: 125, Basarili: 122, Diagnostic: 0, Skipped: 3, Hatali: 0, ExitMismatch: 0, CodeMismatch: 0, Crash/Assert: 0
+Toplam: 128, Basarili: 125, Diagnostic: 0, Skipped: 3, Hatali: 0, ExitMismatch: 0, CodeMismatch: 0, Crash/Assert: 0
 ```
 
 Eski düz liste notları tarihsel bağlam için aşağıda kalabilir; canonical dosya yerleşimi artık yukarıdaki kategori ağacıdır.
@@ -292,7 +292,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
 - Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`. `modules` helper klasörüdür.
-- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 124/124 smoke dosyası başarılı; toplam 127 smoke dosyasının 3 tanesi bilinçli skip edilir.
+- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 125/125 smoke dosyası başarılı; toplam 128 smoke dosyasının 3 tanesi bilinçli skip edilir.
 
 `examples/type_checker/`:
 
@@ -301,7 +301,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
 - Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`, `traits`, `proposals`. `modules` helper klasörüdür.
-- Güncel durumda `-ExpectDiagnostics` ile 93 dosyada 91 kontrollü diagnostic, 1 positive/pass ve 1 module helper skip var; crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 94 dosyada 92 kontrollü diagnostic, 1 positive/pass ve 1 module helper skip var; crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -1687,15 +1687,15 @@ Durum:
   - Enum local variable, function parametre ve return storage'ı underlying integer type'a iner.
   - Unknown enum member ve farklı enum type atanması controlled diagnostic üretir.
   - Scalar enum yalnızca equality/inequality karşılaştırması kabul eder.
-  - Flags enum `|`, `&`, `^` ve mevcut shortcut assignment lowering'i üzerinden `|=`, `&=`, `^=` kabul eder; arithmetic operatörler legal değildir.
-  - Positive smoke: `examples/smoke/scalar_enum.cstar`, `examples/smoke/flags_enum.cstar`.
-  - Negative diagnostic: `examples/type_checker/077.cstar`, `examples/type_checker/078.cstar`, `examples/type_checker/079.cstar`, `examples/type_checker/080.cstar`, `examples/type_checker/081.cstar`, `examples/type_checker/082.cstar`, `examples/type_checker/083.cstar`.
+  - Flags enum `|`, `&`, `^`, unary `~` ve mevcut shortcut assignment lowering'i üzerinden `|=`, `&=`, `^=` kabul eder; arithmetic operatörler legal değildir.
+  - Unary `~` repr-width complement üretir: `uint32` flags enum için 32-bit storage'ın tüm bitleri terslenir. Declared flag set'e geri sıkıştırmak isteyen kod `& KnownMask` kullanmalıdır.
+  - Positive smoke: `examples/smoke/scalar_enum.cstar`, `examples/smoke/flags_enum.cstar`, `examples/smoke/enums/flags_enum_unary_not.cstar`.
+  - Negative diagnostic: `examples/type_checker/077.cstar`, `examples/type_checker/078.cstar`, `examples/type_checker/079.cstar`, `examples/type_checker/080.cstar`, `examples/type_checker/081.cstar`, `examples/type_checker/082.cstar`, `examples/type_checker/083.cstar`, `examples/type_checker/enums/084.cstar`.
 - `tagged` canonical proposal yüzeyidir; flags enum artık MVP olarak parser/semantic/codegen hattına indirildi.
 - `option` statement enum pattern matching için temel yüzey olarak kullanılacak.
 
 Kalan:
 
-- Flags enum unary `~` semantiği ayrıca tasarlanmalı; mask sınırı repr genişliği mi yoksa declared flag union mı olacak netleştirilmeli.
 - `uint128` ve full-width unsigned enum literal modeli lexer/parser numeric storage büyütülünce tekrar ele alınmalı; mevcut MVP member literal değerlerini `uint64_t` sınırında tutar.
 - Signed/unsigned repr boundary testleri genişletilmeli.
 - Payload gereken durumda canonical model explicit `TokenKind + struct Token` layout'u olmalı.
@@ -1712,7 +1712,6 @@ Kalan:
 - Exhaustiveness kontrolü `option(enum_value)` için yapılabilir; `_` default yeni value eklendiğinde warning üretmeli.
 - Smoke/type-checker adayları:
   - tagged variant access without proven tag diagnostic.
-  - flags enum unary `~` mask policy diagnostic/pass.
   - `uint128` enum literal sınırı diagnostic/pass.
 
 ### 8.4 Dynamic Trait Object
@@ -1936,8 +1935,10 @@ Tamamlanan son adım:
   - `Color.Green` lookup, enum local/param/return ve mismatch diagnostic'leri doğrulandı.
   - repr overflow, duplicate value, scalar enum bitwise rejection ve flags explicit/power-of-two value diagnostic'leri doğrulandı.
   - Flags enum `|`, `&`, `^`, `|=`, `&=`, `^=` akışı smoke ile doğrulandı.
+  - Flags enum unary `~` repr-width complement olarak codegen/type-check hattına bağlandı; scalar enum'da diagnostic üretir.
   - `examples/smoke/scalar_enum.cstar`
   - `examples/smoke/flags_enum.cstar`
+  - `examples/smoke/enums/flags_enum_unary_not.cstar`
   - `examples/type_checker/077.cstar`
   - `examples/type_checker/078.cstar`
   - `examples/type_checker/079.cstar`
@@ -1945,6 +1946,7 @@ Tamamlanan son adım:
   - `examples/type_checker/081.cstar`
   - `examples/type_checker/082.cstar`
   - `examples/type_checker/083.cstar`
+  - `examples/type_checker/enums/084.cstar`
 
 Önceki tamamlanan planlama adımı:
 
@@ -1966,6 +1968,5 @@ Sıradaki teknik iş:
 - Önce Aşama 8.9 bakımını sürekli yeşil tut: papers suite controlled diagnostic vermeli.
 - Sonra `tagged` desugar veya `protocol` flow analysis'e geçmek daha sağlıklı olur; çünkü tagged access ve protocol state proof aynı statik kanıtlama altyapısını paylaşabilir.
 - Enum tarafında kalan küçük/ileri işler:
-  - flags enum unary `~` mask policy.
   - full-width `uint128` enum literal storage.
   - tagged explicit layout, variant construction/access ve `option(enum_value)` exhaustiveness.

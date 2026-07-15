@@ -3437,9 +3437,29 @@ SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
       case U_POSITIVE:
       case U_NEGATIVE:
       case U_NOT:
-      case U_BINNEG:
         unaryOpAst.m_Node->acceptBefore(*this);
         break;
+      case U_BINNEG: {
+        symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
+        const bool isEnum =
+            symbolInfo.type == TypeSpecifier::SPEC_DEFINED &&
+            EnumTable.count(symbolInfo.definedTypeName) != 0;
+        if (isEnum) {
+          const auto &enumInfo = EnumTable[symbolInfo.definedTypeName];
+          if (!enumInfo.isFlags) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Bitwise '~' requires a 'flags enum'; enum '" +
+                    enumInfo.name + "' is scalar",
+                symbolInfo);
+          }
+        } else if (symbolInfo.indirectionLevel > 0 ||
+                   !IsIntegerType(symbolInfo.type)) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Bitwise '~' requires an integer or flags enum operand",
+              symbolInfo);
+        }
+        break;
+      }
       case U_TYPEOF:
         if (m_LastBinOp) {
           this->m_TypeErrorMessages.emplace_back(

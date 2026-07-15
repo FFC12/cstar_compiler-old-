@@ -3684,6 +3684,19 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
     return unaryOpAst.m_Node->accept(*this);
   }
 
+  if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_BINNEG) {
+    value = unaryOpAst.m_Node->accept(*this);
+    if (value == nullptr) {
+      return nullptr;
+    }
+    if (!value->getType()->isIntegerTy()) {
+      assert(false && "Bitwise '~' requires an integer-like value.");
+    }
+    value = Builder->CreateNot(value, "bnot");
+    m_LastType = value->getType();
+    return value;
+  }
+
   if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_REF) {
     if (unaryOpAst.m_Node != nullptr &&
         unaryOpAst.m_Node->m_ExprKind == ExprKind::BinOp) {

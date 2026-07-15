@@ -1,0 +1,23 @@
+// expected: pass
+// expected-exit: 0
+
+flags enum FileMode : uint32 {
+    None = 0,
+    Read = 1,
+    Write = 2,
+    Execute = 4,
+    Create = 8,
+}
+
+main() :: int32 {
+    FileMode mode = FileMode.Read | FileMode.Create;
+    FileMode inverted = ~mode;
+    FileMode read_mask = inverted & FileMode.Read;
+    FileMode write_mask = inverted & FileMode.Write;
+
+    if (read_mask == FileMode.None && write_mask == FileMode.Write) {
+        ret 0;
+    }
+
+    ret 1;
+}

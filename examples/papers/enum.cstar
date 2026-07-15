@@ -37,6 +37,13 @@ open_flags() :: FileMode {
     ret FileMode.Read | FileMode.Create;
 }
 
+invert_flags(FileMode mode) :: FileMode {
+    // Flags enum `~` is a repr-width complement. For `uint32`, every bit in
+    // the 32-bit storage is inverted. Use `& KnownMask` when the program wants
+    // to clamp the value back to the declared flag set.
+    ret ~mode;
+}
+
 // ---------------------------------------------------------------------
 // 3. Explicit tagged layout
 // ---------------------------------------------------------------------
