@@ -51,5 +51,5 @@ if [[ "${1:-}" == "--run" ]]; then
     CSTAR="$BUILD_DIR/$BUILD_TYPE/cstar.exe"
   fi
 
-  "$CSTAR" "$ROOT/examples/smoke/minimal.cstar"
+  "$CSTAR" "$ROOT/examples/smoke/core/minimal.cstar"
 fi

@@ -1,7 +1,7 @@
 // expected: diagnostic
 // expected-code: CST2001
 
-include "modules/private_module.cstar" as private_mod
+include "../modules/private_module.cstar" as private_mod
 
 main() :: int32 {
   ret private_mod.hidden_add(1, 2);

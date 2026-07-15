@@ -19,7 +19,7 @@ class FixAST : public IAST {
         m_Symbol(std::move(symbol)),
         m_IsPrefix(isPrefix),
         m_IsPostfix(isPostfix),
-        m_IsIncrement(isPrefix),
+        m_IsIncrement(isIncremant),
         m_IsDecrement(isDecrement) {
     this->m_ASTKind = ASTKind::Expr;
     this->m_ExprKind = ExprKind::FixExpr;

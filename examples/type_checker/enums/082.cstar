@@ -1,0 +1,11 @@
+// expected: diagnostic
+// expected-code: CST1001
+
+enum Color : uint8 {
+    Red = 1,
+    AlsoRed = 1,
+}
+
+main() :: int32 {
+    ret 0;
+}

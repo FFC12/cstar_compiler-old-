@@ -1,7 +1,7 @@
 // expected: pass
 // expected-exit: 6
 
-include "../../std/core.cstar" as core
+include "../../../std/core.cstar" as core
 
 main() :: int32 {
   char* name = core.core_read_string();

@@ -40,7 +40,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/build-ucrt/cstar.exe",
       "args": [
-        "${workspaceFolder}/examples/smoke/minimal.cstar",
+        "${workspaceFolder}/examples/smoke/core/minimal.cstar",
         "--run"
       ],
       "stopAtEntry": false,
@@ -62,7 +62,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/build/Debug/cstar.exe",
       "args": [
-        "${workspaceFolder}/examples/smoke/minimal.cstar",
+        "${workspaceFolder}/examples/smoke/core/minimal.cstar",
         "--run"
       ],
       "stopAtEntry": false,

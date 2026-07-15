@@ -240,7 +240,8 @@ class CStarParser {
   void translationUnit();
   void parseIncludeDirective();
   void parseLinkageBlock(VisibilitySpecifier visibilitySpecifier);
-  void parseEnumDecl(DeclarationModifiers declarationModifiers);
+  void parseEnumDecl(DeclarationModifiers declarationModifiers,
+                     bool isFlags = false);
   void parseStructDecl(DeclarationModifiers declarationModifiers);
   void parseTraitDecl(DeclarationModifiers declarationModifiers);
   std::string parseLinkSource();

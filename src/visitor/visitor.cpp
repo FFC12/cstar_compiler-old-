@@ -10,6 +10,7 @@
 #include <ast/cast_op_ast.hpp>
 #include <ast/control_flow_ast.hpp>
 #include <ast/enum_ast.hpp>
+#include <ast/fix_ast.hpp>
 #include <ast/func_ast.hpp>
 #include <ast/func_call_ast.hpp>
 #include <ast/if_stmt.hpp>
@@ -308,6 +309,14 @@ static bool IsSigned(TypeSpecifier typeSpecifier) {
     default:
       return true;
   }
+}
+
+static llvm::Value *CreateOneValue(llvm::Type *type) {
+  if (type->isFloatingPointTy()) {
+    return llvm::ConstantFP::get(type, 1.0);
+  }
+
+  return llvm::ConstantInt::get(type, 1);
 }
 
 static std::string DecodeCStringEscapes(const std::string &value) {
@@ -3831,7 +3840,59 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
 }
 ValuePtr Visitor::visit(TypeAST &typeAst) { return nullptr; }
 
-ValuePtr Visitor::visit(FixAST &fixAst) { return nullptr; }
+ValuePtr Visitor::visit(FixAST &fixAst) {
+  if (fixAst.m_Symbol == nullptr ||
+      fixAst.m_Symbol->m_ExprKind != ExprKind::SymbolExpr) {
+    assert(false && "increment/decrement target must be a symbol.");
+  }
+
+  auto *symbol = static_cast<SymbolAST *>(fixAst.m_Symbol.get());
+  llvm::Value *storage =
+      FindStorage(m_LocalVarsOnScope, m_GlobalVars, symbol->m_SymbolName);
+  if (storage == nullptr) {
+    assert(false && "increment/decrement target was not found.");
+  }
+
+  auto symbolInfo = getSymbolInfo(symbol->m_SymbolName);
+  llvm::Value *targetAddress = storage;
+  llvm::Type *targetType = GetSymbolLLVMType(symbolInfo);
+
+  auto referenceParam = m_ReferenceParamValueTypes.find(symbol->m_SymbolName);
+  if (referenceParam != m_ReferenceParamValueTypes.end()) {
+    auto *slotType = GetPointeeType(storage);
+    targetAddress =
+        CreateLoad(storage, slotType, symbol->m_SymbolName + ".fix.ref.addr");
+    targetType = referenceParam->second;
+  }
+
+  auto *currentValue =
+      Builder->CreateLoad(targetType, targetAddress, symbol->m_SymbolName);
+  auto *one = CreateOneValue(targetType);
+  llvm::Value *nextValue = nullptr;
+
+  if (fixAst.m_IsIncrement) {
+    nextValue = targetType->isFloatingPointTy()
+                    ? Builder->CreateFAdd(currentValue, one, "inctmp")
+                    : (IsSigned(symbolInfo.type)
+                           ? Builder->CreateNSWAdd(currentValue, one, "inctmp")
+                           : Builder->CreateNUWAdd(currentValue, one,
+                                                   "inctmp"));
+  } else if (fixAst.m_IsDecrement) {
+    nextValue = targetType->isFloatingPointTy()
+                    ? Builder->CreateFSub(currentValue, one, "dectmp")
+                    : (IsSigned(symbolInfo.type)
+                           ? Builder->CreateNSWSub(currentValue, one, "dectmp")
+                           : Builder->CreateNUWSub(currentValue, one,
+                                                   "dectmp"));
+  } else {
+    assert(false && "increment/decrement expression is missing an operator.");
+  }
+
+  Builder->CreateStore(nextValue, targetAddress);
+  m_LastType = targetType;
+  m_LastSigned = IsSigned(symbolInfo.type);
+  return fixAst.m_IsPostfix ? currentValue : nextValue;
+}
 
 ValuePtr Visitor::visit(StructAST &structAst) {
   (void)GetDefinedStructTy(structAst.m_Name);

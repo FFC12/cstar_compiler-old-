@@ -1,0 +1,10 @@
+// expected: diagnostic
+// expected-code: CST1001
+
+enum Tiny : uint8 {
+    TooBig = 256,
+}
+
+main() :: int32 {
+    ret 0;
+}

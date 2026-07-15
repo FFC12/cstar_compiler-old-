@@ -1,0 +1,62 @@
+// expected: diagnostic (proposal)
+//
+// C* POINTER NULLABILITY PROPOSAL
+// -------------------------------
+// Pointers exist because C* is a systems language. Null also exists at the ABI
+// and runtime level. The language surface should make nullability explicit
+// instead of making every pointer silently nullable.
+//
+// Decisions:
+// - `T*`, `T^`, and `T&` are non-null by default.
+// - `T&` is never nullable; a reference aliases existing storage.
+// - Nullable pointers use an explicit `?` marker: `T*?`, `T^?`.
+// - Canonical null literal is `nil`, and it is only legal in nullable pointer
+//   contexts.
+// - `if (p)` on a nullable pointer narrows it to non-null inside the true branch.
+// - Moved-from pointers may be represented as null internally, but source values
+//   are semantically `moved`, not nullable.
+
+read_non_null(int32* ptr) :: int32 {
+    ret deref ptr;
+}
+
+read_nullable(int32*? maybe) :: int32 {
+    // Not legal without a proof:
+    // ret deref maybe;
+
+    if (maybe) {
+        // Inside this branch, `maybe` is narrowed from `int32*?` to `int32*`.
+        ret deref maybe;
+    }
+
+    ret 0;
+}
+
+make_nullable(bool enabled, int32& value) :: int32*? {
+    if (enabled) {
+        ret ref value;
+    }
+
+    ret nil;
+}
+
+take_nullable(int32^? owned) :: int32 {
+    if (owned) {
+        int32 value = deref owned;
+        drop owned;
+        ret value;
+    }
+
+    ret -1;
+}
+
+bad_nil_assignment() :: void {
+    // Not legal: `int32*` is non-null by default.
+    int32* ptr = nil;
+    ret;
+}
+
+ffi_getenv(const char* name) :: char*? {
+    // C ABI functions that can return null should say so in the signature.
+    ret native_getenv(name);
+}

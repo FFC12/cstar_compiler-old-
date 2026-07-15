@@ -132,7 +132,8 @@ example4(constptr int32* ptr) :: any {
 //This means pass by address that shareable pointer but it can't be changed
 //and it can have many ownerships which is able to be shared with
 //another pointer and it can be moved since *
-//when shareable pointer moved, previous pointer will be nil.. and counter does not increase
+// When a shareable pointer is moved, the old storage can be cleared internally,
+// but the source variable is semantically `moved`, not a nullable pointer.
 example5(int32* ptr) :: any {
     int32* sharedHere = ptr;
     sharedHere = Triangle(); 

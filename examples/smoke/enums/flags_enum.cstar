@@ -1,0 +1,24 @@
+// expected: pass
+// expected-exit: 0
+
+flags enum FileMode : uint32 {
+    None = 0,
+    Read = 1,
+    Write = 2,
+    Execute = 4,
+    Create = 8,
+}
+
+open_flags() :: FileMode {
+    ret FileMode.Read | FileMode.Create;
+}
+
+main() :: int32 {
+    FileMode mode = open_flags();
+    mode |= FileMode.Write;
+
+    FileMode readable = mode & FileMode.Read;
+    FileMode toggled = mode ^ FileMode.Write;
+
+    ret 0;
+}

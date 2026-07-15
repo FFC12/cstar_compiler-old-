@@ -63,9 +63,9 @@ if errorlevel 1 exit /b %errorlevel%
 
 if "%~1"=="--run" (
   if exist "%BUILD_DIR%\%CONFIG%\cstar.exe" (
-    "%BUILD_DIR%\%CONFIG%\cstar.exe" "%ROOT%\examples\smoke\minimal.cstar"
+    "%BUILD_DIR%\%CONFIG%\cstar.exe" "%ROOT%\examples\smoke\core\minimal.cstar"
   ) else (
-    "%BUILD_DIR%\cstar.exe" "%ROOT%\examples\smoke\minimal.cstar"
+    "%BUILD_DIR%\cstar.exe" "%ROOT%\examples\smoke\core\minimal.cstar"
   )
   exit /b %errorlevel%
 )

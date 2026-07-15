@@ -12,15 +12,17 @@ class EnumAST : public IAST {
   friend Visitor;
   std::string m_Name;
   TypeSpecifier m_UnderlyingType;
+  bool m_IsFlags;
   std::vector<EnumMemberInfo> m_Members;
 
  public:
   EnumAST(std::string name, TypeSpecifier underlyingType,
           std::vector<EnumMemberInfo> members, AccessSpecifier access,
-          SemanticLoc semLoc)
+          SemanticLoc semLoc, bool isFlags = false)
       : IAST(semLoc),
         m_Name(std::move(name)),
         m_UnderlyingType(underlyingType),
+        m_IsFlags(isFlags),
         m_Members(std::move(members)) {
     this->m_ASTKind = ASTKind::Decl;
     this->m_DeclKind = DeclKind::EnumDecl;
@@ -31,11 +33,15 @@ class EnumAST : public IAST {
   [[nodiscard]] TypeSpecifier underlyingType() const {
     return m_UnderlyingType;
   }
+  [[nodiscard]] bool isFlags() const { return m_IsFlags; }
   [[nodiscard]] const std::vector<EnumMemberInfo>& members() const {
     return m_Members;
   }
 
   void debugNode() override {
+    if (m_IsFlags) {
+      std::cout << "flags ";
+    }
     std::cout << "enum " << m_Name << " {";
     for (const auto& member : m_Members) {
       std::cout << member.name << ";";

@@ -1,4 +1,4 @@
-include "../../std/core.cstar" as core
+include "../../../std/core.cstar" as core
 
 main() :: int32 {
   core.core_print("core text ");

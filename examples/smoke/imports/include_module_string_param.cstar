@@ -1,7 +1,7 @@
 // expected: pass
 // expected-exit: 9
 
-include "modules/string_metric_module.cstar" as metric
+include "../modules/string_metric_module.cstar" as metric
 
 main() :: int32 {
   ret metric.metric_value("module-label", 9);

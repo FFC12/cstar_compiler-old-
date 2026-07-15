@@ -1,0 +1,11 @@
+// expected: diagnostic
+// expected-code: CST1001
+
+flags enum FileMode : uint8 {
+    Read,
+    Write = 2,
+}
+
+main() :: int32 {
+    ret 0;
+}

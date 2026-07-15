@@ -7,7 +7,6 @@ main() :: int32 {
   arr[0] = 9;
   ret arr[0];
 }
-
 -------
 
 // FILE 002: examples/smoke/array_element_read.cstar
@@ -18,7 +17,6 @@ main() :: int32 {
   int32 arr[2] = (4, 5);
   ret arr[1];
 }
-
 -------
 
 // FILE 003: examples/smoke/array_element_shortcut_assignment.cstar
@@ -30,7 +28,6 @@ main() :: int32 {
   arr[1] += 5;
   ret arr[1];
 }
-
 -------
 
 // FILE 004: examples/smoke/array_param_read.cstar
@@ -45,7 +42,6 @@ main() :: int32 {
   int32 values[2] = (4, 5);
   ret read_second(values);
 }
-
 -------
 
 // FILE 005: examples/smoke/array_param_write.cstar
@@ -62,7 +58,6 @@ main() :: int32 {
   write_first(values);
   ret values[0];
 }
-
 -------
 
 // FILE 006: examples/smoke/as_cast_numeric.cstar
@@ -74,7 +69,6 @@ main() :: int32 {
   int32 y = 5 as int32;
   ret x + y;
 }
-
 -------
 
 // FILE 007: examples/smoke/assignment.cstar
@@ -85,7 +79,6 @@ main() :: int32 {
     x = 2;
     ret x;
 }
-
 -------
 
 // FILE 008: examples/smoke/assignment_cast.cstar
@@ -98,7 +91,6 @@ main() :: int32 {
   x = y;
   ret x;
 }
-
 -------
 
 // FILE 009: examples/smoke/binary_expr.cstar
@@ -108,7 +100,6 @@ main() :: int32 {
     int32 x = 1 + 2 * 3;
     ret x;
 }
-
 -------
 
 // FILE 010: examples/smoke/bool_literal.cstar
@@ -122,7 +113,6 @@ main() :: int32 {
 
     ret 0;
 }
-
 -------
 
 // FILE 011: examples/smoke/cast_numeric.cstar
@@ -134,10 +124,22 @@ main() :: int32 {
     int32 y = cast<int32>(5);
     ret x + y;
 }
-
 -------
 
-// FILE 012: examples/smoke/char_literal.cstar
+// FILE 012: examples/smoke/castable_param.cstar
+// expected: pass
+
+cast_is_possible(x bool, bool y) :: int32 {
+    int32 b = y;
+    ret b;
+}
+
+main() :: int32 {
+    ret cast_is_possible(false, true);
+}
+-------
+
+// FILE 013: examples/smoke/char_literal.cstar
 // expected: pass
 // expected-exit: 65
 
@@ -145,19 +147,17 @@ main() :: int32 {
   char c = 'A';
   ret c;
 }
-
 -------
 
-// FILE 013: examples/smoke/comparison_expr.cstar
+// FILE 014: examples/smoke/comparison_expr.cstar
 // expected: pass
 // expected-exit: 1
 main() :: int32 {
     ret 10 >= 10;
 }
-
 -------
 
-// FILE 014: examples/smoke/const_pointer.cstar
+// FILE 015: examples/smoke/const_pointer.cstar
 // expected: pass
 // expected-exit: 2
 
@@ -168,10 +168,9 @@ main() :: int32 {
   pointer = ref second;
   ret deref pointer;
 }
-
 -------
 
-// FILE 015: examples/smoke/const_value.cstar
+// FILE 016: examples/smoke/const_value.cstar
 // expected: pass
 // expected-exit: 5
 
@@ -179,10 +178,9 @@ main() :: int32 {
   const int32 value = 5;
   ret value;
 }
-
 -------
 
-// FILE 016: examples/smoke/constptr_param.cstar
+// FILE 017: examples/smoke/constptr_param.cstar
 // expected: pass
 // expected-exit: 9
 
@@ -196,10 +194,9 @@ main() :: int32 {
   write_through(ref value);
   ret value;
 }
-
 -------
 
-// FILE 017: examples/smoke/constptr_pointer.cstar
+// FILE 018: examples/smoke/constptr_pointer.cstar
 // expected: pass
 // expected-exit: 9
 
@@ -209,10 +206,9 @@ main() :: int32 {
   deref pointer = 9;
   ret deref pointer;
 }
-
 -------
 
-// FILE 018: examples/smoke/constref_param.cstar
+// FILE 019: examples/smoke/constref_param.cstar
 // expected: pass
 // expected-exit: 13
 
@@ -224,10 +220,46 @@ main() :: int32 {
   int32 value = 13;
   ret read_ref(ref value);
 }
-
 -------
 
-// FILE 019: examples/smoke/dereference_assignment.cstar
+// FILE 020: examples/smoke/core_print_read.cstar
+// expected: pass
+include "../../std/core.cstar" as core
+
+main() :: int32 {
+  core.core_print("core text ");
+  core.core_print_i32(7);
+  core.core_print(" ");
+  core.core_print_i64(123456789);
+  core.core_print(" ");
+  core.core_print_f64(3.5);
+  core.core_print("\n");
+
+  int32 value = core.core_read_i32();
+  core.core_print("read ");
+  core.core_print_i32(value);
+  core.core_print("\n");
+
+  ret value;
+}
+-------
+
+// FILE 021: examples/smoke/core_read_string.cstar
+// expected: pass
+// expected-exit: 6
+
+include "../../std/core.cstar" as core
+
+main() :: int32 {
+  char* name = core.core_read_string();
+  core.core_print("name ");
+  core.core_print(name);
+  core.core_print("\n");
+  ret 6;
+}
+-------
+
+// FILE 022: examples/smoke/dereference_assignment.cstar
 // expected: pass
 // expected-exit: 21
 main() :: int32 {
@@ -236,10 +268,9 @@ main() :: int32 {
     deref p = 21;
     ret x;
 }
-
 -------
 
-// FILE 020: examples/smoke/dereference_assignment_shortcut.cstar
+// FILE 023: examples/smoke/dereference_assignment_shortcut.cstar
 // expected: pass
 // expected-exit: 8
 main() :: int32 {
@@ -248,10 +279,9 @@ main() :: int32 {
     deref p += 3;
     ret x;
 }
-
 -------
 
-// FILE 021: examples/smoke/export_block_from_module.cstar
+// FILE 024: examples/smoke/export_block_from_module.cstar
 // expected: pass
 // expected-exit: 4
 
@@ -262,10 +292,9 @@ export from "std:math" {
 main() :: int32 {
   ret abs(0 - 4);
 }
-
 -------
 
-// FILE 022: examples/smoke/expression_newline_continuation.cstar
+// FILE 025: examples/smoke/expression_newline_continuation.cstar
 // expected: pass
 // expected-exit: 19
 
@@ -285,10 +314,36 @@ main() :: int32 {
   ret arithmetic + call_value + matrix[1:
                                        2];
 }
-
 -------
 
-// FILE 023: examples/smoke/float32_arithmetic.cstar
+// FILE 026: examples/smoke/flags_enum.cstar
+// expected: pass
+// expected-exit: 0
+
+flags enum FileMode : uint32 {
+    None = 0,
+    Read = 1,
+    Write = 2,
+    Execute = 4,
+    Create = 8,
+}
+
+open_flags() :: FileMode {
+    ret FileMode.Read | FileMode.Create;
+}
+
+main() :: int32 {
+    FileMode mode = open_flags();
+    mode |= FileMode.Write;
+
+    FileMode readable = mode & FileMode.Read;
+    FileMode toggled = mode ^ FileMode.Write;
+
+    ret 0;
+}
+-------
+
+// FILE 027: examples/smoke/float32_arithmetic.cstar
 // expected: pass
 // expected-exit: 1
 
@@ -302,10 +357,9 @@ main() :: int32 {
 
   ret 0;
 }
-
 -------
 
-// FILE 024: examples/smoke/float64_arithmetic.cstar
+// FILE 028: examples/smoke/float64_arithmetic.cstar
 // expected: pass
 // expected-exit: 1
 
@@ -319,10 +373,9 @@ main() :: int32 {
 
   ret 0;
 }
-
 -------
 
-// FILE 025: examples/smoke/forward_function_call.cstar
+// FILE 029: examples/smoke/forward_function_call.cstar
 // expected: pass
 // expected-exit: 3
 main() :: int32 {
@@ -332,10 +385,9 @@ main() :: int32 {
 add(int32 a, int32 b) :: int32 {
     ret a + b;
 }
-
 -------
 
-// FILE 026: examples/smoke/function_call.cstar
+// FILE 030: examples/smoke/function_call.cstar
 // expected: pass
 // expected-exit: 3
 add(int32 a, int32 b) :: int32 {
@@ -345,10 +397,9 @@ add(int32 a, int32 b) :: int32 {
 main() :: int32 {
     ret add(1, 2);
 }
-
 -------
 
-// FILE 027: examples/smoke/function_call_cast_argument.cstar
+// FILE 031: examples/smoke/function_call_cast_argument.cstar
 // expected: pass
 // expected-exit: 9
 
@@ -359,10 +410,9 @@ add(int32 a, int32 b) :: int32 {
 main() :: int32 {
     ret add(cast<int32>(4.5), cast<int32>(5));
 }
-
 -------
 
-// FILE 028: examples/smoke/function_call_initializer.cstar
+// FILE 032: examples/smoke/function_call_initializer.cstar
 // expected: pass
 // expected-exit: 3
 add(int32 a, int32 b) :: int32 {
@@ -373,10 +423,9 @@ main() :: int32 {
     int32 x = add(1, 2);
     ret x;
 }
-
 -------
 
-// FILE 029: examples/smoke/function_call_pointer_argument.cstar
+// FILE 033: examples/smoke/function_call_pointer_argument.cstar
 // expected: pass
 // expected-exit: 9
 read_ptr(int32* p) :: int32 {
@@ -387,10 +436,9 @@ main() :: int32 {
     int32 x = 9;
     ret read_ptr(ref x);
 }
-
 -------
 
-// FILE 030: examples/smoke/function_call_statement.cstar
+// FILE 034: examples/smoke/function_call_statement.cstar
 // expected: pass
 // expected-exit: 0
 touch() :: void {
@@ -401,10 +449,9 @@ main() :: int32 {
     touch();
     ret 0;
 }
-
 -------
 
-// FILE 031: examples/smoke/function_call_symbol_argument.cstar
+// FILE 035: examples/smoke/function_call_symbol_argument.cstar
 // expected: pass
 // expected-exit: 3
 add(int32 a, int32 b) :: int32 {
@@ -416,10 +463,9 @@ main() :: int32 {
     int32 y = 2;
     ret add(x, y);
 }
-
 -------
 
-// FILE 032: examples/smoke/global_variable.cstar
+// FILE 036: examples/smoke/global_variable.cstar
 // expected: pass
 // expected-exit: 7
 
@@ -429,10 +475,9 @@ main() :: int32 {
   g += 5;
   ret g;
 }
-
 -------
 
-// FILE 033: examples/smoke/if_condition_pointer_conversion.cstar
+// FILE 037: examples/smoke/if_condition_pointer_conversion.cstar
 // expected: pass
 // expected-exit: 1
 
@@ -446,10 +491,9 @@ main() :: int32 {
 
   ret 0;
 }
-
 -------
 
-// FILE 034: examples/smoke/if_condition_scalar_conversion.cstar
+// FILE 038: examples/smoke/if_condition_scalar_conversion.cstar
 // expected: pass
 // expected-exit: 3
 
@@ -468,10 +512,9 @@ main() :: int32 {
 
   ret result;
 }
-
 -------
 
-// FILE 035: examples/smoke/if_elif_else_statement.cstar
+// FILE 039: examples/smoke/if_elif_else_statement.cstar
 // expected: pass
 // expected-exit: 3
 main() :: int32 {
@@ -483,10 +526,9 @@ main() :: int32 {
         ret 2;
     }
 }
-
 -------
 
-// FILE 036: examples/smoke/if_else_statement.cstar
+// FILE 040: examples/smoke/if_else_statement.cstar
 // expected: pass
 // expected-exit: 2
 main() :: int32 {
@@ -496,10 +538,9 @@ main() :: int32 {
         ret 2;
     }
 }
-
 -------
 
-// FILE 037: examples/smoke/if_fallthrough_statement.cstar
+// FILE 041: examples/smoke/if_fallthrough_statement.cstar
 // expected: pass
 // expected-exit: 5
 main() :: int32 {
@@ -513,10 +554,9 @@ main() :: int32 {
 
     ret x;
 }
-
 -------
 
-// FILE 038: examples/smoke/if_statement.cstar
+// FILE 042: examples/smoke/if_statement.cstar
 // expected: pass
 // expected-exit: 7
 main() :: int32 {
@@ -526,10 +566,9 @@ main() :: int32 {
 
     ret 0;
 }
-
 -------
 
-// FILE 039: examples/smoke/import_block_from_crt.cstar
+// FILE 043: examples/smoke/import_block_from_crt.cstar
 // expected: pass
 // expected-exit: 9
 
@@ -540,10 +579,9 @@ import from "std:crt" {
 main() :: int32 {
   ret abs(0 - 9);
 }
-
 -------
 
-// FILE 040: examples/smoke/import_block_function.cstar
+// FILE 044: examples/smoke/import_block_function.cstar
 // expected: pass
 // expected-exit: 6
 
@@ -554,10 +592,9 @@ import {
 main() :: int32 {
   ret abs(0 - 6);
 }
-
 -------
 
-// FILE 041: examples/smoke/import_function_abs.cstar
+// FILE 045: examples/smoke/import_function_abs.cstar
 // expected: pass
 // expected-exit: 7
 
@@ -566,10 +603,9 @@ import abs(int32) :: int32;
 main() :: int32 {
   ret abs(0 - 7);
 }
-
 -------
 
-// FILE 042: examples/smoke/import_function_from_crt.cstar
+// FILE 046: examples/smoke/import_function_from_crt.cstar
 // expected: pass
 // expected-exit: 8
 
@@ -578,10 +614,9 @@ import abs(int32 value) :: int32 from "std:crt";
 main() :: int32 {
   ret abs(0 - 8);
 }
-
 -------
 
-// FILE 043: examples/smoke/import_function_named_param.cstar
+// FILE 047: examples/smoke/import_function_named_param.cstar
 // expected: pass
 // expected-exit: 9
 
@@ -590,10 +625,23 @@ import abs(int32 value) :: int32;
 main() :: int32 {
   ret abs(0 - 9);
 }
-
 -------
 
-// FILE 044: examples/smoke/include_module_function.cstar
+// FILE 048: examples/smoke/import_variadic_printf.cstar
+// expected: pass
+// expected-exit: 5
+
+import from "std:crt" {
+  printf(const char* fmt, ...) :: int32;
+}
+
+main() :: int32 {
+  printf("variadic %s %d %lld %f\n", "printf", cast<int32>(7), cast<int64>(99), 2.5);
+  ret 5;
+}
+-------
+
+// FILE 049: examples/smoke/include_module_function.cstar
 // expected: pass
 // expected-exit: 7
 
@@ -602,10 +650,9 @@ include "modules/math_module.cstar" as math
 main() :: int32 {
   ret math.add_from_module(2, 5);
 }
-
 -------
 
-// FILE 045: examples/smoke/include_module_public_static.cstar
+// FILE 050: examples/smoke/include_module_public_static.cstar
 // expected: pass
 // expected-exit: 12
 
@@ -614,20 +661,29 @@ include "modules/public_static_module.cstar" as cfg
 main() :: int32 {
   ret cfg.double_limit();
 }
-
 -------
 
-// FILE 046: examples/smoke/local_int.cstar
+// FILE 051: examples/smoke/include_module_string_param.cstar
+// expected: pass
+// expected-exit: 9
+
+include "modules/string_metric_module.cstar" as metric
+
+main() :: int32 {
+  ret metric.metric_value("module-label", 9);
+}
+-------
+
+// FILE 052: examples/smoke/local_int.cstar
 // expected: pass
 // expected-exit: 7
 main() :: int32 {
     int32 x = 7;
     ret x;
 }
-
 -------
 
-// FILE 047: examples/smoke/logical_expr.cstar
+// FILE 053: examples/smoke/logical_expr.cstar
 // expected: pass
 // expected-exit: 1
 main() :: int32 {
@@ -635,10 +691,9 @@ main() :: int32 {
     int32 y = 20;
     ret (x < y) && (x != y);
 }
-
 -------
 
-// FILE 048: examples/smoke/loop_array_indexed_iterable.cstar
+// FILE 054: examples/smoke/loop_array_indexed_iterable.cstar
 // expected: pass
 // expected-exit: 24
 
@@ -653,10 +708,9 @@ main() :: int32 {
 
   ret total;
 }
-
 -------
 
-// FILE 049: examples/smoke/loop_array_iterable.cstar
+// FILE 055: examples/smoke/loop_array_iterable.cstar
 // expected: pass
 // expected-exit: 12
 
@@ -670,10 +724,9 @@ main() :: int32 {
 
   ret total;
 }
-
 -------
 
-// FILE 050: examples/smoke/loop_array_param_iterable.cstar
+// FILE 056: examples/smoke/loop_array_param_iterable.cstar
 // expected: pass
 // expected-exit: 18
 
@@ -691,10 +744,9 @@ main() :: int32 {
   int32 values[3] = (4, 6, 8);
   ret sum_values(values);
 }
-
 -------
 
-// FILE 051: examples/smoke/loop_break_continue_nested_if.cstar
+// FILE 057: examples/smoke/loop_break_continue_nested_if.cstar
 // expected: pass
 // expected-exit: 8
 
@@ -716,10 +768,9 @@ main() :: int32 {
 
   ret total;
 }
-
 -------
 
-// FILE 052: examples/smoke/loop_break_statement.cstar
+// FILE 058: examples/smoke/loop_break_statement.cstar
 // expected: pass
 // expected-exit: 6
 
@@ -738,10 +789,9 @@ main() :: int32 {
 
   ret total;
 }
-
 -------
 
-// FILE 053: examples/smoke/loop_continue_statement.cstar
+// FILE 059: examples/smoke/loop_continue_statement.cstar
 // expected: pass
 // expected-exit: 12
 
@@ -761,10 +811,9 @@ main() :: int32 {
 
   ret total;
 }
-
 -------
 
-// FILE 054: examples/smoke/loop_false_skip.cstar
+// FILE 060: examples/smoke/loop_false_skip.cstar
 // expected: pass
 // expected-exit: 7
 
@@ -777,10 +826,9 @@ main() :: int32 {
 
   ret value;
 }
-
 -------
 
-// FILE 055: examples/smoke/loop_nested_if_statement.cstar
+// FILE 061: examples/smoke/loop_nested_if_statement.cstar
 // expected: pass
 // expected-exit: 21
 
@@ -800,10 +848,9 @@ main() :: int32 {
 
   ret total;
 }
-
 -------
 
-// FILE 056: examples/smoke/loop_nested_loop_continue.cstar
+// FILE 062: examples/smoke/loop_nested_loop_continue.cstar
 // expected: pass
 // expected-exit: 4
 
@@ -828,10 +875,9 @@ main() :: int32 {
 
   ret total;
 }
-
 -------
 
-// FILE 057: examples/smoke/loop_pointer_condition.cstar
+// FILE 063: examples/smoke/loop_pointer_condition.cstar
 // expected: pass
 // expected-exit: 3
 
@@ -848,10 +894,9 @@ main() :: int32 {
 
   ret result;
 }
-
 -------
 
-// FILE 058: examples/smoke/loop_range_break_continue.cstar
+// FILE 064: examples/smoke/loop_range_break_continue.cstar
 // expected: pass
 // expected-exit: 5
 
@@ -870,10 +915,9 @@ main() :: int32 {
 
   ret total;
 }
-
 -------
 
-// FILE 059: examples/smoke/loop_range_statement.cstar
+// FILE 065: examples/smoke/loop_range_statement.cstar
 // expected: pass
 // expected-exit: 10
 
@@ -886,10 +930,9 @@ main() :: int32 {
 
   ret total;
 }
-
 -------
 
-// FILE 060: examples/smoke/loop_while_statement.cstar
+// FILE 066: examples/smoke/loop_while_statement.cstar
 // expected: pass
 // expected-exit: 10
 
@@ -904,19 +947,17 @@ main() :: int32 {
 
   ret total;
 }
-
 -------
 
-// FILE 061: examples/smoke/minimal.cstar
+// FILE 067: examples/smoke/minimal.cstar
 // expected: pass
 // expected-exit: 0
 main() :: int32 {
     ret 0;
 }
-
 -------
 
-// FILE 062: examples/smoke/multi_level_dereference_assignment.cstar
+// FILE 068: examples/smoke/multi_level_dereference_assignment.cstar
 // expected: pass
 // expected-exit: 34
 main() :: int32 {
@@ -926,10 +967,9 @@ main() :: int32 {
     **pp = 34;
     ret x;
 }
-
 -------
 
-// FILE 063: examples/smoke/multi_level_dereference_read.cstar
+// FILE 069: examples/smoke/multi_level_dereference_read.cstar
 // expected: pass
 // expected-exit: 8
 
@@ -939,10 +979,9 @@ main() :: int32 {
   int32** pointer_to_pointer = ref pointer;
   ret **pointer_to_pointer;
 }
-
 -------
 
-// FILE 064: examples/smoke/multidim_array_assignment.cstar
+// FILE 070: examples/smoke/multidim_array_assignment.cstar
 // expected: pass
 // expected-exit: 9
 
@@ -951,10 +990,9 @@ main() :: int32 {
   matrix[1:1] = 9;
   ret matrix[1:1];
 }
-
 -------
 
-// FILE 065: examples/smoke/multidim_array_dynamic_index.cstar
+// FILE 071: examples/smoke/multidim_array_dynamic_index.cstar
 // expected: pass
 // expected-exit: 6
 
@@ -965,10 +1003,9 @@ main() :: int32 {
   int32 col = 2;
   ret matrix[row:col];
 }
-
 -------
 
-// FILE 066: examples/smoke/multidim_array_param_read.cstar
+// FILE 072: examples/smoke/multidim_array_param_read.cstar
 // expected: pass
 // expected-exit: 5
 
@@ -980,10 +1017,9 @@ main() :: int32 {
   int32 values[2:3] = ((1, 2, 3), (4, 5, 6));
   ret read_mid(values);
 }
-
 -------
 
-// FILE 067: examples/smoke/multidim_array_param_write.cstar
+// FILE 073: examples/smoke/multidim_array_param_write.cstar
 // expected: pass
 // expected-exit: 7
 
@@ -996,10 +1032,9 @@ main() :: int32 {
   write_mid(values);
   ret values[1:0];
 }
-
 -------
 
-// FILE 068: examples/smoke/multidim_array_read.cstar
+// FILE 074: examples/smoke/multidim_array_read.cstar
 // expected: pass
 // expected-exit: 6
 
@@ -1008,10 +1043,9 @@ main() :: int32 {
                        (4, 5, 6));
   ret matrix[1:2];
 }
-
 -------
 
-// FILE 069: examples/smoke/multidim_array_shortcut_assignment.cstar
+// FILE 075: examples/smoke/multidim_array_shortcut_assignment.cstar
 // expected: pass
 // expected-exit: 8
 
@@ -1020,10 +1054,9 @@ main() :: int32 {
   matrix[0:2] += 5;
   ret matrix[0:2];
 }
-
 -------
 
-// FILE 070: examples/smoke/nested_if_statement.cstar
+// FILE 076: examples/smoke/nested_if_statement.cstar
 // expected: pass
 // expected-exit: 4
 main() :: int32 {
@@ -1037,10 +1070,10 @@ main() :: int32 {
 
     ret 0;
 }
-
 -------
 
-// FILE 071: examples/smoke/nomove_unique_param_read.cstar
+// FILE 077: examples/smoke/nomove_unique_param_read.cstar
+// expected: pass
 // expected-exit: 7
 
 read_nomove(nomove int32^ pointer) :: int32 {
@@ -1053,19 +1086,17 @@ main() :: int32 {
 
   ret read_nomove(move pointer);
 }
-
 -------
 
-// FILE 072: examples/smoke/not_equal_expr.cstar
+// FILE 078: examples/smoke/not_equal_expr.cstar
 // expected: pass
 // expected-exit: 1
 main() :: int32 {
     ret 10 != 20;
 }
-
 -------
 
-// FILE 073: examples/smoke/pointer_from_pointer_initializer.cstar
+// FILE 079: examples/smoke/pointer_from_pointer_initializer.cstar
 // expected: pass
 // expected-exit: 17
 main() :: int32 {
@@ -1075,10 +1106,9 @@ main() :: int32 {
     int32* q = deref pp;
     ret deref q;
 }
-
 -------
 
-// FILE 074: examples/smoke/pointer_return.cstar
+// FILE 080: examples/smoke/pointer_return.cstar
 // expected: pass
 // expected-exit: 13
 identity(int32* p) :: int32* {
@@ -1090,10 +1120,9 @@ main() :: int32 {
     int32* p = identity(ref x);
     ret deref p;
 }
-
 -------
 
-// FILE 075: examples/smoke/pointer_variable_initializer.cstar
+// FILE 081: examples/smoke/pointer_variable_initializer.cstar
 // expected: pass
 // expected-exit: 11
 main() :: int32 {
@@ -1101,10 +1130,9 @@ main() :: int32 {
     int32* p = ref x;
     ret deref p;
 }
-
 -------
 
-// FILE 076: examples/smoke/print.cstar
+// FILE 082: examples/smoke/print.cstar
 // expected: pass
 // expected-exit: 0
 main() :: int32 {
@@ -1113,10 +1141,9 @@ main() :: int32 {
     print("\n");
     ret 0;
 }
-
 -------
 
-// FILE 077: examples/smoke/readonly_multi_level_pointer.cstar
+// FILE 083: examples/smoke/readonly_multi_level_pointer.cstar
 // expected: pass
 // expected-exit: 8
 
@@ -1126,10 +1153,9 @@ main() :: int32 {
   readonly int32** pointer_to_pointer = ref pointer;
   ret **pointer_to_pointer;
 }
-
 -------
 
-// FILE 078: examples/smoke/readonly_param.cstar
+// FILE 084: examples/smoke/readonly_param.cstar
 // expected: pass
 // expected-exit: 7
 
@@ -1141,10 +1167,9 @@ main() :: int32 {
   int32 value = 7;
   ret read_through(ref value);
 }
-
 -------
 
-// FILE 079: examples/smoke/readonly_pointer.cstar
+// FILE 085: examples/smoke/readonly_pointer.cstar
 // expected: pass
 // expected-exit: 7
 
@@ -1153,10 +1178,9 @@ main() :: int32 {
   readonly int32* pointer = ref value;
   ret deref pointer;
 }
-
 -------
 
-// FILE 080: examples/smoke/reference_param.cstar
+// FILE 086: examples/smoke/reference_param.cstar
 // expected: pass
 // expected-exit: 11
 write_ref(int32& x) :: void {
@@ -1173,10 +1197,32 @@ main() :: int32 {
     write_ref(ref value);
     ret read_ref(ref value);
 }
-
 -------
 
-// FILE 081: examples/smoke/shared_pointer_assignment_count.cstar
+// FILE 087: examples/smoke/scalar_enum.cstar
+// expected: pass
+// expected-exit: 0
+
+enum Color : uint8 {
+    Red,
+    Green,
+    Blue = 7,
+}
+
+choose(Color color) :: Color {
+    ret color;
+}
+
+main() :: int32 {
+    Color color = Color.Green;
+    Color selected = choose(color);
+
+    ret 0;
+}
+-------
+
+// FILE 088: examples/smoke/shared_pointer_assignment_count.cstar
+// expected: pass
 // expected-exit: 2
 main() :: int32 {
     int32 first_value = 1;
@@ -1188,10 +1234,10 @@ main() :: int32 {
 
     ret strong_count(first);
 }
-
 -------
 
-// FILE 082: examples/smoke/shared_pointer_copy_count.cstar
+// FILE 089: examples/smoke/shared_pointer_copy_count.cstar
+// expected: pass
 // expected-exit: 2
 main() :: int32 {
     int32 value = 5;
@@ -1200,10 +1246,10 @@ main() :: int32 {
 
     ret strong_count(first);
 }
-
 -------
 
-// FILE 083: examples/smoke/shared_pointer_function_arg_count.cstar
+// FILE 090: examples/smoke/shared_pointer_function_arg_count.cstar
+// expected: pass
 // expected-exit: 2
 
 observe(int32* pointer) :: int32 {
@@ -1216,10 +1262,10 @@ main() :: int32 {
 
   ret observe(source);
 }
-
 -------
 
-// FILE 084: examples/smoke/shared_pointer_move_assignment.cstar
+// FILE 091: examples/smoke/shared_pointer_move_assignment.cstar
+// expected: pass
 // expected-exit: 1
 main() :: int32 {
     int32 value = 7;
@@ -1230,10 +1276,115 @@ main() :: int32 {
 
     ret strong_count(target);
 }
-
 -------
 
-// FILE 085: examples/smoke/struct_field_read.cstar
+// FILE 092: examples/smoke/string_literal_const_char_param.cstar
+// expected: pass
+// expected-exit: 7
+
+passthrough_label(const char* label, int32 value) :: int32 {
+  print(label);
+  print("\n");
+  ret value;
+}
+
+main() :: int32 {
+  ret passthrough_label("label-ok", 7);
+}
+-------
+
+// FILE 093: examples/smoke/struct_constructor_args.cstar
+// expected: pass
+// expected-exit: 11
+
+struct Pair {
+  int32 left;
+  int32 right;
+
+  constructor(int32 a, int32 b) {
+    self.left = a;
+    self.right = b;
+    ret;
+  }
+
+  sum :: int32 {
+    ret self.left + self.right;
+  }
+}
+
+main() :: int32 {
+  Pair p = Pair(5, 6);
+  ret p.sum();
+}
+-------
+
+// FILE 094: examples/smoke/struct_constructor_default.cstar
+// expected: pass
+// expected-exit: 7
+
+struct Point {
+  int32 x;
+  int32 y;
+
+  constructor() {
+    self.x = 3;
+    self.y = 4;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Point p = Point();
+  ret p.x + p.y;
+}
+-------
+
+// FILE 095: examples/smoke/struct_destructor_method.cstar
+// expected: pass
+// expected-exit: 7
+
+int32 cleaned = 0;
+
+struct Resource {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+    ret;
+  }
+
+  destructor() {
+    cleaned = 7;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Resource resource = Resource(9);
+  drop resource;
+  ret cleaned;
+}
+-------
+
+// FILE 096: examples/smoke/struct_field_assignment.cstar
+// expected: pass
+// expected-exit: 9
+
+struct Point {
+  int32 x;
+  int32 y;
+}
+
+main() :: int32 {
+  Point p;
+  p.x = 4;
+  p.y = 2;
+  p.y += 3;
+  ret p.x + p.y;
+}
+-------
+
+// FILE 097: examples/smoke/struct_field_read.cstar
 // expected: pass
 // expected-exit: 0
 
@@ -1246,10 +1397,507 @@ main() :: int32 {
   Point p;
   ret p.x + p.y;
 }
-
 -------
 
-// FILE 086: examples/smoke/uninitialized_local.cstar
+// FILE 098: examples/smoke/struct_function_param_return.cstar
+// expected: pass
+// expected-exit: 12
+
+struct Point {
+  int32 x;
+  int32 y;
+}
+
+sum(Point p) :: int32 {
+  ret p.x + p.y;
+}
+
+make_point() :: Point {
+  Point p;
+  p.x = 2;
+  p.y = 5;
+  ret p;
+}
+
+main() :: int32 {
+  Point p;
+  p.x = 4;
+  p.y = 3;
+  Point q = make_point();
+  ret sum(p) + q.y;
+}
+-------
+
+// FILE 099: examples/smoke/struct_method_no_param_sugar.cstar
+// expected: pass
+// expected-exit: 6
+
+struct Counter {
+  int32 value;
+
+  read :: int32 {
+    ret self.value;
+  }
+}
+
+main() :: int32 {
+  Counter c;
+  c.value = 6;
+  ret c.read();
+}
+-------
+
+// FILE 100: examples/smoke/struct_method_self.cstar
+// expected: pass
+// expected-exit: 9
+
+struct Point {
+  int32 x;
+  int32 y;
+
+  length() :: int32 {
+    ret self.x + self.y;
+  }
+
+  move_x(int32 dx) :: void {
+    self.x += dx;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Point p;
+  p.x = 2;
+  p.y = 3;
+  p.move_x(4);
+  ret p.length();
+}
+-------
+
+// FILE 101: examples/smoke/struct_nested_field.cstar
+// expected: pass
+// expected-exit: 14
+
+struct Point {
+  int32 x;
+  int32 y;
+}
+
+struct Line {
+  Point start;
+  Point end;
+}
+
+main() :: int32 {
+  Line line;
+  line.start.x = 3;
+  line.start.y = 4;
+  line.end.x = 5;
+  line.end.y = 1;
+  line.end.y += 1;
+  ret line.start.x + line.start.y + line.end.x + line.end.y;
+}
+-------
+
+// FILE 102: examples/smoke/struct_pointer_destructor_method.cstar
+// expected: pass
+// expected-exit: 0
+
+struct Resource {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+    ret;
+  }
+
+  destructor() {
+    self.value = 0;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Resource resource = Resource(7);
+  Resource^ owned = ref resource;
+  drop owned;
+  ret resource.value;
+}
+-------
+
+// FILE 103: examples/smoke/struct_scope_exit_destructor.cstar
+// expected: pass
+// expected-exit: 7
+
+int32 cleaned = 0;
+
+struct Resource {
+  int32 value;
+
+  destructor() {
+    cleaned = 7;
+    ret;
+  }
+}
+
+run() :: int32 {
+  Resource resource;
+  ret 1;
+}
+
+main() :: int32 {
+  int32 ignored = run();
+  ret cleaned;
+}
+-------
+
+// FILE 104: examples/smoke/struct_scope_method_receiver.cstar
+// expected: pass
+// expected-exit: 38
+
+struct Accumulator {
+  int32 value;
+
+  constructor(int32 start) {
+    self.value = start;
+    ret;
+  }
+
+  add(int32 amount) :: void {
+    self.value += amount;
+    ret;
+  }
+
+  read :: int32 {
+    ret self.value;
+  }
+
+  static bonus :: int32 {
+    ret 19;
+  }
+}
+
+main() :: int32 {
+  Accumulator value = Accumulator(4);
+  value.add(3);
+
+  Accumulator^ owned = ref value;
+  owned.add(5);
+
+  Accumulator* sharedValue = ref value;
+  Accumulator* copy = sharedValue;
+  copy.add(7);
+
+  ret sharedValue.read() + Accumulator::bonus();
+}
+-------
+
+// FILE 105: examples/smoke/struct_shared_new_operator.cstar
+// expected: pass
+// expected-exit: 2
+
+struct Meter {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+    ret;
+  }
+
+  destructor() {
+    self.value = 0;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Meter* first = shared new Meter(5);
+  Meter* second = first;
+  int32 count = strong_count(first);
+  drop second;
+  drop first;
+  ret count;
+}
+-------
+
+// FILE 106: examples/smoke/struct_shared_pointer_field_method.cstar
+// expected: pass
+// expected-exit: 12
+
+struct Counter {
+  int32 value;
+
+  constructor(int32 start) {
+    self.value = start;
+    ret;
+  }
+
+  add(int32 amount) {
+    self.value += amount;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Counter c = Counter(5);
+  Counter* sharedValue = ref c;
+  Counter* copy = sharedValue;
+  sharedValue.value += 2;
+  copy.add(5);
+  ret sharedValue.value;
+}
+-------
+
+// FILE 107: examples/smoke/struct_shared_pointer_param.cstar
+// expected: pass
+// expected-exit: 2
+
+struct Agent {
+  int32 value;
+
+  constructor(int32 value) {
+    self.value = value;
+  }
+
+  destructor() {
+    self.value = 0;
+    ret;
+  }
+}
+
+audit_agent(Agent* agent) :: int32 {
+  ret strong_count(agent) as int32;
+}
+
+main() :: int32 {
+  Agent* observer = shared new Agent(4);
+  int32 count = audit_agent(observer);
+  drop observer;
+  ret count;
+}
+-------
+
+// FILE 108: examples/smoke/struct_unique_new_operator.cstar
+// expected: pass
+// expected-exit: 9
+
+struct Meter {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+    ret;
+  }
+
+  destructor() {
+    self.value = 0;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Meter^ meter = new Meter(9);
+  int32 value = meter.value;
+  drop meter;
+  ret value;
+}
+-------
+
+// FILE 109: examples/smoke/struct_unique_pointer_field_method.cstar
+// expected: pass
+// expected-exit: 14
+
+struct Point {
+  int32 x;
+  int32 y;
+
+  constructor(int32 a, int32 b) {
+    self.x = a;
+    self.y = b;
+    ret;
+  }
+
+  move_y(int32 dy) {
+    self.y += dy;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Point p = Point(4, 5);
+  Point^ owned = ref p;
+  owned.x += 2;
+  owned.move_y(3);
+  ret owned.x + owned.y;
+}
+-------
+
+// FILE 110: examples/smoke/struct_value_operator_add.cstar
+// expected: pass
+// expected-exit: 10
+
+struct Vec2 {
+  int32 x;
+  int32 y;
+
+  constructor(int32 x, int32 y) {
+    self.x = x;
+    self.y = y;
+  }
+
+  operator +(Vec2 rhs) :: Vec2 {
+    Vec2 result = Vec2(self.x + rhs.x, self.y + rhs.y);
+    ret result;
+  }
+}
+
+main() :: int32 {
+  Vec2 a = Vec2(1, 2);
+  Vec2 b = Vec2(3, 4);
+  Vec2 c = a + b;
+  ret c.x + c.y;
+}
+-------
+
+// FILE 111: examples/smoke/struct_value_operator_arithmetic.cstar
+// expected: pass
+// expected-exit: 12
+
+struct Score {
+  int32 value;
+
+  constructor(int32 value) {
+    self.value = value;
+  }
+
+  operator -(Score rhs) :: Score {
+    Score result = Score(self.value - rhs.value);
+    ret result;
+  }
+
+  operator *(Score rhs) :: Score {
+    Score result = Score(self.value * rhs.value);
+    ret result;
+  }
+
+  operator /(Score rhs) :: Score {
+    Score result = Score(self.value / rhs.value);
+    ret result;
+  }
+
+  operator %(Score rhs) :: Score {
+    Score result = Score(self.value % rhs.value);
+    ret result;
+  }
+}
+
+main() :: int32 {
+  Score a = Score(20);
+  Score b = Score(6);
+  Score two = Score(2);
+  Score three = Score(3);
+  Score five = Score(5);
+  Score c = a - b;
+  Score d = c * two;
+  Score e = d / three;
+  Score f = d % five;
+  ret e.value + f.value;
+}
+-------
+
+// FILE 112: examples/smoke/struct_value_operator_comparison.cstar
+// expected: pass
+// expected-exit: 6
+
+struct Rank {
+  int32 value;
+
+  constructor(int32 value) {
+    self.value = value;
+  }
+
+  operator ==(Rank rhs) :: bool {
+    ret self.value == rhs.value;
+  }
+
+  operator !=(Rank rhs) :: bool {
+    ret self.value != rhs.value;
+  }
+
+  operator <(Rank rhs) :: bool {
+    ret self.value < rhs.value;
+  }
+
+  operator <=(Rank rhs) :: bool {
+    ret self.value <= rhs.value;
+  }
+
+  operator >(Rank rhs) :: bool {
+    ret self.value > rhs.value;
+  }
+
+  operator >=(Rank rhs) :: bool {
+    ret self.value >= rhs.value;
+  }
+}
+
+main() :: int32 {
+  Rank low = Rank(2);
+  Rank sameLow = Rank(2);
+  Rank high = Rank(7);
+  Rank sameHigh = Rank(7);
+  int32 score = 0;
+
+  if (low == sameLow) {
+    score += 1;
+  }
+  if (low != high) {
+    score += 1;
+  }
+  if (low < high) {
+    score += 1;
+  }
+  if (low <= sameLow) {
+    score += 1;
+  }
+  if (high > low) {
+    score += 1;
+  }
+  if (high >= sameHigh) {
+    score += 1;
+  }
+
+  ret score;
+}
+-------
+
+// FILE 113: examples/smoke/trait_struct_conformance.cstar
+// expected: pass
+// expected-exit: 7
+
+trait Measurable {
+  value() :: int32;
+}
+
+struct Meter with Measurable {
+  int32 reading;
+
+  constructor(int32 value) {
+    self.reading = value;
+  }
+
+  value() :: int32 {
+    ret self.reading;
+  }
+}
+
+main() :: int32 {
+  Meter meter = Meter(7);
+  ret meter.value();
+}
+-------
+
+// FILE 114: examples/smoke/uninitialized_local.cstar
 // expected: pass
 // expected-exit: 0
 
@@ -1257,10 +1905,9 @@ main() :: int32 {
   int32 x;
   ret x;
 }
-
 -------
 
-// FILE 087: examples/smoke/unique_pointer.cstar
+// FILE 115: examples/smoke/unique_pointer.cstar
 // expected: pass
 // expected-exit: 7
 
@@ -1270,10 +1917,10 @@ main() :: int32 {
   deref pointer = 7;
   ret value;
 }
-
 -------
 
-// FILE 088: examples/smoke/unique_pointer_function_move_arg.cstar
+// FILE 116: examples/smoke/unique_pointer_function_move_arg.cstar
+// expected: pass
 // expected-exit: 7
 
 take(int32^ pointer) :: int32 {
@@ -1286,10 +1933,10 @@ main() :: int32 {
 
   ret take(move source);
 }
-
 -------
 
-// FILE 089: examples/smoke/unique_pointer_move_assignment.cstar
+// FILE 117: examples/smoke/unique_pointer_move_assignment.cstar
+// expected: pass
 // expected-exit: 9
 main() :: int32 {
     int32 first = 3;
@@ -1301,10 +1948,10 @@ main() :: int32 {
 
     ret deref target;
 }
-
 -------
 
-// FILE 090: examples/smoke/unique_pointer_move_init.cstar
+// FILE 118: examples/smoke/unique_pointer_move_init.cstar
+// expected: pass
 // expected-exit: 7
 main() :: int32 {
     int32 value = 7;
@@ -1313,10 +1960,10 @@ main() :: int32 {
 
     ret deref target;
 }
-
 -------
 
-// FILE 091: examples/smoke/unique_pointer_return_move.cstar
+// FILE 119: examples/smoke/unique_pointer_return_move.cstar
+// expected: pass
 // expected-exit: 9
 
 forward(int32^ pointer) :: int32^ {
@@ -1330,10 +1977,9 @@ main() :: int32 {
 
   ret deref target;
 }
-
 -------
 
-// FILE 092: examples/smoke/unsafe_cast_int_to_pointer.cstar
+// FILE 120: examples/smoke/unsafe_cast_int_to_pointer.cstar
 // expected: pass
 // expected-exit: 7
 
@@ -1346,10 +1992,9 @@ main() :: int32 {
 
     ret 1;
 }
-
 -------
 
-// FILE 093: examples/smoke/void_return.cstar
+// FILE 121: examples/smoke/void_return.cstar
 // expected: pass
 // expected-exit: 0
 
@@ -1361,665 +2006,1234 @@ main() :: int32 {
   do_nothing();
   ret 0;
 }
+-------
+
+// FILE 122: examples/type_checker/000.cstar
+// expected: diagnostic
+main() :: void {
+  int a = 10;
+  float b = 12.24;
+  
+  // should be passed
+  int r = a + b + 10;
+
+  bool k = true;
+
+  int x = 50;
+  // error
+  bool z = x + k + true; 
+
+  a = z;
+  b = r;
+
+  if(t > 10) {
+    int e = 21;
+    bool t = e;
+  }
+  
+  loop(index,data in arr) {
+
+  }
+
+  loop(i in [0,100]) {
+      
+  }
+
+  loop(x > 10) {
+      
+  }
+
+  loop(true) {
+
+  }
+
+  ret;
+}
+-------
+
+// FILE 123: examples/type_checker/001.cstar
+// expected: diagnostic
+main() :: void {
+  int s = t; // error
+  int z = &t; // error
+  uint32 a = 20;
+  int* b = &a;
+  int* x = a + b; // cannot initialize ptr type with non-ptr type
+  int^ a0 = &a;
+  int *b0 = a0 + (a + a0);
+  int *x0 = a0 + b0; // it's okay
+
+  if(p > 10) {
+    if(d < 25 && k > 24) {
+
+    } elif (u < 2) {
+
+    } else {
+     loop (x < 20) {
+       if(p > 20) {
+
+       }
+     } 
+    }
+  }
+
+  ret;
+}
+-------
+
+// FILE 124: examples/type_checker/002.cstar
+// expected: diagnostic
+
+main() :: void {
+    int x = 10;
+    x = 20;
+    float y = 20.25;
+    int z = move y + x;
+    x = y;
+    x = move y + x;
+
+    ret;
+}
+-------
+
+// FILE 125: examples/type_checker/003.cstar
+// expected: diagnostic
+
+main() :: void {
+    int b = 20;
+    int *a = unsafe_cast<int*>(&b);
+    int *s = a;
+    *s = a;
+    **a = 30;
+
+    ret;
+}
 
 -------
 
-// FILE 094: examples/papers/policy.cstar
-// expected: diagnostic (proposal)
-//
-// C* PROTOCOL / ALLOCATOR PROPOSAL
-// --------------------------------
-// This file documents the direction after replacing the old hidden hook
-// idea with smaller, explicit systems.
-//
-// Decision:
-// - `protocol` owns typestate / state safety.
-// - `dynamic protocol` is the explicit runtime fallback.
-// - `allocator` / `Allocator` owns memory allocation strategy.
-// - constructor / destructor / defer own lifetime.
-// - `except` / `throw` / `Result`-like APIs own error handling.
-//
-// Legacy note:
-// The old hidden hook model mixed state validation, allocation, lifetime,
-// and error handling in one runtime mechanism. That model is superseded.
-// The useful ideas remain, but they move to the right layer.
+// FILE 126: examples/type_checker/004.cstar
+// expected: diagnostic
 
-// ---------------------------------------------------------------------
-// 1. Typestate: protocol
-// ---------------------------------------------------------------------
-// A protocol produces user-defined states. These states live
-// in the same type slot as `const`, `readonly`, and future protocol states.
-// The default is static/provable. Do not write `static protocol`;
-// static is the default. Use `dynamic protocol` only when runtime
-// state is explicitly needed.
+//constptr int* t = 20;
 
-protocol StringState for String {
-    state valid, null;
+main(constptr int* p, int l, const int* s) {
+    /*int a = 10;
+    *p = a;
+    l = 20; 
+    s = &a;*/
 
-    default null;
 
-    null  -> valid :: new();
-    valid -> null  :: make_null();
-    valid -> null  :: destructor();
+    int u = 10;
 
-    append(const char* data) :: !null;
-    len() :: !null;
-    data() :: !null;
+    int* k = &u;
+    //const int** w = &k;
 
-    scope_exit :: null;
+    //**w = u;
+    int& r = u;
+    const int& t = r;
+
+    ret;
+} 
+-------
+
+// FILE 127: examples/type_checker/005.cstar
+// expected: diagnostic
+
+
+main () :: void {
+    int a = 10;
+    constptr int* b = &a;
+    int** k = &b;
+    
+    **k = 20;
+
+    ret;
 }
+-------
 
-protocol FileState for FileHandle {
-    state closed, opened;
+// FILE 128: examples/type_checker/006.cstar
+// expected: diagnostic
+main() :: constptr int* {
+    int a = 20;
+    int* p = &a;
 
-    default closed;
-
-    closed -> opened :: open();
-    opened -> closed :: close();
-
-    read() :: !closed;
-    write(const char* data) :: !closed;
-    open(const char* path) :: !opened;
-
-    scope_exit :: closed;
+    ret p;
 }
+-------
 
-// ---------------------------------------------------------------------
-// 2. Explicit runtime fallback: dynamic protocol
-// ---------------------------------------------------------------------
-// Dynamic protocols add one visible runtime discriminant to the
-// resource layout. `.=` is reserved for this explicit/provability-gap path.
-// It must desugar to inspectable code; no hidden hook table, no virtual
-// dispatch, no implicit hashmap.
+// FILE 129: examples/type_checker/007.cstar
+// expected: diagnostic
+main(constptr int[2:2] arr, b int, c int[2:2], Type[2:2] a, p Type) :: void {
+  int16 arr2[2:2] = ((4,1),(2,3));
 
-dynamic protocol ConnectionState for Connection {
-    state idle, sending, failed;
+  arr2[2:1] = 3.0;
 
-    default idle;
+  int &s = a, &r = b;
+  int w = a + b + 20;
 
-    idle    -> sending :: send();
-    sending -> idle    :: ack();
-    sending -> failed  :: timeout();
 
-    send(const char* packet) :: !failed;
+  ret;
 }
+-------
 
-handle_connection(idle Connection^ conn) :: void {
-    loop(true) {
-        conn .= try_send();     // dynamic, tag-checked, visible desugar
+// FILE 130: examples/type_checker/008.cstar
+// expected: diagnostic
 
-        if (conn is failed) {
-            break;
+main(int argc, char** argv) :: int {
+	float32 f = 12.2345345;
+	float64 f2 = 234.34564645;	
+    constptr char* str = "Hello world!";
+
+    if(f > 23 && f2 < 34) {
+        loop(true) {
+            f++;
+            ++f2;
         }
     }
+
+	ret 23;
+} 
+-------
+
+// FILE 131: examples/type_checker/009.cstar
+// expected: diagnostic
+add(int32 a, int32 b) :: int32 {
+    ret a + b;
 }
 
-// ---------------------------------------------------------------------
-// 3. Allocation: allocator trait / allocator object
-// ---------------------------------------------------------------------
-// Allocation is not a protocol hook. It is a capability and a codegen contract.
-// The compiler can lower `new` through an allocator selected by the type,
-// by the scope, or explicitly by the call site.
+main() :: int32 {
+    ret add(1);
+}
+-------
 
-trait Allocator {
-    alloc(usize bytes, usize align) :: void*;
-    free(void* ptr, usize bytes, usize align) :: void;
+// FILE 132: examples/type_checker/010.cstar
+// expected: diagnostic
+add(int32 a, int32 b) :: int32 {
+    ret a + b;
 }
 
-struct SystemAllocator with Allocator {
-    alloc(usize bytes, usize align) :: void* {
-        ret os_alloc(bytes, align);
-    }
+main() :: int32 {
+    ret add(1, true);
+}
+-------
 
-    free(void* ptr, usize bytes, usize align) :: void {
-        os_free(ptr, bytes, align);
-    }
+// FILE 133: examples/type_checker/011.cstar
+// expected: diagnostic
+returns_bool() :: bool {
+    ret true;
 }
 
-struct ArenaAllocator with Allocator {
-    void* begin;
-    usize capacity;
-    usize offset;
+main() :: int32 {
+    int32 x = returns_bool();
+    ret x;
+}
+-------
 
-    alloc(usize bytes, usize align) :: void* {
-        ret arena_alloc(ref self, bytes, align);
-    }
-
-    free(void* ptr, usize bytes, usize align) :: void {
-        // Arena free is a no-op by design.
-        ret;
-    }
+// FILE 134: examples/type_checker/012.cstar
+// expected: diagnostic
+returns_bool() :: bool {
+    ret true;
 }
 
-// ---------------------------------------------------------------------
-// 4. Resource types: struct + constructor/destructor
-// ---------------------------------------------------------------------
-// Struct owns layout. Constructor/destructor own lifetime. Protocol
-// observes and validates state transitions, but does not allocate memory.
-
-struct String with Allocator {
-    char* buffer;
-    usize length;
-    usize capacity;
-
-    constructor() :: null String^ {
-        self.buffer = nil;
-        self.length = 0;
-        self.capacity = 0;
-        ret self;
-    }
-
-    new(const char* data, Allocator& allocator) :: valid String^ {
-        usize n = strlen(data);
-        self.buffer = allocator.alloc(n + 1, alignof(char));
-        memcpy(self.buffer, data, n + 1);
-        self.length = n;
-        self.capacity = n + 1;
-        ret self;
-    }
-
-    append(const char* data) :: valid String^ {
-        // Legal only when state is `valid`.
-        string_append(ref self, data);
-        ret self;
-    }
-
-    len() :: usize {
-        ret self.length;
-    }
-
-    data() :: constptr char* {
-        ret self.buffer;
-    }
-
-    make_null(Allocator& allocator) :: null String^ {
-        if (self.buffer) {
-            allocator.free(self.buffer, self.capacity, alignof(char));
-        }
-
-        self.buffer = nil;
-        self.length = 0;
-        self.capacity = 0;
-        ret self;
-    }
-
-    destructor(Allocator& allocator) :: null String^ {
-        ret self.make_null(ref allocator);
-    }
+main() :: int32 {
+    ret returns_bool();
 }
+-------
 
-struct FileHandle {
-    void* native;
-
-    constructor() :: closed FileHandle^ {
-        self.native = nil;
-        ret self;
-    }
-
-    open(const char* path) :: opened FileHandle^ {
-        self.native = os_open(path);
-        ret self;
-    }
-
-    read() :: constptr char* {
-        ret os_read(self.native);
-    }
-
-    write(const char* data) :: opened FileHandle^ {
-        os_write(self.native, data);
-        ret self;
-    }
-
-    close() :: closed FileHandle^ {
-        os_close(self.native);
-        self.native = nil;
-        ret self;
-    }
-}
-
-// ---------------------------------------------------------------------
-// 5. Error handling is separate from protocol
-// ---------------------------------------------------------------------
-// Runtime errors are explicit effects, not hidden protocol hooks.
-// The exact final syntax is still open, but it should be visible in
-// signatures and call sites.
-
-enum IoError {
-    NotFound,
-    PermissionDenied,
-    Interrupted,
-}
-
-open_file(const char* path) except IoError :: opened FileHandle^ {
-    closed FileHandle^ file;
-
-    if (!os_exists(path)) {
-        throw IoError.NotFound;
-    }
-
-    file.open(path);
-    ret file;
-}
-
-read_all(opened FileHandle^ file) except IoError :: constptr char* {
-    ret file.read();
-}
-
-// ---------------------------------------------------------------------
-// 6. Concurrency boundary: async/task ownership
-// ---------------------------------------------------------------------
-// Async/task boundaries reuse the same ownership rules as by-value
-// function boundaries, but they also need capability markers.
-//
-// Decision:
-// - `async` marks a task/thread boundary effect.
-// - `await` marks a suspension/ownership checkpoint.
-// - `Send` and `Sync` are trait/capability markers, not runtime vtables.
-// - `T^` may cross a task boundary only with explicit `move`.
-// - `T*` may cross by atomic retain/copy, or by explicit `move`.
-// - `nomove` is a parameter-level ownership-flow modifier.
-// - `nomove` is not a protocol state and not a hidden policy hook.
-// - Plain unique copy across the boundary is illegal.
-//
-// Parser status:
-// `async` and `await` are reserved proposal keywords. The current compiler
-// emits controlled diagnostics until scheduler/coroutine lowering exists.
-
-trait Send {}
-trait Sync {}
-
-consume_on_worker(int32^ owned) async :: int32 {
-    ret deref owned;
-}
-
-observe_on_worker(readonly int32* shared) async :: int32 {
-    ret deref shared;
-}
-
-inspect_without_relay(nomove int32^ owned) :: int32 {
-    // Legal: read through the owned pointer.
-    int32 value = deref owned;
-
-    // Rejected:
-    //
-    // int32^ relayed := owned;
-    // ret consume_on_worker(move owned);
-
+// FILE 135: examples/type_checker/013.cstar
+// expected: diagnostic
+add(int32 value) :: int32 {
     ret value;
 }
 
-thread_boundary_example() :: int32 {
-    int32 value = 7;
-    int32^ owned = ref value;
-    int32* shared = ref value;
-
-    int32 a = await consume_on_worker(move owned);
-    int32 b = await observe_on_worker(shared);
-
-    // Rejected:
-    //
-    // await consume_on_worker(owned);  // unique copy
-    // deref owned;                    // moved-after-use
-
-    ret a + b;
-}
-
-// ---------------------------------------------------------------------
-// 7. Usage
-// ---------------------------------------------------------------------
-
 main() :: int32 {
-    SystemAllocator allocator;
-
-    null String^ title;
-    valid String^ live_title := title.new("C* protocol", ref allocator);
-    live_title.append(" / allocator split");
-    print(live_title.data());
-    null String^ consumed := live_title.destructor(ref allocator);
-
-    closed FileHandle^ file;
-    opened FileHandle^ opened_file := file.open("notes.txt");
-    print(opened_file.read());
-    closed FileHandle^ closed_file := opened_file.close();
-
-    // The following should be rejected by pass1:
-    //
-    // live_title.append("use after destructor");
-    // closed_file.read();
-    // opened_file.open("double-open.txt");
-
-    ret 0;
+    bool flag = true;
+    ret add(flag);
 }
-
 -------
 
-// FILE 095: examples/papers/syntax.cstar
-// expected: diagnostic (proposal)
-//Auto importing with involved. this means all standard libraries which needed by this unit to be imported, will be imported by automatically
-include involved {
-    'ML',
-    'X', //sin -> X.sin
-    'Y', //sin -> Y.sin
+// FILE 136: examples/type_checker/014.cstar
+// expected: diagnostic
+main() :: int32 {
+    int32 x = 1;
+    deref x = 2;
+    ret x;
 }
+-------
 
-// also particularly we can import a package or even only a function from it as well
-include {
-    "std:math"
-    "std:math:cos"
+// FILE 137: examples/type_checker/015.cstar
+// expected: diagnostic
+main() :: int32 {
+    int64 value = input_int(1);
+    ret 0;
 }
+-------
 
-// PI is acting like a constant but just a symbol
-include "std:math:PI" as PI 
-//is equal to
-include "std:math" as math
-const int32 PI = math.PI;
+// FILE 138: examples/type_checker/016.cstar
+// expected: diagnostic
+// expected-code: CST2102
 
-// Linkage and storage syntax in C*
-//those are identical since if there is no return type operator exist on the function, compiler treats like 
-//its type is void
-import callMe(int8 x,bool y) :: void; 
-import callMe(int8 x,bool y);
-import {
-    callMe(int x8,bool y);
-    dontCallMe(int32 x,int64 y);
+main() :: int32 {
+  const int32 x = 1;
+  x = 2;
+  ret x;
 }
-import glClearColor(float r,float g,float b,float a) :: void from "opengl32.lib";
-import from "myLibrary.lib" {
-    printf(char*) :: void;
-    callMe() :: void;
+-------
+
+// FILE 139: examples/type_checker/017.cstar
+// expected: diagnostic
+// expected-code: CST2104
+
+main() :: int32 {
+  readonly int32 x = 1;
+  x = 2;
+  ret x;
 }
+-------
 
-//float is automatically replaced by float64 or float32 which depends on the system architecture flag
-export area<Circle>(float x,float y) :: float32;
-export sin(float64 x) :: float64 from "std:math";
-export from "std:math" {
-    abs(int32 x) :: int32;
-    fabs(float32 x) :: float32;
+// FILE 140: examples/type_checker/018.cstar
+// expected: diagnostic
+
+main() :: int32 {
+    int32 x = 1;
+    int32* p = ref x;
+    int64 raw = cast<int64>(p);
+    ret cast<int32>(raw);
 }
+-------
 
-// Module visibility is separate from import/export linkage.
-// Declarations are private by default; `public` exposes them through include/as.
-public static int32 moduleCounter = 0;
-public addFromModule(int32 a, int32 b) :: int32 {
-    ret a + b;
-}
-hiddenModuleHelper() :: int32 {
-    ret 1;
-}
-
-//This is the way of using features of Metaprogramming..
-attribute Area<T> {
-    area($0,$1) -> T match {
-        'Triangle': $0 * $1 / 2,
-        'Square': $0 * $1,
-        _: cterror("no this is not valid type")
-    }
-}
-
-attribute Area<Circle> {
-    area($0) -> 2 * math.PI * $0; 
-}
-
-//meta types for reflectivity
-attribute IsRef<T> {
-    is_ref($0) -> std.meta_ref($0);
-}
-
-
-//Classic macro needs
-macro print(str) {
-    std.out(str)
-}
-
-macro triangle_area(x,y) {
-    x * y / 2;
-}
-
-macro unique_vec(expr){
-    vector^ temp_vec = vector();
-    loop(i in expr){
-        temp_vec.push(i)
-    }
-    ret temp_vec;
-}
-
-
-//Attributing functions from Area (this is like an interface but not exactly interface...)
-struct Shape<T> from Area<T> { 
-    float32 x;
-    float32 y;
-    float32 _z; // private
- 
-    constructor() { 
-    } 
-
-    //if there is no parameters, we can write the function in three different ways
-    area() :: void {}
-    area :: void {}
-    area() {} 
-    area {
-
-    }
-
-    area<Square>(int x,int y) :: float32;
-    area<Triangle>(float32 x,float32 y) :: float32;
-
-    cast_is_not_possible(x bool,bool y) :: void {
-        // it's legal and not breaking PTD (primitive type domination) rule
-        int32 a = x; // but still illegal implicit casting since 'x bool' semantically dictate that you can't cast this parameter in this whole scope
-                     // ? maybe we can use this for preventing to cast that would be occured by the compiler
-        int32 b = y; // but this is legal since there is no restriction semantically since 'bool y'.
-    }
-}
-
-//This is inheritance just like in OOP (so the Triangle prototype is inheriting the Shape prototype)
-//prototypes are like classes but they are more powerful than classes and concept of behind it.
-//with a prototype, you can also create new primitive types for your needs and customize them
-//with attributes and traits. traits are using when if there's common and shared features between
-//prototypes. in that way your prototypes has not to be derived from each other possibly. and also
-//traits offers a strong type checking and flexibility with some equalities features(https://en.wikipedia.org/wiki/Partial_equivalence_relation)
-//just like in Rust and C++ but maybe in the better and stronger ways.
-prototype Triangle(Shape) {
-
-}
-
-a_func(int32, int); 
-
-
-enum Colors {
-	RED(int32),
-	GREEN(const char*),
-	BLUE(int32)
-}
-
-//enum can derive from a prototype
-//that means Colors will be acting like a enum but it will be 
-//also a struct which has only member variables of the base prototype it derived from.1
-enum Colors(Triangle) {
-	
-}
-
-
-example(int32& by_ref) :: void {
-
-}
-
-example1(constref int32& by_ref) :: void {
-
-}
-
-// This means passed by address which holds by an unique pointer (it had moved probably) 
-// and its ownership had been transfered and it's not able to be shared with
-// another pointer since it's an unique ptr but you can move it by move or assignment-move
-// but in some cases, you don't wanna let to be passed a moveable unique_ptr 
-// to the function itself as a param. In this cases you can use nomove qualifier
-// so by this qualifier compiler will be complaining that this passed pointer as moveable unique ptr.
-// example2(nomove constptr int32^ ptr) 
-// 
-// also if the unique_ptr passed as constptr 
-// it means it cannot be moved during entire the function scope
-// but this is semantically a lit bit awkward since when 
-// you moved your unique ptr and its lifetime 
-// to be limited function's scope. but in some rare cases
-// it'll be good to have.
-example2(constptr int32^ ptr) :: any {
-    //this is not possible because ^ pointers are can't be shared
-    //int32^ movedHere = ptr;
-
-    //you can move like
-    int32^ movedHere = move ptr;
-    //or
-    int32^ movedHere2 := ptr;
-    // this is ':=' usually using as type inf in the other languages but we don't have a feature like type inf
-
-}
-
-example3(int32^ ptr) :: any {
-} 
-
-
-//This means pass by address that shareable pointer but it can't be changed
-//and it can have many ownerships which is able to be shared with
-//another pointer and it can be moved but not allowed by constptr
-example4(constptr int32* ptr) :: any {
-    int32* sharedHere = ptr;
-
-    //not possible
-    //sharedHere = Triangle(); 
-}
-
-//This means pass by address that shareable pointer but it can't be changed
-//and it can have many ownerships which is able to be shared with
-//another pointer and it can be moved since *
-//when shareable pointer moved, previous pointer will be nil.. and counter does not increase
-example5(int32* ptr) :: any {
-    int32* sharedHere = ptr;
-    sharedHere = Triangle(); 
-}
-
-
-example6(readonly char* str) async :: any {
-    bool success = await a_function_must_be_awaited();
-    ret success ? str : "not succeded!";
-}
-
-
-//built-in directive which'll be called while compiling the source code
-@compiler_hook()
-__greater_than_hook() :: void {
-
-}
-
-
-
-//This is directive defination here. It can or can't takes param.
-//If it takes params then its params must be matched with
-//the parameters of target function
-#this_function_may_throw_an_error(bool a_param) {
-    //$func, $line,, $col,
-    // this means function will be copied here
-    $func(a_param)::onexcept{
-        print("has thrown an error by function" + $func::name + " " + $line + " " + $col);
-    }::noexcept{
-
-    };
-}
-
-#pretend_integer_overflow -> k_of {
-    // ... some overflow magics here
-}
-
-//this is directive and can be used for functions or variables.
-//they are able to wrap the function or variable that qualified.
-//it's a thing between macro and try-catch statements. they can
-//expand and run on the run time.
-@this_function_may_throw_an_error
-example7(bool a_param) except :: int32 {
-    // integer overflow occures but can be handled by compiler
-    // note: k_of is a one-dim char pointer which is providing string base pointer of result just performed.
-    // 'safe_add' is a macro which is declared by standard library as a helper. It's making sum operations 
-    // based on string simply.
-    @pretend_integer_overflow -> k_of 
-    int k = 1000000000000000000000 + 10000000000000000000000000000000000000; 
-    if(null(k_of)) {
-        safe_add(k_of, 10); 
-        print(k_of);
-    } else {
-        print(k);
-        throw;
-    } 
+// FILE 141: examples/type_checker/019.cstar
+// expected: diagnostic
+read_ref(int32& x) :: int32 {
+    ret x;
 }
 
 main() :: int32 {
-    int32 x = 30;
-    int32* p = ref x;
-    x = deref p;
+    int32 value = 4;
+    ret read_ref(value);
+}
+-------
 
-    //unsafe cast is trying to save ur ass from trouble with type conversions like uint32 -> int32
-    uint32 a = 1233;
-    int32 p = a; // this will be a stupid assignment here
-    int32 l = unsafe_cast<int32>(a); // it tries to understand what to do and helps implicitly if it can (2's complement)
-    float32 f = 12.3453;
-    int32 r = f; //implicitly casting
-    Shape^ shape = Triangle(); 
-    Triangle^ triangle = cast<Triangle^>(shape);
-    
-    //move it (transfer ownership) to the left side.
-    Shape^ anotherShape := shape; 
-    //or maybe
-    Shape^ anotherShape2 = move anotherShape;
+// FILE 142: examples/type_checker/020.cstar
+// expected: diagnostic
+// expected-code: CST2102
 
-    const Shape^ ptr = Triangle(); // the address is not constant and the value it holds cannot be changed.
-    constptr Shape^ ptr = Triangle(); // the address is constant but the value it holds can be changed.
-    readonly Shape^ ptr = Triangle(); // the address and the value are constant and this is readonly.
+write_ref(constref int32& value) :: void {
+  value = 3;
+  ret;
+}
 
-    //for stack-kind variables.
-    const Shape shape;
-    //constptr Shape shape; this is wrong since Shape is not a pointer-type variable
-    //readonly Shape shape; this is wrong since Shape is not a pointer-type variable
+main() :: int32 {
+  int32 value = 1;
+  write_ref(ref value);
+  ret value;
+}
+-------
 
-    if(x == 10) {
+// FILE 143: examples/type_checker/021.cstar
+// expected: diagnostic
+// expected-code: CST2103
 
-    } elif (x > 10) {
+main() :: int32 {
+  int32 first = 1;
+  int32 second = 2;
+  constptr int32* pointer = ref first;
+  pointer = ref second;
+  ret 0;
+}
+-------
 
-    } else {
+// FILE 144: examples/type_checker/022.cstar
+// expected: diagnostic
+// expected-code: CST2104
 
+main() :: int32 {
+  int32 first = 1;
+  int32 second = 2;
+  readonly int32* pointer = ref first;
+  pointer = ref second;
+  ret 0;
+}
+-------
+
+// FILE 145: examples/type_checker/023.cstar
+// expected: diagnostic
+// expected-code: CST2104
+
+main() :: int32 {
+  int32 value = 1;
+  readonly int32* pointer = ref value;
+  deref pointer = 2;
+  ret 0;
+}
+-------
+
+// FILE 146: examples/type_checker/024.cstar
+// expected: diagnostic
+// expected-code: CST2102
+
+main() :: int32 {
+  int32 value = 1;
+  const int32* pointer = ref value;
+  deref pointer = 4;
+  ret 0;
+}
+-------
+
+// FILE 147: examples/type_checker/025.cstar
+// expected: diagnostic
+// expected-code: CST2100
+
+main() :: int32 {
+  int32 value = 8;
+  int32* pointer = ref value;
+  const int32** pointer_to_pointer = ref pointer;
+  ret 0;
+}
+-------
+
+// FILE 148: examples/type_checker/026.cstar
+// expected: diagnostic
+// expected-code: CST2104
+
+main() :: int32 {
+  int32 value = 8;
+  int32* pointer = ref value;
+  readonly int32** pointer_to_pointer = ref pointer;
+  **pointer_to_pointer = 9;
+  ret 0;
+}
+-------
+
+// FILE 149: examples/type_checker/027.cstar
+// expected: diagnostic
+// expected-code: CST2101
+
+main() :: int32 {
+  constref int32 value = 1;
+  ret value;
+}
+-------
+
+// FILE 150: examples/type_checker/028.cstar
+// expected: diagnostic
+
+main() :: int32 {
+  int32*^ pointer;
+  ret 0;
+}
+-------
+
+// FILE 151: examples/type_checker/029.cstar
+// expected: pass
+main() :: int32 {
+    int32 value = 1;
+    int32^ source = ref value;
+    int32^ target = source;
+
+    ret deref target;
+}
+-------
+
+// FILE 152: examples/type_checker/030.cstar
+// expected: pass
+main() :: int32 {
+    int32 source = 1;
+    int32 target := source;
+
+    ret target;
+}
+-------
+
+// FILE 153: examples/type_checker/031.cstar
+// expected: pass
+main() :: int32 {
+    int32 value = 1;
+    int32 target = 0;
+
+    target .= value;
+
+    ret target;
+}
+-------
+
+// FILE 154: examples/type_checker/032.cstar
+// expected: diagnostic
+main() :: int32 {
+    int32 value = 1;
+    int32^ source = ref value;
+    int32^ target := source;
+
+    ret deref source;
+}
+-------
+
+// FILE 155: examples/type_checker/033.cstar
+// expected: diagnostic
+main() :: int32 {
+    int32 value = 1;
+    int32* source = ref value;
+    int32* target := source;
+
+    ret deref source;
+}
+-------
+
+// FILE 156: examples/type_checker/034.cstar
+// expected: diagnostic
+// expected-code: CST2103
+
+rebind(constptr int32* pointer) :: void {
+  int32 other = 2;
+  pointer = ref other;
+  ret;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  rebind(ref value);
+  ret 0;
+}
+-------
+
+// FILE 157: examples/type_checker/035.cstar
+// expected: diagnostic
+// expected-code: CST2104
+
+write_readonly(readonly int32* pointer) :: void {
+  deref pointer = 2;
+  ret;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  write_readonly(ref value);
+  ret 0;
+}
+-------
+
+// FILE 158: examples/type_checker/036.cstar
+// expected: diagnostic
+
+read_second(int32[2] arr) :: int32 {
+  ret arr[1];
+}
+
+main() :: int32 {
+  int32 value = 5;
+  ret read_second(value);
+}
+-------
+
+// FILE 159: examples/type_checker/037.cstar
+// expected: diagnostic
+
+read_second(int32[2] arr) :: int32 {
+  ret arr[1];
+}
+
+main() :: int32 {
+  int32 values[3] = (1, 2, 3);
+  ret read_second(values);
+}
+-------
+
+// FILE 160: examples/type_checker/038.cstar
+// expected: diagnostic
+
+main() :: int32 {
+  int32 value = 1;
+  int32* pointer = ref value;
+  int64 raw = pointer as int64;
+  ret raw as int32;
+}
+-------
+
+// FILE 161: examples/type_checker/039.cstar
+// expected: diagnostic
+// expected-code: CST2100
+
+main() :: int32 {
+  int32 value = 1;
+  readonly int32* source = ref value;
+  int32* mutable = cast<int32*>(source);
+  ret deref mutable;
+}
+-------
+
+// FILE 162: examples/type_checker/040.cstar
+// expected: diagnostic
+
+main() :: int32 {
+  int32 value = 1;
+  Shape converted = cast<Shape>(value);
+  ret value;
+}
+-------
+
+// FILE 163: examples/type_checker/041.cstar
+// expected: diagnostic
+// expected-code: CST2105
+
+take(int32^ pointer) :: int32 {
+  ret deref pointer;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  int32^ source = ref value;
+
+  ret take(source);
+}
+-------
+
+// FILE 164: examples/type_checker/042.cstar
+// expected: diagnostic
+// expected-code: CST2105
+
+take(int32^ pointer) :: int32 {
+  ret deref pointer;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  int32^ source = ref value;
+  int32 result = take(move source);
+
+  ret deref source + result;
+}
+-------
+
+// FILE 165: examples/type_checker/043.cstar
+// expected: diagnostic
+// expected-code: CST2105
+
+forward(int32^ pointer) :: int32^ {
+  ret pointer;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  int32^ source = ref value;
+  int32^ target = forward(move source);
+
+  ret deref target;
+}
+-------
+
+// FILE 166: examples/type_checker/044.cstar
+// expected: diagnostic
+// expected-code: CST1001
+
+run(int32^ task) async :: int32 {
+  ret deref task;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  int32^ task = ref value;
+  ret run(move task);
+}
+-------
+
+// FILE 167: examples/type_checker/045.cstar
+// expected: diagnostic
+// expected-code: CST1001
+
+task_value() :: int32 {
+  ret 1;
+}
+
+main() :: int32 {
+  int32 value = await task_value();
+  ret value;
+}
+-------
+
+// FILE 168: examples/type_checker/046.cstar
+// expected: diagnostic
+// expected-code: CST2105
+
+consume(nomove int32^ pointer) :: int32 {
+  int32^ moved := pointer;
+  ret deref moved;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  int32^ pointer = ref value;
+
+  ret consume(move pointer);
+}
+-------
+
+// FILE 169: examples/type_checker/047.cstar
+// expected: diagnostic
+// expected-code: CST2105
+
+forward(nomove int32^ pointer) :: int32^ {
+  ret move pointer;
+}
+
+main() :: int32 {
+  int32 value = 1;
+  int32^ pointer = ref value;
+  int32^ moved = forward(move pointer);
+
+  ret deref moved;
+}
+-------
+
+// FILE 170: examples/type_checker/048.cstar
+// expected: diagnostic
+// expected-code: CST2105
+
+invalid(nomove int32 value) :: int32 {
+  ret value;
+}
+
+main() :: int32 {
+  ret invalid(1);
+}
+-------
+
+// FILE 171: examples/type_checker/049.cstar
+// expected: diagnostic
+// expected-code: CST2001
+
+main() :: int32 {
+  break;
+  ret 0;
+}
+-------
+
+// FILE 172: examples/type_checker/050.cstar
+// expected: diagnostic
+// expected-code: CST2001
+
+main() :: int32 {
+  continue;
+  ret 0;
+}
+-------
+
+// FILE 173: examples/type_checker/051.cstar
+// expected: diagnostic
+// expected-code: CST1001
+
+main() :: int32 {
+  int32 value = 1;
+
+  option (value) {
+    0: {
+      ret 0;
+    },
+    _: {
+      ret 1;
     }
+  }
 
+  ret 2;
+}
+-------
 
-    loop(true) {
+// FILE 174: examples/type_checker/052.cstar
+// expected: diagnostic
+// expected-code: CST2001
 
-    }
+include "modules/private_module.cstar" as private_mod
 
-    int32 arr[4] = (0,1,2,3);
-    loop(v in arr) {
-        print(v)
-    } 
+main() :: int32 {
+  ret private_mod.hidden_add(1, 2);
+}
+-------
 
-    //by index
-    loop(i,v in arr){ 
-        print(i,v)
-    }
+// FILE 175: examples/type_checker/053.cstar
+// expected: diagnostic
+// expected-code: CST2001
 
+int32 global_counter = 3;
 
-    int32 k = 1;
-    option(k) {
-        0: {
-        
-        },
-        1: {
+static read_counter() :: int32 {
+  ret global_counter;
+}
 
-        },
-        2: {
+main() :: int32 {
+  ret read_counter();
+}
+-------
 
-        },
-        3: {
+// FILE 176: examples/type_checker/054.cstar
+// expected: diagnostic
+// expected-code: CST2001
 
-        },
-        _: {
+helper() :: int32 {
+  ret 1;
+}
 
-        }
-    }
+static read_helper() :: int32 {
+  ret helper();
+}
 
+main() :: int32 {
+  ret read_helper();
+}
+-------
+
+// FILE 177: examples/type_checker/055.cstar
+// expected: diagnostic
+// expected-code: CST2001
+
+struct Point {
+  int32 x;
+}
+
+main() :: int32 {
+  Point p;
+  ret p.y;
+}
+-------
+
+// FILE 178: examples/type_checker/056.cstar
+// expected: diagnostic
+// expected-code: CST2001
+
+struct Point {
+  int32 x;
+  int32 x;
+}
+
+main() :: int32 {
+  Point p;
+  ret p.x;
+}
+-------
+
+// FILE 179: examples/type_checker/057.cstar
+// expected: fail
+// expected-code: CST2001
+
+struct Node {
+  Node child;
+}
+
+main() :: int32 {
+  Node n;
+  ret 0;
+}
+-------
+
+// FILE 180: examples/type_checker/058.cstar
+// expected: fail
+// expected-code: CST2001
+
+struct Point {
+  int32 x;
+}
+
+main() :: int32 {
+  Point p;
+  ret p.missing();
+}
+-------
+
+// FILE 181: examples/type_checker/059.cstar
+// expected: fail
+// expected-code: CST2001
+
+struct Point {
+  int32 x;
+}
+
+main() :: int32 {
+  Point p = Point();
+  ret p.x;
+}
+-------
+
+// FILE 182: examples/type_checker/060.cstar
+// expected: fail
+// expected-code: CST2001
+
+struct Point {
+  int32 x;
+}
+
+main() :: int32 {
+  Point p;
+  ret p::missing();
+}
+-------
+
+// FILE 183: examples/type_checker/061.cstar
+// expected: fail
+// expected-code: CST1001
+
+struct Resource {
+  allocator() {
+    ret;
+  }
+}
+
+main() :: int32 {
+  Resource resource;
+  ret 0;
+}
+-------
+
+// FILE 184: examples/type_checker/062.cstar
+// expected: fail
+// expected-code: CST2001
+
+struct Counter {
+  int32 value;
+
+  add(int32 amount) {
+    self.value += amount;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Counter::add(1);
+  ret 0;
+}
+-------
+
+// FILE 185: examples/type_checker/063.cstar
+// expected: fail
+// expected-code: CST1001
+
+struct Meter {
+  new() :: Meter {
+    Meter meter;
+    ret meter;
+  }
+}
+
+main() :: int32 {
+  ret 0;
+}
+-------
+
+// FILE 186: examples/type_checker/064.cstar
+// expected: fail
+// expected-code: CST1001
+
+struct Meter {
+  static new(int32 raw) :: Meter {
+    Meter meter = Meter(raw);
+    ret meter;
+  }
+
+  constructor(int32 initial) {
+    self.value = initial;
+    ret;
+  }
+
+  int32 value;
+}
+
+main() :: int32 {
+  Meter meter = Meter::new(7);
+  ret meter.value;
+}
+-------
+
+// FILE 187: examples/type_checker/065.cstar
+// expected: fail
+// expected-code: CST2105
+
+struct Resource {
+  int32 value;
+
+  destructor() {
+    self.value = 0;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Resource resource;
+  resource.destructor();
+  ret 0;
+}
+-------
+
+// FILE 188: examples/type_checker/066.cstar
+// expected: fail
+// expected-code: CST2105
+
+struct Resource {
+  int32 value;
+
+  destructor() {
+    self.value = 0;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Resource resource;
+  drop resource;
+  ret resource.value;
+}
+-------
+
+// FILE 189: examples/type_checker/067.cstar
+// expected: fail
+// expected-code: CST1001
+
+struct Meter {
+  operator new(Meter value) :: Meter^ {
+    ret ref value;
+  }
+}
+
+main() :: int32 {
+  ret 0;
+}
+-------
+
+// FILE 190: examples/type_checker/068.cstar
+// expected: diagnostic
+// expected-code: CST2001
+
+trait Measurable {
+  value() :: int32;
+}
+
+struct Meter with Measurable {
+  int32 reading;
+
+  constructor(int32 value) {
+    self.reading = value;
+  }
+}
+
+main() :: int32 {
+  Meter meter = Meter(1);
+  ret 0;
+}
+-------
+
+// FILE 191: examples/type_checker/069.cstar
+// expected: diagnostic
+// expected-code: CST2001
+
+struct NotAllocator {
+  int32 tag;
+
+  constructor(int32 value) {
+    self.tag = value;
+  }
+}
+
+struct Meter {
+  int32 value;
+
+  constructor(int32 value) {
+    self.value = value;
+  }
+}
+
+main() :: int32 {
+  NotAllocator arena = NotAllocator(1);
+  Meter^ meter = new(arena) Meter(3);
+  drop meter;
+  ret 0;
+}
+-------
+
+// FILE 192: examples/type_checker/070.cstar
+// expected: diagnostic
+// expected-code: CST1001
+
+main() :: int32 {
+  static int32 counter = 0;
+  ret counter;
+}
+-------
+
+// FILE 193: examples/type_checker/071.cstar
+// expected: diagnostic
+// expected-code: CST1001
+
+struct Counter {
+  static int32 value;
+}
+
+main() :: int32 {
+  ret 0;
+}
+-------
+
+// FILE 194: examples/type_checker/072.cstar
+// expected: diagnostic
+// expected-code: CST2001
+
+import from "std:crt" {
+  printf(const char* fmt, ...) :: int32;
+}
+
+main() :: int32 {
+  printf();
+  ret 0;
+}
+-------
+
+// FILE 195: examples/type_checker/073.cstar
+// expected: diagnostic
+// expected-code: CST2001
+
+sum(int32 first, ...) :: int32 {
+  ret first;
+}
+
+main() :: int32 {
+  ret sum(1, 2);
+}
+-------
+
+// FILE 196: examples/type_checker/074.cstar
+// expected: diagnostic
+// expected-code: CST1001
+
+dyn Writer;
+
+main() :: int32 {
+  ret 0;
+}
+-------
+
+// FILE 197: examples/type_checker/075.cstar
+// expected: diagnostic
+// expected-code: CST1001
+
+protocol FileState for FileHandle {
+}
+
+main() :: int32 {
+  ret 0;
+}
+-------
+
+// FILE 198: examples/type_checker/076.cstar
+// expected: diagnostic
+// expected-code: CST2001
+
+cast_is_not_possible(x bool, bool y) :: void {
+    int32 a = x;
+    int32 b = y;
+}
+
+main() :: int32 {
     ret 0;
 }
+-------
+
+// FILE 199: examples/type_checker/077.cstar
+// expected: diagnostic
+// expected-code: CST2001
+
+enum Color : uint8 {
+    Red,
+    Green,
+}
+
+main() :: int32 {
+    Color color = Color.Blue;
+    ret 0;
+}
+-------
+
+// FILE 200: examples/type_checker/078.cstar
+// expected: diagnostic
+// expected-code: CST2001
+
+enum Color : uint8 {
+    Red,
+    Green,
+}
+
+enum Mode : uint8 {
+    Read,
+    Write,
+}
+
+main() :: int32 {
+    Color color = Mode.Read;
+    ret 0;
+}
+-------
+
+// FILE 201: examples/type_checker/079.cstar
+// expected: diagnostic
+// expected-code: CST2001
+
+enum Color : uint8 {
+    Red,
+    Green,
+}
+
+main() :: int32 {
+    Color color = Color.Red | Color.Green;
+    ret 0;
+}
+-------
+
+// FILE 202: examples/type_checker/080.cstar
+// expected: diagnostic
+// expected-code: CST1001
+
+flags enum FileMode : uint8 {
+    Read = 1,
+    Weird = 3,
+}
+
+main() :: int32 {
+    ret 0;
+}
+-------
+
+// FILE 203: examples/type_checker/081.cstar
+// expected: diagnostic
+// expected-code: CST1001
+
+enum Tiny : uint8 {
+    TooBig = 256,
+}
+
+main() :: int32 {
+    ret 0;
+}
+-------
+
+// FILE 204: examples/type_checker/082.cstar
+// expected: diagnostic
+// expected-code: CST1001
+
+enum Color : uint8 {
+    Red = 1,
+    AlsoRed = 1,
+}
+
+main() :: int32 {
+    ret 0;
+}
+-------
+
+// FILE 205: examples/type_checker/083.cstar
+// expected: diagnostic
+// expected-code: CST1001
+
+flags enum FileMode : uint8 {
+    Read,
+    Write = 2,
+}
+
+main() :: int32 {
+    ret 0;
+}
+-------
+

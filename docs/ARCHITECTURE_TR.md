@@ -37,9 +37,9 @@ main.cpp
 ├── tools/
 │   └── run_examples.ps1
 ├── examples/
-│   ├── smoke/
+│   ├── smoke/          # recursive smoke categories: core, arrays, pointers, structs, ...
 │   ├── functions/
-│   ├── type_checker/
+│   ├── type_checker/   # recursive diagnostic categories: core, casts, imports, traits, ...
 │   ├── variables/
 │   └── papers/
 ├── include/
@@ -260,7 +260,7 @@ Bu akış:
 
 1. `Build cstar (UCRT64)` task'ini çalıştırır.
 2. `build-ucrt/cstar.exe` dosyasını GDB ile açar.
-3. Argüman olarak `examples/smoke/minimal.cstar` verir.
+3. Argüman olarak `examples/smoke/core/minimal.cstar` verir.
 
 Gereken VSCode eklentisi:
 
@@ -289,10 +289,10 @@ Derleme başarılı.
 Çalışan smoke:
 
 ```text
-examples/smoke/minimal.cstar
-examples/smoke/local_int.cstar
-examples/smoke/binary_expr.cstar
-examples/smoke/assignment.cstar
+examples/smoke/core/minimal.cstar
+examples/smoke/core/local_int.cstar
+examples/smoke/core/binary_expr.cstar
+examples/smoke/core/assignment.cstar
 ```
 
 Smoke örnekleri şu hattı geçiyor:

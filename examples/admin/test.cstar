@@ -1,0 +1,36 @@
+include "../../std/core.cstar" as core
+
+struct Counter {
+    int32 value;
+    int32* ptr;
+
+    constructor(int32 val) {
+        self.value = val;
+        self.ptr = ref val;
+    }
+
+    increase_value() {
+        self.value += 1;
+    }
+
+    destructor()
+    {
+        self.ptr = unsafe_cast<int32*>(0);
+    }
+}
+
+
+main() :: int32 {
+    Counter counter = Counter(10);
+
+    int32 v = 0;
+    loop(v < 10)
+    {
+        counter.increase_value();
+        v++;
+    }
+
+    core.core_print_i32(counter.value);
+    drop counter;
+    ret 0;
+}

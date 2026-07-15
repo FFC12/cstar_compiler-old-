@@ -157,6 +157,7 @@ enum TokenKind {
   ANY,
   ATTRIB,
   PROTO,
+  FLAGS,
   ENUM,
   FOR,
   BREAK,
@@ -644,6 +645,8 @@ class CStarLexer {
       return ATTRIB;
     else if (ident == "prototype")
       return PROTO;
+    else if (ident == "flags")
+      return FLAGS;
     else if (ident == "enum")
       return ENUM;
     else if (ident == "break")
@@ -998,6 +1001,8 @@ class CStarLexer {
         return "self";
       case IS:
         return "is";
+      case FLAGS:
+        return "flags";
       case CAST:
         return "cast";
       case PUBLIC:

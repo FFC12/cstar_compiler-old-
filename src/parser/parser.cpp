@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <set>
 #include <string>
 
@@ -288,7 +289,40 @@ static bool IsEnumUnderlyingType(TypeSpecifier type) {
   }
 }
 
-void CStarParser::parseEnumDecl(DeclarationModifiers declarationModifiers) {
+static uint64_t EnumUnderlyingMax(TypeSpecifier type) {
+  switch (type) {
+    case TypeSpecifier::SPEC_I8:
+      return static_cast<uint64_t>(std::numeric_limits<int8_t>::max());
+    case TypeSpecifier::SPEC_I16:
+      return static_cast<uint64_t>(std::numeric_limits<int16_t>::max());
+    case TypeSpecifier::SPEC_I32:
+      return static_cast<uint64_t>(std::numeric_limits<int32_t>::max());
+    case TypeSpecifier::SPEC_I64:
+    case TypeSpecifier::SPEC_INT:
+    case TypeSpecifier::SPEC_ISIZE:
+      return static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+    case TypeSpecifier::SPEC_U8:
+      return std::numeric_limits<uint8_t>::max();
+    case TypeSpecifier::SPEC_U16:
+      return std::numeric_limits<uint16_t>::max();
+    case TypeSpecifier::SPEC_U32:
+      return std::numeric_limits<uint32_t>::max();
+    case TypeSpecifier::SPEC_U64:
+    case TypeSpecifier::SPEC_U128:
+    case TypeSpecifier::SPEC_UINT:
+    case TypeSpecifier::SPEC_USIZE:
+      return std::numeric_limits<uint64_t>::max();
+    default:
+      return 0;
+  }
+}
+
+static bool IsZeroOrPowerOfTwo(uint64_t value) {
+  return value == 0 || (value & (value - 1)) == 0;
+}
+
+void CStarParser::parseEnumDecl(DeclarationModifiers declarationModifiers,
+                                bool isFlags) {
   if (declarationModifiers.linkage == VisibilitySpecifier::VIS_IMPORT ||
       declarationModifiers.linkage == VisibilitySpecifier::VIS_EXPORT) {
     ParserError("enum visibility uses public/private, not import/export",
@@ -301,6 +335,13 @@ void CStarParser::parseEnumDecl(DeclarationModifiers declarationModifiers) {
   auto posInfo = currentTokenInfo().getTokenPositionInfo();
   size_t begin = posInfo.begin;
   size_t line = posInfo.line;
+
+  if (isFlags) {
+    expected(TokenKind::FLAGS);
+    this->advance();
+    skipTopLevelTrivia();
+    expected(TokenKind::ENUM);
+  }
 
   this->advance();
   expected(TokenKind::IDENT);
@@ -318,13 +359,16 @@ void CStarParser::parseEnumDecl(DeclarationModifiers declarationModifiers) {
     ParserError("Enum underlying type must be an integer type",
                 currentTokenInfo());
   }
+  const auto maxValue = EnumUnderlyingMax(underlyingType);
   this->advance();
 
   expected(TokenKind::LBRACK);
   this->advance();
 
-  int64_t nextValue = 0;
+  uint64_t nextValue = 0;
+  bool implicitValueOverflow = false;
   std::set<std::string> memberNames;
+  std::set<uint64_t> memberValues;
   std::vector<EnumMemberInfo> members;
   while (!is(TokenKind::RBRACK) && !is(TokenKind::_EOF)) {
     skipTopLevelTrivia();
@@ -346,13 +390,52 @@ void CStarParser::parseEnumDecl(DeclarationModifiers declarationModifiers) {
     if (is(TokenKind::EQUAL)) {
       this->advance();
       expected(TokenKind::SCALARI);
-      member.value = std::stoll(currentTokenStr());
-      nextValue = member.value;
+      try {
+        member.value = std::stoull(currentTokenStr());
+      } catch (const std::exception&) {
+        ParserError("Enum member value '" + currentTokenStr() +
+                        "' is not a valid unsigned integer literal",
+                    currentTokenInfo());
+      }
       this->advance();
+    } else if (isFlags) {
+      ParserError("Flags enum member '" + member.name +
+                      "' must declare an explicit bit value",
+                  prevTokenInfo());
+    } else if (implicitValueOverflow) {
+      ParserError("Implicit enum member value for '" + member.name +
+                      "' overflows the enum underlying type",
+                  prevTokenInfo());
     }
 
+    if (member.value > maxValue) {
+      ParserError("Enum member '" + member.name + "' value '" +
+                      std::to_string(member.value) +
+                      "' overflows the enum underlying type",
+                  prevTokenInfo());
+    }
+
+    if (isFlags && !IsZeroOrPowerOfTwo(member.value)) {
+      ParserError("Flags enum member '" + member.name +
+                      "' must be 0 or a power-of-two bit value",
+                  prevTokenInfo());
+    }
+
+    if (memberValues.count(member.value) != 0) {
+      ParserError("Duplicate enum member value '" +
+                      std::to_string(member.value) + "' in enum '" +
+                      enumName + "'",
+                  prevTokenInfo());
+    }
+    memberValues.insert(member.value);
+
     members.push_back(std::move(member));
-    nextValue += 1;
+    if (members.back().value == maxValue) {
+      implicitValueOverflow = true;
+    } else {
+      nextValue = members.back().value + 1;
+      implicitValueOverflow = false;
+    }
     skipTopLevelTrivia();
 
     if (is(TokenKind::COMMA)) {
@@ -376,7 +459,7 @@ void CStarParser::parseEnumDecl(DeclarationModifiers declarationModifiers) {
 
   this->m_AST.emplace_back(std::make_unique<EnumAST>(
       enumName, underlyingType, std::move(members),
-      declarationModifiers.access, semLoc));
+      declarationModifiers.access, semLoc, isFlags));
 
   skipTopLevelTrivia();
   if (is(TokenKind::SEMICOLON)) {
@@ -624,6 +707,11 @@ void CStarParser::translationUnit() {
 
       if (is(TokenKind::TRAIT)) {
         parseTraitDecl(declarationModifiers);
+        continue;
+      }
+
+      if (is(TokenKind::FLAGS)) {
+        parseEnumDecl(declarationModifiers, true);
         continue;
       }
 

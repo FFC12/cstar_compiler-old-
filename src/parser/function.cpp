@@ -736,11 +736,14 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         this->advance();
 
         scope.emplace_back(std::move(expr));
-      } else if (is(TokenKind::IDENT) || is(TokenKind::MINUSMINUS) ||
-                 is(TokenKind::PLUSPLUS)) {
+      } else if ((is(TokenKind::IDENT) &&
+                  (nextToken == TokenKind::MINUSMINUS ||
+                   nextToken == TokenKind::PLUSPLUS)) ||
+                 is(TokenKind::MINUSMINUS) || is(TokenKind::PLUSPLUS)) {
         PositionInfo posInfo = currentTokenInfo().getTokenPositionInfo();
         begin = posInfo.begin;
         line = posInfo.line;
+        size_t end = posInfo.end;
 
         bool postfix = false, prefix = false;
         bool increment = false, decrement = false;
@@ -753,10 +756,15 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
           if (nextToken == TokenKind::IDENT) {
             this->advance();
             name = currentTokenStr();
+            end = currentTokenInfo().getTokenPositionInfo().end;
             this->advance();
+          } else {
+            ParserError("Prefix increment/decrement expects a symbol",
+                        currentTokenInfo());
           }
         } else if (is(TokenKind::IDENT)) {
           name = currentTokenStr();
+          end = currentTokenInfo().getTokenPositionInfo().end;
 
           if (nextToken == TokenKind::MINUSMINUS ||
               nextToken == TokenKind::PLUSPLUS) {
@@ -764,14 +772,13 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
             this->advance();
             increment = is(TokenKind::PLUSPLUS);
             decrement = is(TokenKind::MINUSMINUS);
+            end = currentTokenInfo().getTokenPositionInfo().end;
             this->advance();
           }
         }
         expected(SEMICOLON);
         this->advance();
 
-        posInfo = currentTokenInfo().getTokenPositionInfo();
-        size_t end = posInfo.end;
         SemanticLoc semLoc = SemanticLoc(begin, end, line);
 
         auto symbol = std::make_unique<SymbolAST>(name, semLoc);

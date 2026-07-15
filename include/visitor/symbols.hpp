@@ -46,12 +46,13 @@ struct TraitInfo {
 
 struct EnumMemberInfo {
   std::string name;
-  int64_t value = 0;
+  uint64_t value = 0;
 };
 
 struct EnumInfo {
   std::string name;
   TypeSpecifier underlyingType = TypeSpecifier::SPEC_I32;
+  bool isFlags = false;
   std::vector<EnumMemberInfo> members;
   std::map<std::string, size_t> memberIndexes;
 };

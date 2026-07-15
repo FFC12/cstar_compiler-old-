@@ -22,6 +22,7 @@ Tamamlanan altyapı:
 - `tools/run_examples.bat` eklendi; Windows execution policy'ye takılmadan suite parametreleri geçirilebiliyor.
 - Smoke runner `// expected-exit: N` etiketini okuyup generated executable'ın process exit status değerini doğruluyor.
 - Example runner `// expected-code: CSTNNNN` etiketini okuyup diagnostic suite'lerinde beklenen hata kodunu doğruluyor.
+- `examples/smoke/` ve `examples/type_checker/` artık düz dosya yığını değildir; runner recursive çalıştığı için testler konuya göre alt klasörlere ayrıldı. `modules/` klasörleri yalnızca include helper dosyalarıdır ve suite tarafından skip edilir.
 - Compiler banner ve diagnostic çıktıları `include/diagnostics/*` altında toplandı.
 - Diagnostic formatı dosya yolu, satır, sütun, severity, hata kodu ve caret marker gösterecek hale getirildi.
 - Renkli console çıktısı tek helper üzerinden yönetiliyor; `NO_COLOR` ortam değişkeni destekleniyor.
@@ -52,9 +53,20 @@ Tamamlanan dil/codegen parçaları:
   - canonical member erişimi `Name.A`.
   - enum local/param/return storage underlying integer'a iner.
   - unknown member ve enum-type mismatch diagnostic üretir.
+- Flags enum MVP:
+  - `flags enum FileMode : uint32 { Read = 1, Write = 2 }`
+  - explicit bit value zorunlu.
+  - değerler `0` veya power-of-two olmalı.
+  - bitwise `|`, `&`, `^`, `|=`, `&=`, `^=` çalışır.
+  - scalar enum bitwise kullanım, duplicate value ve repr overflow diagnostic üretir.
 - Basit arithmetic expression.
 - Integer ve floating point `+`, `-`, `*`, `/`, `%` codegen.
 - Comparison/logical expression.
+- Prefix/postfix increment-decrement statement:
+  - `++x;`
+  - `x++;`
+  - `--x;`
+  - `x--;`
 - Lokal scalar assignment:
   - `=`
   - `+=`
@@ -107,21 +119,44 @@ Tamamlanan dil/codegen parçaları:
     - `core_print`, `core_println`, `core_print_char`, `core_print_i32`, `core_print_i64`, `core_print_f64`, `core_read_i32`, `core_read_i64`, `core_read_string` sağlar.
     - Sayı/float yazdırma artık CRT `printf` formatları üstünden yapılır.
     - `core_read_string` geçici `public static char[256]` buffer + `scanf("%255s", ...)` kullanır; gerçek string type/dynamic buffer gelince değiştirilecek stdlib noktasıdır.
-    - `examples/smoke/core_print_read.cstar` include alias + CRT import + read/write smoke doğrulamasıdır.
-    - `examples/smoke/core_read_string.cstar` CRT `scanf` + variadic array argument + `ref arr[0]` C pointer dönüşünü doğrular.
-    - `examples/smoke/import_variadic_printf.cstar` doğrudan `printf("%s %d %lld %f", ...)` ABI doğrulamasıdır.
+    - `examples/smoke/runtime/core_print_read.cstar` include alias + CRT import + read/write smoke doğrulamasıdır.
+    - `examples/smoke/runtime/core_read_string.cstar` CRT `scanf` + variadic array argument + `ref arr[0]` C pointer dönüşünü doğrular.
+    - `examples/smoke/imports/import_variadic_printf.cstar` doğrudan `printf("%s %d %lld %f", ...)` ABI doğrulamasıdır.
   - Function call ownership codegen'i `char*`/`const char*` parametrelerini shared pointer gibi retain etmeyecek şekilde düzeltildi; CRT string ABI raw pointer kalır.
   - `ref arr[index]` codegen'i eklendi; array element adresi C ABI pointer olarak alınabilir.
   - Variadic array symbol argument codegen'i array value yerine storage pointer geçirir; `scanf("%255s", buffer)` çalışır.
   - Bu katman ileride stdlib/native interop ABI'sinin bağlanacağı giriş noktasıdır.
   - Açık takip: `va_list`/`va_arg` gibi C* içinde variadic body yazma modeli ayrı dil tasarımı gerektirir.
 
-Çalışan smoke seti:
+Çalışan smoke seti artık kategori bazlıdır:
 
 ```text
-examples/smoke/minimal.cstar
-examples/smoke/local_int.cstar
-examples/smoke/global_variable.cstar
+examples/smoke/core/
+examples/smoke/casts/
+examples/smoke/arrays/
+examples/smoke/control_flow/
+examples/smoke/functions/
+examples/smoke/imports/
+examples/smoke/pointers/
+examples/smoke/ownership/
+examples/smoke/runtime/
+examples/smoke/enums/
+examples/smoke/structs/
+examples/smoke/modules/        # helper; runner skip eder
+```
+
+Güncel smoke doğrulama sonucu:
+
+```text
+Toplam: 125, Basarili: 122, Diagnostic: 0, Skipped: 3, Hatali: 0, ExitMismatch: 0, CodeMismatch: 0, Crash/Assert: 0
+```
+
+Eski düz liste notları tarihsel bağlam için aşağıda kalabilir; canonical dosya yerleşimi artık yukarıdaki kategori ağacıdır.
+
+```text
+examples/smoke/core/minimal.cstar
+examples/smoke/core/local_int.cstar
+examples/smoke/core/global_variable.cstar
 examples/smoke/uninitialized_local.cstar
 examples/smoke/void_return.cstar
 examples/smoke/char_literal.cstar
@@ -129,10 +164,12 @@ examples/smoke/float32_arithmetic.cstar
 examples/smoke/float64_arithmetic.cstar
 examples/smoke/bool_literal.cstar
 examples/smoke/scalar_enum.cstar
+examples/smoke/flags_enum.cstar
 examples/smoke/binary_expr.cstar
 examples/smoke/comparison_expr.cstar
 examples/smoke/not_equal_expr.cstar
 examples/smoke/logical_expr.cstar
+examples/smoke/increment_decrement.cstar
 examples/smoke/assignment.cstar
 examples/smoke/assignment_cast.cstar
 examples/smoke/cast_numeric.cstar
@@ -155,8 +192,8 @@ examples/smoke/import_block_function.cstar
 examples/smoke/import_function_abs.cstar
 examples/smoke/import_function_from_crt.cstar
 examples/smoke/import_function_named_param.cstar
-examples/smoke/include_module_function.cstar
-examples/smoke/include_module_public_static.cstar
+examples/smoke/imports/include_module_function.cstar
+examples/smoke/imports/include_module_public_static.cstar
 examples/smoke/const_value.cstar
 examples/smoke/const_pointer.cstar
 examples/smoke/reference_param.cstar
@@ -254,7 +291,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Her zaman yeşil kalması gereken küçük çalışan compiler çekirdeği.
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
-- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 120/120 smoke dosyası başarılı.
+- Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`. `modules` helper klasörüdür.
+- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 122/122 smoke dosyası başarılı; toplam 125 smoke dosyasının 3 tanesi bilinçli skip edilir.
 
 `examples/type_checker/`:
 
@@ -262,24 +300,44 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Exit code `1` çoğu dosya için kabul edilebilir diagnostic olabilir.
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
-- Güncel durumda `-ExpectDiagnostics` ile 80 dosyada 78 kontrollü diagnostic, 1 positive/pass ve 1 module helper skip var; crash/assert yok.
+- Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`, `traits`, `proposals`. `modules` helper klasörüdür.
+- Güncel durumda `-ExpectDiagnostics` ile 86 dosyada 83 kontrollü diagnostic, 2 positive/pass ve 1 module helper skip var; crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
 ```text
-examples/type_checker/000.cstar
-examples/type_checker/001.cstar
-examples/type_checker/003.cstar
-examples/type_checker/007.cstar
-examples/type_checker/008.cstar
+examples/type_checker/core/000.cstar
+examples/type_checker/core/001.cstar
+examples/type_checker/core/003.cstar
+examples/type_checker/core/007.cstar
+examples/type_checker/core/008.cstar
 ```
 
 Bu dosyalar daha önce lexer sonrası parser/semantic tarafında `std::deque::operator[]` assert'ine düşüyordu. Expression parser'daki boş `parenthesesPos`, `sparenthesesPos` ve `ternaryPos` erişimleri guard edildi. Artık crash yerine kontrollü diagnostic yoluna giriyorlar.
 
-Kontrollü diagnostic üreten type-checker seti:
+Kontrollü diagnostic üreten type-checker seti kategori bazlıdır:
 
 ```text
-examples/type_checker/000.cstar
+examples/type_checker/arrays/
+examples/type_checker/casts/
+examples/type_checker/control_flow/
+examples/type_checker/core/
+examples/type_checker/enums/
+examples/type_checker/functions/
+examples/type_checker/imports/
+examples/type_checker/ownership/
+examples/type_checker/pointers/
+examples/type_checker/proposals/
+examples/type_checker/runtime/
+examples/type_checker/structs/
+examples/type_checker/traits/
+examples/type_checker/modules/        # helper; runner skip eder
+```
+
+Eski düz liste notları tarihsel bağlam için aşağıda kalabilir; canonical dosya yerleşimi artık yukarıdaki kategori ağacıdır.
+
+```text
+examples/type_checker/core/000.cstar
 examples/type_checker/001.cstar
 examples/type_checker/002.cstar
 examples/type_checker/003.cstar
@@ -331,7 +389,7 @@ examples/type_checker/048.cstar
 examples/type_checker/049.cstar
 examples/type_checker/050.cstar
 examples/type_checker/051.cstar
-examples/type_checker/052.cstar
+examples/type_checker/imports/052.cstar
 examples/type_checker/053.cstar
 examples/type_checker/054.cstar
 examples/type_checker/055.cstar
@@ -346,6 +404,24 @@ examples/type_checker/063.cstar
 examples/type_checker/064.cstar
 examples/type_checker/065.cstar
 examples/type_checker/066.cstar
+examples/type_checker/067.cstar
+examples/type_checker/068.cstar
+examples/type_checker/069.cstar
+examples/type_checker/070.cstar
+examples/type_checker/071.cstar
+examples/type_checker/072.cstar
+examples/type_checker/073.cstar
+examples/type_checker/074.cstar
+examples/type_checker/075.cstar
+examples/type_checker/functions/076.cstar
+examples/type_checker/077.cstar
+examples/type_checker/078.cstar
+examples/type_checker/079.cstar
+examples/type_checker/080.cstar
+examples/type_checker/081.cstar
+examples/type_checker/082.cstar
+examples/type_checker/083.cstar
+examples/type_checker/084.cstar
 ```
 
 Bu dosyalar parser/pass hattına giriyor ve semantic diagnostic üretebiliyor. Kritik semantic sınıflar `expected-code` etiketiyle doğrulanabilir.
@@ -605,18 +681,24 @@ Durum: MVP çalışıyor.
 Tamamlanan:
 
 - Primitive argümanlı call:
+
   - `add(1, 2)`
 - Return value kullanımı:
+
   - `ret add(1, 2);`
 - Call sonucunu variable initializer içinde kullanma:
+
   - `int32 x = add(1, 2);`
 - Parametresiz call statement:
+
   - `foo();`
 - Function signature table:
+
   - pass0 içinde fonksiyon return tipi ve parametre listesi toplanıyor.
   - pass1 içinde bilinmeyen fonksiyon, argüman sayısı ve temel scalar argüman tipi diagnostic'i üretiliyor.
   - `foo();` gibi call statement artık semantic pass tarafından da ziyaret ediliyor.
 - Smoke:
+
   - `examples/smoke/function_call.cstar`
   - `examples/smoke/function_call_initializer.cstar`
   - `examples/smoke/function_call_statement.cstar`
@@ -627,16 +709,18 @@ Tamamlanan:
   - `examples/smoke/pointer_variable_initializer.cstar`
   - `examples/smoke/pointer_return.cstar`
 - Negative diagnostic:
+
   - `examples/type_checker/009.cstar`
   - `examples/type_checker/010.cstar`
   - `examples/type_checker/013.cstar`
-
 - Function return type kontrolü:
+
   - Tamamlandı: `int32 x = returns_bool();` gibi çağrılar net diagnostic üretiyor.
   - Negative diagnostic:
     - `examples/type_checker/011.cstar`
     - `examples/type_checker/012.cstar`
 - Function argument kontrolünü genişlet:
+
   - Tamamlandı: primitive symbol argüman tipleri.
   - Tamamlandı: explicit `cast<T>(expr)` ile function argument geçme.
   - Tamamlandı: tek seviyeli primitive pointer argümana `ref x` geçirme ve callee içinde `deref p` okuma için smoke/codegen MVP.
@@ -644,8 +728,10 @@ Tamamlanan:
   - Tamamlandı: qualifier argümanları.
   - Tamamlandı: tek ve çok boyutlu array parametreleri.
 - Forward declaration call:
+
   - Tamamlandı: `foo` çağrıldığı noktadan sonra tanımlansa da codegen çalışıyor.
 - Import/forward declaration call:
+
   - Tamamlandı: basit native import bildirimi ve external call codegen.
   - İsimsiz ABI parametresi: `import abs(int32) :: int32;`
   - İsimli proposal/doküman formu: `import abs(int32 value) :: int32;`
@@ -671,7 +757,7 @@ Tamamlanan:
   - Tamamlandı: `bool y` formu primitive parametreyi implicit cast edilebilir kabul eder.
   - Tamamlandı: `x bool` formu aynı primitive tipi taşır ama sembolün scope içinde implicit cast edilmesini yasaklar.
   - Smoke: `examples/smoke/castable_param.cstar`
-  - Negative diagnostic: `examples/type_checker/076.cstar`
+  - Negative diagnostic: `examples/type_checker/functions/076.cstar`
 - Tek seviyeli primitive pointer/ref parametre codegen smoke:
   - `examples/smoke/function_call_pointer_argument.cstar`
 - Primitive reference parametre codegen smoke:
@@ -800,7 +886,30 @@ Tamamlanan:
   - `examples/type_checker/016.cstar`, `017.cstar`, `020.cstar`, `021.cstar`, `022.cstar`, `023.cstar`, `024.cstar`, `025.cstar`, `026.cstar`, `027.cstar`, `034.cstar`, `035.cstar`, `039.cstar` dosyaları `expected-code` ile doğrulanır.
 - `tools/run_examples.ps1` diagnostic suite'lerinde `expected-code` kontrolü yapar.
 
-İleri aşama: Bu alt aşamada açık madde kalmadı. Ownership transfer ve lifetime başlıkları Aşama 3.2 altında takip edilecek.
+Kalan tasarım kararı: pointer nullability.
+
+- Bugünkü codegen `move` sonrası source pointer'ı null'a çekebilir ve condition conversion pointer için null karşılaştırması yapar; yani IR/runtime seviyesinde null kavramı fiilen vardır.
+- Dil yüzeyinde her pointer'ın default-nullable kabul edilmesi C/C++ tarzı sessiz hata alanı açar; ama pointer varken null ihtiyacını yok saymak da sistem programlama gerçekliğine uymaz. C* yönü:
+  - Normal `T*`, `T^`, `T&` değerleri default non-null kabul edilmeli.
+  - Nullable pointer açık type surface ile yazılmalı: önerilen canonical form `T*?` ve `T^?`.
+  - `T&` nullable olmamalı; reference/borrow var olan storage'a alias demektir.
+  - `nil` literal yalnız nullable pointer bağlamında type-check edilmeli.
+  - `null` kelimesi C interop dokümanlarında anılabilir ama canonical literal `nil` olmalı.
+  - `deref` non-null kanıtı olmayan nullable pointer'da reddedilmeli; `if (p)` veya protocol/flow proof sonrası scope içinde non-null narrow edilmeli.
+  - `unsafe_cast<T*>(0)` gibi raw interop yolları ayrı unsafe escape hatch olarak kalmalı.
+  - Moved-from pointer'ın iç temsilde null'a çekilmesi kullanıcı tarafından “nullable value” olarak görülmemeli; semantic state `moved` olarak kalmalı ve yeniden initialize edilmeden kullanım `CST2105` üretmeli.
+- Kısa vadeli MVP:
+  - Var olan non-null pointer davranışını koru.
+  - `T*?` / `T^?` syntax henüz uygulanana kadar kullanıcının `nil` assignment yapmasını controlled proposal diagnostic ile reddet.
+  - Native interop ve allocator failure için null dönen raw pointer konusunu Aşama 8.5 allocation failure policy ve fallible `new?` ile birlikte çöz.
+- Test adayları:
+  - `int32* p = nil;` controlled diagnostic.
+  - `int32*? p = nil;` nullable syntax açılınca pass.
+  - `deref p` nullable pointer için check öncesi diagnostic.
+  - `if (p) { ret deref p; }` flow narrowing pass.
+  - `ret p ? 1 : 0;` gibi pointer condition mevcut zero/nil karşılaştırma davranışını korur.
+
+İleri aşama: Ownership transfer ve lifetime başlıkları Aşama 3.2 altında takip edilecek. Pointer nullability kararı allocator failure ve protocol/flow analysis ile birlikte sıkılaştırılacak.
 
 ### 3.2 Ownership Pointer `^`
 
@@ -1031,6 +1140,39 @@ Tamamlanan:
 
 İleri aşama: Gerçek parser/AST/codegen `enum` ve temel user-defined type tasarımından sonra açılacak. Bu alt aşamada açık parser güvenlik/tasarım maddesi kalmadı.
 
+### 5.3 Ternary Expression `cond ? a : b`
+
+Durum:
+
+- Lexer ve expression parser tarafında `?` / `:` token ve `BinaryOpAST::extra` temsili vardır.
+- Codegen tarafında ternary için `select` notu bulunur; fakat tam semantic/type-check kontratı henüz MVP kalitesinde değildir.
+
+Karar notu:
+
+- C* için ternary bir statement değil expression olmalıdır.
+- İlk MVP yalnız value-producing expression bağlamlarında açılmalı:
+  - `int32 x = cond ? a : b;`
+  - `ret cond ? a : b;`
+  - function argument: `foo(flag ? left : right);`
+- `cond` dönüşümü `if` condition ile aynı olmalı: `bool`, integer, float ve pointer zero/null karşılaştırmasına iner.
+- Branch type birleştirme kuralı açık olmalı:
+  - Aynı type: doğrudan kabul.
+  - Primitive numeric: mevcut safe implicit conversion/data-loss warning kurallarıyla ortak hedef type.
+  - Enum: aynı enum type zorunlu; farklı enum type reddedilmeli.
+  - Pointer: aynı pointee/ownership/qualifier veya güvenli qualifier genişletmesi; qualifier stripping reddedilmeli.
+  - Struct/user-defined: aynı type zorunlu; conversion overload gelene kadar farklı user-defined type reddedilmeli.
+  - `void` branch kabul edilmemeli; side-effect statement seçimi için `if` kullanılmalı.
+- Codegen:
+  - Side-effect içermeyen scalar/pointer branch için `select`.
+  - Branch expression içinde call/assignment/drop gibi side-effect doğuran ifade desteklenecekse basic block + PHI gerekir; ilk MVP bunu reddedebilir veya PHI lowering'iyle açabilir.
+- Test adayları:
+  - smoke: scalar ternary initializer/return.
+  - smoke: pointer condition ternary.
+  - type_checker: branch type mismatch.
+  - type_checker: qualifier stripping.
+  - type_checker: void branch.
+  - newline smoke: `cond ?\n a :\n b`.
+
 ## Aşama 6 - Import / Package / Native Interop
 
 Proposal hedefleri:
@@ -1045,7 +1187,7 @@ Tamamlanan:
 - `include` branch'i parser içinde boş olduğu için infinite loop riski vardı; artık gerçek grammar'a bağlı.
 - `include involved { ... }`, `include { ... }` ve `include "module" as alias` parse ediliyor.
 - Yerel `.cstar` include dosyaları ana compilation unit'e parse/merge ediliyor.
-  - `examples/smoke/include_module_function.cstar`
+  - `examples/smoke/imports/include_module_function.cstar`
   - `examples/smoke/modules/math_module.cstar`
 - Basit `import func(...) :: type;` call codegen ile bağlandı.
   - `import abs(int32) :: int32;`
@@ -1064,18 +1206,18 @@ Tamamlanan:
 - `--emit=dynamiclib` backend clang `-shared` ile platform dynamic library üretir.
 - `include ... as alias` function-call lookup'a bağlı:
   - `math.add_from_module(...)`
-  - `examples/smoke/include_module_function.cstar`
+  - `examples/smoke/imports/include_module_function.cstar`
 - `public`/default-private module visibility MVP'si tamamlandı:
   - `public` function/variable declaration'ları include edilen local module'den ana compilation unit'e açılır
   - modifier yazılmayan declaration default private kabul edilir
   - `import`/`export` visibility değil, native/linkage ABI yüzeyidir
   - private module function'ına alias üzerinden erişim controlled diagnostic üretir
-  - `examples/type_checker/052.cstar`
+  - `examples/type_checker/imports/052.cstar`
 - Module-level `static` MVP'si tamamlandı:
   - static function LLVM tarafında internal linkage alır
   - static global variable internal linkage/storage davranışını korur
   - static function non-static global symbol/function kullanamaz
-  - `examples/smoke/include_module_public_static.cstar`
+  - `examples/smoke/imports/include_module_public_static.cstar`
   - `examples/type_checker/053.cstar`
   - `examples/type_checker/054.cstar`
 - Native link normalizasyonu:
@@ -1085,7 +1227,14 @@ Tamamlanan:
 
 Kalan:
 
-- Bu aşamada açık MVP maddesi kalmadı.
+- String literal / `const char*` ABI hardening:
+  - String literal type'ı canonical olarak `const char[N]` mı, yoksa decay edilmiş `const char*` mı görünecek netleştirilmeli. Önerilen model: storage `const char[N]`, expression value C ABI bağlamında `const char*` decay eder.
+  - String literal kesinlikle mutable `char*` parametreye implicit geçmemeli; `const char*` / `readonly char*` güvenli, mutable `char*` için explicit unsafe/copy gerekir.
+  - `char*` ve `const char*` bugün CRT/string ABI için raw C pointer kalır; compiler-owned shared handle semantiğine karışmamalı. Bu karar dokümanda korunmalı.
+  - Escape decode genişletilmeli: `\0`, `\r`, `\b`, `\xNN`, ileride UTF-8 policy.
+  - Embedded null içeren literal için length bilgisi olmayan `const char*` kullanımında uyarı/policy düşünülmeli; gerçek string/slice modeli gelince `StringView { ptr, len }` benzeri stdlib tipi önerilir.
+  - String literal global storage dedup/constant linkage ve module-level lifetime netleştirilmeli.
+  - Test adayları: `const char*` parametre pass, mutable `char*` implicit reddi, escape decode smoke, include edilen module fonksiyonuna string literal geçişi.
 - Gerçek namespace/type module sistemi ve `struct`/user-defined type modül export/import davranışı Aşama 7 ile birlikte tasarlanacak.
 - Not: Bugünkü include modeli source-level public declaration merge yapar; public function body içinde private module helper lowering'i gerçek module object/scope modeliyle birlikte genişletilecek.
 
@@ -1415,6 +1564,7 @@ Canonical proposal örnekleri artık concept bazlı dosyalara ayrılmıştır:
 - `examples/papers/trait.cstar`: static trait ve açık dynamic trait object ABI.
 - `examples/papers/protocol.cstar`: typestate, dynamic protocol, `.=` ve scope-exit cleanup.
 - `examples/papers/allocator.cstar`: allocator capability ve `new` lowering.
+- `examples/papers/nullability.cstar`: non-null default pointer, nullable `T*?`/`T^?` ve `nil`.
 - `examples/papers/concurrency.cstar`: async/task ownership, `Send`/`Sync`, `nomove`.
 
 `examples/papers/struct.cstar` yalnız struct/lifecycle/value operator kararlarını taşır. `examples/papers/syntax.cstar` artık bu ileri denemeleri taşımıyor.
@@ -1500,31 +1650,29 @@ Kalan:
 
 Durum:
 
-- Lexer `enum` keyword'ünü tanır.
-- Parser/AST/pass0/pass1/codegen scalar enum MVP'si çalışır:
+- Lexer `enum` ve `flags` keyword'lerini tanır.
+- Parser/AST/pass0/pass1/codegen scalar enum ve flags enum MVP'si çalışır:
   - C-like grammar: `enum Color : uint8 { Red, Green, Blue = 7 }`.
+  - Flags grammar: `flags enum FileMode : uint32 { Read = 1, Write = 2 }`.
   - Explicit repr tüm enum'lar için zorunlu tutulur.
-  - Member value assignment implicit incremental veya explicit integer literal olabilir.
+  - Scalar enum member value assignment implicit incremental veya explicit integer literal olabilir.
+  - Flags enum member değerleri explicit yazılır; `0` veya tek bit/power-of-two olmak zorundadır.
+  - Enum repr overflow ve duplicate member value controlled diagnostic üretir.
   - Canonical erişim `Color.Green`; unqualified member erişimi açılmadı.
   - Enum local variable, function parametre ve return storage'ı underlying integer type'a iner.
   - Unknown enum member ve farklı enum type atanması controlled diagnostic üretir.
-  - Positive smoke: `examples/smoke/scalar_enum.cstar`.
-  - Negative diagnostic: `examples/type_checker/077.cstar`, `examples/type_checker/078.cstar`.
-- `flags` ve `tagged` canonical proposal yüzeyidir; lexer/parser durumları ayrıca kontrol edilip eksikse keyword/token olarak eklenmeli.
+  - Scalar enum yalnızca equality/inequality karşılaştırması kabul eder.
+  - Flags enum `|`, `&`, `^` ve mevcut shortcut assignment lowering'i üzerinden `|=`, `&=`, `^=` kabul eder; arithmetic operatörler legal değildir.
+  - Positive smoke: `examples/smoke/scalar_enum.cstar`, `examples/smoke/flags_enum.cstar`.
+  - Negative diagnostic: `examples/type_checker/077.cstar`, `examples/type_checker/078.cstar`, `examples/type_checker/079.cstar`, `examples/type_checker/080.cstar`, `examples/type_checker/081.cstar`, `examples/type_checker/082.cstar`, `examples/type_checker/083.cstar`.
+- `tagged` canonical proposal yüzeyidir; flags enum artık MVP olarak parser/semantic/codegen hattına indirildi.
 - `option` statement enum pattern matching için temel yüzey olarak kullanılacak.
 
 Kalan:
 
-- Flags enum grammar'ı: `flags enum FileMode : uint32 { Read = 1, Write = 2 }`.
-- Scalar enum hardening:
-  - duplicate value policy.
-  - out-of-range repr diagnostic.
-  - signed/unsigned repr boundary testleri.
-  - duplicate member negative testini parser + semantic tarafında net diagnostic koduna bağla.
-- Flags enum semantic:
-  - bitwise `|`, `&`, `^`, `~` legal.
-  - arithmetic legal olmamalı.
-  - duplicate/overlap değer policy'si warning olabilir.
+- Flags enum unary `~` semantiği ayrıca tasarlanmalı; mask sınırı repr genişliği mi yoksa declared flag union mı olacak netleştirilmeli.
+- `uint128` ve full-width unsigned enum literal modeli lexer/parser numeric storage büyütülünce tekrar ele alınmalı; mevcut MVP member literal değerlerini `uint64_t` sınırında tutar.
+- Signed/unsigned repr boundary testleri genişletilmeli.
 - Payload gereken durumda canonical model explicit `TokenKind + struct Token` layout'u olmalı.
 - `tagged Packet : uint8 { ... }` sugar'ı explicit `tag + storage` layout'una inecek şekilde tasarlanmalı.
 - `tagged` desugar contract:
@@ -1538,9 +1686,9 @@ Kalan:
   - Runtime checked access ayrı safety feature olarak sonra değerlendirilecek.
 - Exhaustiveness kontrolü `option(enum_value)` için yapılabilir; `_` default yeni value eklendiğinde warning üretmeli.
 - Smoke/type-checker adayları:
-  - flags enum bitwise pass.
-  - enum repr overflow diagnostic.
   - tagged variant access without proven tag diagnostic.
+  - flags enum unary `~` mask policy diagnostic/pass.
+  - `uint128` enum literal sınırı diagnostic/pass.
 
 ### 8.4 Dynamic Trait Object
 
@@ -1573,6 +1721,7 @@ Durum:
 - `new Type(args)`, `shared new Type(args)` ve `new(allocator) Type(args)` MVP yüzeyi çalışır.
 - `Allocator` trait conformance semantic kontrolünde kullanılır.
 - `examples/papers/allocator.cstar` canonical proposal dosyasıdır.
+- `examples/papers/nullability.cstar` nullable pointer ve `nil` canonical proposal dosyasıdır.
 - Shared handle güçlü sayacı MVP olarak vardır; allocator-backed shared metadata contract'ı henüz tam değildir.
 
 Kalan:
@@ -1593,13 +1742,27 @@ Kalan:
 - Bugünkü explicit allocator'ın yalnız data allocation mı yaptığı, yoksa shared control-block'u da mı yönettiği netleştirilmeli; hedef tek runtime layout contract'ı olmalı.
 - Allocation failure policy:
   - gizli policy hook yok.
-  - `except`/`throw` veya explicit result-like return ile görünür olmalı.
-  - null raw pointer dönen allocator için controlled runtime/semantic policy belirlenmeli.
+  - `new T(args)` ve `shared new T(args)` default olarak infallible/non-null kabul edilmeli; allocation failure ilk runtime MVP'de abort veya görünür compiler runtime error olabilir.
+  - Fallible allocation ayrı yüzey olmalı: önerilen form `new? T(args)` ve `shared new? T(args)`.
+  - `new? T(args)` sonucu `T^?`, `shared new? T(args)` sonucu `T*?` olmalı.
+  - `except`/`throw` veya explicit result-like return modeli olgunlaşınca fallible allocation bu effect/result modeliyle de ifade edilebilir.
+  - null raw pointer dönen allocator, infallible `new` içinde sessiz null pointer üretmemeli; ya visible failure'a çevrilmeli ya da `new?` yoluyla nullable sonuç vermeli.
+- Primitive allocation policy:
+  - `new` yalnız constructor'lı struct/resource type'lara hapsedilmemeli; C* için allocation operator'ı sized concrete storage üretir.
+  - `new int32(7)`, `new float64(1.0)`, `shared new bool(true)` gibi primitive heap allocation formları legal olmalı.
+  - Primitive `new` lowering'i: allocate `sizeof(T)`, initializer store, `T^` veya `T*` handle döndür; destructor yok, drop/release yalnız storage free eder.
+  - Struct `new` lowering'i: allocate storage, zero/init, constructor call, destructor + free cleanup edge.
+  - Array gibi sized concrete type'lar için ileride `new int32[4]((1, 2, 3, 4))` değerlendirilebilir.
+  - Illegal target'lar: `void`, unsized/representation'ı belirsiz type, concrete type bilinmeyen dynamic trait object.
+  - Generic wrapper tipleri (`Box<T>`, `Cell<T>` vb.) primitive allocation için zorunlu dil mekanizması olmamalı; ileride stdlib convenience olarak gelebilir.
 - Test adayları:
   - allocator olmayan değerle `new(allocator)` diagnostic'i korunmalı.
   - allocator-backed unique allocation pass.
   - allocator-backed shared allocation pass.
   - destructor + allocator.free çağrı sırası smoke.
+  - `new int32(7)` smoke.
+  - `shared new float64(1.0)` smoke.
+  - `new? int32(7)` fallible allocation proposal diagnostic veya future smoke.
 
 ### 8.6 Protocol / Typestate
 
@@ -1741,21 +1904,30 @@ Kalan:
 
 Tamamlanan son adım:
 
-- Scalar enum MVP compiler hattına indirildi:
+- Scalar enum hardening ve flags enum MVP compiler hattına indirildi:
   - `EnumAST`, `EnumTable`, parser/pass0/pass1/codegen desteği eklendi.
   - `enum Name : repr { A, B = 7 }` grammar'ı çalışıyor.
+  - `flags enum Name : repr { A = 1, B = 2 }` grammar'ı çalışıyor.
   - `Color.Green` lookup, enum local/param/return ve mismatch diagnostic'leri doğrulandı.
+  - repr overflow, duplicate value, scalar enum bitwise rejection ve flags explicit/power-of-two value diagnostic'leri doğrulandı.
+  - Flags enum `|`, `&`, `^`, `|=`, `&=`, `^=` akışı smoke ile doğrulandı.
   - `examples/smoke/scalar_enum.cstar`
+  - `examples/smoke/flags_enum.cstar`
   - `examples/type_checker/077.cstar`
   - `examples/type_checker/078.cstar`
+  - `examples/type_checker/079.cstar`
+  - `examples/type_checker/080.cstar`
+  - `examples/type_checker/081.cstar`
+  - `examples/type_checker/082.cstar`
+  - `examples/type_checker/083.cstar`
 
 Önceki tamamlanan planlama adımı:
 
 - Proposal dosyaları concept bazlı ayrıldı:
-
 - `policy.cstar`: concept map / eski hook modelinin ayrıştırılması.
 - `struct.cstar`: struct/lifecycle/value operator.
 - `allocator.cstar`: allocator capability ve `new` lowering.
+- `nullability.cstar`: nullable pointer ve `nil` modeli.
 - `trait.cstar`: static trait + explicit `dynamic Trait`.
 - `protocol.cstar`: typestate, `.=` ve scope-exit cleanup.
 - `enum.cstar`: scalar enum, flags enum, tagged layout.
@@ -1767,8 +1939,8 @@ Bu dosyalar compiler ile controlled diagnostic verir; crash/assert kabul edilmez
 Sıradaki teknik iş:
 
 - Önce Aşama 8.9 bakımını sürekli yeşil tut: papers suite controlled diagnostic vermeli.
-- Enum hardening'i tamamla:
-  - repr overflow diagnostic.
-  - duplicate value policy.
-  - flags enum grammar + bitwise-only semantic.
 - Sonra `tagged` desugar veya `protocol` flow analysis'e geçmek daha sağlıklı olur; çünkü tagged access ve protocol state proof aynı statik kanıtlama altyapısını paylaşabilir.
+- Enum tarafında kalan küçük/ileri işler:
+  - flags enum unary `~` mask policy.
+  - full-width `uint128` enum literal storage.
+  - tagged explicit layout, variant construction/access ve `option(enum_value)` exhaustiveness.

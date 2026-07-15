@@ -73,6 +73,30 @@ static std::string ValueOperatorMethodName(BinOpKind kind) {
   }
 }
 
+static bool IsFixableScalarType(TypeSpecifier type) {
+  switch (type) {
+    case TypeSpecifier::SPEC_I8:
+    case TypeSpecifier::SPEC_I16:
+    case TypeSpecifier::SPEC_I32:
+    case TypeSpecifier::SPEC_I64:
+    case TypeSpecifier::SPEC_INT:
+    case TypeSpecifier::SPEC_U8:
+    case TypeSpecifier::SPEC_U16:
+    case TypeSpecifier::SPEC_U32:
+    case TypeSpecifier::SPEC_U64:
+    case TypeSpecifier::SPEC_U128:
+    case TypeSpecifier::SPEC_UINT:
+    case TypeSpecifier::SPEC_ISIZE:
+    case TypeSpecifier::SPEC_USIZE:
+    case TypeSpecifier::SPEC_F32:
+    case TypeSpecifier::SPEC_F64:
+    case TypeSpecifier::SPEC_FLOAT:
+      return true;
+    default:
+      return false;
+  }
+}
+
 IAST *Visitor::methodCallReceiver(IAST *node) const {
   if (node == nullptr || node->m_ExprKind != ExprKind::BinOp) {
     return nullptr;
@@ -355,6 +379,14 @@ static const EnumMemberInfo *FindEnumMember(const std::string &enumName,
   }
 
   return &enumIt->second.members[memberIt->second];
+}
+
+static bool IsEnumBitwiseOperator(BinOpKind kind) {
+  return kind == B_AND || kind == B_OR || kind == B_XOR;
+}
+
+static bool IsEnumEqualityOperator(BinOpKind kind) {
+  return kind == B_EQ || kind == B_NEQ;
 }
 
 static bool LosslessCasting(TypeSpecifier target, TypeSpecifier source) {
@@ -1435,6 +1467,18 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
     }
   }
 
+  if (this->m_TypeChecking && !matchedSymbol.symbolName.empty()) {
+    const auto begin = symbolInfo.begin;
+    const auto end = symbolInfo.end;
+    const auto line = symbolInfo.line;
+    const auto typeCheckerInfo = symbolInfo.typeCheckerInfo;
+    symbolInfo = matchedSymbol;
+    symbolInfo.begin = begin;
+    symbolInfo.end = end;
+    symbolInfo.line = line;
+    symbolInfo.typeCheckerInfo = typeCheckerInfo;
+  }
+
   return symbolInfo;
 }
 
@@ -1841,6 +1885,38 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
       this->m_BinOpTermCount += 1;
       auto lhsSymbol = lhs->acceptBefore(*this);
       this->m_BinOpTermCount -= 1;
+
+      const bool lhsIsEnum =
+          lhsSymbol.type == TypeSpecifier::SPEC_DEFINED &&
+          EnumTable.count(lhsSymbol.definedTypeName) != 0;
+      const bool rhsIsEnum =
+          rhsSymbol.type == TypeSpecifier::SPEC_DEFINED &&
+          EnumTable.count(rhsSymbol.definedTypeName) != 0;
+      if (lhsIsEnum || rhsIsEnum) {
+        if (!lhsIsEnum || !rhsIsEnum ||
+            lhsSymbol.definedTypeName != rhsSymbol.definedTypeName ||
+            lhsSymbol.indirectionLevel != 0 || rhsSymbol.indirectionLevel != 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Enum binary operation requires matching enum operands",
+              lhsIsEnum ? rhsSymbol : lhsSymbol);
+        } else {
+          const auto &enumInfo = EnumTable[lhsSymbol.definedTypeName];
+          if (IsEnumBitwiseOperator(binaryOpAst.m_BinOpKind)) {
+            if (!enumInfo.isFlags) {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Bitwise enum operators require a 'flags enum'; enum '" +
+                      enumInfo.name + "' is scalar",
+                  lhsSymbol);
+            }
+          } else if (!IsEnumEqualityOperator(binaryOpAst.m_BinOpKind)) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Enum values only support equality; flags enums also support "
+                "bitwise &, | and ^",
+                lhsSymbol);
+          }
+        }
+      }
+
       if (isPtrType && !errorFlag) {
         if (!lhsSymbol.typeCheckerInfo.isCompatiblePtr &&
             (this->m_LastBinOp && !this->m_LastBinOpHasAtLeastOnePtr) &&
@@ -3246,6 +3322,19 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {
     SymbolInfo movedReturnSource;
     bool markMovedReturnSource = false;
     if (retAst.m_RetExpr != nullptr) {
+      if (m_LastFuncRetTypeInfo.type == TypeSpecifier::SPEC_VOID &&
+          m_LastFuncRetTypeInfo.indirectionLevel == 0) {
+        this->m_TypeErrorMessages.emplace_back(
+            "void function cannot return a value; use 'ret;'",
+            symbolInfo);
+        this->m_LastRetExpr = previousLastRetExpr;
+        this->m_ExpectedType = previousExpectedType;
+        this->m_LastSymbolInfo = previousLastSymbolInfo;
+        this->m_DefinedTypeFlag = previousDefinedTypeFlag;
+        this->m_DefinedTypeName = previousDefinedTypeName;
+        return symbolInfo;
+      }
+
       auto *retSymbol = dynamic_cast<SymbolAST *>(retAst.m_RetExpr.get());
       auto *retUnary = dynamic_cast<UnaryOpAST *>(retAst.m_RetExpr.get());
       const bool returnIsMove =
@@ -3392,15 +3481,67 @@ SymbolInfo Visitor::preVisit(TypeAST &typeAst) {
 SymbolInfo Visitor::preVisit(FixAST &fixAst) {
   SymbolInfo symbolInfo;
 
-  // Problem symbolId den kaynaklanıyor. Validate ederken
-  // symbol ıd si olmadığı için hata veriyor. Bunun uzerinde düşünmen
-  // gerekiyor.
-  Visitor::SymbolId += 1;
   if (m_TypeChecking) {
-    this->m_LastFixExpr = true;
+    if (fixAst.m_Symbol == nullptr ||
+        fixAst.m_Symbol->m_ExprKind != ExprKind::SymbolExpr) {
+      symbolInfo.begin = fixAst.m_SemLoc.begin;
+      symbolInfo.end = fixAst.m_SemLoc.end;
+      symbolInfo.line = fixAst.m_SemLoc.line;
+      this->m_TypeErrorMessages.emplace_back(
+          "increment/decrement target must be a symbol", symbolInfo);
+      return symbolInfo;
+    }
+
+    auto *symbol = static_cast<SymbolAST *>(fixAst.m_Symbol.get());
+    symbolInfo.symbolName = symbol->m_SymbolName;
+    symbolInfo.begin = symbol->m_SemLoc.begin;
+    symbolInfo.end = symbol->m_SemLoc.end;
+    symbolInfo.line = symbol->m_SemLoc.line;
+
+    SymbolInfo matchedSymbol;
     this->m_LastSymbolInfo = symbolInfo;
-    fixAst.m_Symbol->acceptBefore(*this);
+    this->m_LastSymbolInfo.symbolId = m_SymbolId;
+    this->m_LastSymbolInfo.scopeId = m_ScopeId;
+    this->m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
+    this->m_LastFixExpr = true;
+    const bool found =
+        symbolValidation(symbol->m_SymbolName, symbolInfo, matchedSymbol);
     this->m_LastFixExpr = false;
+
+    if (!found) {
+      return symbolInfo;
+    }
+
+    symbolInfo = matchedSymbol;
+    symbolInfo.begin = symbol->m_SemLoc.begin;
+    symbolInfo.end = symbol->m_SemLoc.end;
+    symbolInfo.line = symbol->m_SemLoc.line;
+
+    if (!fixAst.m_IsIncrement && !fixAst.m_IsDecrement) {
+      this->m_TypeErrorMessages.emplace_back(
+          "increment/decrement expression is missing an operator", symbolInfo);
+      return symbolInfo;
+    }
+
+    if (symbolInfo.indirectionLevel > 0 || symbolInfo.isRef ||
+        symbolInfo.type == TypeSpecifier::SPEC_DEFINED ||
+        !IsFixableScalarType(symbolInfo.type)) {
+      this->m_TypeErrorMessages.emplace_back(
+          "increment/decrement requires a mutable numeric scalar", symbolInfo);
+    }
+
+    if (symbolInfo.isConstVal || symbolInfo.isConstRef) {
+      this->m_TypeErrorMessages.emplace_back(
+          "const-qualified value is not assignable", symbolInfo,
+          DiagnosticCode::SemanticConstAssignment);
+    }
+
+    if (symbolInfo.isReadOnly) {
+      this->m_TypeErrorMessages.emplace_back(
+          "readonly-qualified symbol is neither assignable with a value nor "
+          "pointer with a reference",
+          symbolInfo, DiagnosticCode::SemanticReadonlyAssignment);
+    }
   }
 
   return symbolInfo;
@@ -3519,6 +3660,7 @@ SymbolInfo Visitor::preVisit(EnumAST &enumAst) {
   EnumInfo info;
   info.name = enumAst.m_Name;
   info.underlyingType = enumAst.m_UnderlyingType;
+  info.isFlags = enumAst.m_IsFlags;
 
   for (const auto &member : enumAst.m_Members) {
     if (info.memberIndexes.count(member.name) != 0) {
