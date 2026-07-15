@@ -1,0 +1,10 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+main() :: int32 {
+  int32 x = 1;
+  int32* p = ref x;
+  int32 y = +p;
+
+  ret y;
+}

@@ -17,8 +17,10 @@ temel editor ayarlari ve otomatik baslayan static analyzer destegi saglar.
 - analyzer: acik dosyalarda diagnostics ve LSP completion
 - icon: extension icon ve `.cstar` file icon
 
-Sembolik operatorler `punctuation.operator.*` scope'lariyla renklendirilir; bu sayede temalar
-normal C* operatorlerini hata veya diagnostic token'i gibi gostermek zorunda kalmaz.
+Sembolik operatorler bilerek C*'a ozel `meta.operator.*.cstar` scope'lariyla
+renklendirilir. Bu, temalarin operatorleri hata gibi kirmizi/pembe boyamasini
+engeller. Analyzer diagnostics ve completion calisir; highlight katmani sade
+TextMate grammar olarak kalir.
 
 ## Analyzer Ayarlari
 
@@ -41,11 +43,11 @@ Sonra `F5` ile Extension Development Host ac ve bir `.cstar` dosyasi yukle.
 
 ```bash
 cd vscode-cstar-syntax
-vsce.cmd package --allow-missing-repository --out cstar-syntax-0.3.0.vsix
+vsce.cmd package --allow-missing-repository --out cstar-syntax-0.4.0.vsix
 ```
 
 ## VSIX Kurulum
 
 ```bash
-code --install-extension cstar-syntax-0.3.0.vsix --force
+code --install-extension cstar-syntax-0.4.0.vsix --force
 ```

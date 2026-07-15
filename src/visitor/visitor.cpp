@@ -575,6 +575,9 @@ static llvm::Value *CreateOrderedCompare(llvm::CmpInst::Predicate floatPredicate
                                          llvm::Value *lhs, llvm::Value *rhs,
                                          llvm::Type *valueType, bool isSigned,
                                          const llvm::Twine &name) {
+  lhs = CastValueToType(lhs, valueType, isSigned);
+  rhs = CastValueToType(rhs, valueType, isSigned);
+
   if (valueType->isFloatTy() || valueType->isDoubleTy()) {
     return Visitor::Builder->CreateFCmp(floatPredicate, lhs, rhs, name);
   }
@@ -587,6 +590,9 @@ static llvm::Value *CreateEqualityCompare(bool equals, llvm::Value *lhs,
                                           llvm::Value *rhs,
                                           llvm::Type *valueType,
                                           const llvm::Twine &name) {
+  lhs = CastValueToType(lhs, valueType, true);
+  rhs = CastValueToType(rhs, valueType, true);
+
   if (valueType->isFloatTy() || valueType->isDoubleTy()) {
     return Visitor::Builder->CreateFCmp(
         equals ? llvm::CmpInst::FCMP_OEQ : llvm::CmpInst::FCMP_ONE, lhs, rhs,
@@ -3975,6 +3981,36 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
       assert(false && "Unary '-' requires a numeric value.");
     }
     m_LastType = value->getType();
+    return value;
+  }
+
+  if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_POSITIVE) {
+    value = unaryOpAst.m_Node->accept(*this);
+    if (value == nullptr) {
+      return nullptr;
+    }
+    if (!value->getType()->isIntegerTy() &&
+        !value->getType()->isFloatingPointTy()) {
+      assert(false && "Unary '+' requires a numeric value.");
+    }
+    m_LastType = value->getType();
+    return value;
+  }
+
+  if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_NOT) {
+    auto *targetType = m_LastType;
+    value = unaryOpAst.m_Node->accept(*this);
+    if (value == nullptr) {
+      return nullptr;
+    }
+
+    value = CastValueToBranchCondition(value, m_LastSigned);
+    value = Builder->CreateNot(value, "nottmp");
+    if (targetType != nullptr && targetType != value->getType()) {
+      value = CastValueToType(value, targetType, false);
+    }
+    m_LastType = value->getType();
+    m_LastSigned = false;
     return value;
   }
 

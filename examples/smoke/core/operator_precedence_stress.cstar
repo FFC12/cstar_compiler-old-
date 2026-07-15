@@ -1,0 +1,32 @@
+// expected: pass
+// expected-exit: 42
+
+main() :: int32 {
+  int32 a = 5;
+  int32 b = 3;
+  int32 c = 2;
+
+  int32 tick = 1;
+  tick++;
+  ++tick;
+  tick--;
+  --tick;
+
+  int32 arith = ((+a + b * c) - ((a - c) / b) + (a % c));
+  int32 bitmix = ((5 & 3) | (8 ^ 2)) + ((16 >> 2) + (1 << 3));
+  int32 inverted = ~0;
+  int32 narrowed = cast<int32>(4.9) + (5 as int32);
+
+  bool logic = !false && ((arith == 11) && (bitmix >= 23)) && !(a < b) &&
+               ((a != c) || false);
+
+  int32 selected = logic ? (arith + bitmix + narrowed - tick) : 100;
+  int32* pointer = ref selected;
+  int32 through_pointer = pointer ? deref pointer : 0;
+  int32 final =
+      ((through_pointer == 42) && (inverted == -1) && (tick == 1)) ?
+          through_pointer :
+          7;
+
+  ret final;
+}

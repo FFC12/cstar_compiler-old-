@@ -14,6 +14,7 @@
     { "include": "#types" },
     { "include": "#constants" },
     { "include": "#numbers" },
+    { "include": "#variables" },
     { "include": "#functions" },
     { "include": "#members" },
     { "include": "#operators" },
@@ -214,7 +215,7 @@
               "match": ",|::"
             },
             {
-              "name": "punctuation.operator.pointer.cstar",
+              "name": "meta.operator.pointer.cstar",
               "match": "\\*|\\^|&|\\?"
             }
           ]
@@ -224,23 +225,23 @@
     "operators": {
       "patterns": [
         {
-          "name": "punctuation.operator.varargs.cstar",
+          "name": "meta.operator.varargs.cstar",
           "match": "\\.\\.\\."
         },
         {
-          "name": "keyword.operator.allocation.fallible.cstar",
+          "name": "meta.operator.allocation.fallible.cstar",
           "match": "\\bnew\\?"
         },
         {
-          "name": "punctuation.operator.nullable.cstar",
+          "name": "meta.operator.nullable.cstar",
           "match": "\\?"
         },
         {
-          "name": "punctuation.operator.assignment.policy.cstar",
+          "name": "meta.operator.assignment.policy.cstar",
           "match": "\\.="
         },
         {
-          "name": "punctuation.operator.assignment.move.cstar",
+          "name": "meta.operator.assignment.move.cstar",
           "match": ":="
         },
         {
@@ -248,43 +249,43 @@
           "match": "::"
         },
         {
-          "name": "punctuation.operator.range.cstar",
+          "name": "meta.operator.range.cstar",
           "match": "\\.\\."
         },
         {
-          "name": "punctuation.operator.comparison.cstar",
+          "name": "meta.operator.comparison.cstar",
           "match": "==|!=|<=|>="
         },
         {
-          "name": "punctuation.operator.logical.cstar",
+          "name": "meta.operator.logical.cstar",
           "match": "&&|\\|\\||!"
         },
         {
-          "name": "punctuation.operator.fix.cstar",
+          "name": "meta.operator.increment-decrement.cstar",
           "match": "\\+\\+|--"
         },
         {
-          "name": "punctuation.operator.arrow.cstar",
+          "name": "meta.operator.arrow.cstar",
           "match": "->|=>"
         },
         {
-          "name": "punctuation.operator.bitwise.cstar",
+          "name": "meta.operator.bitwise.cstar",
           "match": "<<|>>|&|\\||\\^|~"
         },
         {
-          "name": "punctuation.operator.assignment.cstar",
+          "name": "meta.operator.assignment.cstar",
           "match": "\\+=|-=|\\*=|/=|%=|="
         },
         {
-          "name": "punctuation.operator.arithmetic.cstar",
+          "name": "meta.operator.arithmetic.cstar",
           "match": "[-+*/%]"
         },
         {
-          "name": "punctuation.operator.comparison.cstar",
+          "name": "meta.operator.comparison.cstar",
           "match": "[<>]"
         },
         {
-          "name": "punctuation.operator.member.cstar",
+          "name": "punctuation.accessor.member.cstar",
           "match": "\\."
         }
       ]
@@ -374,6 +375,24 @@
         {
           "name": "constant.numeric.integer.cstar",
           "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "meta.variable.declaration.cstar",
+          "match": "\\b(?:(?:const|constptr|constref|readonly|nomove|public|private|static|dynamic|shared)\\s+)*(?:void|bool|char|uchar|int|uint|int8|int16|int32|int64|uint8|uint16|uint32|uint64|uint128|isize|usize|float|float32|float64|any|vec2|vec3|vec4|dyn|[A-Z][A-Za-z0-9_]*)(?:\\s*(?:\\[[^\\]]*\\]|[*^&?]))*\\s+([a-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "variable.other.definition.cstar" }
+          }
+        },
+        {
+          "name": "meta.assignment.lhs.cstar",
+          "match": "\\b([a-z_][A-Za-z0-9_]*)\\b\\s*(?=(?:=|:=|\\.=|\\+=|-=|\\*=|/=|%=|<<=|>>=|&=|\\|=|\\^=))",
+          "captures": {
+            "1": { "name": "variable.other.assignment.cstar" }
+          }
         }
       ]
     },

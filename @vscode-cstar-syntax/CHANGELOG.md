@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- Reworked symbolic operator scopes to neutral `meta.operator.*.cstar` scopes so themes do not paint every operator as an error-like red token.
+- Removed the semantic token provider to avoid theme-specific function underlines/decorations.
+- Kept analyzer diagnostics/completion active while leaving highlighting to TextMate grammar.
+- Added TextMate patterns for variable declarations and assignment LHS names.
+- Improved precedence/operator-heavy highlighting for ternary, shifts, comparisons, nullable pointers, and allocation syntax.
+
 ## 0.3.0
 
 - Added bundled C* static analyzer server.

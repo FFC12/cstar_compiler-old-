@@ -856,11 +856,7 @@ ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
             unaryOpKind = UnaryOpKind::U_PREFIX;
           break;
         case TokenKind::PLUS:
-          ParserError(
-              "You don't need to put an extra '+' before expression. Only "
-              "'-' "
-              "is meaningful.",
-              op.entryTokenInfo());
+          unaryOpKind = UnaryOpKind::U_POSITIVE;
           break;
         case TokenKind::MINUS:
           unaryOpKind = UnaryOpKind::U_NEGATIVE;

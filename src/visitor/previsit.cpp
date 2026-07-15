@@ -551,6 +551,55 @@ static bool IsEnumEqualityOperator(BinOpKind kind) {
   return kind == B_EQ || kind == B_NEQ;
 }
 
+static bool IsLogicalOperator(BinOpKind kind) {
+  return kind == B_LAND || kind == B_LOR;
+}
+
+static bool IsComparisonOperator(BinOpKind kind) {
+  switch (kind) {
+    case B_EQ:
+    case B_NEQ:
+    case B_LT:
+    case B_LTEQ:
+    case B_GT:
+    case B_GTEQ:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static bool IsOrderedComparisonOperator(BinOpKind kind) {
+  return kind == B_LT || kind == B_LTEQ || kind == B_GT || kind == B_GTEQ;
+}
+
+static bool IsValueOperator(BinOpKind kind) {
+  switch (kind) {
+    case B_ADD:
+    case B_SUB:
+    case B_MUL:
+    case B_DIV:
+    case B_MOD:
+    case B_AND:
+    case B_OR:
+    case B_XOR:
+    case B_SHL:
+    case B_SHR:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static SymbolInfo MakeBoolInfo(const SemanticLoc &loc) {
+  SymbolInfo info;
+  info.begin = loc.begin;
+  info.end = loc.end;
+  info.line = loc.line;
+  info.type = TypeSpecifier::SPEC_BOOL;
+  return info;
+}
+
 static bool LosslessCasting(TypeSpecifier target, TypeSpecifier source) {
   return GetBitSize(target) < GetBitSize(source);
 }
@@ -2137,6 +2186,203 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
       return symbolInfo;
     }
 
+    auto resolveOperandInfo = [&](IAST *node) -> SymbolInfo {
+      SymbolInfo resolved;
+      if (node == nullptr) {
+        return resolved;
+      }
+
+      if (auto *scalar = dynamic_cast<ScalarOrLiteralAST *>(node)) {
+        return InferScalarLiteralType(scalar);
+      }
+
+      if (auto *symbol = dynamic_cast<SymbolAST *>(node)) {
+        const auto previousExpectedType = m_ExpectedType;
+        const auto previousLastSymbolInfo = m_LastSymbolInfo;
+        const auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+        const auto previousDefinedTypeName = m_DefinedTypeName;
+        const auto previousLastCondExpr = m_LastCondExpr;
+
+        m_LastCondExpr = true;
+        m_ExpectedType = TypeSpecifier::SPEC_BOOL;
+        m_LastSymbolInfo.type = TypeSpecifier::SPEC_BOOL;
+        m_LastSymbolInfo.indirectionLevel = 0;
+        m_LastSymbolInfo.isRef = false;
+        m_DefinedTypeFlag = false;
+        m_DefinedTypeName.clear();
+
+        resolved = symbol->acceptBefore(*this);
+
+        m_ExpectedType = previousExpectedType;
+        m_LastSymbolInfo = previousLastSymbolInfo;
+        m_DefinedTypeFlag = previousDefinedTypeFlag;
+        m_DefinedTypeName = previousDefinedTypeName;
+        m_LastCondExpr = previousLastCondExpr;
+        return resolved;
+      }
+
+      const auto previousExpectedType = m_ExpectedType;
+      const auto previousLastSymbolInfo = m_LastSymbolInfo;
+      const auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+      const auto previousDefinedTypeName = m_DefinedTypeName;
+      const auto previousLastBinOp = m_LastBinOp;
+      const auto previousLastBinOpHasPtr = m_LastBinOpHasAtLeastOnePtr;
+      const auto previousLastCondExpr = m_LastCondExpr;
+
+      m_LastBinOp = true;
+      m_LastCondExpr = false;
+      m_LastBinOpHasAtLeastOnePtr = false;
+      m_ExpectedType = TypeSpecifier::SPEC_I64;
+      m_LastSymbolInfo.type = TypeSpecifier::SPEC_I64;
+      m_LastSymbolInfo.indirectionLevel = 0;
+      m_LastSymbolInfo.isRef = false;
+      m_LastSymbolInfo.isUnique = false;
+      m_DefinedTypeFlag = false;
+      m_DefinedTypeName.clear();
+
+      resolved = node->acceptBefore(*this);
+      if (auto *scalar = dynamic_cast<ScalarOrLiteralAST *>(node)) {
+        resolved = InferScalarLiteralType(scalar);
+      }
+
+      m_ExpectedType = previousExpectedType;
+      m_LastSymbolInfo = previousLastSymbolInfo;
+      m_DefinedTypeFlag = previousDefinedTypeFlag;
+      m_DefinedTypeName = previousDefinedTypeName;
+      m_LastBinOp = previousLastBinOp;
+      m_LastBinOpHasAtLeastOnePtr = previousLastBinOpHasPtr;
+      m_LastCondExpr = previousLastCondExpr;
+      return resolved;
+    };
+
+    if (IsLogicalOperator(binaryOpAst.m_BinOpKind)) {
+      auto visitConditionOperand = [&](IAST *node) {
+        const auto previousExpectedType = m_ExpectedType;
+        const auto previousLastSymbolInfo = m_LastSymbolInfo;
+        const auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+        const auto previousDefinedTypeName = m_DefinedTypeName;
+        const auto previousLastCondExpr = m_LastCondExpr;
+
+        m_LastCondExpr = true;
+        m_ExpectedType = TypeSpecifier::SPEC_BOOL;
+        m_LastSymbolInfo.type = TypeSpecifier::SPEC_BOOL;
+        m_LastSymbolInfo.indirectionLevel = 0;
+        m_LastSymbolInfo.isRef = false;
+        m_DefinedTypeFlag = false;
+        m_DefinedTypeName.clear();
+
+        if (node != nullptr) {
+          node->acceptBefore(*this);
+        }
+
+        m_ExpectedType = previousExpectedType;
+        m_LastSymbolInfo = previousLastSymbolInfo;
+        m_DefinedTypeFlag = previousDefinedTypeFlag;
+        m_DefinedTypeName = previousDefinedTypeName;
+        m_LastCondExpr = previousLastCondExpr;
+      };
+
+      visitConditionOperand(lhs.get());
+      visitConditionOperand(rhs.get());
+      return MakeBoolInfo(binaryOpAst.m_SemLoc);
+    }
+
+    if (IsComparisonOperator(binaryOpAst.m_BinOpKind)) {
+      auto lhsSymbol = resolveOperandInfo(lhs.get());
+      auto rhsSymbol = resolveOperandInfo(rhs.get());
+
+      if (lhsSymbol.type == TypeSpecifier::SPEC_DEFINED &&
+          lhsSymbol.indirectionLevel == 0) {
+        const auto overloadMethod =
+            ValueOperatorMethodName(binaryOpAst.m_BinOpKind);
+        const auto functionName =
+            lhsSymbol.definedTypeName + "." + overloadMethod;
+        auto signatureIt = FunctionTable.find(functionName);
+        if (signatureIt != FunctionTable.end()) {
+          const auto &signature = signatureIt->second;
+          if (signature.params.size() != 2) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Value operator '" + functionName +
+                    "' must have exactly one explicit parameter",
+                lhsSymbol);
+          } else {
+            const auto &rhsParam = signature.params[1];
+            if (rhsParam.type != rhsSymbol.type ||
+                rhsParam.definedTypeName != rhsSymbol.definedTypeName ||
+                rhsParam.indirectionLevel != rhsSymbol.indirectionLevel) {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Right operand does not match value operator parameter",
+                  rhsSymbol);
+            }
+          }
+
+          if (signature.returnType.type != TypeSpecifier::SPEC_BOOL ||
+              signature.returnType.indirectionLevel != 0) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Comparison value operators must return bool", lhsSymbol);
+          }
+
+          return MakeBoolInfo(binaryOpAst.m_SemLoc);
+        }
+      }
+
+      const bool lhsIsPointer = IsPointerLike(lhsSymbol);
+      const bool rhsIsPointer = IsPointerLike(rhsSymbol);
+      const bool lhsIsEnum =
+          lhsSymbol.type == TypeSpecifier::SPEC_DEFINED &&
+          EnumTable.count(lhsSymbol.definedTypeName) != 0;
+      const bool rhsIsEnum =
+          rhsSymbol.type == TypeSpecifier::SPEC_DEFINED &&
+          EnumTable.count(rhsSymbol.definedTypeName) != 0;
+
+      if (lhsIsPointer || rhsIsPointer) {
+        if (IsOrderedComparisonOperator(binaryOpAst.m_BinOpKind)) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Pointer values only support equality comparisons",
+              lhsIsPointer ? lhsSymbol : rhsSymbol);
+        } else if (!lhsIsPointer || !rhsIsPointer ||
+                   lhsSymbol.type != rhsSymbol.type ||
+                   lhsSymbol.definedTypeName != rhsSymbol.definedTypeName ||
+                   lhsSymbol.indirectionLevel != rhsSymbol.indirectionLevel ||
+                   lhsSymbol.isRef != rhsSymbol.isRef ||
+                   lhsSymbol.isUnique != rhsSymbol.isUnique) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Pointer comparison requires matching pointer types",
+              lhsIsPointer ? rhsSymbol : lhsSymbol);
+        }
+      } else if (lhsIsEnum || rhsIsEnum) {
+        if (!lhsIsEnum || !rhsIsEnum ||
+            lhsSymbol.definedTypeName != rhsSymbol.definedTypeName) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Enum comparison requires matching enum operands",
+              lhsIsEnum ? rhsSymbol : lhsSymbol);
+        } else if (IsOrderedComparisonOperator(binaryOpAst.m_BinOpKind)) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Enum values only support equality comparisons", lhsSymbol);
+        }
+      } else {
+        const bool lhsNumeric = IsNumericPrimitiveType(lhsSymbol.type) ||
+                                lhsSymbol.type == TypeSpecifier::SPEC_BOOL;
+        const bool rhsNumeric = IsNumericPrimitiveType(rhsSymbol.type) ||
+                                rhsSymbol.type == TypeSpecifier::SPEC_BOOL;
+        if (!lhsNumeric || !rhsNumeric) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Comparison operands must be numeric, bool, enum or matching "
+              "pointer values",
+              !lhsNumeric ? lhsSymbol : rhsSymbol);
+        } else if (IsOrderedComparisonOperator(binaryOpAst.m_BinOpKind) &&
+                   (lhsSymbol.type == TypeSpecifier::SPEC_BOOL ||
+                    rhsSymbol.type == TypeSpecifier::SPEC_BOOL)) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Ordered comparisons require numeric operands, not bool",
+              lhsSymbol.type == TypeSpecifier::SPEC_BOOL ? lhsSymbol
+                                                         : rhsSymbol);
+        }
+      }
+
+      return MakeBoolInfo(binaryOpAst.m_SemLoc);
+    }
+
     const auto overloadMethod = ValueOperatorMethodName(binaryOpAst.m_BinOpKind);
     if (!overloadMethod.empty()) {
       auto previousExpectedType = m_ExpectedType;
@@ -2359,6 +2605,17 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
         this->m_TypeWarningMessages.emplace_back(
             "You exceeded to the maximum dimension count of the array",
             lhsSymbol);
+      }
+
+      if (IsValueOperator(binaryOpAst.m_BinOpKind)) {
+        if (!IsVoidValue(lhsSymbol)) {
+          symbolInfo = lhsSymbol;
+        } else {
+          symbolInfo = rhsSymbol;
+        }
+        symbolInfo.begin = binaryOpAst.m_SemLoc.begin;
+        symbolInfo.end = binaryOpAst.m_SemLoc.end;
+        symbolInfo.line = binaryOpAst.m_SemLoc.line;
       }
 
       this->m_LastBinOp = false;
@@ -3946,18 +4203,87 @@ SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
           this->m_LastDereferenced = false;
           this->m_DereferenceLevel = 1;
         }
+        if (symbolInfo.indirectionLevel == 0 && !symbolInfo.isRef) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Dereference requires a pointer or reference operand",
+              symbolInfo);
+        } else if (symbolInfo.indirectionLevel > 0) {
+          symbolInfo.indirectionLevel -= 1;
+          symbolInfo.isUnique = false;
+          symbolInfo.isRef = false;
+          symbolInfo.isSubscriptable = false;
+          symbolInfo.arrayDimensions.clear();
+        } else if (symbolInfo.isRef) {
+          symbolInfo.isRef = false;
+        }
         break;
       }
       case U_SIZEOF:
       case U_PREFIX:
       case U_POSTFIX:
-      case U_POSITIVE:
-      case U_NEGATIVE:
-      case U_NOT:
         unaryOpAst.m_Node->acceptBefore(*this);
         break;
-      case U_BINNEG: {
+      case U_POSITIVE:
+      case U_NEGATIVE: {
         symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
+        if (auto *scalar =
+                dynamic_cast<ScalarOrLiteralAST *>(unaryOpAst.m_Node.get())) {
+          symbolInfo = InferScalarLiteralType(scalar);
+          if (IsNumericPrimitiveType(m_LastSymbolInfo.type) &&
+              m_LastSymbolInfo.indirectionLevel == 0) {
+            symbolInfo.type = m_LastSymbolInfo.type;
+          }
+        }
+
+        if (symbolInfo.indirectionLevel > 0 || symbolInfo.isRef ||
+            !IsNumericPrimitiveType(symbolInfo.type)) {
+          this->m_TypeErrorMessages.emplace_back(
+              std::string(unaryOpAst.m_UnaryOpKind == U_POSITIVE ? "Unary '+'"
+                                                                 : "Unary '-'") +
+                  " requires a numeric operand",
+              symbolInfo);
+        }
+        break;
+      }
+      case U_NOT: {
+        const auto previousExpectedType = m_ExpectedType;
+        const auto previousLastSymbolInfo = m_LastSymbolInfo;
+        const auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+        const auto previousDefinedTypeName = m_DefinedTypeName;
+        const auto previousLastCondExpr = m_LastCondExpr;
+
+        m_LastCondExpr = true;
+        m_ExpectedType = TypeSpecifier::SPEC_BOOL;
+        m_LastSymbolInfo.type = TypeSpecifier::SPEC_BOOL;
+        m_LastSymbolInfo.indirectionLevel = 0;
+        m_LastSymbolInfo.isRef = false;
+        m_DefinedTypeFlag = false;
+        m_DefinedTypeName.clear();
+
+        unaryOpAst.m_Node->acceptBefore(*this);
+
+        m_ExpectedType = previousExpectedType;
+        m_LastSymbolInfo = previousLastSymbolInfo;
+        m_DefinedTypeFlag = previousDefinedTypeFlag;
+        m_DefinedTypeName = previousDefinedTypeName;
+        m_LastCondExpr = previousLastCondExpr;
+
+        symbolInfo.type = TypeSpecifier::SPEC_BOOL;
+        symbolInfo.indirectionLevel = 0;
+        symbolInfo.isRef = false;
+        break;
+      }
+      case U_BINNEG: {
+        if (auto *scalar =
+                dynamic_cast<ScalarOrLiteralAST *>(unaryOpAst.m_Node.get())) {
+          symbolInfo = InferScalarLiteralType(scalar);
+          if (!scalar->isFloat() && IsIntegerType(m_LastSymbolInfo.type) &&
+              m_LastSymbolInfo.indirectionLevel == 0) {
+            symbolInfo.type = m_LastSymbolInfo.type;
+          }
+        } else {
+          symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
+        }
         const bool isEnum =
             symbolInfo.type == TypeSpecifier::SPEC_DEFINED &&
             EnumTable.count(symbolInfo.definedTypeName) != 0;
