@@ -1,0 +1,9 @@
+// expected: pass
+// expected-exit: 6
+
+main() :: int32 {
+  int32 values[2:3] = ((1, 2, 3), (4, 5, 6));
+  int32 row = -1;
+  int32 col = -1;
+  ret values[row:col];
+}

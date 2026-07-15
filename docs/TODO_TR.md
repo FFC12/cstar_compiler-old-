@@ -148,7 +148,7 @@ examples/smoke/modules/        # helper; runner skip eder
 Güncel smoke doğrulama sonucu:
 
 ```text
-Toplam: 135, Basarili: 132, Diagnostic: 0, Skipped: 3, Hatali: 0, ExitMismatch: 0, CodeMismatch: 0, Crash/Assert: 0
+Toplam: 137, Basarili: 134, Diagnostic: 0, Skipped: 3, Hatali: 0, ExitMismatch: 0, CodeMismatch: 0, Crash/Assert: 0
 ```
 
 Eski düz liste notları tarihsel bağlam için aşağıda kalabilir; canonical dosya yerleşimi artık yukarıdaki kategori ağacıdır.
@@ -292,7 +292,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
 - Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`. `modules` helper klasörüdür.
-- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 132/132 smoke dosyası başarılı; toplam 135 smoke dosyasının 3 tanesi bilinçli skip edilir.
+- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 134/134 smoke dosyası başarılı; toplam 137 smoke dosyasının 3 tanesi bilinçli skip edilir.
 
 `examples/type_checker/`:
 
@@ -301,7 +301,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
 - Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`, `traits`, `proposals`. `modules` helper klasörüdür.
-- Güncel durumda `-ExpectDiagnostics` ile 104 dosyada 102 kontrollü diagnostic, 1 positive/pass ve 1 module helper skip var; crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 107 dosyada 105 kontrollü diagnostic, 1 positive/pass ve 1 module helper skip var; crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -1084,13 +1084,18 @@ Tamamlanan:
 - Regression diagnostic:
   - `examples/smoke/arrays/array_negative_index_read.cstar`
   - `examples/smoke/arrays/array_negative_index_assignment.cstar`
+  - `examples/smoke/arrays/array_dynamic_negative_index_read.cstar`
   - `examples/smoke/arrays/multidim_array_negative_index_read.cstar`
+  - `examples/smoke/arrays/multidim_array_dynamic_negative_index_read.cstar`
   - `examples/type_checker/arrays/array_constant_index_oob_read.cstar`
   - `examples/type_checker/arrays/array_constant_negative_index_read.cstar`
   - `examples/type_checker/arrays/array_constant_index_oob_assignment.cstar`
+  - `examples/type_checker/arrays/array_constant_negative_index_oob_assignment.cstar`
   - `examples/type_checker/arrays/array_initializer_too_few.cstar`
   - `examples/type_checker/arrays/array_initializer_too_many.cstar`
   - `examples/type_checker/arrays/array_non_constant_dimension.cstar`
+  - `examples/type_checker/arrays/array_param_non_constant_dimension.cstar`
+  - `examples/type_checker/arrays/array_param_zero_dimension.cstar`
   - `examples/type_checker/arrays/local_array_stack_too_large.cstar`
 - Expression parser newline dayanıklılığı:
   - Delimiter içi veya operator/comma sonrası satır sonları expression devamı kabul edilir.

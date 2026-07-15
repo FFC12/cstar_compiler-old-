@@ -1,0 +1,10 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+read_first(int32[count] values) :: int32 {
+  ret values[0];
+}
+
+main() :: int32 {
+  ret 0;
+}

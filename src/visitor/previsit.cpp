@@ -3496,9 +3496,30 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
                            symbolInfo.isRef);
 
   if (paramAst.m_IsSubscriptable) {
-    for (auto &v : paramAst.m_ArrDim) {
-      auto scalar = dynamic_cast<ScalarOrLiteralAST *>(v.get());
-      symbolInfo.arrayDimensions.push_back(std::stoi(scalar->m_Value));
+    for (auto &dimensionNode : paramAst.m_ArrDim) {
+      uint64_t dimension = 0;
+      if (!TryGetNonNegativeIntegerLiteral(dimensionNode.get(), dimension)) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Array parameter dimensions must be compile-time positive integer "
+            "literals",
+            symbolInfo);
+        continue;
+      }
+
+      if (dimension == 0) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Array parameter dimensions must be greater than zero",
+            symbolInfo);
+        continue;
+      }
+
+      if (dimension > std::numeric_limits<size_t>::max()) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Array parameter dimension is too large", symbolInfo);
+        continue;
+      }
+
+      symbolInfo.arrayDimensions.push_back(static_cast<size_t>(dimension));
     }
   }
 

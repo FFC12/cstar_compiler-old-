@@ -29,6 +29,8 @@
 #include <codegen/native_runtime.hpp>
 #include <visitor/visitor.hpp>
 
+#include <limits>
+
 llvm::BasicBlock *Visitor::MainFuncBB = nullptr;
 llvm::GlobalVariable *Visitor::LastGlobVarRef = nullptr;
 
@@ -243,10 +245,26 @@ static llvm::ArrayType *GetArrayType(llvm::Type *elementType,
   size_t length = 1;
   for (const auto &dim : dimensions) {
     auto *scalar = dynamic_cast<ScalarOrLiteralAST *>(dim.get());
-    if (scalar == nullptr) {
-      assert(false && "Only constant array parameter dimensions are supported.");
+    if (scalar == nullptr || scalar->isFloat()) {
+      return llvm::ArrayType::get(elementType, length);
     }
-    length *= std::stoull(scalar->getValue());
+
+    size_t parsedChars = 0;
+    uint64_t dimension = 0;
+    try {
+      dimension = std::stoull(scalar->getValue(), &parsedChars);
+    } catch (...) {
+      return llvm::ArrayType::get(elementType, length);
+    }
+
+    if (parsedChars != scalar->getValue().size() || dimension == 0 ||
+        dimension > std::numeric_limits<size_t>::max() ||
+        length > std::numeric_limits<size_t>::max() /
+                     static_cast<size_t>(dimension)) {
+      return llvm::ArrayType::get(elementType, length);
+    }
+
+    length *= static_cast<size_t>(dimension);
   }
 
   return llvm::ArrayType::get(elementType, length);
