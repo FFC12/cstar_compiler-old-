@@ -1,0 +1,7 @@
+// expected: diagnostic
+// expected-code: CST2100
+
+main() :: int32 {
+  constptr char* text = "must-not-initialize-constptr";
+  ret 0;
+}

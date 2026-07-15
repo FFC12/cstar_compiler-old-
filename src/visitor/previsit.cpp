@@ -549,10 +549,16 @@ void Visitor::accumulateIncompatiblePtrErrMesg(const SymbolInfo &symbolInfo,
     }
   }
 
-  auto extra = !this->m_LastSymbolInfo.isConstPtr &&
-                       !this->m_LastSymbolInfo.isConstVal &&
-                       this->m_ExpectedType == TypeSpecifier::SPEC_CHAR
-                   ? "String must have a 'const', 'constptr' or 'readonly' qualifier"
+  const bool stringLiteralTarget =
+      this->m_ExpectedType == TypeSpecifier::SPEC_CHAR &&
+      this->m_LastSymbolInfo.indirectionLevel > 0;
+  auto extra = stringLiteralTarget &&
+                       (this->m_LastSymbolInfo.isUnique ||
+                        (!this->m_LastSymbolInfo.isConstVal &&
+                         !this->m_LastSymbolInfo.isReadOnly))
+                   ? "String literal requires an immutable non-owning target: "
+                     "use 'const char*' or 'readonly char*'; use an explicit "
+                     "copy for 'char^'"
                    : "";
 
   if (s.empty()) {
@@ -1515,8 +1521,8 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
                     this->m_ExpectedType == TypeSpecifier::SPEC_UCHAR) &&
                    scalarAst.m_IsLiteral &&
                    this->m_LastSymbolInfo.indirectionLevel > 0 &&
-                   (this->m_LastSymbolInfo.isConstPtr ||
-                    this->m_LastSymbolInfo.isConstVal ||
+                   !this->m_LastSymbolInfo.isUnique &&
+                   (this->m_LastSymbolInfo.isConstVal ||
                     this->m_LastSymbolInfo.isReadOnly)) {
         } else if ((this->m_ExpectedType == TypeSpecifier::SPEC_U8 ||
                     this->m_ExpectedType == TypeSpecifier::SPEC_U16 ||

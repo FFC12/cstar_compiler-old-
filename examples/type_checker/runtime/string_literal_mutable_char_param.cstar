@@ -1,0 +1,10 @@
+// expected: diagnostic
+// expected-code: CST2100
+
+accept_mutable(char* text) :: int32 {
+  ret 1;
+}
+
+main() :: int32 {
+  ret accept_mutable("must-not-decay-to-mutable");
+}

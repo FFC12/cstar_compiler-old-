@@ -1,0 +1,10 @@
+// expected: diagnostic
+// expected-code: CST2100
+
+accept_constptr(constptr char* text) :: int32 {
+  ret 1;
+}
+
+main() :: int32 {
+  ret accept_constptr("must-not-decay-to-constptr");
+}

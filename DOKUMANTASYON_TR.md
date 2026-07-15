@@ -92,7 +92,7 @@ VSCode F5/debug akışı için `.vscode` yapılandırmaları da eklendi.
 
 `expected-exit`, generated executable'ın process exit status değeridir. Yani `ret 7;` console'a `7` yazdırmaz; programın exit code'unu `7` yapar. Terminalde doğrudan `.exe` çalıştırıldığında Windows bu değeri ekrana basmaz, PowerShell tarafında `$LASTEXITCODE` ile görülür. Smoke runner bu değeri otomatik yakalar ve `[OK] ... (exit N)` şeklinde doğrular.
 
-Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Smoke dosyaları artık tek klasörde yığılmaz; konuya göre `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums` ve `structs` alt klasörlerine ayrılır. `examples/smoke/modules/` yalnızca include helper dosyaları içindir ve runner tarafından bilinçli skip edilir. Bu set şu anda runner'ın skip ettiği module helper dosyaları hariç 122/122 başarılıdır; toplam 125 smoke dosyasının 3 tanesi bilinçli skip edilir:
+Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Smoke dosyaları artık tek klasörde yığılmaz; konuya göre `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums` ve `structs` alt klasörlerine ayrılır. `examples/smoke/modules/` yalnızca include helper dosyaları içindir ve runner tarafından bilinçli skip edilir. Bu set şu anda runner'ın skip ettiği module helper dosyaları hariç 124/124 başarılıdır; toplam 127 smoke dosyasının 3 tanesi bilinçli skip edilir:
 
 - minimal program ve `ret expr`
 - `ret;` kullanan void fonksiyon çağrısı
@@ -143,6 +143,7 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Smoke dosy
 - geçici `print(...)` builtin
 - geçici `input_int()` builtin
 - geçici `input_string()` builtin
+- string literal / `const char*` ABI: literal doğrudan `const char*` parametre/değişkene ve `readonly char*` değişkene geçebilir
 - geçici `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()` ve `read_key()` konsol builtin'leri
 - native import/export:
   - `import abs(int32) :: int32;`
@@ -176,7 +177,7 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Smoke dosy
   - trait MVP: `trait Name { ... }`, `struct T with Trait`, compile-time conformance check
   - value operator MVP: struct içinde `operator +(T rhs) :: T` benzeri methodlar
 
-`examples/type_checker/` seti kontrollü diagnostic üretir; crash/assert beklenmez. Bu set de `arrays`, `casts`, `control_flow`, `core`, `enums`, `functions`, `imports`, `ownership`, `pointers`, `proposals`, `runtime`, `structs` ve `traits` alt klasörlerine ayrılır. `examples/type_checker/modules/` yalnızca include helper dosyası taşır ve runner tarafından skip edilir. `// expected-code: CSTNNNN` etiketi varsa runner beklenen diagnostic kodunu da doğrular. Güncel suite 86 dosyada 83 controlled diagnostic, 2 positive/pass ve 1 module helper skip ile geçer. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, safe cast qualifier stripping reddini, user-defined cast controlled diagnostic'ini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` parametre/pointer adresi reassignment reddini, `readonly` parametre/pointer address/value assignment reddini, array parametreye scalar/farklı boyutlu array geçişi reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, function arg/return ownership transfer ihlallerini, `nomove` ownership-flow ihlallerini, `async`/`await` proposal diagnostic'ini, moved-after-use reddini, dropped-after-use reddini, direct destructor call reddini, `.=` protocol proposal diagnostic'ini, loop dışı `break`/`continue` reddini, `option` proposal diagnostic'ini, include edilen module içindeki private function erişimi reddini, `static` function içinden non-static global/function erişimi reddini, struct duplicate/unknown field diagnostic'lerini, direct self-by-value struct field reddini, unknown struct method reddini, constructor olmayan type için constructor initializer reddini, instance method'un `::` ile çağrılamamasını, non-static/by-value `new` method formlarının reddini, user-defined lifecycle operator reddini, local/static data member reddini, eksik trait conformance reddini, allocator olmayan değerle `new(allocator)` kullanımını, unknown enum member reddini, enum type mismatch reddini, scalar enum bitwise reddini, flags enum power-of-two/explicit value zorunluluğunu, enum repr overflow diagnostic'ini, duplicate enum value diagnostic'ini ve `void` fonksiyonda değer döndürme reddini kapsar.
+`examples/type_checker/` seti kontrollü diagnostic üretir; crash/assert beklenmez. Bu set de `arrays`, `casts`, `control_flow`, `core`, `enums`, `functions`, `imports`, `ownership`, `pointers`, `proposals`, `runtime`, `structs` ve `traits` alt klasörlerine ayrılır. `examples/type_checker/modules/` yalnızca include helper dosyası taşır ve runner tarafından skip edilir. `// expected-code: CSTNNNN` etiketi varsa runner beklenen diagnostic kodunu da doğrular. Güncel suite 93 dosyada 91 controlled diagnostic, 1 positive/pass ve 1 module helper skip ile geçer. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, safe cast qualifier stripping reddini, user-defined cast controlled diagnostic'ini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` parametre/pointer adresi reassignment reddini, `readonly` parametre/pointer address/value assignment reddini, string literal'ın mutable `char*`, hedefi mutable bırakan `constptr char*` ve ownership iddiası taşıyan `char^` bağlamlarına implicit geçişinin reddini, array parametreye scalar/farklı boyutlu array geçişi reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, function arg/return ownership transfer ihlallerini, `nomove` ownership-flow ihlallerini, `async`/`await` proposal diagnostic'ini, moved-after-use reddini, dropped-after-use reddini, direct destructor call reddini, `.=` protocol proposal diagnostic'ini, loop dışı `break`/`continue` reddini, `option` proposal diagnostic'ini, include edilen module içindeki private function erişimi reddini, `static` function içinden non-static global/function erişimi reddini, struct duplicate/unknown field diagnostic'lerini, direct self-by-value struct field reddini, unknown struct method reddini, constructor olmayan type için constructor initializer reddini, instance method'un `::` ile çağrılamamasını, non-static/by-value `new` method formlarının reddini, user-defined lifecycle operator reddini, local/static data member reddini, eksik trait conformance reddini, allocator olmayan değerle `new(allocator)` kullanımını, unknown enum member reddini, enum type mismatch reddini, scalar enum bitwise reddini, flags enum power-of-two/explicit value zorunluluğunu, enum repr overflow diagnostic'ini, duplicate enum value diagnostic'ini ve `void` fonksiyonda değer döndürme reddini kapsar.
 
 `examples/functions/`, `examples/variables/` ve `examples/papers/` dizinleri hâlâ daha çok proposal/stres örnekleridir. Runner ile ayrı çalıştırılır; amaç hepsini bugün yeşil yapmak değil, dil geliştikçe buradan küçük MVP smoke'lar çıkarmaktır. `examples/interactive/` ise input, terminal kontrolü, raw input, frame render ve ownership stresini daha büyük programlarla dener.
 
@@ -349,7 +350,7 @@ Desteklenen biçimler:
 - Unary operator olarak `deref`.
 - `*` expression içinde dereference olarak da kullanılabiliyor.
 
-Güncel codegen notu: `ref x` shared pointer beklenen yerde `{ data=&x, strong=new atomic i64(1) }` handle'ı üretir. `int32* q = p` ve `q = p` atomic retain yapar; `q := p` ve `q = move p` transfer yapar ve source moved kabul edilir. Shared pointer by-value function argument plain symbol ile retain/copy yapar; `move` argument/return source'u null'a çekilir. `strong_count(p)` compiler builtin'i atomic strong-count değerini döndürür. Primitive pointer parametre/return ABI'si de bu shared handle'ı taşır; `read_ptr(ref x)`, `identity(int32* p) :: int32*`, `int32* q = deref pp`, `deref p = value`, `deref p += value`, `nomove int32^ p`, `**pp` ve `**pp = value` smoke setinde çalışır. CRT/string interop için `char*` ve `const char*` raw C string pointer ABI'sinde kalır; string literal `const char*` parametreye doğrudan geçebilir. Primitive reference parametreler `int32& x` syntax'ı ile çağıranın storage'ına alias olur; çağrı tarafında açık `ref value` gerekir, fonksiyon gövdesinde `x` normal değer gibi okunur ve `x = value;` çağıranın değerini günceller. `const`/`constref`/`constptr`/`readonly` qualifier kontrolleri semantic pass'te korunur.
+Güncel codegen notu: `ref x` shared pointer beklenen yerde `{ data=&x, strong=new atomic i64(1) }` handle'ı üretir. `int32* q = p` ve `q = p` atomic retain yapar; `q := p` ve `q = move p` transfer yapar ve source moved kabul edilir. Shared pointer by-value function argument plain symbol ile retain/copy yapar; `move` argument/return source'u null'a çekilir. `strong_count(p)` compiler builtin'i atomic strong-count değerini döndürür. Primitive pointer parametre/return ABI'si de bu shared handle'ı taşır; `read_ptr(ref x)`, `identity(int32* p) :: int32*`, `int32* q = deref pp`, `deref p = value`, `deref p += value`, `nomove int32^ p`, `**pp` ve `**pp = value` smoke setinde çalışır. CRT/string interop için `char*` ve `const char*` raw C string pointer ABI'sinde kalır; string literal `const char*` parametreye/değişkene ve `readonly char*` bağlamına doğrudan geçebilir. Mutable `char*`, yalnız pointer adresini sabitleyen `constptr char*` ve unique ownership iddiası taşıyan `char^` bağlamlarına implicit decay etmez; bu durum `CST2100` qualifier diagnostic'i üretir. Owned mutable string gerekiyorsa ileride explicit copy/allocator API'si kullanılmalıdır. Primitive reference parametreler `int32& x` syntax'ı ile çağıranın storage'ına alias olur; çağrı tarafında açık `ref value` gerekir, fonksiyon gövdesinde `x` normal değer gibi okunur ve `x = value;` çağıranın değerini günceller. `const`/`constref`/`constptr`/`readonly` qualifier kontrolleri semantic pass'te korunur.
 
 ### 6.3 Nullability Tasarım Yönü
 
@@ -385,6 +386,8 @@ Semantic pass bu qualifier'lar için bazı kontroller yapıyor:
 
 - `constptr` pointer olmayan değerle uyumsuz; pointer adresi sonradan değiştirilemez.
 - `constptr` pointer'ın hedef değeri `deref` ile okunup yazılabilir.
+- Bu yüzden `constptr char*` string literal için güvenli hedef değildir; literal immutable storage kabul edildiği için hedef değeri salt-okunur yapan `const char*` veya `readonly char*` gerekir.
+- `char^`, `const char^` ve `readonly char^` da string literal için güvenli değildir; literal storage'ı caller-owned heap allocation değildir.
 - `constref` reference olmayan değerle uyumsuz; mutable storage'a read-only reference olarak bağlanabilir.
 - `constref` parametre okunabilir fakat assignment target olamaz.
 - `readonly` pointer adresi ve hedef değeri salt-okunur kabul ediliyor.
@@ -433,7 +436,7 @@ export main() :: int32 { ret 0; }
 static int globalCounter = 0;
 ```
 
-Mevcut parser module-level function ve variable deklarasyonlarında `public`, `private`, `static`, `import` ve `export` modifier'larını kabul eder.
+Mevcut parser module-level function, variable, struct, trait ve enum deklarasyonlarında `public`/`private` erişim bilgisini parse eder. Function ve variable deklarasyonlarında buna ek olarak `static`, `import` ve `export` modifier'ları da desteklenir. Struct/trait/enum için `import`/`export` ve top-level `static` bugün geçerli surface değildir.
 
 Visibility/linkage ayrımı:
 
@@ -441,10 +444,15 @@ Visibility/linkage ayrımı:
 - Modifier yazılmayan declaration default olarak private kabul edilir.
 - `private` açıkça yazılabilir ama default ile aynıdır.
 - `import`/`export` visibility değildir; native/linkage ABI sınırı için kullanılır.
+- Top-level `public struct`, `public trait` ve `public enum` hedef kural olarak aynı global declaration havuzuna açılır; yani module API'si yalnız fonksiyonlardan oluşmaz.
+- Struct body içinde field/method visibility de aynı prensibi izler: member default private, `public` member module dışından erişilebilir olmalıdır.
+- Bugünkü compiler'da struct field metadata'sında `isPublic` tutulur, fakat module sınırı üzerinden field visibility enforcement henüz tamamlanmamıştır. Bu yüzden dokümandaki kural canonical hedeftir; negatif/pozitif testleri TODO'dadır.
 
 `static` kararı:
 
-- Global scope'ta `static`, internal linkage/storage duration anlamı taşır.
+- Global scope'ta `static`, internal linkage/storage duration anlamı taşır ve tek başına visibility açmaz.
+- `public static`, C* source include yüzeyinde public API'ye açılan ama native/linkage tarafında static/internal kalan module-level state/function anlamına gelir.
+- Sadece `static` yazılan declaration private kabul edilir.
 - Static function LLVM tarafında internal linkage alır.
 - Static function yalnızca static global state'e ve static function'lara erişebilir; non-static global symbol/function kullanımı semantic diagnostic üretir.
 - Local static ve static data member bu modelde kapalıdır; parser module-level static state'e yönlendiren diagnostic üretir. Thread-safe one-time local initialization gerekiyorsa ayrı proposal olarak ele alınacaktır.
@@ -1079,7 +1087,7 @@ include {
 include "std:math:PI" as PI
 ```
 
-Compiler artık `include involved { ... }`, `include { ... }` ve `include "module" as alias` formlarını gerçek grammar olarak parse eder. `include` hedefi `.cstar` ile biten yerel bir dosyaysa dosya ana compilation unit'e parse/merge edilir; böylece başka dosyadaki function deklarasyonları çağrılabilir.
+Compiler artık `include involved { ... }`, `include { ... }` ve `include "module" as alias` formlarını gerçek grammar olarak parse eder. `include` hedefi `.cstar` ile biten yerel bir dosyaysa dosya ana compilation unit'e parse/merge edilir; böylece başka dosyadaki public global deklarasyonlar hedeflenebilir. Bugün function/variable yolu smoke testlerle sabitlenmiştir; `public struct`/`public trait`/`public enum` tarafı AST merge seviyesinde taşınabilse de gerçek namespaced type lookup ve member visibility enforcement hâlâ ayrı tamamlanacak iştir.
 
 ```cstar
 include "modules/math_module.cstar" as math
@@ -1090,6 +1098,35 @@ main() :: int32 {
 ```
 
 `as` alias'ı function call lookup için çalışır; `math.add_from_module(...)` gibi alias member çağrısı include edilen module içindeki `public add_from_module` imzasına çözülür. Include edilen local module yalnızca `public` deklarasyonları ve gerekli native `import` forward deklarasyonlarını dışarı açar. Modifier yazılmayan declaration private kabul edilir ve alias üzerinden çağrılamaz; `examples/type_checker/imports/052.cstar` bunu doğrular.
+
+Module API yüzeyi için hedef kural:
+
+```cstar
+// modules/geometry.cstar
+public struct Point {
+    public int32 x;
+    public int32 y;
+    private int32 cachedHash;
+}
+
+public trait Drawable {
+    draw(self) :: void;
+}
+
+public static int32 version = 1; // include API'sinde public, native/linkage tarafında internal
+static int32 cacheHits = 0;      // private module state
+```
+
+```cstar
+include "modules/geometry.cstar" as geo
+
+main() :: int32 {
+    // Hedef yüzey: geo.Point ve geo.Drawable gibi public type declaration erişimi.
+    // Bugünkü compiler'da alias function lookup tamam; alias type lookup ve
+    // struct private field diagnostic'i TODO kapsamındadır.
+    ret 0;
+}
+```
 
 ### 15.2 Import/export from library
 

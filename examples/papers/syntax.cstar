@@ -51,6 +51,22 @@ hiddenModuleHelper() :: int32 {
     ret 1;
 }
 
+// Public module API is not limited to functions.
+// Top-level struct/trait/enum declarations can also be public.
+public struct ModulePoint {
+    public int32 x;
+    public int32 y;
+    private int32 cachedHash;
+}
+
+public trait ModuleDrawable {
+    draw(self) :: void;
+}
+
+// Plain static stays private; public static is explicitly exported through
+// source-level include while keeping internal/native linkage semantics.
+static int32 privateModuleCache = 0;
+
 //Attributing functions from Area (this is a compile-time trait/capability contract)
 struct Shape<T> with Area<T> { 
     float32 x;
@@ -141,6 +157,12 @@ example5(int32* ptr) :: any {
 
 
 example6(readonly char* str) async :: any {
+    // String literals are immutable C string storage. They may flow into
+    // `const char*` or `readonly char*`, but not `char*`, `constptr char*`,
+    // `char^`, `const char^` or `readonly char^`.
+    // `constptr char*` only freezes the pointer address; it does not make the
+    // pointed char data immutable. `char^` would claim ownership of static
+    // literal storage, so owned strings must be created through explicit copy.
     bool success = await a_function_must_be_awaited();
     ret success ? str : "not succeded!";
 }

@@ -1,0 +1,7 @@
+// expected: diagnostic
+// expected-code: CST2100
+
+main() :: int32 {
+  const char^ text = "must-not-initialize-const-unique";
+  ret 0;
+}

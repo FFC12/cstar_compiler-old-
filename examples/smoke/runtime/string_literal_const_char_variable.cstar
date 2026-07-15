@@ -1,0 +1,13 @@
+// expected: pass
+// expected-exit: 9
+
+read_label(const char* label) :: int32 {
+  print(label);
+  print("\n");
+  ret 9;
+}
+
+main() :: int32 {
+  const char* label = "literal-as-const-char";
+  ret read_label(label);
+}

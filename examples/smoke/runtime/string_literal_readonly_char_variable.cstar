@@ -1,0 +1,13 @@
+// expected: pass
+// expected-exit: 10
+
+read_label(readonly char* label) :: int32 {
+  print(label);
+  print("\n");
+  ret 10;
+}
+
+main() :: int32 {
+  readonly char* label = "literal-as-readonly-char";
+  ret read_label(label);
+}

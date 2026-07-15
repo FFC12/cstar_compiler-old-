@@ -292,7 +292,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
 - Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`. `modules` helper klasörüdür.
-- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 122/122 smoke dosyası başarılı; toplam 125 smoke dosyasının 3 tanesi bilinçli skip edilir.
+- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 124/124 smoke dosyası başarılı; toplam 127 smoke dosyasının 3 tanesi bilinçli skip edilir.
 
 `examples/type_checker/`:
 
@@ -301,7 +301,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
 - Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`, `traits`, `proposals`. `modules` helper klasörüdür.
-- Güncel durumda `-ExpectDiagnostics` ile 86 dosyada 83 kontrollü diagnostic, 2 positive/pass ve 1 module helper skip var; crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 93 dosyada 91 kontrollü diagnostic, 1 positive/pass ve 1 module helper skip var; crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -1213,9 +1213,15 @@ Tamamlanan:
   - `import`/`export` visibility değil, native/linkage ABI yüzeyidir
   - private module function'ına alias üzerinden erişim controlled diagnostic üretir
   - `examples/type_checker/imports/052.cstar`
+- Top-level type visibility hedef kuralı netleştirildi:
+  - `public struct`, `public trait` ve `public enum` de module global API havuzuna açılmalıdır; module API'si yalnız function/variable değildir.
+  - Mevcut include merge kodu `isPublicDecl()` ile public top-level declaration'ları genel olarak taşıyabilir; fakat `mod.Type`/alias type lookup, type symbol ownership ve diagnostic testleri henüz tamamlanmadı.
+  - Struct member visibility hedefi: field/method default private, `public` member module dışından erişilebilir. Parser field metadata'sında `isPublic` tutar; external access enforcement TODO'dur.
 - Module-level `static` MVP'si tamamlandı:
   - static function LLVM tarafında internal linkage alır
   - static global variable internal linkage/storage davranışını korur
+  - `static` tek başına private kabul edilir; visibility açmaz
+  - `public static`, source-level include API'sine açılan ama native/linkage tarafında internal kalan declaration anlamına gelmelidir
   - static function non-static global symbol/function kullanamaz
   - `examples/smoke/imports/include_module_public_static.cstar`
   - `examples/type_checker/053.cstar`
@@ -1228,14 +1234,33 @@ Tamamlanan:
 Kalan:
 
 - String literal / `const char*` ABI hardening:
-  - String literal type'ı canonical olarak `const char[N]` mı, yoksa decay edilmiş `const char*` mı görünecek netleştirilmeli. Önerilen model: storage `const char[N]`, expression value C ABI bağlamında `const char*` decay eder.
-  - String literal kesinlikle mutable `char*` parametreye implicit geçmemeli; `const char*` / `readonly char*` güvenli, mutable `char*` için explicit unsafe/copy gerekir.
+  - Karar netleşti: string literal storage modeli uzun vadede `const char[N]`, expression yüzeyi C ABI bağlamında `const char*` decay eder.
+  - String literal mutable target'a implicit geçmez. Güvenli hedefler `const char*` ve `readonly char*` kabul edilir.
+  - `constptr char*` güvenli değildir; C* modelinde yalnız pointer adresini sabitler, hedef `char` değerini mutable bırakır. Bu yüzden string literal için `char*` ile aynı sınıfta reddedilir.
+  - `char^`, `const char^` ve `readonly char^` de desteklenmez. String literal static/immutable storage'dır; unique pointer ise ownership/free/drop iddiası taşır. Owned mutable string gerekiyorsa ileride explicit copy/allocator API'si kullanılmalıdır.
+  - Bu kural `CST2100` semantic qualifier diagnostic'i ile sabitlendi:
+    - `examples/smoke/runtime/string_literal_const_char_variable.cstar`
+    - `examples/smoke/runtime/string_literal_readonly_char_variable.cstar`
+    - `examples/type_checker/runtime/string_literal_mutable_char_param.cstar`
+    - `examples/type_checker/runtime/string_literal_mutable_char_variable.cstar`
+    - `examples/type_checker/runtime/string_literal_constptr_char_param.cstar`
+    - `examples/type_checker/runtime/string_literal_constptr_char_variable.cstar`
+    - `examples/type_checker/runtime/string_literal_unique_char_variable.cstar`
+    - `examples/type_checker/runtime/string_literal_const_unique_char_variable.cstar`
+    - `examples/type_checker/runtime/string_literal_readonly_unique_char_variable.cstar`
   - `char*` ve `const char*` bugün CRT/string ABI için raw C pointer kalır; compiler-owned shared handle semantiğine karışmamalı. Bu karar dokümanda korunmalı.
   - Escape decode genişletilmeli: `\0`, `\r`, `\b`, `\xNN`, ileride UTF-8 policy.
   - Embedded null içeren literal için length bilgisi olmayan `const char*` kullanımında uyarı/policy düşünülmeli; gerçek string/slice modeli gelince `StringView { ptr, len }` benzeri stdlib tipi önerilir.
   - String literal global storage dedup/constant linkage ve module-level lifetime netleştirilmeli.
-  - Test adayları: `const char*` parametre pass, mutable `char*` implicit reddi, escape decode smoke, include edilen module fonksiyonuna string literal geçişi.
-- Gerçek namespace/type module sistemi ve `struct`/user-defined type modül export/import davranışı Aşama 7 ile birlikte tasarlanacak.
+  - Kalan test adayları: escape decode smoke, include edilen module fonksiyonuna string literal geçişi, mutable `char*` implicit reddinin return/assignment varyantları.
+- Gerçek namespace/type module sistemi ve `struct`/`trait`/`enum` type modül export/import davranışı Aşama 7 ile birlikte tamamlanacak:
+  - `public struct` include positive smoke.
+  - `public trait` include positive smoke ve `struct with mod.Trait` conformance kararı.
+  - `public enum` include positive smoke.
+  - `private struct`/`trait`/`enum` alias erişimi controlled diagnostic.
+  - `mod.Type` canonical syntax'ı mı, yoksa source-merge sonrası unqualified type mı kullanılacak netleştirilecek. Tavsiye: alias ile gelen API'de `mod.Type`, same-compilation merge içi helper'da unqualified internal symbol.
+  - Struct field/member visibility enforcement: same module private erişebilir, dış module yalnız `public` member'a erişebilir.
+  - `public static` function/global include smoke; bare `static` alias erişimi private diagnostic.
 - Not: Bugünkü include modeli source-level public declaration merge yapar; public function body içinde private module helper lowering'i gerçek module object/scope modeliyle birlikte genişletilecek.
 
 ## Aşama 7 - User-defined Types
