@@ -1,0 +1,8 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+main() :: int32 {
+  int32 count = 2;
+  int32 values[count] = (1, 2);
+  ret values[0];
+}

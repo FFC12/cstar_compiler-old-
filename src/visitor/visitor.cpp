@@ -265,6 +265,30 @@ static llvm::Value *CastArrayIndex(llvm::Value *index) {
   return index;
 }
 
+static llvm::Value *NormalizeArrayIndex(llvm::Value *index, size_t dimension) {
+  index = CastArrayIndex(index);
+  auto *indexType = Visitor::Builder->getInt64Ty();
+  auto *dimensionValue =
+      llvm::ConstantInt::get(indexType, static_cast<uint64_t>(dimension));
+
+  if (auto *constant = llvm::dyn_cast<llvm::ConstantInt>(index)) {
+    const auto signedValue = constant->getSExtValue();
+    if (signedValue < 0) {
+      return llvm::ConstantInt::get(indexType, signedValue +
+                                                 static_cast<int64_t>(dimension));
+    }
+    return index;
+  }
+
+  auto *zero = llvm::ConstantInt::get(indexType, 0);
+  auto *isNegative = Visitor::Builder->CreateICmpSLT(index, zero,
+                                                     "array.index.neg");
+  auto *fromEnd =
+      Visitor::Builder->CreateAdd(index, dimensionValue, "array.index.fromend");
+  return Visitor::Builder->CreateSelect(isNegative, fromEnd, index,
+                                        "array.index.norm");
+}
+
 static llvm::Value *CreateLinearArrayIndex(
     const std::vector<llvm::Value *> &indexes,
     const std::vector<size_t> &dimensions) {
@@ -272,14 +296,17 @@ static llvm::Value *CreateLinearArrayIndex(
     return llvm::ConstantInt::get(Visitor::Builder->getInt64Ty(), 0);
   }
 
-  llvm::Value *linear = CastArrayIndex(indexes.front());
   const size_t usableDims = std::min(indexes.size(), dimensions.size());
+  llvm::Value *linear =
+      usableDims == 0
+          ? CastArrayIndex(indexes.front())
+          : NormalizeArrayIndex(indexes.front(), dimensions.front());
   for (size_t i = 1; i < usableDims; ++i) {
     auto *stride =
         llvm::ConstantInt::get(Visitor::Builder->getInt64Ty(), dimensions[i]);
     linear = Visitor::Builder->CreateMul(linear, stride, "array.stride");
-    linear = Visitor::Builder->CreateAdd(linear, CastArrayIndex(indexes[i]),
-                                         "array.index");
+    linear = Visitor::Builder->CreateAdd(
+        linear, NormalizeArrayIndex(indexes[i], dimensions[i]), "array.index");
   }
 
   return linear;
@@ -2134,6 +2161,106 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       return storage;
     }
 
+    if (varAst.m_IsInitializerList && varAst.m_RHS->m_ExprKind != BinOp) {
+      std::vector<BinOpOrVal> elements;
+      getElementsOfArray(*varAst.m_RHS, elements);
+      auto emitInitializerElement = [&](const BinOpOrVal &el) -> llvm::Value * {
+        if (el.isSymbol) {
+          auto *symbolAst = reinterpret_cast<SymbolAST *>(el.address);
+          return symbolAst->accept(*this);
+        }
+        if (el.isBinOp) {
+          auto *binaryAst = reinterpret_cast<BinaryOpAST *>(el.address);
+          return createBinaryOp(*binaryAst);
+        }
+        if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
+          return llvm::ConstantFP::get(m_LastType, el.value);
+        }
+        uint64_t val = std::stoull(el.value);
+        return llvm::ConstantInt::get(m_LastType, val);
+      };
+
+      if (varAst.m_IsLocal) {
+        auto *storage = Builder->CreateAlloca(arrayType, nullptr,
+                                              llvm::Twine(varAst.m_Name));
+        auto *zero = llvm::ConstantAggregateZero::get(arrayType);
+        Builder->CreateStore(zero, storage);
+
+        for (size_t i = 0; i < elements.size(); ++i) {
+          auto *elementValue = emitInitializerElement(elements[i]);
+          elementValue = CastValueToType(elementValue, type, m_LastSigned);
+          auto *zeroIndex = llvm::ConstantInt::get(Builder->getInt64Ty(), 0);
+          auto *elementIndex =
+              llvm::ConstantInt::get(Builder->getInt64Ty(), i);
+          auto *slot = Builder->CreateInBoundsGEP(
+              arrayType, storage, {zeroIndex, elementIndex});
+          Builder->CreateStore(elementValue, slot);
+        }
+
+        m_LocalVarsOnScope[varAst.m_Name] = storage;
+        this->m_LastVarDecl = false;
+        this->m_LastType = nullptr;
+        this->m_LastDefinedTypeName.clear();
+        this->m_LastSigned = false;
+        return storage;
+      }
+
+      std::vector<llvm::Constant *> values;
+      bool constantInitializer = true;
+      for (auto &el : elements) {
+        if (el.isSymbol || el.isBinOp) {
+          constantInitializer = false;
+          break;
+        }
+
+        llvm::Constant *constant = nullptr;
+        if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
+          constant = llvm::ConstantFP::get(m_LastType, el.value);
+        } else {
+          uint64_t val = std::stoull(el.value);
+          constant = llvm::ConstantInt::get(m_LastType, val);
+        }
+        values.push_back(constant);
+      }
+
+      if (constantInitializer) {
+        auto *init = llvm::ConstantArray::get(arrayType, values);
+        globVar = CreateInitConstantGlobalVar(
+            varAst.m_Name, varAst.m_VisibilitySpec, arrayType, init);
+      } else {
+        auto *zero = llvm::ConstantAggregateZero::get(arrayType);
+        globVar = CreateInitConstantGlobalVar(
+            varAst.m_Name, varAst.m_VisibilitySpec, arrayType,
+            llvm::dyn_cast<llvm::Constant>(zero));
+
+        auto *lastInsertPoint = Builder->GetInsertBlock();
+        auto *globInitFunc = CreateGlobalVarInitFunc();
+        m_GlobaInitVarFunc.push_back(globInitFunc->getName());
+        Builder->SetInsertPoint(&globInitFunc->getEntryBlock());
+        for (size_t i = 0; i < elements.size(); ++i) {
+          auto *elementValue = emitInitializerElement(elements[i]);
+          elementValue = CastValueToType(elementValue, type, m_LastSigned);
+          auto *zeroIndex = llvm::ConstantInt::get(Builder->getInt64Ty(), 0);
+          auto *elementIndex =
+              llvm::ConstantInt::get(Builder->getInt64Ty(), i);
+          auto *slot = Builder->CreateInBoundsGEP(
+              arrayType, globVar, {zeroIndex, elementIndex});
+          Builder->CreateStore(elementValue, slot);
+        }
+        Builder->CreateRetVoid();
+        if (lastInsertPoint != nullptr) {
+          Builder->SetInsertPoint(lastInsertPoint);
+        }
+      }
+
+      this->m_GlobalVars[varAst.m_Name] = globVar;
+      this->m_LastVarDecl = false;
+      this->m_LastType = nullptr;
+      this->m_LastDefinedTypeName.clear();
+      this->m_LastSigned = false;
+      return globVar;
+    }
+
     if (!varAst.m_IsLocal && varAst.m_RHS->m_ExprKind == BinOp &&
         !m_LastInitializerList) {
       llvm::Constant *constant = nullptr;
@@ -3793,9 +3920,19 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
   llvm::Value *value = nullptr;
 
   if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_NEGATIVE) {
-    this->m_LastNegConstant = true;
     value = unaryOpAst.m_Node->accept(*this);
-    this->m_LastNegConstant = false;
+    if (value == nullptr) {
+      return nullptr;
+    }
+    if (value->getType()->isFloatingPointTy()) {
+      value = Builder->CreateFNeg(value, "fnegtmp");
+    } else if (value->getType()->isIntegerTy()) {
+      value = Builder->CreateNeg(value, "negtmp");
+    } else {
+      assert(false && "Unary '-' requires a numeric value.");
+    }
+    m_LastType = value->getType();
+    return value;
   }
 
   if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_MOVE) {

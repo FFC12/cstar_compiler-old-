@@ -1,0 +1,7 @@
+// expected: pass
+// expected-exit: 2
+
+main() :: int32 {
+  int32 values[2] = (1, 2);
+  ret values[-1];
+}

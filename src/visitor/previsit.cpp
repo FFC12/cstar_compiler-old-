@@ -23,6 +23,7 @@
 #include <visitor/visitor.hpp>
 
 #include <algorithm>
+#include <limits>
 #include <set>
 
 using DiagnosticCode = cstar::diagnostics::DiagnosticCode;
@@ -250,6 +251,93 @@ static size_t GetBitSize(TypeSpecifier typeSpecifier) {
       return 0;
   }
 }
+
+static constexpr uint64_t kMaxLocalStackArrayBytes = 1024 * 1024;
+
+static bool TryGetNonNegativeIntegerLiteral(IAST *node, uint64_t &value) {
+  auto *scalar = dynamic_cast<ScalarOrLiteralAST *>(node);
+  if (scalar == nullptr || scalar->isFloat()) {
+    return false;
+  }
+
+  const auto literal = scalar->getValue();
+  if (literal.empty() || literal[0] == '-') {
+    return false;
+  }
+
+  try {
+    size_t parsedChars = 0;
+    value = std::stoull(literal, &parsedChars);
+    return parsedChars == literal.size();
+  } catch (...) {
+    return false;
+  }
+}
+
+static uint64_t ProductOfDimensions(const std::vector<size_t> &dimensions) {
+  uint64_t product = 1;
+  for (auto dimension : dimensions) {
+    if (dimension == 0 ||
+        product > std::numeric_limits<uint64_t>::max() / dimension) {
+      return 0;
+    }
+    product *= dimension;
+  }
+  return product;
+}
+
+static uint64_t PrimitiveTypeStorageBytes(TypeSpecifier typeSpecifier) {
+  if (typeSpecifier == TypeSpecifier::SPEC_DEFINED) {
+    return 0;
+  }
+  return std::max<uint64_t>(1, GetBitSize(typeSpecifier) / 8);
+}
+
+static bool IsConstantArrayIndexOutOfBounds(int64_t index, size_t dimension) {
+  if (dimension == 0) {
+    return true;
+  }
+
+  if (index >= 0) {
+    return static_cast<uint64_t>(index) >= dimension;
+  }
+
+  if (index == std::numeric_limits<int64_t>::min()) {
+    return true;
+  }
+
+  return static_cast<uint64_t>(-index) > dimension;
+}
+
+bool Visitor::tryGetConstantIntegerLiteral(IAST *node, int64_t &value) const {
+  auto *scalar = dynamic_cast<ScalarOrLiteralAST *>(node);
+  if (scalar != nullptr && !scalar->isFloat()) {
+    try {
+      size_t parsedChars = 0;
+      value = std::stoll(scalar->getValue(), &parsedChars);
+      return parsedChars == scalar->getValue().size();
+    } catch (...) {
+      return false;
+    }
+  }
+
+  auto *unary = dynamic_cast<UnaryOpAST *>(node);
+  if (unary == nullptr ||
+      (unary->m_UnaryOpKind != UnaryOpKind::U_NEGATIVE &&
+       unary->m_UnaryOpKind != UnaryOpKind::U_POSITIVE)) {
+    return false;
+  }
+
+  int64_t innerValue = 0;
+  if (!tryGetConstantIntegerLiteral(unary->m_Node.get(), innerValue)) {
+    return false;
+  }
+
+  value = unary->m_UnaryOpKind == UnaryOpKind::U_NEGATIVE ? -innerValue
+                                                          : innerValue;
+  return true;
+}
+
 static std::string GetTypeStr(TypeSpecifier typeSpecifier) {
   switch (typeSpecifier) {
     case SPEC_VOID:
@@ -651,10 +739,60 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
 
   if (symbolInfo.isSubscriptable) {
     for (auto &v : varAst.m_ArrDim) {
-      auto scalar = dynamic_cast<ScalarOrLiteralAST *>(v.get());
-      symbolInfo.arrayDimensions.push_back(std::stoi(scalar->m_Value));
+      uint64_t dimension = 0;
+      if (!TryGetNonNegativeIntegerLiteral(v.get(), dimension)) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Array dimensions must be compile-time positive integer literals "
+            "in the current MVP",
+            symbolInfo);
+        continue;
+      }
+
+      if (dimension == 0) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Array dimensions must be greater than zero", symbolInfo);
+        continue;
+      }
+
+      if (dimension > std::numeric_limits<size_t>::max()) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Array dimension is too large for this target", symbolInfo);
+        continue;
+      }
+
+      symbolInfo.arrayDimensions.push_back(static_cast<size_t>(dimension));
     }
     m_LastArrayDims = symbolInfo.arrayDimensions;
+
+    const bool allDimensionsValid =
+        symbolInfo.arrayDimensions.size() == varAst.m_ArrDim.size();
+    const auto elementCount =
+        allDimensionsValid ? ProductOfDimensions(symbolInfo.arrayDimensions) : 0;
+    if (allDimensionsValid && elementCount == 0) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Array dimensions overflow the addressable element count",
+          symbolInfo);
+    } else if (allDimensionsValid && varAst.m_IsLocal) {
+      const uint64_t elementBytes =
+          symbolInfo.indirectionLevel > 0
+              ? static_cast<uint64_t>(sizeof(void *))
+              : PrimitiveTypeStorageBytes(symbolInfo.type);
+      if (elementBytes > 0 &&
+          elementCount >
+              std::numeric_limits<uint64_t>::max() / elementBytes) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Array storage size overflows the addressable byte count",
+            symbolInfo);
+      } else if (elementBytes > 0 &&
+                 elementCount * elementBytes > kMaxLocalStackArrayBytes) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Local array requires " +
+                std::to_string(elementCount * elementBytes) +
+                " bytes of stack storage; use heap/allocator-backed storage "
+                "for large buffers",
+            symbolInfo);
+      }
+    }
   }
 
   // Do not need to look up the symbol table
@@ -684,11 +822,16 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
           }
         } else {
           std::vector<BinOpOrVal> vec;
-          auto binaryExpr = dynamic_cast<BinaryOpAST *>(varAst.m_RHS.get());
-          getElementsOfArray(*binaryExpr, vec);
-
-          // size_t index = 1;
-          // validateArray(*binaryExpr, 0, index);
+          getElementsOfArray(*varAst.m_RHS, vec);
+          const auto expectedElements =
+              ProductOfDimensions(symbolInfo.arrayDimensions);
+          if (expectedElements != 0 && vec.size() != expectedElements) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Array initializer has " + std::to_string(vec.size()) +
+                    " element(s), but array storage requires " +
+                    std::to_string(expectedElements),
+                symbolInfo);
+          }
         }
         m_LastArrayDims.clear();
       }
@@ -1030,22 +1173,23 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
                 "Array type with index(es) is not assignable", symbolInfo);
           } else {
             for (int i = 0; i < matchedSymbol.arrayDimensions.size(); ++i) {
-              auto index = dynamic_cast<ScalarOrLiteralAST *>(
-                  assignmentAst.m_SubscriptIndexes[i].get());
-              if (index == nullptr) {
+              auto *index = assignmentAst.m_SubscriptIndexes[i].get();
+              int64_t indexVal = 0;
+              if (!tryGetConstantIntegerLiteral(index, indexVal)) {
                 continue;
               }
-              auto indexVal = std::stoi(index->m_Value);
-              if (indexVal >= matchedSymbol.arrayDimensions[i]) {
-                m_TypeWarningMessages.emplace_back(
-                    "Array index '" + index->m_Value +
-                        "' is after the beginning of the array",
-                    symbolInfo);
-              } else if (indexVal < 0) {
-                m_TypeWarningMessages.emplace_back(
-                    "Array index '" + index->m_Value +
-                        "' is before the beginning of the array",
-                    symbolInfo);
+              if (IsConstantArrayIndexOutOfBounds(
+                      indexVal, matchedSymbol.arrayDimensions[i])) {
+                SymbolInfo indexInfo;
+                indexInfo.begin = index->getSemLoc().begin;
+                indexInfo.end = index->getSemLoc().end;
+                indexInfo.line = index->getSemLoc().line;
+                m_TypeErrorMessages.emplace_back(
+                    "Array index '" + std::to_string(indexVal) +
+                        "' is out of bounds for dimension " +
+                        std::to_string(i) + " with size " +
+                        std::to_string(matchedSymbol.arrayDimensions[i]),
+                    indexInfo);
               }
             }
           }
@@ -1826,27 +1970,22 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
           if (matchedSymbol.isSubscriptable && indexCount <= arraySize) {
             m_LastArrayIndexCount = indexCount;
             m_LastSubscriptable = true;
-            std::vector<ScalarOrLiteralAST *> indexes;
+            std::vector<IAST *> indexes;
             auto collectArrayIndexLiterals =
                 [&](auto &self, IAST *expr,
-                    std::vector<ScalarOrLiteralAST *> &indexes) -> void {
+                    std::vector<IAST *> &indexes) -> void {
               if (expr == nullptr) {
                 return;
               }
 
-              if (expr->m_ExprKind == ExprKind::ScalarExpr) {
-                indexes.push_back(static_cast<ScalarOrLiteralAST *>(expr));
-                return;
-              }
-
               if (expr->m_ExprKind != ExprKind::BinOp) {
-                indexes.push_back(nullptr);
+                indexes.push_back(expr);
                 return;
               }
 
               auto *binaryExpr = static_cast<BinaryOpAST *>(expr);
               if (binaryExpr->m_BinOpKind != B_MARRS) {
-                indexes.push_back(nullptr);
+                indexes.push_back(expr);
                 return;
               }
 
@@ -1862,17 +2001,22 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
                 continue;
               }
 
-              auto indexVal = std::stoi(indexes[i]->m_Value);
-              if (indexVal >= matchedSymbol.arrayDimensions[i]) {
-                m_TypeWarningMessages.emplace_back(
-                    "Array index '" + indexes[i]->m_Value +
-                        "' is after the beginning of the array",
-                    rhsSymbol);
-              } else if (indexVal < 0) {
-                m_TypeWarningMessages.emplace_back(
-                    "Array index '" + indexes[i]->m_Value +
-                        "' is before the beginning of the array",
-                    rhsSymbol);
+              int64_t indexVal = 0;
+              if (!tryGetConstantIntegerLiteral(indexes[i], indexVal)) {
+                continue;
+              }
+              if (IsConstantArrayIndexOutOfBounds(
+                      indexVal, matchedSymbol.arrayDimensions[i])) {
+                SymbolInfo indexInfo;
+                indexInfo.begin = indexes[i]->getSemLoc().begin;
+                indexInfo.end = indexes[i]->getSemLoc().end;
+                indexInfo.line = indexes[i]->getSemLoc().line;
+                m_TypeErrorMessages.emplace_back(
+                    "Array index '" + std::to_string(indexVal) +
+                        "' is out of bounds for dimension " +
+                        std::to_string(i) + " with size " +
+                        std::to_string(matchedSymbol.arrayDimensions[i]),
+                    indexInfo);
               }
             }
           } else {

@@ -1,0 +1,7 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+main() :: int32 {
+  int64 big[200000] = (0);
+  ret 0;
+}

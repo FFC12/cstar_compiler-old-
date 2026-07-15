@@ -1,11 +1,22 @@
 #include <algorithm>
 #include <parser/parser.hpp>
 
+static bool StartsUnaryExpressionAfter(TokenKind kind) {
+  switch (kind) {
+    case TokenKind::LSQPAR:
+      return true;
+    default:
+      return false;
+  }
+}
+
 // if there is an operator before it (i rely on this and maybe not good idea?)
 // or if it's the first operator in the expression
 // then [probably] it's an unary operator
 bool CStarParser::isUnaryOp() {
-  if (isOperator(this->prevSignificantTokenInfo()) && !this->isCastOp()) {
+  if ((isOperator(this->prevSignificantTokenInfo()) ||
+       StartsUnaryExpressionAfter(this->prevSignificantTokenKind())) &&
+      !this->isCastOp()) {
     return true;
   } else {
     return false;

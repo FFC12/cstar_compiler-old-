@@ -75,6 +75,10 @@ class BinaryOpAST : public IAST {
   }
 
   ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
+
+  [[nodiscard]] BinOpKind binOpKind() const { return m_BinOpKind; }
+  ASTNode takeLeft() { return std::move(m_LHS); }
+  ASTNode takeRight() { return std::move(m_RHS); }
 };
 
 /*

@@ -656,30 +656,26 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
 
         expected(TokenKind::LSQPAR);
 
-        // advance '['
-        this->advance();
-
-        expected({TokenKind::SCALARI, TokenKind::IDENT});
-
         std::vector<ASTNode> indexes{};
-        auto index = is(TokenKind::SCALARI) ? this->advanceConstantOrLiteral()
-                                            : this->advanceSymbol();
-        indexes.emplace_back(std::move(index));
+        auto collectSubscriptIndexes = [&](auto &self, ASTNode expr) -> void {
+          if (expr == nullptr) {
+            return;
+          }
 
-        while (is(TokenKind::COLON)) {
-          // advance ':'
-          this->advance();
+          if (expr->getExprKind() == ExprKind::BinOp) {
+            auto *binary = static_cast<BinaryOpAST *>(expr.get());
+            if (binary->binOpKind() == BinOpKind::B_MARRS) {
+              self(self, binary->takeLeft());
+              self(self, binary->takeRight());
+              return;
+            }
+          }
 
-          expected({TokenKind::SCALARI, TokenKind::IDENT});
+          indexes.emplace_back(std::move(expr));
+        };
 
-          index = is(TokenKind::SCALARI) ? this->advanceConstantOrLiteral()
-                                         : this->advanceSymbol();
-
-          indexes.emplace_back(std::move(index));
-        }
-
-        expected(TokenKind::RSQPAR);
-        this->advance();
+        auto indexExpr = this->expression(true, 3);
+        collectSubscriptIndexes(collectSubscriptIndexes, std::move(indexExpr));
 
         if (is(TokenKind::POLICY_ASSIGN)) {
           ParserError(

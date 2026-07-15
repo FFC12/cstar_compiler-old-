@@ -148,7 +148,7 @@ examples/smoke/modules/        # helper; runner skip eder
 Güncel smoke doğrulama sonucu:
 
 ```text
-Toplam: 130, Basarili: 127, Diagnostic: 0, Skipped: 3, Hatali: 0, ExitMismatch: 0, CodeMismatch: 0, Crash/Assert: 0
+Toplam: 135, Basarili: 132, Diagnostic: 0, Skipped: 3, Hatali: 0, ExitMismatch: 0, CodeMismatch: 0, Crash/Assert: 0
 ```
 
 Eski düz liste notları tarihsel bağlam için aşağıda kalabilir; canonical dosya yerleşimi artık yukarıdaki kategori ağacıdır.
@@ -292,7 +292,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
 - Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`. `modules` helper klasörüdür.
-- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 127/127 smoke dosyası başarılı; toplam 130 smoke dosyasının 3 tanesi bilinçli skip edilir.
+- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 132/132 smoke dosyası başarılı; toplam 135 smoke dosyasının 3 tanesi bilinçli skip edilir.
 
 `examples/type_checker/`:
 
@@ -301,7 +301,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
 - Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`, `traits`, `proposals`. `modules` helper klasörüdür.
-- Güncel durumda `-ExpectDiagnostics` ile 97 dosyada 95 kontrollü diagnostic, 1 positive/pass ve 1 module helper skip var; crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 104 dosyada 102 kontrollü diagnostic, 1 positive/pass ve 1 module helper skip var; crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -1046,6 +1046,9 @@ Tamamlanan:
 
 - Tek boyutlu local array:
   - `int32 arr[2] = (1, 2);`
+  - Tek elemanlı local/global array initializer artık doğru array storage üretir:
+    - `examples/smoke/arrays/single_element_array_initializer.cstar`
+    - `examples/smoke/arrays/global_single_element_array_initializer.cstar`
 - Array element read:
   - `ret arr[0];`
 - Array element assignment:
@@ -1071,9 +1074,24 @@ Tamamlanan:
   - `examples/smoke/multidim_array_param_read.cstar`
   - `examples/smoke/multidim_array_param_write.cstar`
 - Bounds politikası MVP:
-  - Sabit out-of-range index için compile-time warning üretilir.
+  - Sabit negatif index boyut içinde kaldığı sürece sondan indeksleme olarak normalize edilir: `arr[-1]` son eleman, `matrix[-1:-1]` son satır/son kolon olur.
+  - Sabit index pozitif tarafta veya negatif tarafta array sınırını aşarsa compile-time error üretilir; codegen'e out-of-bounds GEP bırakılmaz.
+  - Array dimension'ları mevcut MVP'de compile-time positive integer literal olmak zorundadır; `int32[count]` gibi runtime-sized array syntax'ı controlled diagnostic üretir.
+  - Initializer eleman sayısı `product(dimensions)` ile eşleşmek zorundadır; eksik/fazla initializer controlled diagnostic üretir.
+  - Local primitive/pointer array storage 1 MiB üstüne çıkarsa stack overflow riskine karşı controlled diagnostic üretir; büyük buffer için heap/allocator-backed model kullanılmalıdır.
   - Dinamik index için runtime bounds check şimdilik üretilmez.
   - Runtime checked array/slice modeli ileride stdlib/safety mode altında ele alınacak.
+- Regression diagnostic:
+  - `examples/smoke/arrays/array_negative_index_read.cstar`
+  - `examples/smoke/arrays/array_negative_index_assignment.cstar`
+  - `examples/smoke/arrays/multidim_array_negative_index_read.cstar`
+  - `examples/type_checker/arrays/array_constant_index_oob_read.cstar`
+  - `examples/type_checker/arrays/array_constant_negative_index_read.cstar`
+  - `examples/type_checker/arrays/array_constant_index_oob_assignment.cstar`
+  - `examples/type_checker/arrays/array_initializer_too_few.cstar`
+  - `examples/type_checker/arrays/array_initializer_too_many.cstar`
+  - `examples/type_checker/arrays/array_non_constant_dimension.cstar`
+  - `examples/type_checker/arrays/local_array_stack_too_large.cstar`
 - Expression parser newline dayanıklılığı:
   - Delimiter içi veya operator/comma sonrası satır sonları expression devamı kabul edilir.
   - `((1, 2, 3),\n (4, 5, 6))`, `1 +\n2`, `func(a,\nb)` ve `arr[1:\n2]` smoke ile korunur.
