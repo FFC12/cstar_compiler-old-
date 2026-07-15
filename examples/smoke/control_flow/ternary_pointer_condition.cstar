@@ -1,0 +1,9 @@
+// expected: pass
+// expected-exit: 1
+
+main() :: int32 {
+  int32 value = 44;
+  int32* pointer = ref value;
+
+  ret pointer ? 1 : 0;
+}

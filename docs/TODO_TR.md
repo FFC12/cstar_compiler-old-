@@ -1180,34 +1180,45 @@ Tamamlanan:
 
 Durum:
 
-- Lexer ve expression parser tarafında `?` / `:` token ve `BinaryOpAST::extra` temsili vardır.
-- Codegen tarafında ternary için `select` notu bulunur; fakat tam semantic/type-check kontratı henüz MVP kalitesinde değildir.
+- MVP tamamlandı.
+- Lexer ve expression parser tarafında `?` / `:` token ve `BinaryOpAST::extra` temsili kullanılır.
+- Pass 1, ternary expression için condition/branch type contract kontrolü yapar.
+- Codegen, side-effect-free scalar/pointer branch'leri LLVM `select` ile üretir.
 
 Karar notu:
 
-- C* için ternary bir statement değil expression olmalıdır.
-- İlk MVP yalnız value-producing expression bağlamlarında açılmalı:
+- C* için ternary bir statement değil expression'dır.
+- MVP value-producing expression bağlamlarında açıktır:
   - `int32 x = cond ? a : b;`
   - `ret cond ? a : b;`
   - function argument: `foo(flag ? left : right);`
-- `cond` dönüşümü `if` condition ile aynı olmalı: `bool`, integer, float ve pointer zero/null karşılaştırmasına iner.
-- Branch type birleştirme kuralı açık olmalı:
+- `cond` dönüşümü `if` condition ile aynıdır: `bool`, integer, float ve pointer zero/null karşılaştırmasına iner.
+- Branch type birleştirme kuralı:
   - Aynı type: doğrudan kabul.
   - Primitive numeric: mevcut safe implicit conversion/data-loss warning kurallarıyla ortak hedef type.
   - Enum: aynı enum type zorunlu; farklı enum type reddedilmeli.
-  - Pointer: aynı pointee/ownership/qualifier veya güvenli qualifier genişletmesi; qualifier stripping reddedilmeli.
+  - Pointer MVP: aynı pointee/ownership/qualifier şekli zorunlu; qualifier stripping reddedilir.
   - Struct/user-defined: aynı type zorunlu; conversion overload gelene kadar farklı user-defined type reddedilmeli.
-  - `void` branch kabul edilmemeli; side-effect statement seçimi için `if` kullanılmalı.
+  - `void` branch kabul edilmez; side-effect statement seçimi için `if` kullanılmalı.
 - Codegen:
   - Side-effect içermeyen scalar/pointer branch için `select`.
-  - Branch expression içinde call/assignment/drop gibi side-effect doğuran ifade desteklenecekse basic block + PHI gerekir; ilk MVP bunu reddedebilir veya PHI lowering'iyle açabilir.
-- Test adayları:
-  - smoke: scalar ternary initializer/return.
-  - smoke: pointer condition ternary.
-  - type_checker: branch type mismatch.
-  - type_checker: qualifier stripping.
-  - type_checker: void branch.
-  - newline smoke: `cond ?\n a :\n b`.
+  - Branch expression içinde call/assignment/allocation gibi side-effect doğuran ifade şimdilik diagnostic üretir; doğru uzun vadeli lowering basic block + PHI gerektirir.
+
+Tamamlanan smoke/regression:
+
+- `examples/smoke/control_flow/ternary_initializer.cstar`
+- `examples/smoke/control_flow/ternary_return.cstar`
+- `examples/smoke/control_flow/ternary_function_argument.cstar`
+- `examples/smoke/control_flow/ternary_pointer_condition.cstar`
+- `examples/smoke/control_flow/ternary_newline_continuation.cstar`
+- `examples/type_checker/control_flow/ternary_branch_type_mismatch.cstar`
+- `examples/type_checker/control_flow/ternary_void_branch.cstar`
+
+Kalan ileri iş:
+
+- Side-effect branch'leri için basic block + PHI lowering.
+- Pointer qualifier widening modelini çok seviyeli qualifier syntax'ı oturduktan sonra genişletmek.
+- Enum/struct ternary için daha zengin regression seti.
 
 ## Aşama 6 - Import / Package / Native Interop
 

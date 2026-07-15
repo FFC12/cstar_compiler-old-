@@ -919,6 +919,32 @@ Notlar:
 - `? :` ternary operator `BinaryOpAST` içinde üçüncü `extra` child ile temsil ediliyor.
 - `,` initializer list / arg list / expression list için binary operator gibi kullanılıyor.
 
+### 12.1 Ternary Expression
+
+`cond ? a : b` C* içinde statement değil expression'dır. Bugünkü MVP üç ana bağlamda testlidir:
+
+```cstar
+int32 x = flag ? left : right;
+ret enabled ? 7 : 3;
+ret add_one(use_big ? 8 : 2);
+```
+
+Koşul tarafı `if` ile aynı truthiness kuralını kullanır: `bool`, integer, float ve pointer değerler condition'a çevrilebilir. Pointer condition zero/null karşılaştırmasına iner; örneğin `p ? 1 : 0` non-null pointer için `1` döndürür.
+
+Branch'ler değer üretmek zorundadır. `void` branch kabul edilmez. Numeric primitive branch'ler beklenen hedef tipe cast edilebilir; pointer branch'lerde pointee, ownership ve qualifier şekli korunmalıdır. Qualifier stripping güvenli olmadığı için reddedilir.
+
+MVP codegen side-effect-free branch'leri LLVM `select` ile üretir. Bu yüzden branch içinde function call, allocation veya assignment varsa şu an diagnostic verilir; bu form ileride basic block + PHI lowering ile güvenli şekilde açılmalıdır.
+
+```cstar
+main() :: int32 {
+  bool flag = false;
+
+  ret flag ?
+      2 :
+      5;
+}
+```
+
 ## 13. Semantic Analiz
 
 Semantic yapı `Visitor::preVisit(...)` fonksiyonları üzerinden yürüyor.
@@ -962,6 +988,12 @@ Amaç:
   - plain `void` hedef reddi
   - safe cast pointer/value kategori reddi
   - safe cast qualifier stripping reddi
+- Ternary expression kontrolleri:
+  - condition `if` ile aynı bool/integer/float/pointer dönüşüm yüzeyini kullanır
+  - branch'ler value-producing olmalıdır
+  - primitive numeric branch'ler beklenen hedef tipe indirilebilir
+  - pointer branch'lerde pointee/ownership/qualifier şekli korunur
+  - side-effect branch'leri MVP'de reddedilir; PHI lowering ileri iştir
 
 Örnek type-checker testleri:
 
@@ -1026,7 +1058,7 @@ Codegen iki parçalı:
   - logical and/or (`&&`, `||`)
   - shift
   - comparison (`<`, `<=`, `>`, `>=`, `==`, `!=`) sonucu `bool/i1`
-  - ternary için `select`
+  - ternary için `select`; condition `if` helper'ı ile bool'a çevrilir ve branch'ler tek LLVM tipe cast edilir
 - Array initializer için kısmi constant array / memcpy yaklaşımı.
 - Tek ve çok boyutlu local/global array element read/write.
 - `if/elif/else` basic block üretimi; nested/fallthrough senaryoları smoke ile doğrulanıyor.

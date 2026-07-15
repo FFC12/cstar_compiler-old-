@@ -270,6 +270,61 @@ static llvm::ArrayType *GetArrayType(llvm::Type *elementType,
   return llvm::ArrayType::get(elementType, length);
 }
 
+static bool TryParseUnsignedIntegerLiteral(const std::string &literal,
+                                           uint64_t &value) {
+  try {
+    size_t parsedChars = 0;
+    value = std::stoull(literal, &parsedChars);
+    return parsedChars == literal.size();
+  } catch (...) {
+    return false;
+  }
+}
+
+static bool TryParseSignedIntegerLiteral(const std::string &literal,
+                                         int64_t &value) {
+  try {
+    size_t parsedChars = 0;
+    value = std::stoll(literal, &parsedChars);
+    return parsedChars == literal.size();
+  } catch (...) {
+    return false;
+  }
+}
+
+static llvm::Constant *CreateLiteralConstant(llvm::Type *type,
+                                             const std::string &literal) {
+  if (type->isDoubleTy() || type->isFloatTy()) {
+    return llvm::ConstantFP::get(type, literal);
+  }
+
+  if (!literal.empty() && literal[0] == '-') {
+    int64_t signedValue = 0;
+    if (TryParseSignedIntegerLiteral(literal, signedValue)) {
+      return llvm::ConstantInt::get(type, signedValue, true);
+    }
+  }
+
+  uint64_t unsignedValue = 0;
+  if (TryParseUnsignedIntegerLiteral(literal, unsignedValue)) {
+    return llvm::ConstantInt::get(type, unsignedValue);
+  }
+
+  return llvm::ConstantInt::get(type, 0);
+}
+
+static size_t FlatArrayLength(const std::vector<size_t> &dimensions) {
+  size_t length = 1;
+  for (auto dimension : dimensions) {
+    if (dimension == 0 ||
+        length > std::numeric_limits<size_t>::max() / dimension) {
+      return 1;
+    }
+    length *= dimension;
+  }
+  return length;
+}
+
 static llvm::Value *CastArrayIndex(llvm::Value *index) {
   if (index->getType()->isIntegerTy()) {
     return Visitor::Builder->CreateIntCast(index, Visitor::Builder->getInt64Ty(),
@@ -640,16 +695,39 @@ SymbolInfo Visitor::getSymbolInfo(const std::string &symbolName) {
 }
 
 static bool IsAnyBinOpOrSymbolInvolved(std::vector<BinOpOrVal> &v) {
-  bool flag = false;
-
-  for (auto &e : v) {
-    if (e.isBinOp || e.isSymbol) {
-      flag = true;
-      break;
+  for (const auto &element : v) {
+    if (element.isBinOp || element.isSymbol) {
+      return true;
     }
   }
 
-  return flag;
+  return false;
+}
+
+static llvm::Value *CreateInitializerValue(Visitor &visitor,
+                                           const BinOpOrVal &element,
+                                           llvm::Type *elementType) {
+  if (element.isSymbol) {
+    auto *symbolAst = reinterpret_cast<SymbolAST *>(element.address);
+    return symbolAst->accept(visitor);
+  }
+
+  if (element.isBinOp) {
+    auto *binaryAst = reinterpret_cast<BinaryOpAST *>(element.address);
+    return visitor.createBinaryOp(*binaryAst);
+  }
+
+  return CreateLiteralConstant(elementType, element.value);
+}
+
+static llvm::Value *CreateArrayElementAddress(llvm::Type *arrayType,
+                                              llvm::Value *storage,
+                                              size_t index) {
+  auto *zero = llvm::ConstantInt::get(Visitor::Builder->getInt64Ty(), 0);
+  auto *elementIndex =
+      llvm::ConstantInt::get(Visitor::Builder->getInt64Ty(), index);
+  return Visitor::Builder->CreateInBoundsGEP(arrayType, storage,
+                                             {zero, elementIndex});
 }
 
 static llvm::Type *GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
@@ -1632,6 +1710,53 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
     return Builder->CreateLoad(field.valueType, field.address, field.name);
   }
 
+  if (binaryOpAst.m_BinOpKind == B_TER) {
+    if (binaryOpAst.m_LHS == nullptr || binaryOpAst.m_RHS == nullptr ||
+        binaryOpAst.m_Extra == nullptr) {
+      return nullptr;
+    }
+
+    auto *targetType = m_LastType;
+    const auto targetDefinedTypeName = m_LastDefinedTypeName;
+    const auto targetSigned = m_LastSigned;
+
+    m_LastType = nullptr;
+    m_LastDefinedTypeName.clear();
+    auto *condition = binaryOpAst.m_LHS->accept(*this);
+    condition = CastValueToBranchCondition(condition, m_LastSigned);
+    if (condition == nullptr) {
+      m_LastType = targetType;
+      m_LastDefinedTypeName = targetDefinedTypeName;
+      m_LastSigned = targetSigned;
+      return nullptr;
+    }
+
+    m_LastType = targetType;
+    m_LastDefinedTypeName = targetDefinedTypeName;
+    m_LastSigned = targetSigned;
+    auto *trueValue = binaryOpAst.m_RHS->accept(*this);
+    if (trueValue == nullptr) {
+      return nullptr;
+    }
+
+    auto *selectType = targetType != nullptr ? targetType : trueValue->getType();
+    trueValue = CastValueToType(trueValue, selectType, m_LastSigned);
+
+    m_LastType = selectType;
+    m_LastDefinedTypeName = targetDefinedTypeName;
+    auto *falseValue = binaryOpAst.m_Extra->accept(*this);
+    if (falseValue == nullptr) {
+      return nullptr;
+    }
+    falseValue = CastValueToType(falseValue, selectType, m_LastSigned);
+
+    m_LastType = selectType;
+    m_LastDefinedTypeName = targetDefinedTypeName;
+    m_LastSigned = targetSigned;
+    return Builder->CreateSelect(condition, trueValue, falseValue,
+                                 "selecttmp");
+  }
+
   if (binaryOpAst.m_BinOpKind == B_ARRS) {
     m_LastArrayIndex = true;
     lhs = binaryOpAst.m_LHS->accept(*this);
@@ -1756,18 +1881,6 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
       break;
     }
     case B_TER: {
-      if (lhs == nullptr || rhs == nullptr || binaryOpAst.m_Extra == nullptr) {
-        return nullptr;
-      }
-      auto extra = binaryOpAst.m_Extra->accept(*this);
-      if (extra == nullptr) {
-        return nullptr;
-      }
-      if (lhs->getType()->getIntegerBitWidth() != 1) {
-        lhs = Builder->CreateIntCast(lhs, Builder->getInt1Ty(), false);
-      }
-
-      value = Builder->CreateSelect(lhs, rhs, extra, "selectmp");
       break;
     }
     case B_ARRS: {
@@ -2078,12 +2191,11 @@ ValuePtr Visitor::visit(VarAST &varAst) {
 
     for (auto &dim : varAst.m_ArrDim) {
       auto val = (ScalarOrLiteralAST *)dim.get();
-      this->m_LastArrayDims.push_back(std::stoull(val->m_Value));
+      uint64_t dimension = 1;
+      TryParseUnsignedIntegerLiteral(val->m_Value, dimension);
+      this->m_LastArrayDims.push_back(static_cast<size_t>(dimension));
     }
-    size_t length = 1;
-    for (auto &dim : m_LastArrayDims) {
-      length *= dim;
-    }
+    size_t length = FlatArrayLength(m_LastArrayDims);
     arrayType = llvm::ArrayType::get(type, length);
   }
 
@@ -2182,21 +2294,6 @@ ValuePtr Visitor::visit(VarAST &varAst) {
     if (varAst.m_IsInitializerList && varAst.m_RHS->m_ExprKind != BinOp) {
       std::vector<BinOpOrVal> elements;
       getElementsOfArray(*varAst.m_RHS, elements);
-      auto emitInitializerElement = [&](const BinOpOrVal &el) -> llvm::Value * {
-        if (el.isSymbol) {
-          auto *symbolAst = reinterpret_cast<SymbolAST *>(el.address);
-          return symbolAst->accept(*this);
-        }
-        if (el.isBinOp) {
-          auto *binaryAst = reinterpret_cast<BinaryOpAST *>(el.address);
-          return createBinaryOp(*binaryAst);
-        }
-        if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
-          return llvm::ConstantFP::get(m_LastType, el.value);
-        }
-        uint64_t val = std::stoull(el.value);
-        return llvm::ConstantInt::get(m_LastType, val);
-      };
 
       if (varAst.m_IsLocal) {
         auto *storage = Builder->CreateAlloca(arrayType, nullptr,
@@ -2205,13 +2302,10 @@ ValuePtr Visitor::visit(VarAST &varAst) {
         Builder->CreateStore(zero, storage);
 
         for (size_t i = 0; i < elements.size(); ++i) {
-          auto *elementValue = emitInitializerElement(elements[i]);
+          auto *elementValue =
+              CreateInitializerValue(*this, elements[i], m_LastType);
           elementValue = CastValueToType(elementValue, type, m_LastSigned);
-          auto *zeroIndex = llvm::ConstantInt::get(Builder->getInt64Ty(), 0);
-          auto *elementIndex =
-              llvm::ConstantInt::get(Builder->getInt64Ty(), i);
-          auto *slot = Builder->CreateInBoundsGEP(
-              arrayType, storage, {zeroIndex, elementIndex});
+          auto *slot = CreateArrayElementAddress(arrayType, storage, i);
           Builder->CreateStore(elementValue, slot);
         }
 
@@ -2231,13 +2325,7 @@ ValuePtr Visitor::visit(VarAST &varAst) {
           break;
         }
 
-        llvm::Constant *constant = nullptr;
-        if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
-          constant = llvm::ConstantFP::get(m_LastType, el.value);
-        } else {
-          uint64_t val = std::stoull(el.value);
-          constant = llvm::ConstantInt::get(m_LastType, val);
-        }
+        auto *constant = CreateLiteralConstant(m_LastType, el.value);
         values.push_back(constant);
       }
 
@@ -2256,13 +2344,10 @@ ValuePtr Visitor::visit(VarAST &varAst) {
         m_GlobaInitVarFunc.push_back(globInitFunc->getName());
         Builder->SetInsertPoint(&globInitFunc->getEntryBlock());
         for (size_t i = 0; i < elements.size(); ++i) {
-          auto *elementValue = emitInitializerElement(elements[i]);
+          auto *elementValue =
+              CreateInitializerValue(*this, elements[i], m_LastType);
           elementValue = CastValueToType(elementValue, type, m_LastSigned);
-          auto *zeroIndex = llvm::ConstantInt::get(Builder->getInt64Ty(), 0);
-          auto *elementIndex =
-              llvm::ConstantInt::get(Builder->getInt64Ty(), i);
-          auto *slot = Builder->CreateInBoundsGEP(
-              arrayType, globVar, {zeroIndex, elementIndex});
+          auto *slot = CreateArrayElementAddress(arrayType, globVar, i);
           Builder->CreateStore(elementValue, slot);
         }
         Builder->CreateRetVoid();
@@ -2649,11 +2734,8 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
     llvm::ArrayType *arrayType = nullptr;
 
     if (m_LastInitializerList) {
-      size_t length = 1;
-      for (auto &dim : m_LastArrayDims) {
-        length *= dim;
-      }
-      arrayType = llvm::ArrayType::get(m_LastType, length);
+      arrayType =
+          llvm::ArrayType::get(m_LastType, FlatArrayLength(m_LastArrayDims));
     }
 
     if (m_LastGlobVar) {
@@ -2669,38 +2751,14 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
           auto globInitFunc = CreateGlobalVarInitFunc();
           m_GlobaInitVarFunc.push_back(globInitFunc->getName());
           Builder->SetInsertPoint(&globInitFunc->getEntryBlock());
-          std::vector<llvm::Value *> values;
           auto symbol = LastGlobVarRef;
 
-          int i = 0;
+          size_t i = 0;
           for (auto &el : elements) {
-            if (el.isSymbol) {
-              auto symbolAst = reinterpret_cast<SymbolAST *>(el.address);
-              value = symbolAst->accept(*this);
-            } else if (el.isBinOp) {
-              auto binaryAst = reinterpret_cast<BinaryOpAST *>(el.address);
-              value = createBinaryOp(*binaryAst);
-            } else {
-              if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
-                value = llvm::ConstantFP::get(m_LastType, el.value);
-              } else {
-                uint64_t val = std::stoull(el.value);
-                value = llvm::ConstantInt::get(m_LastType, val);
-              }
-            }
-
-            std::vector<llvm::Value *> idxList;
-            auto index = llvm::ConstantInt::get(Builder->getInt64Ty(), 0);
-            idxList.push_back(index);
-            index = llvm::ConstantInt::get(Builder->getInt64Ty(), i);
-            idxList.push_back(index);
-            i++;
-
-            auto gep =
-                Builder->CreateInBoundsGEP(GetPointeeType(symbol), symbol,
-                                           idxList);
-
-            Visitor::Builder->CreateStore(value, gep);
+            value = CreateInitializerValue(*this, el, m_LastType);
+            auto *gep =
+                CreateArrayElementAddress(GetPointeeType(symbol), symbol, i++);
+            Builder->CreateStore(value, gep);
           }
 
           // value = Visitor::Builder->CreateStore(value, LastGlobVarRef);
@@ -2711,12 +2769,7 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
           std::vector<llvm::Constant *> values;
 
           for (auto &el : elements) {
-            if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
-              values.push_back(llvm::ConstantFP::get(m_LastType, el.value));
-            } else {
-              uint64_t val = std::stoull(el.value);
-              values.push_back(llvm::ConstantInt::get(m_LastType, val));
-            }
+            values.push_back(CreateLiteralConstant(m_LastType, el.value));
           }
 
           value = llvm::ConstantArray::get(arrayType, values);
@@ -2746,44 +2799,16 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
         if (IsAnyBinOpOrSymbolInvolved(elements)) {
           size_t i = 0;
           for (auto &el : elements) {
-            if (el.isSymbol) {
-              auto symbolAst = reinterpret_cast<SymbolAST *>(el.address);
-              value = symbolAst->accept(*this);
-            } else if (el.isBinOp) {
-              auto binaryAst = reinterpret_cast<BinaryOpAST *>(el.address);
-              value = createBinaryOp(*binaryAst);
-            } else {
-              if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
-                value = llvm::ConstantFP::get(m_LastType, el.value);
-              } else {
-                uint64_t val = std::stoull(el.value);
-                value = llvm::ConstantInt::get(m_LastType, val);
-              }
-            }
-
-            std::vector<llvm::Value *> idxList;
-            auto index = llvm::ConstantInt::get(Builder->getInt64Ty(), 0);
-            idxList.push_back(index);
-            index = llvm::ConstantInt::get(Builder->getInt64Ty(), i);
-            idxList.push_back(index);
-            i++;
-
-            auto gep = Builder->CreateInBoundsGEP(arrayType, ptr, idxList);
-
-            Visitor::Builder->CreateStore(value, gep);
+            value = CreateInitializerValue(*this, el, m_LastType);
+            auto *gep = CreateArrayElementAddress(arrayType, ptr, i++);
+            Builder->CreateStore(value, gep);
           }
 
           value = ptr;
         } else {
           std::vector<llvm::Constant *> values;
           for (auto &el : elements) {
-            if (m_LastType->isDoubleTy() || m_LastType->isFloatTy()) {
-              value = llvm::ConstantFP::get(m_LastType, el.value);
-            } else {
-              uint64_t val = std::stoull(el.value);
-              value = llvm::ConstantInt::get(m_LastType, val);
-            }
-            values.push_back(llvm::dyn_cast<llvm::Constant>(value));
+            values.push_back(CreateLiteralConstant(m_LastType, el.value));
           }
           auto init = llvm::ConstantArray::get(arrayType, values);
           auto globVar = CreateInitConstantGlobalVar(

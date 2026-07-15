@@ -1,0 +1,12 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+touch() :: void {
+  ret;
+}
+
+main() :: int32 {
+  bool flag = true;
+
+  ret flag ? touch() : 1;
+}

@@ -36,6 +36,10 @@ class ScalarOrLiteralAST : public IAST {
   std::string getValue() const { return m_Value; }
 
   bool isFloat() const { return m_IsFloat; }
+  bool isIntegral() const { return m_IsIntegral; }
+  bool isBoolean() const { return m_IsBoolean; }
+  bool isLetter() const { return m_IsLetter; }
+  bool isLiteral() const { return m_IsLiteral; }
 
   SymbolInfo acceptBefore(Visitor& visitor) override {
     return visitor.preVisit(*this);

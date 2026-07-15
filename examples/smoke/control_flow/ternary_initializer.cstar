@@ -1,0 +1,11 @@
+// expected: pass
+// expected-exit: 12
+
+main() :: int32 {
+  bool pick_left = false;
+  int32 left = 7;
+  int32 right = 12;
+  int32 result = pick_left ? left : right;
+
+  ret result;
+}

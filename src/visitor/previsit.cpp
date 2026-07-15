@@ -455,6 +455,79 @@ static bool IsFloatingType(TypeSpecifier typeSpecifier) {
   }
 }
 
+static bool IsNumericPrimitiveType(TypeSpecifier typeSpecifier) {
+  return IsIntegerType(typeSpecifier) || IsFloatingType(typeSpecifier) ||
+         typeSpecifier == SPEC_CHAR || typeSpecifier == SPEC_UCHAR;
+}
+
+static bool IsVoidValue(const SymbolInfo &symbolInfo) {
+  return symbolInfo.type == TypeSpecifier::SPEC_VOID &&
+         symbolInfo.indirectionLevel == 0 && !symbolInfo.isRef;
+}
+
+static bool IsPointerLike(const SymbolInfo &symbolInfo) {
+  return symbolInfo.indirectionLevel > 0 || symbolInfo.isRef ||
+         symbolInfo.isSubscriptable;
+}
+
+static bool SameQualifierShape(const SymbolInfo &lhs,
+                               const SymbolInfo &rhs) {
+  return lhs.isUnique == rhs.isUnique && lhs.isRef == rhs.isRef &&
+         lhs.isConstVal == rhs.isConstVal &&
+         lhs.isConstPtr == rhs.isConstPtr &&
+         lhs.isConstRef == rhs.isConstRef &&
+         lhs.isReadOnly == rhs.isReadOnly;
+}
+
+static bool SameTypeShape(const SymbolInfo &lhs, const SymbolInfo &rhs) {
+  return lhs.type == rhs.type && lhs.definedTypeName == rhs.definedTypeName &&
+         lhs.indirectionLevel == rhs.indirectionLevel &&
+         lhs.isSubscriptable == rhs.isSubscriptable &&
+         SameQualifierShape(lhs, rhs);
+}
+
+static SymbolInfo InferScalarLiteralType(ScalarOrLiteralAST *scalar) {
+  SymbolInfo info;
+  if (scalar == nullptr) {
+    return info;
+  }
+
+  const auto loc = scalar->getSemLoc();
+  info.begin = loc.begin;
+  info.end = loc.end;
+  info.line = loc.line;
+  info.value = scalar->getValue();
+  if (scalar->isLiteral()) {
+    info.type = TypeSpecifier::SPEC_CHAR;
+    info.indirectionLevel = 1;
+    info.isConstVal = true;
+  } else if (scalar->isBoolean()) {
+    info.type = TypeSpecifier::SPEC_BOOL;
+  } else if (scalar->isFloat()) {
+    info.type = TypeSpecifier::SPEC_F64;
+  } else if (scalar->isLetter()) {
+    info.type = TypeSpecifier::SPEC_CHAR;
+  } else {
+    info.type = TypeSpecifier::SPEC_I64;
+  }
+  return info;
+}
+
+static bool ContainsTernarySelectSideEffect(IAST *node) {
+  if (node == nullptr) {
+    return false;
+  }
+
+  switch (node->getExprKind()) {
+    case ExprKind::FuncCallExpr:
+    case ExprKind::AssignmentExpr:
+    case ExprKind::NewExpr:
+      return true;
+    default:
+      return false;
+  }
+}
+
 static const EnumMemberInfo *FindEnumMember(const std::string &enumName,
                                             const std::string &memberName) {
   auto enumIt = Visitor::EnumTable.find(enumName);
@@ -1873,6 +1946,195 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
       };
 
       return resolveFieldAccess(resolveFieldAccess, &binaryOpAst);
+    }
+
+    if (binaryOpAst.m_BinOpKind == B_TER) {
+      symbolInfo.begin = binaryOpAst.m_SemLoc.begin;
+      symbolInfo.end = binaryOpAst.m_SemLoc.end;
+      symbolInfo.line = binaryOpAst.m_SemLoc.line;
+
+      if (lhs == nullptr || rhs == nullptr || binaryOpAst.m_Extra == nullptr) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Ternary expression requires condition, true branch and false "
+            "branch",
+            symbolInfo);
+        return symbolInfo;
+      }
+
+      auto containsSelectSideEffect =
+          [&](auto &self, IAST *node) -> bool {
+        if (node == nullptr || ContainsTernarySelectSideEffect(node)) {
+          return node != nullptr;
+        }
+
+        if (node->getExprKind() == ExprKind::BinOp) {
+          auto *binary = static_cast<BinaryOpAST *>(node);
+          return self(self, binary->m_LHS.get()) ||
+                 self(self, binary->m_RHS.get()) ||
+                 self(self, binary->m_Extra.get());
+        }
+
+        if (node->getExprKind() == ExprKind::UnaryOp) {
+          auto *unary = static_cast<UnaryOpAST *>(node);
+          return self(self, unary->m_Node.get());
+        }
+
+        if (node->getExprKind() == ExprKind::CastExpr) {
+          auto *cast = static_cast<CastOpAST *>(node);
+          return self(self, cast->m_Node.get());
+        }
+
+        return false;
+      };
+
+      auto visitCondition = [&]() {
+        const auto previousExpectedType = m_ExpectedType;
+        const auto previousLastSymbolInfo = m_LastSymbolInfo;
+        const auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+        const auto previousDefinedTypeName = m_DefinedTypeName;
+        const auto previousLastCondExpr = m_LastCondExpr;
+
+        m_LastCondExpr = true;
+        m_ExpectedType = TypeSpecifier::SPEC_BOOL;
+        m_LastSymbolInfo.type = TypeSpecifier::SPEC_BOOL;
+        m_LastSymbolInfo.indirectionLevel = 0;
+        m_LastSymbolInfo.isRef = false;
+        m_DefinedTypeFlag = false;
+        m_DefinedTypeName.clear();
+        lhs->acceptBefore(*this);
+
+        m_ExpectedType = previousExpectedType;
+        m_LastSymbolInfo = previousLastSymbolInfo;
+        m_DefinedTypeFlag = previousDefinedTypeFlag;
+        m_DefinedTypeName = previousDefinedTypeName;
+        m_LastCondExpr = previousLastCondExpr;
+      };
+
+      auto visitBranch = [&](IAST *node) -> SymbolInfo {
+        const auto previousExpectedType = m_ExpectedType;
+        const auto previousLastSymbolInfo = m_LastSymbolInfo;
+        const auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+        const auto previousDefinedTypeName = m_DefinedTypeName;
+        const auto previousLastBinOp = m_LastBinOp;
+        const auto previousLastBinOpHasPtr = m_LastBinOpHasAtLeastOnePtr;
+
+        m_LastBinOp = true;
+        m_LastBinOpHasAtLeastOnePtr = false;
+        SymbolInfo branchInfo = node->acceptBefore(*this);
+
+        if (auto *scalar = dynamic_cast<ScalarOrLiteralAST *>(node)) {
+          branchInfo = InferScalarLiteralType(scalar);
+        } else if (IsVoidValue(branchInfo) &&
+                   node->getExprKind() == ExprKind::BinOp &&
+                   m_LastSymbolInfo.type != TypeSpecifier::SPEC_VOID) {
+          branchInfo = m_LastSymbolInfo;
+        }
+
+        m_ExpectedType = previousExpectedType;
+        m_LastSymbolInfo = previousLastSymbolInfo;
+        m_DefinedTypeFlag = previousDefinedTypeFlag;
+        m_DefinedTypeName = previousDefinedTypeName;
+        m_LastBinOp = previousLastBinOp;
+        m_LastBinOpHasAtLeastOnePtr = previousLastBinOpHasPtr;
+        return branchInfo;
+      };
+
+      auto branchFitsTarget = [](const SymbolInfo &branch,
+                                 const SymbolInfo &target) {
+        if (IsVoidValue(branch)) {
+          return false;
+        }
+
+        if (IsPointerLike(target)) {
+          return branch.type == target.type &&
+                 branch.definedTypeName == target.definedTypeName &&
+                 branch.indirectionLevel == target.indirectionLevel &&
+                 branch.isUnique == target.isUnique &&
+                 branch.isRef == target.isRef &&
+                 SameQualifierShape(branch, target);
+        }
+
+        if (target.type == TypeSpecifier::SPEC_BOOL) {
+          return branch.type == TypeSpecifier::SPEC_BOOL &&
+                 branch.indirectionLevel == 0;
+        }
+
+        if (IsNumericPrimitiveType(target.type)) {
+          return IsNumericPrimitiveType(branch.type) &&
+                 branch.type != TypeSpecifier::SPEC_BOOL &&
+                 branch.indirectionLevel == 0;
+        }
+
+        if (target.type == TypeSpecifier::SPEC_DEFINED) {
+          return branch.type == TypeSpecifier::SPEC_DEFINED &&
+                 branch.definedTypeName == target.definedTypeName &&
+                 branch.indirectionLevel == target.indirectionLevel;
+        }
+
+        return SameTypeShape(branch, target);
+      };
+
+      auto branchesAreCompatible = [](const SymbolInfo &trueInfo,
+                                      const SymbolInfo &falseInfo) {
+        if (IsVoidValue(trueInfo) || IsVoidValue(falseInfo)) {
+          return false;
+        }
+
+        if (SameTypeShape(trueInfo, falseInfo)) {
+          return true;
+        }
+
+        const bool bothNumeric =
+            IsNumericPrimitiveType(trueInfo.type) &&
+            IsNumericPrimitiveType(falseInfo.type) &&
+            trueInfo.type != TypeSpecifier::SPEC_BOOL &&
+            falseInfo.type != TypeSpecifier::SPEC_BOOL &&
+            trueInfo.indirectionLevel == 0 && falseInfo.indirectionLevel == 0;
+        if (bothNumeric) {
+          return true;
+        }
+
+        return false;
+      };
+
+      visitCondition();
+
+      if (containsSelectSideEffect(containsSelectSideEffect, rhs.get()) ||
+          containsSelectSideEffect(containsSelectSideEffect,
+                                   binaryOpAst.m_Extra.get())) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Ternary branch expressions must be side-effect-free in the "
+            "current MVP; use if/else for calls, allocation or assignment",
+            symbolInfo);
+      }
+
+      auto trueInfo = visitBranch(rhs.get());
+      auto falseInfo = visitBranch(binaryOpAst.m_Extra.get());
+
+      if (IsVoidValue(trueInfo) || IsVoidValue(falseInfo)) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Ternary branches must produce a value", symbolInfo);
+      } else if (m_LastSymbolInfo.type != TypeSpecifier::SPEC_VOID ||
+                 IsPointerLike(m_LastSymbolInfo)) {
+        if (!branchFitsTarget(trueInfo, m_LastSymbolInfo) ||
+            !branchFitsTarget(falseInfo, m_LastSymbolInfo)) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Ternary branch types are incompatible with the expected "
+              "expression type",
+              symbolInfo);
+        }
+        symbolInfo = m_LastSymbolInfo;
+      } else if (!branchesAreCompatible(trueInfo, falseInfo)) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Ternary branches must have compatible value types", symbolInfo);
+      } else {
+        symbolInfo = trueInfo;
+      }
+
+      symbolInfo.begin = binaryOpAst.m_SemLoc.begin;
+      symbolInfo.end = binaryOpAst.m_SemLoc.end;
+      symbolInfo.line = binaryOpAst.m_SemLoc.line;
+      return symbolInfo;
     }
 
     const auto overloadMethod = ValueOperatorMethodName(binaryOpAst.m_BinOpKind);

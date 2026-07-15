@@ -1,0 +1,12 @@
+// expected: pass
+// expected-exit: 9
+
+add_one(int32 value) :: int32 {
+  ret value + 1;
+}
+
+main() :: int32 {
+  bool use_big = true;
+
+  ret add_one(use_big ? 8 : 2);
+}

@@ -1,0 +1,10 @@
+// expected: pass
+// expected-exit: 5
+
+main() :: int32 {
+  bool flag = false;
+
+  ret flag ?
+      2 :
+      5;
+}
