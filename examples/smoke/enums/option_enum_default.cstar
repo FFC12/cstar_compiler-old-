@@ -1,0 +1,25 @@
+// expected: pass
+// expected-exit: 7
+
+enum Status : uint8 {
+    Ready,
+    Busy,
+    Closed,
+}
+
+classify(Status status) :: int32 {
+    option (status) {
+        Status.Ready: {
+            ret 1;
+        },
+        _: {
+            ret 7;
+        }
+    }
+
+    ret 9;
+}
+
+main() :: int32 {
+    ret classify(Status.Closed);
+}

@@ -1,0 +1,23 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+enum TokenKind : uint8 {
+    Identifier,
+    Integer,
+    End,
+}
+
+main() :: int32 {
+    TokenKind kind = TokenKind.Identifier;
+
+    option (kind) {
+        TokenKind.Identifier: {
+            ret 1;
+        },
+        TokenKind.Integer: {
+            ret 2;
+        }
+    }
+
+    ret 0;
+}

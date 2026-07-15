@@ -4,7 +4,6 @@
 #include <map>
 #include <vector>
 
-using Scope = std::vector<ASTNode>;
 // using ConditionBlock = std::map<ASTNode, Scope>;
 using ConditionBlock = std::multimap<std::string, std::pair<ASTNode, Scope>>;
 

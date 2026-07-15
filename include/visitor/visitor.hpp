@@ -73,6 +73,7 @@ class FuncCallAST;
 class FuncAST;
 class IfStmtAST;
 class LoopStmtAST;
+class OptionStmtAST;
 class NewAST;
 class BreakStmtAST;
 class ContinueStmtAST;
@@ -253,6 +254,7 @@ class Visitor {
   ValuePtr visit(FuncCallAST& funcCallAst);
   ValuePtr visit(IfStmtAST& ifStmtAst);
   ValuePtr visit(LoopStmtAST& loopStmtAst);
+  ValuePtr visit(OptionStmtAST& optionStmtAst);
   ValuePtr visit(NewAST& newAst);
   ValuePtr visit(BreakStmtAST& breakStmtAst);
   ValuePtr visit(ContinueStmtAST& continueStmtAst);
@@ -277,6 +279,7 @@ class Visitor {
   SymbolInfo preVisit(FuncCallAST& funcCallAst);
   SymbolInfo preVisit(IfStmtAST& ifStmtAst);
   SymbolInfo preVisit(LoopStmtAST& loopStmtAst);
+  SymbolInfo preVisit(OptionStmtAST& optionStmtAst);
   SymbolInfo preVisit(NewAST& newAst);
   SymbolInfo preVisit(BreakStmtAST& breakStmtAst);
   SymbolInfo preVisit(ContinueStmtAST& continueStmtAst);

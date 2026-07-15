@@ -845,15 +845,7 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
       } else if (is(TokenKind::LOOP)) {
         this->advanceLoopStmt(scope);
       } else if (is(TokenKind::OPTION)) {
-        ParserHint(
-            "`option` is the C* value-match statement proposal. Planned "
-            "syntax is `option (value) { pattern: { ... }, _: { ... } }`; "
-            "it is not lowered by this compiler yet.",
-            currentTokenInfo());
-        ParserError(
-            "`option`/match statements are part of the C* proposal, but "
-            "parser AST and codegen are not implemented yet.",
-            currentTokenInfo());
+        this->advanceOptionStmt(scope);
       } else if (is(TokenKind::BREAK) || is(TokenKind::CONTINUE)) {
         const bool isBreak = is(TokenKind::BREAK);
         PositionInfo posInfo = currentTokenInfo().getTokenPositionInfo();

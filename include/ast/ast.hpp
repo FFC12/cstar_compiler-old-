@@ -1,6 +1,7 @@
 #ifndef AST_HPP
 #define AST_HPP
 #include <iostream>
+#include <vector>
 #include <parser/visibility_specifiers.hpp>
 #include <visitor/visitor.hpp>
 
@@ -53,6 +54,7 @@ enum StmtKind {
   BreakStmt,
   ContinueStmt,
   DropStmt,
+  OptionStmt,
 };
 
 struct SemanticLoc {
@@ -101,5 +103,6 @@ class IAST {
 
 #include <memory>
 using ASTNode = std::unique_ptr<IAST>;
+using Scope = std::vector<ASTNode>;
 
 #endif

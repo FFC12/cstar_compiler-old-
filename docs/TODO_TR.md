@@ -148,7 +148,7 @@ examples/smoke/modules/        # helper; runner skip eder
 Güncel smoke doğrulama sonucu:
 
 ```text
-Toplam: 128, Basarili: 125, Diagnostic: 0, Skipped: 3, Hatali: 0, ExitMismatch: 0, CodeMismatch: 0, Crash/Assert: 0
+Toplam: 130, Basarili: 127, Diagnostic: 0, Skipped: 3, Hatali: 0, ExitMismatch: 0, CodeMismatch: 0, Crash/Assert: 0
 ```
 
 Eski düz liste notları tarihsel bağlam için aşağıda kalabilir; canonical dosya yerleşimi artık yukarıdaki kategori ağacıdır.
@@ -292,7 +292,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - Yeni özellik eklenirken önce buraya küçük positive smoke eklenir.
 - `// expected-exit: N` varsa `ret N;` ile üretilen process exit status değeri doğrulanır; bu console output değildir.
 - Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`. `modules` helper klasörüdür.
-- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 125/125 smoke dosyası başarılı; toplam 128 smoke dosyasının 3 tanesi bilinçli skip edilir.
+- Güncel durumda runner'ın skip ettiği module helper dosyaları hariç 127/127 smoke dosyası başarılı; toplam 130 smoke dosyasının 3 tanesi bilinçli skip edilir.
 
 `examples/type_checker/`:
 
@@ -301,7 +301,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
 - Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`, `traits`, `proposals`. `modules` helper klasörüdür.
-- Güncel durumda `-ExpectDiagnostics` ile 94 dosyada 92 kontrollü diagnostic, 1 positive/pass ve 1 module helper skip var; crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 97 dosyada 95 kontrollü diagnostic, 1 positive/pass ve 1 module helper skip var; crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -1121,24 +1121,37 @@ Tamamlanan:
 
 ### 5.2 Option / Match Benzeri Yapı
 
-Proposal seviyesinde.
+Enum odaklı statement MVP tamamlandı.
 
 Karar:
 
 - Canonical keyword `option` kalır; ayrı `match` keyword'ü şimdilik eklenmez.
 - İlk yüzey statement odaklıdır, expression/value döndürmez:
-  - `option (value) { pattern: { ... }, _: { ... } }`
+  - `option (value) { Enum.Member: { ... }, _: { ... } }`
 - `_` default branch anlamına gelir.
-- Pattern MVP sadece literal scalar/char/bool ve `_` kabul eder; range/destructuring/guard sonra.
+- Pattern MVP sadece `Enum.Member` ve `_` kabul eder; literal scalar/char/bool, range/destructuring/guard sonra.
 - Branch gövdeleri normal statement scope'u olur; `ret`, `break`, `continue` kendi bağlam kurallarını korur.
-- Exhaustiveness kontrolü ilk MVP'de yalnızca `bool` için düşünülebilir; genel enum/struct pattern exhaustiveness `enum`/`struct` sonrası.
+- Exhaustiveness kontrolü scalar/flags enum değerleri için çalışır: `_` yoksa bütün enum üyeleri açıkça ele alınmalıdır.
+- Duplicate enum branch, farklı enum type pattern'i ve birden fazla `_` default diagnostic üretir.
+- `_` varsa default fallback olarak sona iner; kaynakta yazıldığı sıradan bağımsız olarak kalan değerleri yakalar.
 
 Tamamlanan:
 
-- Function body içinde `option` artık parser'ı takmaz; controlled proposal diagnostic üretir.
-  - `examples/type_checker/051.cstar`
+- Gerçek parser/AST/semantic/codegen hattı:
+  - `include/ast/option_stmt.hpp`
+  - `src/parser/branch.cpp`
+  - `src/visitor/previsit.cpp`
+  - `src/visitor/visitor.cpp`
+- Positive smoke:
+  - `examples/smoke/enums/option_enum_exhaustive.cstar`
+  - `examples/smoke/enums/option_enum_default.cstar`
+- Negative diagnostic:
+  - `examples/type_checker/enums/085.cstar` eksik enum branch.
+  - `examples/type_checker/enums/086.cstar` farklı enum pattern type.
+  - `examples/type_checker/enums/087.cstar` duplicate enum branch.
+  - `examples/type_checker/control_flow/051.cstar` literal pattern henüz desteklenmediği için diagnostic kalır.
 
-İleri aşama: Gerçek parser/AST/codegen `enum` ve temel user-defined type tasarımından sonra açılacak. Bu alt aşamada açık parser güvenlik/tasarım maddesi kalmadı.
+İleri aşama: `option` expression formu, literal/bool/char pattern, range/guard pattern, tagged payload destructuring ve `_` default kullanan enum option için "yeni enum member eklendiğinde branch default'a düşüyor" warning'i.
 
 ### 5.3 Ternary Expression `cond ? a : b`
 
@@ -1692,7 +1705,12 @@ Durum:
   - Positive smoke: `examples/smoke/scalar_enum.cstar`, `examples/smoke/flags_enum.cstar`, `examples/smoke/enums/flags_enum_unary_not.cstar`.
   - Negative diagnostic: `examples/type_checker/077.cstar`, `examples/type_checker/078.cstar`, `examples/type_checker/079.cstar`, `examples/type_checker/080.cstar`, `examples/type_checker/081.cstar`, `examples/type_checker/082.cstar`, `examples/type_checker/083.cstar`, `examples/type_checker/enums/084.cstar`.
 - `tagged` canonical proposal yüzeyidir; flags enum artık MVP olarak parser/semantic/codegen hattına indirildi.
-- `option` statement enum pattern matching için temel yüzey olarak kullanılacak.
+- `option` statement enum pattern matching için temel çalışan yüzeydir:
+  - `option(value) { Enum.Member: { ... }, _: { ... } }`
+  - `_` yoksa enum üyeleri exhaustive olmak zorundadır.
+  - Duplicate branch, enum type mismatch ve birden fazla default diagnostic üretir.
+  - Positive smoke: `examples/smoke/enums/option_enum_exhaustive.cstar`, `examples/smoke/enums/option_enum_default.cstar`.
+  - Negative diagnostic: `examples/type_checker/enums/085.cstar`, `examples/type_checker/enums/086.cstar`, `examples/type_checker/enums/087.cstar`.
 
 Kalan:
 
@@ -1709,7 +1727,7 @@ Kalan:
   - Pass1 tag'i kanıtlayabiliyorsa direct field access.
   - Kanıtlayamıyorsa ilk MVP controlled diagnostic.
   - Runtime checked access ayrı safety feature olarak sonra değerlendirilecek.
-- Exhaustiveness kontrolü `option(enum_value)` için yapılabilir; `_` default yeni value eklendiğinde warning üretmeli.
+- `_` default kullanılan enum option için yeni enum member eklendiğinde warning üretme policy'si ayrıca tasarlanmalı.
 - Smoke/type-checker adayları:
   - tagged variant access without proven tag diagnostic.
   - `uint128` enum literal sınırı diagnostic/pass.
@@ -1969,4 +1987,4 @@ Sıradaki teknik iş:
 - Sonra `tagged` desugar veya `protocol` flow analysis'e geçmek daha sağlıklı olur; çünkü tagged access ve protocol state proof aynı statik kanıtlama altyapısını paylaşabilir.
 - Enum tarafında kalan küçük/ileri işler:
   - full-width `uint128` enum literal storage.
-  - tagged explicit layout, variant construction/access ve `option(enum_value)` exhaustiveness.
+  - tagged explicit layout ve variant construction/access.

@@ -177,7 +177,7 @@
         },
         {
           "name": "storage.type.lifecycle.cstar",
-          "match": "\\b(constructor|destructor)\\b"
+          "match": "\\b(constructor|destructor|allocator)\\b"
         },
         {
           "name": "storage.type.attribute.cstar",
@@ -215,7 +215,7 @@
             },
             {
               "name": "punctuation.operator.pointer.cstar",
-              "match": "\\*|\\^|&"
+              "match": "\\*|\\^|&|\\?"
             }
           ]
         }
@@ -226,6 +226,14 @@
         {
           "name": "punctuation.operator.varargs.cstar",
           "match": "\\.\\.\\."
+        },
+        {
+          "name": "keyword.operator.allocation.fallible.cstar",
+          "match": "\\bnew\\?"
+        },
+        {
+          "name": "punctuation.operator.nullable.cstar",
+          "match": "\\?"
         },
         {
           "name": "punctuation.operator.assignment.policy.cstar",
@@ -250,6 +258,14 @@
         {
           "name": "punctuation.operator.logical.cstar",
           "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "punctuation.operator.fix.cstar",
+          "match": "\\+\\+|--"
+        },
+        {
+          "name": "punctuation.operator.arrow.cstar",
+          "match": "->|=>"
         },
         {
           "name": "punctuation.operator.bitwise.cstar",
@@ -289,7 +305,7 @@
         },
         {
           "name": "keyword.operator.ownership.cstar",
-          "match": "\\b(ref|deref|move|strong_count|new|shared)\\b"
+          "match": "\\b(ref|deref|move|strong_count|new\\?|new|shared)\\b"
         },
         {
           "name": "keyword.operator.cast.cstar",
@@ -334,6 +350,10 @@
         {
           "name": "variable.language.self.cstar",
           "match": "\\b(self)\\b"
+        },
+        {
+          "name": "constant.other.placeholder.cstar",
+          "match": "\\b_\\b"
         }
       ]
     },

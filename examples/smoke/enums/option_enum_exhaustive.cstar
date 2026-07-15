@@ -1,0 +1,28 @@
+// expected: pass
+// expected-exit: 2
+
+enum TokenKind : uint8 {
+    Identifier,
+    Integer,
+    End,
+}
+
+score(TokenKind kind) :: int32 {
+    option (kind) {
+        TokenKind.Identifier: {
+            ret 1;
+        },
+        TokenKind.Integer: {
+            ret 2;
+        },
+        TokenKind.End: {
+            ret 0;
+        }
+    }
+
+    ret 9;
+}
+
+main() :: int32 {
+    ret score(TokenKind.Integer);
+}

@@ -1,0 +1,27 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+enum Color : uint8 {
+    Red,
+    Green,
+}
+
+enum Mode : uint8 {
+    Read,
+    Write,
+}
+
+main() :: int32 {
+    Color color = Color.Red;
+
+    option (color) {
+        Mode.Read: {
+            ret 1;
+        },
+        _: {
+            ret 0;
+        }
+    }
+
+    ret 0;
+}

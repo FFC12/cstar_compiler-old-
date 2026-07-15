@@ -287,6 +287,7 @@ class CStarParser {
 
   // branch.cpp
   void advanceIfStmt(std::vector<ASTNode>& scope);
+  void advanceOptionStmt(std::vector<ASTNode>& scope);
 
   // loop.cpp
   void advanceLoopStmt(std::vector<ASTNode>& scope);

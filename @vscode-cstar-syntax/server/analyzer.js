@@ -126,6 +126,9 @@ function analyzeText(text, uri = "file:///unknown.cstar") {
   checkPointerMarkers(document.tokens, add);
   checkStructConformance(document.symbols, add);
   checkUnknownSimpleTypes(document, add);
+  checkInvalidQualifierCombinations(document.symbols, add);
+  checkOwnershipFlow(document.tokens, document.symbols, add);
+  checkProtocolDynamicAssignment(document.tokens, add);
 
   return diagnostics;
 }
@@ -178,6 +181,7 @@ function addKeywordItems(items) {
   for (const label of primitiveTypes) {
     items.push({ label, kind: CompletionItemKind.Keyword, detail: "C* primitive type" });
   }
+  items.push({ label: "new?", kind: CompletionItemKind.Keyword, detail: "C* fallible allocation proposal" });
 }
 
 function addSymbolItems(items, symbols) {
@@ -569,13 +573,41 @@ function skipMemberSignatureOrBody(tokens, start, end) {
 
 function parseVariableDeclaration(tokens, i) {
   let index = i;
-  while (qualifierSet.has(tokens[index]?.text)) index += 1;
+  const qualifiers = [];
+  while (qualifierSet.has(tokens[index]?.text)) {
+    qualifiers.push({ text: tokens[index].text, offset: tokens[index].offset });
+    index += 1;
+  }
   const typeStart = tokens[index];
-  if (!typeStart || !isTypeName(typeStart.text)) return null;
-  let type = typeStart.text;
-  index += 1;
+  if (!typeStart) return null;
+  let type = "";
+  if (typeStart.text === "dynamic" && isTypeName(tokens[index + 1]?.text)) {
+    type = `dynamic ${tokens[index + 1].text}`;
+    index += 2;
+  } else if (!isTypeName(typeStart.text) && isProtocolStateType(tokens, index)) {
+    type = `${typeStart.text} ${tokens[index + 1].text}`;
+    index += 2;
+  } else if (isTypeName(typeStart.text)) {
+    type = typeStart.text;
+    index += 1;
+  } else {
+    return null;
+  }
+
+  if (tokens[index]?.text === "[") {
+    const closeIndex = findBalancedToken(tokens, index, "[", "]");
+    if (closeIndex !== -1) {
+      type += tokens.slice(index, closeIndex + 1).map(token => token.text).join("");
+      index = closeIndex + 1;
+    }
+  }
+
   while (tokens[index] && ["*", "^", "&"].includes(tokens[index].text)) {
     type += tokens[index].text;
+    index += 1;
+  }
+  if (tokens[index]?.text === "?") {
+    type += "?";
     index += 1;
   }
   const nameToken = tokens[index];
@@ -586,9 +618,28 @@ function parseVariableDeclaration(tokens, i) {
   return {
     name: nameToken.text,
     type,
+    qualifiers,
     offset: nameToken.offset,
     endIndex
   };
+}
+
+function isProtocolStateType(tokens, index) {
+  return isIdentifier(tokens[index]?.text) &&
+    /^[a-z]/.test(tokens[index].text) &&
+    isTypeName(tokens[index + 1]?.text);
+}
+
+function findBalancedToken(tokens, start, open, close) {
+  let depth = 0;
+  for (let i = start; i < tokens.length; i += 1) {
+    if (tokens[i].text === open) depth += 1;
+    if (tokens[i].text === close) {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
 }
 
 function checkDelimiters(clean, add) {
@@ -727,6 +778,104 @@ function checkUnknownSimpleTypes(document, add) {
   }
 }
 
+function checkInvalidQualifierCombinations(symbols, add) {
+  for (const variable of symbols.variables.values()) {
+    const qualifierTexts = new Set((variable.qualifiers || []).map(item => item.text));
+    const type = variable.type || "";
+    const isPointerLike = /[*^&]/.test(type);
+    const isUnique = type.includes("^");
+    if (qualifierTexts.has("constref") && !type.includes("&")) {
+      const q = variable.qualifiers.find(item => item.text === "constref");
+      add("CSTA2101", "`constref` requires a reference type like `T&`.", q?.offset || variable.offset, "constref".length);
+    }
+    for (const qualifier of ["constptr", "readonly"]) {
+      if (qualifierTexts.has(qualifier) && !isPointerLike) {
+        const q = variable.qualifiers.find(item => item.text === qualifier);
+        add("CSTA2102", `\`${qualifier}\` requires a pointer/reference type.`, q?.offset || variable.offset, qualifier.length);
+      }
+    }
+    if (qualifierTexts.has("nomove") && !isUnique) {
+      const q = variable.qualifiers.find(item => item.text === "nomove");
+      add("CSTA2103", "`nomove` is only meaningful on unique `^` ownership.", q?.offset || variable.offset, "nomove".length);
+    }
+  }
+}
+
+function checkOwnershipFlow(tokens, symbols, add) {
+  const moved = new Map();
+  const variableTypes = new Map();
+  for (const variable of symbols.variables.values()) variableTypes.set(variable.name, variable.type || "");
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token.text === ":=") {
+      const lhs = previousIdentifier(tokens, i);
+      const rhs = nextIdentifier(tokens, i);
+      const lhsType = variableTypes.get(lhs?.text || "");
+      if (lhsType && isPrimitiveNonPointer(lhsType)) {
+        add("CSTA2200", "`:=` transfers ownership and cannot be used with primitive non-pointer values.", token.offset, token.text.length);
+      }
+      if (rhs) moved.set(rhs.text, token.offset);
+      continue;
+    }
+
+    if (token.text === "=") {
+      const lhs = previousIdentifier(tokens, i);
+      const rhs = nextIdentifier(tokens, i);
+      const lhsType = variableTypes.get(lhs?.text || "");
+      const previous = tokens[i + 1]?.text;
+      const rhsIndex = rhs ? tokens.indexOf(rhs) : -1;
+      const rhsIsCall = rhsIndex !== -1 && tokens[rhsIndex + 1]?.text === "(";
+      if (lhsType?.includes("^") && rhs && !rhsIsCall && previous !== "ref" && previous !== "new" && previous !== "move") {
+        add("CSTA2202", "Unique `^` ownership cannot be copied with `=`; use `move`, `ref`, `new`, or `:=` as appropriate.", token.offset, token.text.length);
+      }
+      continue;
+    }
+
+    if (token.text === "move") {
+      const rhs = nextIdentifier(tokens, i);
+      if (rhs) moved.set(rhs.text, token.offset);
+      continue;
+    }
+
+    if (isIdentifier(token.text) && moved.has(token.text)) {
+      const prev = tokens[i - 1]?.text;
+      if (prev === "move" || prev === ":=") continue;
+      add("CSTA2201", `Use of moved value '${token.text}'.`, token.offset, token.text.length);
+      moved.delete(token.text);
+    }
+  }
+}
+
+function checkProtocolDynamicAssignment(tokens, add) {
+  for (const token of tokens) {
+    if (token.text === ".=") {
+      add("CSTA2300", "Dynamic protocol assignment `.=` is still a proposal surface.", token.offset, token.text.length);
+    }
+  }
+}
+
+function previousIdentifier(tokens, index) {
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (isIdentifier(tokens[i].text)) return tokens[i];
+    if ([";", "{", "}"].includes(tokens[i].text)) return null;
+  }
+  return null;
+}
+
+function nextIdentifier(tokens, index) {
+  for (let i = index + 1; i < tokens.length; i += 1) {
+    if (isIdentifier(tokens[i].text)) return tokens[i];
+    if ([";", "{", "}"].includes(tokens[i].text)) return null;
+  }
+  return null;
+}
+
+function isPrimitiveNonPointer(type) {
+  const stripped = stripTypeDecorators(type);
+  return typeKeywords.has(stripped) && !/[*^&?[\]]/.test(type);
+}
+
 function looksLikeTypeUsage(tokens, i) {
   const token = tokens[i];
   if (!isIdentifier(token.text)) return false;
@@ -798,7 +947,7 @@ function isTypeName(text) {
 }
 
 function stripTypeDecorators(type) {
-  return String(type || "").replace(/[*^&]+$/g, "");
+  return String(type || "").replace(/[*^&?]+$/g, "").replace(/\[[^\]]*\]/g, "");
 }
 
 module.exports = {

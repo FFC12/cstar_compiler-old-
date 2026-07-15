@@ -5,6 +5,11 @@
 // Enum is primarily a C ABI friendly scalar tag. Payload data uses explicit
 // tagged layout. `tagged` is syntax sugar for that explicit layout, not a hidden
 // heap allocation or runtime metadata system.
+//
+// Compiler status:
+// - scalar enum and flags enum are implemented as MVP.
+// - option(enum_value) with Enum.Member patterns and `_` default is implemented.
+// - tagged payload layout/destructuring is still proposal.
 
 // ---------------------------------------------------------------------
 // 1. Scalar enum

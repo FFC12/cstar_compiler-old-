@@ -92,7 +92,7 @@ VSCode F5/debug akışı için `.vscode` yapılandırmaları da eklendi.
 
 `expected-exit`, generated executable'ın process exit status değeridir. Yani `ret 7;` console'a `7` yazdırmaz; programın exit code'unu `7` yapar. Terminalde doğrudan `.exe` çalıştırıldığında Windows bu değeri ekrana basmaz, PowerShell tarafında `$LASTEXITCODE` ile görülür. Smoke runner bu değeri otomatik yakalar ve `[OK] ... (exit N)` şeklinde doğrular.
 
-Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Smoke dosyaları artık tek klasörde yığılmaz; konuya göre `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums` ve `structs` alt klasörlerine ayrılır. `examples/smoke/modules/` yalnızca include helper dosyaları içindir ve runner tarafından bilinçli skip edilir. Bu set şu anda runner'ın skip ettiği module helper dosyaları hariç 125/125 başarılıdır; toplam 128 smoke dosyasının 3 tanesi bilinçli skip edilir:
+Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Smoke dosyaları artık tek klasörde yığılmaz; konuya göre `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums` ve `structs` alt klasörlerine ayrılır. `examples/smoke/modules/` yalnızca include helper dosyaları içindir ve runner tarafından bilinçli skip edilir. Bu set şu anda runner'ın skip ettiği module helper dosyaları hariç 127/127 başarılıdır; toplam 130 smoke dosyasının 3 tanesi bilinçli skip edilir:
 
 - minimal program ve `ret expr`
 - `ret;` kullanan void fonksiyon çağrısı
@@ -177,7 +177,7 @@ Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Smoke dosy
   - trait MVP: `trait Name { ... }`, `struct T with Trait`, compile-time conformance check
   - value operator MVP: struct içinde `operator +(T rhs) :: T` benzeri methodlar
 
-`examples/type_checker/` seti kontrollü diagnostic üretir; crash/assert beklenmez. Bu set de `arrays`, `casts`, `control_flow`, `core`, `enums`, `functions`, `imports`, `ownership`, `pointers`, `proposals`, `runtime`, `structs` ve `traits` alt klasörlerine ayrılır. `examples/type_checker/modules/` yalnızca include helper dosyası taşır ve runner tarafından skip edilir. `// expected-code: CSTNNNN` etiketi varsa runner beklenen diagnostic kodunu da doğrular. Güncel suite 94 dosyada 92 controlled diagnostic, 1 positive/pass ve 1 module helper skip ile geçer. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, safe cast qualifier stripping reddini, user-defined cast controlled diagnostic'ini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` parametre/pointer adresi reassignment reddini, `readonly` parametre/pointer address/value assignment reddini, string literal'ın mutable `char*`, hedefi mutable bırakan `constptr char*` ve ownership iddiası taşıyan `char^` bağlamlarına implicit geçişinin reddini, array parametreye scalar/farklı boyutlu array geçişi reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, function arg/return ownership transfer ihlallerini, `nomove` ownership-flow ihlallerini, `async`/`await` proposal diagnostic'ini, moved-after-use reddini, dropped-after-use reddini, direct destructor call reddini, `.=` protocol proposal diagnostic'ini, loop dışı `break`/`continue` reddini, `option` proposal diagnostic'ini, include edilen module içindeki private function erişimi reddini, `static` function içinden non-static global/function erişimi reddini, struct duplicate/unknown field diagnostic'lerini, direct self-by-value struct field reddini, unknown struct method reddini, constructor olmayan type için constructor initializer reddini, instance method'un `::` ile çağrılamamasını, non-static/by-value `new` method formlarının reddini, user-defined lifecycle operator reddini, local/static data member reddini, eksik trait conformance reddini, allocator olmayan değerle `new(allocator)` kullanımını, unknown enum member reddini, enum type mismatch reddini, scalar enum bitwise/unary `~` reddini, flags enum power-of-two/explicit value zorunluluğunu, enum repr overflow diagnostic'ini, duplicate enum value diagnostic'ini ve `void` fonksiyonda değer döndürme reddini kapsar.
+`examples/type_checker/` seti kontrollü diagnostic üretir; crash/assert beklenmez. Bu set de `arrays`, `casts`, `control_flow`, `core`, `enums`, `functions`, `imports`, `ownership`, `pointers`, `proposals`, `runtime`, `structs` ve `traits` alt klasörlerine ayrılır. `examples/type_checker/modules/` yalnızca include helper dosyası taşır ve runner tarafından skip edilir. `// expected-code: CSTNNNN` etiketi varsa runner beklenen diagnostic kodunu da doğrular. Güncel suite 97 dosyada 95 controlled diagnostic, 1 positive/pass ve 1 module helper skip ile geçer. Yeni negatif çekirdek testleri `const`/`readonly` assignment reddini, safe cast pointer/value kategori reddini, safe cast qualifier stripping reddini, user-defined cast controlled diagnostic'ini, çıplak value ile reference parametre çağrısı reddini, `constref` parametreye assignment reddini, `constptr` parametre/pointer adresi reassignment reddini, `readonly` parametre/pointer address/value assignment reddini, string literal'ın mutable `char*`, hedefi mutable bırakan `constptr char*` ve ownership iddiası taşıyan `char^` bağlamlarına implicit geçişinin reddini, array parametreye scalar/farklı boyutlu array geçişi reddini, `const int32*` target assignment reddini, çok seviyeli qualifier pointer reddini, invalid qualifier/type kombinasyonunu, `*`/`^` pointer marker karışımı reddini, unique pointer copy reddini, primitive `:=` reddini, function arg/return ownership transfer ihlallerini, `nomove` ownership-flow ihlallerini, `async`/`await` proposal diagnostic'ini, moved-after-use reddini, dropped-after-use reddini, direct destructor call reddini, `.=` protocol proposal diagnostic'ini, loop dışı `break`/`continue` reddini, literal `option` pattern diagnostic'ini, enum `option` exhaustiveness/type mismatch/duplicate branch diagnostic'lerini, include edilen module içindeki private function erişimi reddini, `static` function içinden non-static global/function erişimi reddini, struct duplicate/unknown field diagnostic'lerini, direct self-by-value struct field reddini, unknown struct method reddini, constructor olmayan type için constructor initializer reddini, instance method'un `::` ile çağrılamamasını, non-static/by-value `new` method formlarının reddini, user-defined lifecycle operator reddini, local/static data member reddini, eksik trait conformance reddini, allocator olmayan değerle `new(allocator)` kullanımını, unknown enum member reddini, enum type mismatch reddini, scalar enum bitwise/unary `~` reddini, flags enum power-of-two/explicit value zorunluluğunu, enum repr overflow diagnostic'ini, duplicate enum value diagnostic'ini ve `void` fonksiyonda değer döndürme reddini kapsar.
 
 `examples/functions/`, `examples/variables/` ve `examples/papers/` dizinleri hâlâ daha çok proposal/stres örnekleridir. Runner ile ayrı çalıştırılır; amaç hepsini bugün yeşil yapmak değil, dil geliştikçe buradan küçük MVP smoke'lar çıkarmaktır. `examples/interactive/` ise input, terminal kontrolü, raw input, frame render ve ownership stresini daha büyük programlarla dener.
 
@@ -311,7 +311,7 @@ Triangle^ triangle = cast<Triangle^>(shape);
 
 Mevcut semantic pass'te `struct Name { field; ... }` MVP'si için user-defined type table doldurulur. Primitive ve by-value user-defined field layout LLVM `StructType` olarak üretilir, zero-init struct variable oluşturulur, `value.field` read/write syntax'ı çalışır, nested field chain `line.start.x` GEP zinciriyle iner ve by-value struct parametre/return desteklenir. Struct method MVP'sinde methodlar internal olarak `StructName.method(self&, ...)` fonksiyonuna iner; `value.method(args)` receiver'ı implicit `self` argümanı yapar ve `self.field` read/write referans üzerinden caller storage'ına iner. `Point^ owned = ref p; owned.x` ve `Counter* sharedValue = ref c; sharedValue.value` formları pointee struct alanına auto-deref edilir; `owned.method(args)` ve `sharedValue.method(args)` çağrıları implicit `self&` için pointee adresini geçirir. `static` struct method self almaz ve `Type::method(args)` ile çağrılır; `::` instance receiver için kullanılmaz. Constructor MVP'sinde `constructor(args) { ... }` internal `StructName.constructor(self&, ...)` fonksiyonuna iner ve `StructName value = StructName(args);` local by-value initializer storage'ı zero-init edip constructor'ı çağırır. Value operator MVP'sinde `operator +`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `<=`, `>` ve `>=` struct method ABI'siyle çalışır; lifecycle/allocation operator'ları compiler-reserved kalır. `new` static method değildir; `new Type(args)` unique heap storage, `shared new Type(args)` shared handle/control-count üretir, constructor'ı çağırır ve drop/scope-exit release hattına bağlanır. Tasarım yönü olarak `new` yalnız struct/resource type'lara hapsedilmez; `new int32(7)` gibi sized primitive storage allocation da C* vizyonuna uygundur, fakat mevcut MVP'nin primitive `new` yüzeyi ayrıca uygulanmalıdır. `new(allocator) Type(args)` için allocator değerinin `Allocator` trait'ini sağlaması beklenir. `destructor(...) { ... }` tanımlanabilir, normal kullanıcı çağrısı `value.destructor()` reddedilir; erken release `drop value;` ile yapılır ve by-value local struct'lar scope/return çıkışında otomatik destructor çağırır. Direct self-by-value field reddedilir. Trait MVP'si `trait Name { requirement(...) :: Type; }` ve `struct T with Trait` compile-time conformance check'i yapar. `protocol`, `dynamic protocol` ve `dynamic Trait` runtime/flow lowering'i Aşama 8+ ileri proposal olarak kalır ve bugün controlled diagnostic üretir.
 
-Scalar enum ve flags enum MVP'si user-defined type table'a girer fakat struct layout üretmez. `enum Color : uint8 { Red, Green, Blue = 7 }` formunda explicit repr zorunludur; `Color.Green` member lookup'u enum type'ı olarak type-check edilir ve codegen'de underlying integer constant'a iner. Enum local variable, parametre ve return storage'ı repr type'ıdır. Unknown member, farklı enum type ataması, repr overflow ve duplicate enum value diagnostic üretir. `flags enum FileMode : uint32 { Read = 1, Write = 2 }` bitmask yüzeyi olarak çalışır; flags member değerleri explicit ve `0`/power-of-two olmak zorundadır. Scalar enum bitwise operatörleri ve unary `~` kullanımını reddeder. Flags enum `|`, `&`, `^`, unary `~` ve shortcut assignment formlarını kabul eder. `~` repr-width complement üretir; örneğin `uint32` flags enum'da 32-bit storage'ın tüm bitleri terslenir. Declared flag set'e geri sıkıştırmak isteyen kod `& KnownMask` kullanmalıdır. Tagged payload layout, exhaustiveness ve enum pattern matching hâlâ Aşama 8 proposal/hardening işidir.
+Scalar enum ve flags enum MVP'si user-defined type table'a girer fakat struct layout üretmez. `enum Color : uint8 { Red, Green, Blue = 7 }` formunda explicit repr zorunludur; `Color.Green` member lookup'u enum type'ı olarak type-check edilir ve codegen'de underlying integer constant'a iner. Enum local variable, parametre ve return storage'ı repr type'ıdır. Unknown member, farklı enum type ataması, repr overflow ve duplicate enum value diagnostic üretir. `flags enum FileMode : uint32 { Read = 1, Write = 2 }` bitmask yüzeyi olarak çalışır; flags member değerleri explicit ve `0`/power-of-two olmak zorundadır. Scalar enum bitwise operatörleri ve unary `~` kullanımını reddeder. Flags enum `|`, `&`, `^`, unary `~` ve shortcut assignment formlarını kabul eder. `~` repr-width complement üretir; örneğin `uint32` flags enum'da 32-bit storage'ın tüm bitleri terslenir. Declared flag set'e geri sıkıştırmak isteyen kod `& KnownMask` kullanmalıdır. `option(enum_value)` statement MVP'si `Enum.Member` pattern'leri ve `_` default ile çalışır; `_` yoksa bütün enum üyeleri exhaustive olmak zorundadır. Tagged payload layout ve tagged payload destructuring hâlâ Aşama 8 proposal/hardening işidir.
 
 ## 6. Pointer, Reference ve Ownership Modeli
 
@@ -1316,7 +1316,7 @@ enum Color : uint8 {
 }
 ```
 
-Çalışan MVP'de repr zorunludur, member erişimi `Color.Green` formundadır, enum değerleri local/param/return tarafında repr integer storage'a iner. Scalar enum member'ları implicit incremental veya explicit integer literal alabilir. Repr sınırını aşan değerler, duplicate value ve unknown member controlled diagnostic üretir. Scalar enum'lar bitmask değildir; bu yüzden `Color.Red | Color.Blue` gibi bitwise kullanım reddedilir. Unqualified member erişimi ve exhaustiveness henüz hardening işidir.
+Çalışan MVP'de repr zorunludur, member erişimi `Color.Green` formundadır, enum değerleri local/param/return tarafında repr integer storage'a iner. Scalar enum member'ları implicit incremental veya explicit integer literal alabilir. Repr sınırını aşan değerler, duplicate value ve unknown member controlled diagnostic üretir. Scalar enum'lar bitmask değildir; bu yüzden `Color.Red | Color.Blue` gibi bitwise kullanım reddedilir. Unqualified member erişimi henüz açılmadı; canonical form açık `Enum.Member` yazımıdır.
 
 Flags enum scalar enum üzerine kurulan explicit bitmask yüzeyidir:
 
@@ -1352,6 +1352,38 @@ Flags enum kuralları:
 - `|`, `&`, `^`, `|=`, `&=`, `^=` legal; arithmetic operatörler legal değildir.
 - Unary `~` repr-width complement üretir; declared flag union'a otomatik clamp yapmaz.
 - `uint128` gibi full-width literal sınırları mevcut numeric literal storage genişletilince tekrar sıkılaştırılacaktır; bugünkü MVP member literal değerlerini `uint64_t` sınırında tutar.
+
+Enum branch kontrolü için canonical yüzey `option` statement'ıdır. Bu yapı bugün expression değeri üretmez; branch gövdeleri normal statement scope'u olarak çalışır:
+
+```cstar
+enum TokenKind : uint8 {
+    Identifier,
+    Integer,
+    End,
+}
+
+score(TokenKind kind) :: int32 {
+    option(kind) {
+        TokenKind.Identifier: {
+            ret 1;
+        },
+        TokenKind.Integer: {
+            ret 2;
+        },
+        TokenKind.End: {
+            ret 0;
+        }
+    }
+}
+```
+
+Kurallar:
+
+- Pattern MVP yalnızca `Enum.Member` ve `_` default kabul eder.
+- `_` yoksa bütün enum üyeleri yazılmalıdır; eksik üye diagnostic üretir.
+- Aynı enum üyesi iki kez yazılamaz.
+- Pattern enum type'ı, `option(...)` içindeki değerin enum type'ı ile aynı olmalıdır.
+- Literal `0:`, range, guard ve payload destructuring henüz açılmadı; bu alanlar tagged/layout aşamasına bağlıdır.
 
 Payload gereken durumlarda canonical yüzey implicit payload enum değil, explicit tagged layout'tur:
 
@@ -1448,19 +1480,30 @@ Güncel karar:
 
 Mevcut lexer/parser bu sistemi uygulamıyor.
 
-### 15.7 Option/match/case
+### 15.9 Option/match/case
 
 ```cstar
-option (k) {
-    0: { ret 0; },
-    1: { ret 1; },
-    _: { ret -1; }
+enum Status : uint8 {
+    Ready,
+    Busy,
+    Failed,
+}
+
+classify(Status s) :: int32 {
+    option(s) {
+        Status.Ready: {
+            ret 1;
+        },
+        _: {
+            ret 0;
+        }
+    }
 }
 ```
 
-Karar: canonical yüzey `option` statement'ıdır; ayrı `match` keyword'ü şimdilik eklenmez. `_` default branch'tir. İlk MVP expression döndürmez, yalnızca statement scope'ları çalıştırır. Pattern tarafı önce scalar literal/char/bool ve `_` ile sınırlı tutulmalıdır; destructuring, range pattern ve exhaustiveness daha sonra `enum`/`struct` sistemiyle birlikte ele alınır.
+Karar: canonical yüzey `option` statement'ıdır; ayrı `match` keyword'ü şimdilik eklenmez. `_` default branch'tir. İlk MVP expression döndürmez, yalnızca statement scope'ları çalıştırır. Çalışan MVP enum odaklıdır: pattern tarafı `Enum.Member` veya `_` olmalıdır. `_` kullanılmıyorsa enum exhaustive olmak zorundadır.
 
-Mevcut compiler `option` keyword'ünü function body içinde görürse controlled `CST1001` proposal diagnostic üretir. Böylece parser takılmaz; gerçek AST/codegen henüz yoktur.
+Bugünkü compiler parser/AST/semantic/codegen hattında `option(enum_value)` lowering üretir. Literal scalar/char/bool pattern, range pattern, guard, destructuring ve expression-valued option henüz yoktur. `examples/smoke/enums/option_enum_exhaustive.cstar` ve `examples/smoke/enums/option_enum_default.cstar` pozitif örneklerdir; `examples/type_checker/enums/085.cstar`, `086.cstar`, `087.cstar` exhaustiveness, type mismatch ve duplicate branch diagnostic'lerini doğrular.
 
 ## 16. Mevcut Dil İçin Kısa Cheat Sheet
 
@@ -1501,7 +1544,7 @@ main(int argc, char** argv) :: int {
 }
 ```
 
-Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, prefix/postfix increment-decrement statement, scalar/dereference/tek ve çok boyutlu array assignment, çok boyutlu dynamic index, scalar enum repr storage/member constant, flags enum bitwise/unary `~` storage/member constant, `ret expr`, primitive function call, `import/export/from` native/module declaration, local `.cstar` include, `public`/default-private module visibility MVP'si, module-level `static` function/variable MVP'si ve alias function lookup, struct declaration/zero-init/field read-write/nested field/by-value param-return/method-self/local-constructor/drop/by-value scope-exit destructor/unique-shared-pointer-field-method/instance-scope-method-alias/unique-shared-new-operator/value-operator MVP'si, trait declaration ve `struct with Trait` conformance MVP'si, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()`, `read_key()`, temel `if/elif/else`, while-style `loop`, range loop, array iterable loop, `break` ve `continue` akışıdır. Genel sequence iterable, gerçek namespace/type module sistemi, tagged enum layout/exhaustiveness, operator index/generic overload resolution ve protocol/dynamic trait-object lowering hâlâ ayrı aşama gerektirir.
+Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güvenle çalıştığı smoke ile doğrulanan alt küme; primitive local/global değişkenler, char/float primitive'leri, integer/float arithmetic, comparison/logical expression, prefix/postfix increment-decrement statement, scalar/dereference/tek ve çok boyutlu array assignment, çok boyutlu dynamic index, scalar enum repr storage/member constant, flags enum bitwise/unary `~` storage/member constant, enum `option(Enum.Member/_ )` statement ve exhaustiveness MVP'si, `ret expr`, primitive function call, `import/export/from` native/module declaration, local `.cstar` include, `public`/default-private module visibility MVP'si, module-level `static` function/variable MVP'si ve alias function lookup, struct declaration/zero-init/field read-write/nested field/by-value param-return/method-self/local-constructor/drop/by-value scope-exit destructor/unique-shared-pointer-field-method/instance-scope-method-alias/unique-shared-new-operator/value-operator MVP'si, trait declaration ve `struct with Trait` conformance MVP'si, explicit cast, unsafe integer/pointer cast MVP, pointer argümanı, primitive reference parametresi, pointer variable initializer, pointer return, pointer'dan pointer okuma, `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()`, `read_key()`, temel `if/elif/else`, while-style `loop`, range loop, array iterable loop, `break` ve `continue` akışıdır. Genel sequence iterable, gerçek namespace/type module sistemi, tagged enum payload layout/destructuring, operator index/generic overload resolution ve protocol/dynamic trait-object lowering hâlâ ayrı aşama gerektirir.
 
 ## 17. Bilinen Sorunlar ve Teknik Riskler
 
@@ -1514,7 +1557,7 @@ Codegen notu: Bu cheat sheet proposal tarafına biraz yakın durur. Bugün güve
 ### 17.2 Semantic riskleri
 
 - User-defined type sistemi genişlemeye devam ediyor; struct/trait ve temel value operator MVP çalışır, operator index, generic trait bound, protocol flow analysis ve dynamic trait object ABI hâlâ eksiktir.
-- Scalar enum ve flags enum MVP çalışır; repr overflow, duplicate value, scalar/flags bitwise ayrımı ve flags enum unary `~` semantic'i diagnostic/smoke ile doğrulanır. Tagged layout, `option(enum_value)` exhaustiveness ve full-width `uint128` enum literal modeli hâlâ eksiktir.
+- Scalar enum ve flags enum MVP çalışır; repr overflow, duplicate value, scalar/flags bitwise ayrımı, flags enum unary `~` semantic'i ve `option(enum_value)` exhaustiveness diagnostic/smoke ile doğrulanır. Tagged payload layout/destructuring ve full-width `uint128` enum literal modeli hâlâ eksiktir.
 - Array validation MVP'si sabit index warning'i üretir; runtime bounds check ve slice doğrulaması sonraki safety/stdlib aşamasındadır.
 - Scope ve symbol validation elle yönetilen id/level mekanizmasına bağlı.
 - `move`/ownership modeli semantic pass ve shared handle codegen içinde çalışır; by-value function argument/return transfer MVP'si, `nomove` parametre kısıtı, drop/scope-exit destructor ve unique/shared `new` release hattı vardır. Kalan büyük eksik gerçek async lowering, shared control-block runtime contract'ının sıkılaştırılması ve allocation failure policy'sidir.

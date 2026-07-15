@@ -10,6 +10,7 @@
 #include <ast/if_stmt.hpp>
 #include <ast/loop_stmt.hpp>
 #include <ast/new_ast.hpp>
+#include <ast/option_stmt.hpp>
 #include <ast/param_ast.hpp>
 #include <ast/ret_ast.hpp>
 #include <ast/scalar_ast.hpp>
@@ -2475,6 +2476,95 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
   return symbolInfo;
 }
 
+SymbolInfo Visitor::preVisit(OptionStmtAST &optionStmtAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.begin = optionStmtAst.m_SemLoc.begin;
+  symbolInfo.end = optionStmtAst.m_SemLoc.end;
+  symbolInfo.line = optionStmtAst.m_SemLoc.line;
+
+  SymbolInfo matchedValue;
+  if (m_TypeChecking) {
+    this->m_LastCondExpr = true;
+    matchedValue = optionStmtAst.m_Value->acceptBefore(*this);
+    this->m_LastCondExpr = false;
+    const bool valueIsEnum =
+        matchedValue.type == TypeSpecifier::SPEC_DEFINED &&
+        EnumTable.count(matchedValue.definedTypeName) != 0 &&
+        matchedValue.indirectionLevel == 0;
+    if (!valueIsEnum) {
+      this->m_TypeErrorMessages.emplace_back(
+          "option currently requires a scalar enum value", symbolInfo);
+    }
+  } else {
+    optionStmtAst.m_Value->acceptBefore(*this);
+  }
+
+  std::set<std::string> coveredMembers;
+  bool hasDefault = false;
+  const EnumInfo *enumInfo = nullptr;
+  if (!matchedValue.definedTypeName.empty() &&
+      EnumTable.count(matchedValue.definedTypeName) != 0) {
+    enumInfo = &EnumTable[matchedValue.definedTypeName];
+  }
+
+  for (auto &optionCase : optionStmtAst.m_Cases) {
+    if (m_TypeChecking) {
+      if (optionCase.isDefault) {
+        if (hasDefault) {
+          SymbolInfo caseInfo;
+          caseInfo.begin = optionCase.loc.begin;
+          caseInfo.end = optionCase.loc.end;
+          caseInfo.line = optionCase.loc.line;
+          this->m_TypeErrorMessages.emplace_back(
+              "option can only declare one default '_' branch", caseInfo);
+        }
+        hasDefault = true;
+      } else {
+        auto patternInfo = optionCase.pattern->acceptBefore(*this);
+        if (enumInfo != nullptr &&
+            patternInfo.definedTypeName != enumInfo->name) {
+          this->m_TypeErrorMessages.emplace_back(
+              "option pattern enum type must match the option value enum",
+              patternInfo);
+        }
+        if (patternInfo.type == TypeSpecifier::SPEC_DEFINED &&
+            !patternInfo.definedTypeName.empty()) {
+          const auto dot = patternInfo.symbolName.find('.');
+          const auto memberName =
+              dot == std::string::npos ? patternInfo.symbolName
+                                       : patternInfo.symbolName.substr(dot + 1);
+          if (coveredMembers.count(memberName) != 0) {
+            this->m_TypeErrorMessages.emplace_back(
+                "duplicate option branch for enum member '" + memberName + "'",
+                patternInfo);
+          }
+          coveredMembers.insert(memberName);
+        }
+      }
+    }
+
+    enterScope(false);
+    this->m_SymbolId++;
+    for (auto &node : optionCase.scope) {
+      scopeHandler(node, SymbolScope::IfSt);
+    }
+    exitScope(false);
+  }
+
+  if (m_TypeChecking && enumInfo != nullptr && !hasDefault) {
+    for (const auto &member : enumInfo->members) {
+      if (coveredMembers.count(member.name) == 0) {
+        this->m_TypeErrorMessages.emplace_back(
+            "non-exhaustive option over enum '" + enumInfo->name +
+                "': missing member '" + member.name + "'",
+            symbolInfo);
+      }
+    }
+  }
+
+  return symbolInfo;
+}
+
 SymbolInfo Visitor::preVisit(BreakStmtAST &breakStmtAst) {
   SymbolInfo symbolInfo;
   symbolInfo.begin = breakStmtAst.m_SemLoc.begin;
@@ -3717,6 +3807,8 @@ void Visitor::scopeHandler(std::unique_ptr<IAST> &node,
       node->acceptBefore(*this);
     } else if (node->m_StmtKind == StmtKind::IfStmt) {
       node->acceptBefore(*this);
+    } else if (node->m_StmtKind == StmtKind::OptionStmt) {
+      node->acceptBefore(*this);
     } else if (node->m_StmtKind == StmtKind::BreakStmt ||
                node->m_StmtKind == StmtKind::ContinueStmt ||
                node->m_StmtKind == StmtKind::DropStmt) {
@@ -3753,6 +3845,8 @@ void Visitor::typeCheckerScopeHandler(std::unique_ptr<IAST> &node) {
     if (node->m_StmtKind == StmtKind::LoopStmt) {
       node->acceptBefore(*this);
     } else if (node->m_StmtKind == StmtKind::IfStmt) {
+      node->acceptBefore(*this);
+    } else if (node->m_StmtKind == StmtKind::OptionStmt) {
       node->acceptBefore(*this);
     } else if (node->m_StmtKind == StmtKind::BreakStmt ||
                node->m_StmtKind == StmtKind::ContinueStmt ||

@@ -16,6 +16,7 @@
 #include <ast/if_stmt.hpp>
 #include <ast/loop_stmt.hpp>
 #include <ast/new_ast.hpp>
+#include <ast/option_stmt.hpp>
 #include <ast/param_ast.hpp>
 #include <ast/ret_ast.hpp>
 #include <ast/scalar_ast.hpp>
@@ -3408,6 +3409,123 @@ skip_else:
   }*/
 
   // There is no returning value here.
+  return nullptr;
+}
+
+ValuePtr Visitor::visit(OptionStmtAST &optionStmtAst) {
+  llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
+
+  llvm::Value *matchedValue = optionStmtAst.m_Value->accept(*this);
+  if (matchedValue == nullptr) {
+    return nullptr;
+  }
+
+  std::vector<size_t> explicitCases;
+  int defaultCase = -1;
+  for (size_t i = 0; i < optionStmtAst.m_Cases.size(); ++i) {
+    if (optionStmtAst.m_Cases[i].isDefault) {
+      defaultCase = static_cast<int>(i);
+    } else {
+      explicitCases.push_back(i);
+    }
+  }
+
+  auto *afterBB =
+      llvm::BasicBlock::Create(Builder->getContext(), "option.end", parentFunc);
+  auto *defaultBB =
+      defaultCase >= 0
+          ? llvm::BasicBlock::Create(Builder->getContext(), "option.default",
+                                     parentFunc)
+          : nullptr;
+
+  auto enumPattern = [&](IAST *node, std::string &enumName,
+                         std::string &memberName) {
+    if (node == nullptr || node->m_ExprKind != ExprKind::BinOp) {
+      return false;
+    }
+    auto *binary = static_cast<BinaryOpAST *>(node);
+    if (binary->m_BinOpKind != B_DOT || binary->m_LHS == nullptr ||
+        binary->m_RHS == nullptr ||
+        binary->m_LHS->m_ExprKind != ExprKind::SymbolExpr ||
+        binary->m_RHS->m_ExprKind != ExprKind::SymbolExpr) {
+      return false;
+    }
+
+    auto *enumSymbol = static_cast<SymbolAST *>(binary->m_LHS.get());
+    auto *memberSymbol = static_cast<SymbolAST *>(binary->m_RHS.get());
+    enumName = enumSymbol->m_SymbolName;
+    memberName = memberSymbol->m_SymbolName;
+    return true;
+  };
+
+  if (explicitCases.empty()) {
+    if (defaultBB != nullptr) {
+      CreateBranchIfNeeded(defaultBB);
+      Builder->SetInsertPoint(defaultBB);
+      EmitScope(*this, optionStmtAst.m_Cases[defaultCase].scope);
+      CreateBranchIfNeeded(afterBB);
+    } else {
+      CreateBranchIfNeeded(afterBB);
+    }
+    Builder->SetInsertPoint(afterBB);
+    return nullptr;
+  }
+
+  for (size_t casePosition = 0; casePosition < explicitCases.size();
+       ++casePosition) {
+    const size_t caseIndex = explicitCases[casePosition];
+    std::string enumName;
+    std::string memberName;
+    if (!enumPattern(optionStmtAst.m_Cases[caseIndex].pattern.get(), enumName,
+                     memberName)) {
+      assert(false && "option enum pattern should have been checked in pass1.");
+    }
+
+    const auto enumIt = EnumTable.find(enumName);
+    if (enumIt == EnumTable.end()) {
+      assert(false && "option enum should have been registered in pass1.");
+    }
+    const auto *member = FindEnumMember(enumName, memberName);
+    if (member == nullptr) {
+      assert(false && "option enum member should have been checked in pass1.");
+    }
+
+    auto *caseBB =
+        llvm::BasicBlock::Create(Builder->getContext(), "option.case",
+                                 parentFunc);
+    llvm::BasicBlock *nextBB = nullptr;
+    const bool hasNextExplicit = casePosition + 1 < explicitCases.size();
+    if (hasNextExplicit) {
+      nextBB =
+          llvm::BasicBlock::Create(Builder->getContext(), "option.next",
+                                   parentFunc);
+    } else {
+      nextBB = defaultBB != nullptr ? defaultBB : afterBB;
+    }
+
+    auto *memberValue = llvm::ConstantInt::get(
+        matchedValue->getType(), member->value,
+        IsSigned(enumIt->second.underlyingType));
+    auto *condition = Builder->CreateICmpEQ(matchedValue, memberValue,
+                                            "option.match");
+    Builder->CreateCondBr(condition, caseBB, nextBB);
+
+    Builder->SetInsertPoint(caseBB);
+    EmitScope(*this, optionStmtAst.m_Cases[caseIndex].scope);
+    CreateBranchIfNeeded(afterBB);
+
+    if (hasNextExplicit) {
+      Builder->SetInsertPoint(nextBB);
+    }
+  }
+
+  if (defaultBB != nullptr) {
+    Builder->SetInsertPoint(defaultBB);
+    EmitScope(*this, optionStmtAst.m_Cases[defaultCase].scope);
+    CreateBranchIfNeeded(afterBB);
+  }
+
+  Builder->SetInsertPoint(afterBB);
   return nullptr;
 }
 
