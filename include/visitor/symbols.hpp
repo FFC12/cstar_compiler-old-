@@ -33,6 +33,7 @@ struct StructInfo {
   std::vector<StructFieldInfo> fields;
   std::map<std::string, size_t> fieldIndexes;
   std::vector<std::string> traits;
+  bool isFromIncludedModule = false;
 };
 
 struct TraitRequirementInfo {

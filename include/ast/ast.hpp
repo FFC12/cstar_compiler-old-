@@ -75,6 +75,7 @@ class IAST {
   DeclKind m_DeclKind;
   AccessSpecifier m_AccessSpecifier = ACCESS_PRIVATE;
   bool m_IsStaticDecl = false;
+  bool m_IsFromIncludedSource = false;
   SemanticLoc m_SemLoc;
 
  public:
@@ -99,6 +100,10 @@ class IAST {
     return this->m_AccessSpecifier == ACCESS_PUBLIC;
   }
   [[nodiscard]] bool isStaticDecl() const { return this->m_IsStaticDecl; }
+  void markFromIncludedSource() { this->m_IsFromIncludedSource = true; }
+  [[nodiscard]] bool isFromIncludedSource() const {
+    return this->m_IsFromIncludedSource;
+  }
 };
 
 #include <memory>

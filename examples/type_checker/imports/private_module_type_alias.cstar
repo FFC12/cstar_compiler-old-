@@ -1,0 +1,9 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+include "../modules/private_types_module.cstar" as hidden
+
+main() :: int32 {
+  hidden.HiddenPoint point;
+  ret 0;
+}

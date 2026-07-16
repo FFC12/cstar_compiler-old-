@@ -1,0 +1,29 @@
+public struct ModulePoint {
+  public int32 x;
+  public int32 y;
+  int32 cachedHash;
+
+  public constructor(int32 left, int32 right) {
+    self.x = left;
+    self.y = right;
+    self.cachedHash = left + right;
+  }
+
+  public sum :: int32 {
+    ret self.cachedHash;
+  }
+}
+
+public enum ModuleColor : uint8 {
+  Red,
+  Green,
+  Blue,
+}
+
+public trait ModuleReadable {
+  read() :: int32;
+}
+
+private struct HiddenPoint {
+  int32 x;
+}

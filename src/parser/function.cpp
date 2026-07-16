@@ -1,5 +1,7 @@
 #include <parser/parser.hpp>
 
+#include <algorithm>
+
 static bool IsValueOperatorToken(TokenKind kind) {
   switch (kind) {
     case PLUS:
@@ -24,9 +26,7 @@ ASTNode CStarParser::advanceDefinedType() {
 
   auto tokenPos = currentTokenInfo().getTokenPositionInfo();
   auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
-  auto symbol =
-      std::make_unique<SymbolAST>(currentTokenStr(), semLoc);
-  this->advance();
+  auto symbol = std::make_unique<SymbolAST>(advanceDefinedTypeName(), semLoc);
 
   bool isUniquePtr = false;
   size_t indirectionLevel = 0;
@@ -50,6 +50,30 @@ ASTNode CStarParser::advanceDefinedType() {
   return std::make_unique<TypeAST>(TypeSpecifier::SPEC_DEFINED,
                                    std::move(symbol), isUniquePtr, true, isRef,
                                    indirectionLevel, semLoc);
+}
+
+std::string CStarParser::advanceDefinedTypeName() {
+  expected(TokenKind::IDENT);
+  auto firstName = currentTokenStr();
+  this->advance();
+
+  if (!is(TokenKind::DOT)) {
+    return firstName;
+  }
+
+  auto dotInfo = currentTokenInfo();
+  if (std::find(m_ModuleAliases.begin(), m_ModuleAliases.end(), firstName) ==
+      m_ModuleAliases.end()) {
+    ParserError("Qualified type names must start with an include alias",
+                dotInfo);
+  }
+
+  this->advance();
+  expected(TokenKind::IDENT);
+  auto typeName = currentTokenStr();
+  this->advance();
+
+  return typeName;
 }
 
 ASTNode CStarParser::advanceFieldAccessChain(size_t begin, size_t line) {
@@ -523,6 +547,23 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         ParserError("Incomplete declaration or expression", currentTokenInfo());
       }
 
+      bool qualifiedTypeDeclaration = false;
+      if (is(TokenKind::IDENT) && nextToken == TokenKind::DOT) {
+        bool lookaheadOutOfSize = false;
+        const auto typeToken =
+            this->nextTokenInfo(lookaheadOutOfSize, 2).getTokenKind();
+        const auto afterTypeToken =
+            this->nextTokenInfo(lookaheadOutOfSize, 3).getTokenKind();
+        if (!lookaheadOutOfSize && typeToken == TokenKind::IDENT) {
+          qualifiedTypeDeclaration =
+              afterTypeToken == TokenKind::IDENT ||
+              afterTypeToken == TokenKind::STAR ||
+              afterTypeToken == TokenKind::XOR ||
+              afterTypeToken == TokenKind::AND ||
+              afterTypeToken == TokenKind::LSQPAR;
+        }
+      }
+
       size_t begin = currentTokenInfo().getTokenPositionInfo().begin;
       size_t line = currentTokenInfo().getTokenPositionInfo().line;
 
@@ -559,6 +600,7 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
       }
 
       if (isType(currentTokenInfo()) ||
+          qualifiedTypeDeclaration ||
           (!(is(TokenKind::PLUSPLUS) || is(TokenKind::MINUSMINUS)) &&
            (nextToken == TokenKind::IDENT || nextToken == TokenKind::STAR ||
             nextToken == TokenKind::XOR || nextToken == TokenKind::AND)) ||

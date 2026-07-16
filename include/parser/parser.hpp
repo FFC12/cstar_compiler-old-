@@ -279,6 +279,7 @@ class CStarParser {
   void funcDecl(DeclarationModifiers declarationModifiers,
                 bool forceForwardDecl = false,
                 const std::string& methodOwner = "");
+  std::string advanceDefinedTypeName();
   ASTNode advanceDefinedType();
   ASTNode advanceFieldAccessChain(size_t begin, size_t line);
   void advanceParams(std::vector<ASTNode>& params, bool isForwardDecl,

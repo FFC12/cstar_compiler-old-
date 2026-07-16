@@ -859,6 +859,19 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
     symbolInfo.isNeededEval = false;
   }
 
+  if (varAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED &&
+      varAst.m_Typename != nullptr &&
+      varAst.m_Typename->m_ExprKind == ExprKind::SymbolExpr) {
+    auto typeName =
+        dynamic_cast<SymbolAST *>(varAst.m_Typename.get())->m_SymbolName;
+    this->m_DefinedTypeName = typeName;
+    this->m_DefinedTypeFlag = true;
+    if (m_TypeChecking && this->m_TypeTable.count(typeName) == 0) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Unknown type '" + typeName + "'", symbolInfo);
+    }
+  }
+
   if (symbolInfo.isSubscriptable) {
     for (auto &v : varAst.m_ArrDim) {
       uint64_t dimension = 0;
@@ -967,19 +980,6 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
       this->m_TypeErrorMessages.emplace_back(
           "Invalid qualifier/type combination",
           symbolInfo, DiagnosticCode::SemanticInvalidQualifier);
-    }
-
-    if (varAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED) {
-      if (varAst.m_Typename->m_ExprKind == ExprKind::SymbolExpr) {
-        auto typeName =
-            dynamic_cast<SymbolAST *>(varAst.m_Typename.get())->m_SymbolName;
-        this->m_DefinedTypeName = typeName;
-        this->m_DefinedTypeFlag = true;
-        if (m_TypeChecking && this->m_TypeTable.count(typeName) == 0) {
-          this->m_TypeErrorMessages.emplace_back(
-              "Unknown type '" + typeName + "'", symbolInfo);
-        }
-      }
     }
 
     // reset all state flags.
@@ -1186,7 +1186,19 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
             lookup.begin = symbol->m_SemLoc.begin;
             lookup.end = symbol->m_SemLoc.end;
             lookup.line = symbol->m_SemLoc.line;
-            symbolValidation(symbol->m_SymbolName, lookup, resolved);
+            auto symbolName = symbol->m_SymbolName;
+            if (!symbolValidation(symbolName, lookup, resolved, true)) {
+              if (StructTable.count(symbol->m_SymbolName) != 0) {
+                this->m_TypeErrorMessages.emplace_back(
+                    "Struct type '" + symbol->m_SymbolName +
+                        "' has no instance; use a value before accessing "
+                        "fields",
+                    lookup);
+              } else {
+                symbolValidation(symbolName, lookup, resolved);
+              }
+              return resolved;
+            }
             if (resolved.type == TypeSpecifier::SPEC_DEFINED &&
                 resolved.indirectionLevel > 0) {
               resolved.indirectionLevel = 0;
@@ -1215,6 +1227,9 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
 
           auto base = self(self, fieldAccess->m_LHS.get());
           auto *fieldSymbol = static_cast<SymbolAST *>(fieldAccess->m_RHS.get());
+          if (base.symbolName.empty() && base.type == TypeSpecifier::SPEC_VOID) {
+            return resolved;
+          }
           if (base.type != TypeSpecifier::SPEC_DEFINED) {
             this->m_TypeErrorMessages.emplace_back(
                 "Field assignment requires a struct value", base);
@@ -1239,6 +1254,19 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
           }
 
           const auto &field = structIt->second.fields[fieldIt->second];
+          if (structIt->second.isFromIncludedModule && !field.isPublic &&
+              m_CurrentStructMethodOwner != base.definedTypeName) {
+            SymbolInfo fieldInfo;
+            fieldInfo.symbolName = fieldSymbol->m_SymbolName;
+            fieldInfo.begin = fieldSymbol->m_SemLoc.begin;
+            fieldInfo.end = fieldSymbol->m_SemLoc.end;
+            fieldInfo.line = fieldSymbol->m_SemLoc.line;
+            this->m_TypeErrorMessages.emplace_back(
+                "Field '" + field.name + "' of module struct '" +
+                    base.definedTypeName + "' is private",
+                fieldInfo);
+            return resolved;
+          }
           resolved = base;
           resolved.symbolName = base.symbolName + "." + field.name;
           resolved.type = field.type;
@@ -1928,7 +1956,19 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
           lookup.begin = symbol->m_SemLoc.begin;
           lookup.end = symbol->m_SemLoc.end;
           lookup.line = symbol->m_SemLoc.line;
-          symbolValidation(symbol->m_SymbolName, lookup, resolved);
+          auto symbolName = symbol->m_SymbolName;
+          if (!symbolValidation(symbolName, lookup, resolved, true)) {
+            if (StructTable.count(symbol->m_SymbolName) != 0) {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Struct type '" + symbol->m_SymbolName +
+                      "' has no instance; use a value before accessing "
+                      "fields",
+                  lookup);
+            } else {
+              symbolValidation(symbolName, lookup, resolved);
+            }
+            return resolved;
+          }
           if (resolved.type == TypeSpecifier::SPEC_DEFINED &&
               resolved.indirectionLevel > 0) {
             resolved.indirectionLevel = 0;
@@ -1955,6 +1995,9 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
 
         auto base = self(self, fieldAccess->m_LHS.get());
         auto *fieldSymbol = static_cast<SymbolAST *>(fieldAccess->m_RHS.get());
+        if (base.symbolName.empty() && base.type == TypeSpecifier::SPEC_VOID) {
+          return resolved;
+        }
         if (base.type != TypeSpecifier::SPEC_DEFINED) {
           this->m_TypeErrorMessages.emplace_back(
               "Field access requires a struct value", base);
@@ -1979,6 +2022,19 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
         }
 
         const auto &field = structIt->second.fields[fieldIt->second];
+        if (structIt->second.isFromIncludedModule && !field.isPublic &&
+            m_CurrentStructMethodOwner != base.definedTypeName) {
+          SymbolInfo fieldInfo;
+          fieldInfo.symbolName = fieldSymbol->m_SymbolName;
+          fieldInfo.begin = fieldSymbol->m_SemLoc.begin;
+          fieldInfo.end = fieldSymbol->m_SemLoc.end;
+          fieldInfo.line = fieldSymbol->m_SemLoc.line;
+          this->m_TypeErrorMessages.emplace_back(
+              "Field '" + field.name + "' of module struct '" +
+                  base.definedTypeName + "' is private",
+              fieldInfo);
+          return resolved;
+        }
         resolved = base;
         resolved.symbolName = base.symbolName + "." + field.name;
         resolved.type = field.type;
@@ -2847,8 +2903,17 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
 
   if (m_TypeChecking) {
     const bool previousStaticFunction = m_CurrentFunctionIsStatic;
+    const auto previousStructMethodOwner = m_CurrentStructMethodOwner;
     m_DroppedSemanticSymbols.clear();
     m_CurrentFunctionIsStatic = funcAst.m_IsStatic;
+    std::string currentMethodOwner;
+    std::string currentMethodName;
+    if (SplitStructMethodName(funcAst.m_FuncName, currentMethodOwner,
+                              currentMethodName)) {
+      m_CurrentStructMethodOwner = currentMethodOwner;
+    } else {
+      m_CurrentStructMethodOwner.clear();
+    }
     this->m_LastScopeSymbols = LocalSymbolTable[funcAst.m_FuncName];
     for (auto &param : funcAst.m_Params) {
       auto symbol = param->acceptBefore(*this);
@@ -2860,6 +2925,7 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
       typeCheckerScopeHandler(node);
     }
     m_CurrentFunctionIsStatic = previousStaticFunction;
+    m_CurrentStructMethodOwner = previousStructMethodOwner;
   } else {
     for (auto &param : funcAst.m_Params) {
       auto symbol = param->acceptBefore(*this);
@@ -3484,6 +3550,17 @@ std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
 
       if (ModuleAliases.count(alias->m_SymbolName) != 0) {
         return member->m_SymbolName;
+      }
+
+      if (StructTable.count(alias->m_SymbolName) != 0) {
+        if (emitDiagnostics) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Instance method call requires a struct value; use '" +
+                  alias->m_SymbolName + "::" + member->m_SymbolName +
+                  "(...)' only for static methods",
+              symbolInfo);
+        }
+        return {};
       }
 
       if (emitDiagnostics) {
@@ -4428,6 +4505,7 @@ SymbolInfo Visitor::preVisit(StructAST &structAst) {
   StructInfo info;
   info.name = structAst.m_Name;
   info.traits = structAst.m_Traits;
+  info.isFromIncludedModule = structAst.m_IsFromIncludedSource;
   for (const auto &field : structAst.m_Fields) {
     if (info.fieldIndexes.count(field.name) != 0) {
       SymbolInfo fieldSymbol = symbolInfo;

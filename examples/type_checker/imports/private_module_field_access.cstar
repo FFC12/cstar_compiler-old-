@@ -1,0 +1,9 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+include "../../smoke/modules/public_types_module.cstar" as types
+
+main() :: int32 {
+  types.ModulePoint point = ModulePoint(1, 2);
+  ret point.cachedHash;
+}

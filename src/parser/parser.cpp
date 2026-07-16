@@ -135,11 +135,11 @@ StructFieldInfo CStarParser::parseStructField(
 
   if (is(TokenKind::IDENT)) {
     field.type = TypeSpecifier::SPEC_DEFINED;
-    field.definedTypeName = currentTokenStr();
+    field.definedTypeName = advanceDefinedTypeName();
   } else {
     field.type = typeSpecifierOf(currentTokenInfo());
+    this->advance();
   }
-  this->advance();
 
   while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
     const bool currentPointerIsUnique =
@@ -500,8 +500,7 @@ void CStarParser::parseStructDecl(DeclarationModifiers declarationModifiers) {
     do {
       skipTopLevelTrivia();
       expected(TokenKind::IDENT);
-      traits.push_back(currentTokenStr());
-      this->advance();
+      traits.push_back(advanceDefinedTypeName());
       skipTopLevelTrivia();
       if (!is(TokenKind::COMMA)) {
         break;

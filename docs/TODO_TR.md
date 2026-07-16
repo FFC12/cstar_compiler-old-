@@ -148,7 +148,7 @@ examples/smoke/modules/        # helper; runner skip eder
 Güncel smoke doğrulama sonucu:
 
 ```text
-Toplam: 137, Basarili: 134, Diagnostic: 0, Skipped: 3, Hatali: 0, ExitMismatch: 0, CodeMismatch: 0, Crash/Assert: 0
+Toplam: 145, Basarili: 141, Diagnostic: 0, Skipped: 4, Hatali: 0, ExitMismatch: 0, CodeMismatch: 0, Crash/Assert: 0
 ```
 
 Eski düz liste notları tarihsel bağlam için aşağıda kalabilir; canonical dosya yerleşimi artık yukarıdaki kategori ağacıdır.
@@ -301,7 +301,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run_examples.ps1 -Su
 - `// expected-code: CSTNNNN` etiketi varsa runner diagnostic kodunu da doğrular.
 - Assert/crash kabul edilemez; önce bunlar izole edilmeli.
 - Dosyalar konu bazlı alt klasörlerdedir: `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums`, `structs`, `traits`, `proposals`. `modules` helper klasörüdür.
-- Güncel durumda `-ExpectDiagnostics` ile 107 dosyada 105 kontrollü diagnostic, 1 positive/pass ve 1 module helper skip var; crash/assert yok.
+- Güncel durumda `-ExpectDiagnostics` ile 117 dosyada 113 kontrollü diagnostic, 2 positive/pass ve 2 module helper skip var; crash/assert yok.
 
 Tamamlanan crash/assert düzeltmesi:
 
@@ -1262,8 +1262,23 @@ Tamamlanan:
   - `examples/type_checker/imports/052.cstar`
 - Top-level type visibility hedef kuralı netleştirildi:
   - `public struct`, `public trait` ve `public enum` de module global API havuzuna açılmalıdır; module API'si yalnız function/variable değildir.
-  - Mevcut include merge kodu `isPublicDecl()` ile public top-level declaration'ları genel olarak taşıyabilir; fakat `mod.Type`/alias type lookup, type symbol ownership ve diagnostic testleri henüz tamamlanmadı.
-  - Struct member visibility hedefi: field/method default private, `public` member module dışından erişilebilir. Parser field metadata'sında `isPublic` tutar; external access enforcement TODO'dur.
+  - `mod.Type` alias syntax'ı type pozisyonlarında parse edilir ve bugünkü source-merge mimarisinde public type'ın gerçek adına çözülür.
+  - Public top-level type include smoke tamamlandı:
+    - `examples/smoke/imports/include_module_public_types.cstar`
+    - `examples/smoke/modules/public_types_module.cstar`
+  - `public struct`, `public enum`, `public trait` ve `struct with mod.Trait` conformance bu smoke içinde doğrulanır.
+  - Private top-level type alias erişimi controlled diagnostic üretir:
+    - `examples/type_checker/imports/private_module_type_alias.cstar`
+    - `examples/type_checker/modules/private_types_module.cstar`
+  - Uninitialized local defined-type declaration için unknown type kontrolü initializer varlığına bağlı olmaktan çıkarıldı; diagnostic yerine codegen/pass crash'e düşme yolu kapatıldı.
+  - Struct member visibility MVP'si tamamlandı:
+    - Include edilen public struct field'ları default private kabul edilir; module dışından yalnız `public` field okunup yazılabilir.
+    - Struct'ın kendi method'ları private field'lara erişebilir; bu sayede public method private state'i kapsülleyebilir.
+    - Instance olmadan `StructType.field` erişimi controlled diagnostic üretir.
+    - Instance method için `StructType.method()` çağrısı controlled diagnostic üretir; static method canonical yazımı `StructType::method()` kalır.
+    - `examples/type_checker/imports/private_module_field_access.cstar`
+    - `examples/type_checker/structs/struct_type_field_access.cstar`
+    - `examples/type_checker/structs/struct_type_instance_method_call.cstar`
 - Module-level `static` MVP'si tamamlandı:
   - static function LLVM tarafında internal linkage alır
   - static global variable internal linkage/storage davranışını korur
@@ -1301,12 +1316,9 @@ Kalan:
   - String literal global storage dedup/constant linkage ve module-level lifetime netleştirilmeli.
   - Kalan test adayları: escape decode smoke, include edilen module fonksiyonuna string literal geçişi, mutable `char*` implicit reddinin return/assignment varyantları.
 - Gerçek namespace/type module sistemi ve `struct`/`trait`/`enum` type modül export/import davranışı Aşama 7 ile birlikte tamamlanacak:
-  - `public struct` include positive smoke.
-  - `public trait` include positive smoke ve `struct with mod.Trait` conformance kararı.
-  - `public enum` include positive smoke.
-  - `private struct`/`trait`/`enum` alias erişimi controlled diagnostic.
-  - `mod.Type` canonical syntax'ı mı, yoksa source-merge sonrası unqualified type mı kullanılacak netleştirilecek. Tavsiye: alias ile gelen API'de `mod.Type`, same-compilation merge içi helper'da unqualified internal symbol.
-  - Struct field/member visibility enforcement: same module private erişebilir, dış module yalnız `public` member'a erişebilir.
+  - Bugünkü MVP'de alias ile gelen API'de `mod.Type` canonical yazımdır; semantic isim source-merge nedeniyle şimdilik unqualified public type adına iner.
+  - Gerçek namespace ownership geldiğinde `mod.Type` isim çakışmalarını da taşıyan stable type identity üretmelidir.
+  - Gerçek namespace ownership geldiğinde bugünkü source-merge tabanlı field visibility kontrolü stable module identity üzerine taşınmalıdır.
   - `public static` function/global include smoke; bare `static` alias erişimi private diagnostic.
 - Not: Bugünkü include modeli source-level public declaration merge yapar; public function body içinde private module helper lowering'i gerçek module object/scope modeliyle birlikte genişletilecek.
 

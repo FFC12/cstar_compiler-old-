@@ -1167,8 +1167,7 @@ ASTNode CStarParser::advanceNewExpression(bool isShared) {
   }
 
   expected(TokenKind::IDENT);
-  auto typeName = currentTokenStr();
-  this->advance();
+  auto typeName = advanceDefinedTypeName();
 
   expected(TokenKind::LPAREN);
   ASTNode args = nullptr;

@@ -1,0 +1,32 @@
+// expected: pass
+// expected-exit: 31
+
+include "../modules/public_types_module.cstar" as types
+
+struct LocalReader with types.ModuleReadable {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+  }
+
+  read :: int32 {
+    ret self.value;
+  }
+}
+
+take_point(types.ModulePoint point) :: int32 {
+  ret point.sum() + point.x + point.y;
+}
+
+main() :: int32 {
+  types.ModulePoint point = ModulePoint(7, 5);
+  types.ModuleColor color = ModuleColor.Green;
+  LocalReader reader = LocalReader(4);
+
+  if (color == ModuleColor.Green) {
+    ret take_point(point) + reader.read() + 3;
+  }
+
+  ret 1;
+}

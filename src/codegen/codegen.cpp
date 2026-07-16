@@ -218,6 +218,7 @@ void CStarCodegen::appendIncludedSource(
     const auto declKind = node->getDeclKind();
     if (node->isPublicDecl() || declKind == DeclKind::ImportFuncDecl ||
         declKind == DeclKind::ImportVarDecl) {
+      node->markFromIncludedSource();
       m_AST.push_back(std::move(node));
     }
   }

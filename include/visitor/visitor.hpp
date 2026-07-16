@@ -119,6 +119,7 @@ class Visitor {
   SymbolInfo m_LastSymbolInfo;
   SymbolInfo m_LastFuncRetTypeInfo;
   bool m_CurrentFunctionIsStatic = false;
+  std::string m_CurrentStructMethodOwner;
 
   // Those are for if we're checking
   // some types which's pointing a address (ptr-type)

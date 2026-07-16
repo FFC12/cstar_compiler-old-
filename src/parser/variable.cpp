@@ -10,7 +10,10 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
   auto begin = currentTokenInfo().getTokenPositionInfo().begin;
   if (isDefinedType) {
     // will be passed to the VarDeclAST;
-    definedTypeSymbol = this->advanceSymbol();
+    auto tokenPos = currentTokenInfo().getTokenPositionInfo();
+    auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
+    definedTypeSymbol =
+        std::make_unique<SymbolAST>(advanceDefinedTypeName(), semLoc);
 
     type = TypeSpecifier::SPEC_DEFINED;
   } else {

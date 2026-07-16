@@ -858,9 +858,66 @@ Modül erişiminde `public` önemlidir. Include edilen dosyadaki public function
 
 Future hedef:
 
-- Public function yanında public struct, trait, enum gibi global havuz nesneleri de alias üzerinden erişilebilir olmalıdır.
-- Struct içi field/method visibility ayrı modelle netleşecektir.
+- Public function yanında public struct, trait ve enum gibi global havuz nesneleri de alias üzerinden type pozisyonunda erişilebilir.
+- `mod.Type` bugünkü source-merge mimarisinde public type'ın gerçek adına çözülür; bu nedenle constructor/member erişiminde mevcut MVP hâlâ unqualified public type adını kullanır.
+- Private top-level type alias erişimi `Unknown type` diagnostic'i üretir.
+- Include edilen public struct içinde field default private kabul edilir; module dışından yalnız `public` field okunup yazılabilir.
+- Struct'ın kendi method'ları private field'lara erişebilir; public method private state'i güvenli bir API arkasında saklayabilir.
+- Instance olmadan `StructType.field` erişimi geçersizdir. Instance method çağrısı da `StructType.method()` ile yapılamaz; static method için canonical yazım `StructType::method()` kalır.
 - `public static` dışarı açılabilir static sembol; sadece `static` default-private kabul edilmelidir.
+
+```cstar
+include "../modules/public_types_module.cstar" as types
+
+struct LocalReader with types.ModuleReadable {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+  }
+
+  read :: int32 {
+    ret self.value;
+  }
+}
+
+take_point(types.ModulePoint point) :: int32 {
+  ret point.sum() + point.x + point.y;
+}
+
+main() :: int32 {
+  types.ModulePoint point = ModulePoint(7, 5);
+  types.ModuleColor color = ModuleColor.Green;
+  LocalReader reader = LocalReader(4);
+
+  if (color == ModuleColor.Green) {
+    ret take_point(point) + reader.read() + 3;
+  }
+
+  ret 1;
+}
+```
+
+Private module field ve instance'sız member erişimi diagnostic üretir:
+
+```cstar
+include "../modules/public_types_module.cstar" as types
+
+main() :: int32 {
+  types.ModulePoint point = ModulePoint(7, 5);
+  ret point.cachedHash; // diagnostic: private module field
+}
+```
+
+```cstar
+struct Point {
+  public int32 x;
+}
+
+main() :: int32 {
+  ret Point.x; // diagnostic: struct type instance değildir
+}
+```
 
 ### 13.3 Export
 
