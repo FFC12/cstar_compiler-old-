@@ -71,6 +71,8 @@ else()
   message(STATUS "Target data layout was not detected; LLVM will use its default")
 endif()
 
+file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" CSTAR_SOURCE_ROOT)
+
 configure_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/include/cstar_config.hpp.in"
   "${CMAKE_CURRENT_BINARY_DIR}/generated/cstar_config.hpp"

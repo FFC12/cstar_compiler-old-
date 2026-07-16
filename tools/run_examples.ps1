@@ -120,11 +120,15 @@ if ((Split-Path -Leaf $ResolvedBuildDir) -in @("Debug", "Release")) {
 
 $RunDir = Join-Path $ResolvedBuildDir "example-runs"
 New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
+$RunOutputDir = Join-Path $RunDir ".cstar-out"
+New-Item -ItemType Directory -Force -Path $RunOutputDir | Out-Null
 
 $OldPath = $env:PATH
+$OldCstarOutputDir = $env:CSTAR_OUTPUT_DIR
 if (Test-Path -LiteralPath "C:\msys64\ucrt64\bin") {
   $env:PATH = "C:\msys64\ucrt64\bin;C:\msys64\usr\bin;$env:PATH"
 }
+$env:CSTAR_OUTPUT_DIR = $RunOutputDir
 
 $Files = Get-ChildItem -LiteralPath $ExamplesDir -Filter "*.cstar" -Recurse |
   Sort-Object FullName
@@ -174,7 +178,7 @@ foreach ($File in $Files) {
 
   Write-Host "[RUN] $RelativeName" -ForegroundColor Cyan
 
-  Push-Location $RunDir
+  Push-Location $Root
   try {
     $CompilerOutput = & $Cstar $File.FullName --run --stats 2>&1
     $ExitCode = $LASTEXITCODE
@@ -232,7 +236,9 @@ Write-Host ("Toplam: {0}, Basarili: {1}, Diagnostic: {2}, Skipped: {3}, Hatali: 
 
 if ($Failures.Count -gt 0) {
   $env:PATH = $OldPath
+  $env:CSTAR_OUTPUT_DIR = $OldCstarOutputDir
   exit 1
 }
 
 $env:PATH = $OldPath
+$env:CSTAR_OUTPUT_DIR = $OldCstarOutputDir

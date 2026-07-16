@@ -1,4 +1,5 @@
 #include <parser/parser.hpp>
+#include <cstar_config.hpp>
 
 #include <algorithm>
 #include <cstdint>
@@ -65,6 +66,45 @@ static std::filesystem::path ResolveLogicalIncludeSource(
   }
 
   return {};
+}
+
+static bool IsStdSourceIncludePath(const std::filesystem::path& path) {
+  return path.begin() != path.end() && *path.begin() == "std";
+}
+
+static std::filesystem::path ResolveConfiguredStdlibRoot() {
+  if (const char* stdlibPath = std::getenv("CSTAR_STDLIB_PATH")) {
+    if (stdlibPath[0] != '\0') {
+      return std::filesystem::path(stdlibPath);
+    }
+  }
+
+  if (const char* sourceRoot = std::getenv("CSTAR_SOURCE_ROOT")) {
+    if (sourceRoot[0] != '\0') {
+      return std::filesystem::path(sourceRoot) / "std";
+    }
+  }
+
+  return std::filesystem::path(CSTAR_SOURCE_ROOT) / "std";
+}
+
+static std::filesystem::path ResolveSourceIncludePath(
+    const std::filesystem::path& includePath,
+    const std::filesystem::path& includingFile) {
+  if (!includePath.is_relative()) {
+    return std::filesystem::absolute(includePath).lexically_normal();
+  }
+
+  std::filesystem::path resolved;
+  if (IsStdSourceIncludePath(includePath)) {
+    auto relativeInsideStd = includePath;
+    relativeInsideStd = relativeInsideStd.lexically_relative("std");
+    resolved = ResolveConfiguredStdlibRoot() / relativeInsideStd;
+  } else {
+    resolved = includingFile.parent_path() / includePath;
+  }
+
+  return std::filesystem::absolute(resolved).lexically_normal();
 }
 
 void CStarParser::parse() {
@@ -140,16 +180,8 @@ void CStarParser::collectPublicMacrosFromSourceIncludes() {
       continue;
     }
 
-    if (includePath.is_relative()) {
-      if (includePath.begin() != includePath.end() &&
-          *includePath.begin() == "std") {
-        includePath = std::filesystem::current_path() / includePath;
-      } else {
-        auto sourcePath = std::filesystem::path(m_Lexer.getFilepath().get());
-        includePath = sourcePath.parent_path() / includePath;
-      }
-    }
-    includePath = std::filesystem::absolute(includePath).lexically_normal();
+    auto sourcePath = std::filesystem::path(m_Lexer.getFilepath().get());
+    includePath = ResolveSourceIncludePath(includePath, sourcePath);
     collectPublicMacrosFromIncludedFile(includePath,
                                         m_TokenStream[cursor].getTokenAsStr());
   }
@@ -191,14 +223,10 @@ void CStarParser::collectPublicMacrosFromIncludedFile(
           (tokens[cursor].getTokenKind() == TokenKind::LITERAL ||
            tokens[cursor].getTokenKind() == TokenKind::LETTER)) {
         const auto nestedName = tokens[cursor].getTokenAsStr();
-        if (nestedName.size() >= 6 &&
-            nestedName.substr(nestedName.size() - 6) == ".cstar") {
-          std::filesystem::path nestedPath(nestedName);
-          if (nestedPath.is_relative()) {
-            nestedPath = path.parent_path() / nestedPath;
-          }
+        auto nestedPath = ResolveLogicalIncludeSource(nestedName);
+        if (!nestedPath.empty()) {
           collectPublicMacrosFromIncludedFile(
-              std::filesystem::absolute(nestedPath).lexically_normal(), alias);
+              ResolveSourceIncludePath(nestedPath, path), alias);
         }
       }
     }

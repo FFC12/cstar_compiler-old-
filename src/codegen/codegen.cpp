@@ -172,6 +172,44 @@ std::string CStarCodegen::nativeLinkArgument(const std::string& library) {
 #endif
 }
 
+static bool IsStdSourceIncludePath(const std::filesystem::path& path) {
+  return path.begin() != path.end() && *path.begin() == "std";
+}
+
+static std::filesystem::path ResolveConfiguredStdlibRoot() {
+  if (const char* stdlibPath = std::getenv("CSTAR_STDLIB_PATH")) {
+    if (stdlibPath[0] != '\0') {
+      return std::filesystem::path(stdlibPath);
+    }
+  }
+
+  if (const char* sourceRoot = std::getenv("CSTAR_SOURCE_ROOT")) {
+    if (sourceRoot[0] != '\0') {
+      return std::filesystem::path(sourceRoot) / "std";
+    }
+  }
+
+  return std::filesystem::path(CSTAR_SOURCE_ROOT) / "std";
+}
+
+static std::filesystem::path ResolveSourceIncludePath(
+    const std::filesystem::path& includePath,
+    const std::filesystem::path& includingFile) {
+  if (!includePath.is_relative()) {
+    return std::filesystem::absolute(includePath).lexically_normal();
+  }
+
+  std::filesystem::path resolved;
+  if (IsStdSourceIncludePath(includePath)) {
+    auto relativeInsideStd = includePath.lexically_relative("std");
+    resolved = ResolveConfiguredStdlibRoot() / relativeInsideStd;
+  } else {
+    resolved = includingFile.parent_path() / includePath;
+  }
+
+  return std::filesystem::absolute(resolved).lexically_normal();
+}
+
 int CStarCodegen::runCommand(const std::vector<std::string>& args,
                              bool reportBackendFailure) const {
   std::ostringstream command;
@@ -209,15 +247,7 @@ int CStarCodegen::runCommand(const std::vector<std::string>& args,
 void CStarCodegen::appendIncludedSource(
     const std::filesystem::path& includePath,
     std::set<std::filesystem::path>& seen) {
-  auto resolved = includePath;
-  if (resolved.is_relative()) {
-    if (resolved.begin() != resolved.end() && *resolved.begin() == "std") {
-      resolved = std::filesystem::current_path() / resolved;
-    } else {
-      resolved = m_InputPath.parent_path() / resolved;
-    }
-  }
-  resolved = std::filesystem::absolute(resolved).lexically_normal();
+  auto resolved = ResolveSourceIncludePath(includePath, m_InputPath);
 
   if (seen.count(resolved) > 0) {
     return;
@@ -257,7 +287,7 @@ void CStarCodegen::appendIncludedSource(
   }
 
   for (const auto& nestedInclude : parser.sourceIncludes()) {
-    appendIncludedSource(resolved.parent_path() / nestedInclude, seen);
+    appendIncludedSource(ResolveSourceIncludePath(nestedInclude, resolved), seen);
   }
 
   std::vector<ASTNode> includedAST;

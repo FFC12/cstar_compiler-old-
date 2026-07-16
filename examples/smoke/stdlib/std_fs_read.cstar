@@ -7,7 +7,11 @@ main() :: int32 {
   fs.FileReadResult result = fs.read_text_4096(
       "examples/smoke/stdlib/data/fs_sample.txt", buffer);
 
-  int32 score = cast<int32>(result.length);
+  int64 length = result.length;
+  int32 score = 0;
+  if (length >= 11) {
+    score += 12;
+  }
   if (result.success()) {
     score += 4;
   }
