@@ -1,0 +1,13 @@
+// expected-exit: 24
+
+sum_multiline(
+  int32 left,
+  int32 right,
+  int32 extra
+) :: int32 {
+  ret left + right + extra;
+}
+
+main() :: int32 {
+  ret sum_multiline(7, 8, 9);
+}

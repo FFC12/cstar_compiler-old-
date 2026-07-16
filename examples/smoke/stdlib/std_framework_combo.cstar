@@ -1,0 +1,27 @@
+// expected-exit: 71
+
+include "../../../std/math.cstar" as math
+include "../../../std/print.cstar" as io
+include "../../../std/time.cstar" as time
+include "../../../std/network.cstar" as net
+
+main() :: int32 {
+  math.Vec2i velocity = Vec2i(6, 8);
+  int64 length = velocity.manhattan();
+  int64 bounded = math.clamp_i64(length, 0, 20);
+  int64 elapsed = time.elapsed_ticks(time.from_ticks(10), time.from_ticks(17));
+
+  net.Endpoint endpoint = Endpoint(12, net.default_port(Protocol.Https),
+                                   Protocol.Https);
+
+  int32 score = cast<int32>(bounded + elapsed);
+  if (net.endpoint_is_secure(endpoint)) {
+    score += 50;
+  }
+
+  io.write("framework score ");
+  io.write_i32(score);
+  io.line();
+
+  ret score;
+}

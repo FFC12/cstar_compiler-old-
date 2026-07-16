@@ -1,0 +1,15 @@
+// expected-exit: 7
+
+include "../../../std/print.cstar" as io
+
+main() :: int32 {
+  io.write("std print ");
+  io.write_i32(7);
+  io.write(" ");
+  io.write_i64(99);
+  io.write(" ");
+  io.write_f64(1.5);
+  io.line();
+  io.flush();
+  ret 7;
+}

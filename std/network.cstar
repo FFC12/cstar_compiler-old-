@@ -1,0 +1,104 @@
+public enum Protocol : uint8 {
+  Http,
+  Https,
+  Tcp,
+  Udp,
+}
+
+attribute StdNetworkValue for struct {
+  $emit function std_network_value_metadata() :: void {
+    ret;
+  }
+}
+
+public macro http_success($status: expr) -> expr {
+  (($status) >= 200 && ($status) <= 299)
+}
+
+public trait SecureEndpoint {
+  secure() :: bool;
+}
+
+@StdNetworkValue
+public struct Endpoint {
+  public int64 host_id;
+  public int32 port;
+  public Protocol scheme;
+
+  public constructor(int64 hostId, int32 port, Protocol scheme) {
+    self.host_id = hostId;
+    self.port = port;
+    self.scheme = scheme;
+  }
+
+  public secure() :: bool {
+    ret is_secure(self.scheme);
+  }
+
+  public defaulted() :: bool {
+    int32 expected = default_port(self.scheme);
+    ret self.port == expected;
+  }
+
+  public operator ==(Endpoint rhs) :: bool {
+    ret self.host_id == rhs.host_id &&
+        self.port == rhs.port &&
+        self.scheme == rhs.scheme;
+  }
+}
+
+public default_port(Protocol scheme) :: int32 {
+  if (scheme == Protocol.Http) {
+    ret 80;
+  }
+  if (scheme == Protocol.Https) {
+    ret 443;
+  }
+  ret 0;
+}
+
+public is_secure(Protocol scheme) :: bool {
+  ret scheme == Protocol.Https;
+}
+
+public status_success(int32 status) :: bool {
+  ret http_success(status);
+}
+
+public status_redirect(int32 status) :: bool {
+  ret status >= 300 && status <= 399;
+}
+
+public retry_backoff_ms(int32 attempt) :: int32 {
+  if (attempt <= 0) {
+    ret 0;
+  }
+  if (attempt == 1) {
+    ret 100;
+  }
+  if (attempt == 2) {
+    ret 250;
+  }
+  if (attempt == 3) {
+    ret 500;
+  }
+  ret 1000;
+}
+
+public endpoint(int64 hostId, Protocol scheme) :: Endpoint {
+  Endpoint value = Endpoint(hostId, default_port(scheme), scheme);
+  ret value;
+}
+
+public endpoint_with_port(int64 hostId, int32 port, Protocol scheme) :: Endpoint {
+  Endpoint value = Endpoint(hostId, port, scheme);
+  ret value;
+}
+
+public endpoint_is_secure(Endpoint value) :: bool {
+  ret value.secure();
+}
+
+public endpoint_is_defaulted(Endpoint value) :: bool {
+  ret value.defaulted();
+}

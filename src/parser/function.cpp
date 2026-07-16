@@ -175,6 +175,10 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
 
     advanceParams(params, isForwardDecl, isVariadic);
 
+    while (is(TokenKind::LINEFEED) || is(TokenKind::COMMENT)) {
+      this->advance();
+    }
+
     expected(TokenKind::RPAREN);
 
     // ')'
@@ -287,6 +291,10 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
 void CStarParser::advanceParams(std::vector<ASTNode>& params,
                                 bool isForwardDecl, bool& isVariadic) {
 param_again:
+  while (is(TokenKind::LINEFEED) || is(TokenKind::COMMENT)) {
+    this->advance();
+  }
+
   if (is(TokenKind::TRIPLET)) {
     isVariadic = true;
     this->advance();
@@ -496,6 +504,9 @@ param_again:
   if (is(TokenKind::COMMA)) {
     // skip ','
     this->advance();
+    while (is(TokenKind::LINEFEED) || is(TokenKind::COMMENT)) {
+      this->advance();
+    }
     if (isVariadic) {
       ParserError("Unexpected parameter after variadic marker '...'",
                   currentTokenInfo());

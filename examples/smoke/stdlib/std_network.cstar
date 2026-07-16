@@ -1,0 +1,18 @@
+// expected-exit: 38
+
+include "../../../std/network.cstar" as net
+
+main() :: int32 {
+  int32 score = 0;
+  if (net.status_success(204)) {
+    score += 10;
+  }
+  if (net.is_secure(Protocol.Https)) {
+    score += 20;
+  }
+  if (net.status_redirect(302)) {
+    score += 3;
+  }
+  score += net.retry_backoff_ms(3) / 100;
+  ret score;
+}

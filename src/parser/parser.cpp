@@ -2,9 +2,13 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <set>
+#include <sstream>
 #include <string>
 
 static bool IsProposalOnlyTopLevel(TokenKind kind) {
@@ -42,6 +46,7 @@ static bool IsMacroReturnKindName(const std::string& name) {
 
 void CStarParser::parse() {
   m_TokenStream = this->m_Lexer.perform();
+  collectPublicMacrosFromSourceIncludes();
   preprocessCompileTimeSurface();
   if (m_StatsEnabled) {
     this->m_Lexer.lexerStats();
@@ -61,6 +66,154 @@ void CStarParser::parse() {
   }*/
 
   this->parserStats();
+}
+
+void CStarParser::collectPublicMacrosFromSourceIncludes() {
+  for (size_t index = 0; index < m_TokenStream.size(); ++index) {
+    if (m_TokenStream[index].getTokenKind() != TokenKind::INCLUDE) {
+      continue;
+    }
+
+    size_t cursor = index + 1;
+    while (cursor < m_TokenStream.size() &&
+           (m_TokenStream[cursor].getTokenKind() == TokenKind::LINEFEED ||
+            m_TokenStream[cursor].getTokenKind() == TokenKind::COMMENT)) {
+      cursor += 1;
+    }
+
+    if (cursor >= m_TokenStream.size() ||
+        (m_TokenStream[cursor].getTokenKind() != TokenKind::LITERAL &&
+         m_TokenStream[cursor].getTokenKind() != TokenKind::LETTER)) {
+      continue;
+    }
+
+    const auto includeName = m_TokenStream[cursor].getTokenAsStr();
+    if (includeName.size() < 6 ||
+        includeName.substr(includeName.size() - 6) != ".cstar") {
+      continue;
+    }
+    cursor += 1;
+
+    while (cursor < m_TokenStream.size() &&
+           (m_TokenStream[cursor].getTokenKind() == TokenKind::LINEFEED ||
+            m_TokenStream[cursor].getTokenKind() == TokenKind::COMMENT)) {
+      cursor += 1;
+    }
+
+    if (cursor >= m_TokenStream.size() ||
+        m_TokenStream[cursor].getTokenKind() != TokenKind::AS) {
+      continue;
+    }
+    cursor += 1;
+
+    while (cursor < m_TokenStream.size() &&
+           (m_TokenStream[cursor].getTokenKind() == TokenKind::LINEFEED ||
+            m_TokenStream[cursor].getTokenKind() == TokenKind::COMMENT)) {
+      cursor += 1;
+    }
+
+    if (cursor >= m_TokenStream.size() ||
+        m_TokenStream[cursor].getTokenKind() != TokenKind::IDENT) {
+      continue;
+    }
+
+    std::filesystem::path includePath(includeName);
+    if (includePath.is_relative()) {
+      auto sourcePath = std::filesystem::path(m_Lexer.getFilepath().get());
+      includePath = sourcePath.parent_path() / includePath;
+    }
+    includePath = std::filesystem::absolute(includePath).lexically_normal();
+    collectPublicMacrosFromIncludedFile(includePath,
+                                        m_TokenStream[cursor].getTokenAsStr());
+  }
+}
+
+void CStarParser::collectPublicMacrosFromIncludedFile(
+    const std::filesystem::path& path, const std::string& alias) {
+  if (m_PreprocessedMacroIncludes.count(path) != 0) {
+    return;
+  }
+  m_PreprocessedMacroIncludes.insert(path);
+
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    return;
+  }
+
+  std::stringstream ss;
+  ss << file.rdbuf();
+
+  auto realPathStr = path.string();
+  auto realPath = static_cast<char*>(std::malloc(realPathStr.size() + 1));
+  std::memcpy(realPath, realPathStr.c_str(), realPathStr.size() + 1);
+  const std::shared_ptr<char> realPathPtr(realPath, std::free);
+
+  CStarLexer lexer(ss.str(), realPathPtr);
+  auto tokens = lexer.perform();
+  std::vector<TokenInfo> ignoredOutput;
+
+  for (size_t index = 0; index < tokens.size();) {
+    if (tokens[index].getTokenKind() == TokenKind::INCLUDE) {
+      size_t cursor = index + 1;
+      while (cursor < tokens.size() &&
+             (tokens[cursor].getTokenKind() == TokenKind::LINEFEED ||
+              tokens[cursor].getTokenKind() == TokenKind::COMMENT)) {
+        cursor += 1;
+      }
+      if (cursor < tokens.size() &&
+          (tokens[cursor].getTokenKind() == TokenKind::LITERAL ||
+           tokens[cursor].getTokenKind() == TokenKind::LETTER)) {
+        const auto nestedName = tokens[cursor].getTokenAsStr();
+        if (nestedName.size() >= 6 &&
+            nestedName.substr(nestedName.size() - 6) == ".cstar") {
+          std::filesystem::path nestedPath(nestedName);
+          if (nestedPath.is_relative()) {
+            nestedPath = path.parent_path() / nestedPath;
+          }
+          collectPublicMacrosFromIncludedFile(
+              std::filesystem::absolute(nestedPath).lexically_normal(), alias);
+        }
+      }
+    }
+
+    if (tokens[index].getTokenKind() == TokenKind::PUBLIC) {
+      size_t cursor = index + 1;
+      while (cursor < tokens.size() &&
+             (tokens[cursor].getTokenKind() == TokenKind::LINEFEED ||
+              tokens[cursor].getTokenKind() == TokenKind::COMMENT)) {
+        cursor += 1;
+      }
+      if (cursor < tokens.size() &&
+          tokens[cursor].getTokenKind() == TokenKind::MACRO &&
+          cursor + 1 < tokens.size() &&
+          tokens[cursor + 1].getTokenKind() == TokenKind::IDENT) {
+        const auto qualifiedName =
+            alias + "." + tokens[cursor + 1].getTokenAsStr();
+        index = collectIncludedPublicMacroDefinition(cursor, tokens,
+                                                     qualifiedName);
+        continue;
+      }
+    }
+    index += 1;
+  }
+}
+
+size_t CStarParser::collectIncludedPublicMacroDefinition(
+    size_t index, std::vector<TokenInfo>& tokens,
+    const std::string& qualifiedName) {
+  auto savedTokens = std::move(m_TokenStream);
+  m_TokenStream = std::move(tokens);
+
+  std::vector<TokenInfo> ignoredOutput;
+  const size_t nextIndex = collectMacroDefinition(index, ignoredOutput);
+  auto macro = m_CompileTimeMacros[m_TokenStream[index + 1].getTokenAsStr()];
+  m_CompileTimeMacros.erase(m_TokenStream[index + 1].getTokenAsStr());
+  macro.name = qualifiedName;
+  m_CompileTimeMacros[qualifiedName] = std::move(macro);
+
+  tokens = std::move(m_TokenStream);
+  m_TokenStream = std::move(savedTokens);
+  return nextIndex;
 }
 
 void CStarParser::skipTopLevelTrivia() {
@@ -410,18 +563,28 @@ bool CStarParser::tryExpandMacroCall(size_t& index,
     return false;
   }
 
-  auto macroIt = m_CompileTimeMacros.find(m_TokenStream[index].getTokenAsStr());
+  std::string macroName = m_TokenStream[index].getTokenAsStr();
+  size_t callNameEnd = index;
+  if (index + 3 < m_TokenStream.size() &&
+      m_TokenStream[index + 1].getTokenKind() == TokenKind::DOT &&
+      m_TokenStream[index + 2].getTokenKind() == TokenKind::IDENT &&
+      m_TokenStream[index + 3].getTokenKind() == TokenKind::LPAREN) {
+    macroName += "." + m_TokenStream[index + 2].getTokenAsStr();
+    callNameEnd = index + 2;
+  }
+
+  auto macroIt = m_CompileTimeMacros.find(macroName);
   if (macroIt == m_CompileTimeMacros.end()) {
     return false;
   }
 
-  if (index + 1 >= m_TokenStream.size() ||
-      m_TokenStream[index + 1].getTokenKind() != TokenKind::LPAREN) {
+  if (callNameEnd + 1 >= m_TokenStream.size() ||
+      m_TokenStream[callNameEnd + 1].getTokenKind() != TokenKind::LPAREN) {
     return false;
   }
 
   const auto callToken = m_TokenStream[index];
-  size_t cursor = index + 2;
+  size_t cursor = callNameEnd + 2;
   std::vector<std::vector<TokenInfo>> args;
   std::vector<TokenInfo> currentArg;
   size_t parenDepth = 0;
@@ -505,6 +668,20 @@ void CStarParser::preprocessCompileTimeSurface() {
       if (m_TokenStream[i].getTokenKind() == TokenKind::ATTRIB) {
         i = copyAttributeDefinition(i, output);
         continue;
+      }
+      if (m_TokenStream[i].getTokenKind() == TokenKind::PUBLIC) {
+        size_t cursor = i + 1;
+        while (cursor < m_TokenStream.size() &&
+               (m_TokenStream[cursor].getTokenKind() == TokenKind::LINEFEED ||
+                m_TokenStream[cursor].getTokenKind() == TokenKind::COMMENT)) {
+          cursor += 1;
+        }
+        if (cursor < m_TokenStream.size() &&
+            m_TokenStream[cursor].getTokenKind() == TokenKind::MACRO) {
+          i = collectMacroDefinition(cursor, output);
+          changed = true;
+          continue;
+        }
       }
       if (m_TokenStream[i].getTokenKind() == TokenKind::MACRO) {
         i = collectMacroDefinition(i, output);

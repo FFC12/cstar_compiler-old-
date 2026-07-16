@@ -1,0 +1,147 @@
+import from "std:crt" {
+  printf(const char* fmt, ...) :: int32;
+  scanf(const char* fmt, ...) :: int32;
+  fflush(void* stream) :: int32;
+  getchar() :: int32;
+}
+
+public static char input_buffer[256];
+
+attribute StdPrintSurface for struct {
+  $emit function std_print_surface_metadata() :: void {
+    ret;
+  }
+}
+
+public macro print_line($text: expr) -> stmt {
+  write($text);
+  line()
+}
+
+public trait TextWriter {
+  write(const char* text) :: void;
+  line() :: void;
+  flush() :: void;
+}
+
+@StdPrintSurface
+public struct ConsoleWriter with TextWriter {
+  public int32 written;
+
+  public constructor() {
+    self.written = 0;
+  }
+
+  public write(const char* text) :: void {
+    printf("%s", text);
+    self.written += 1;
+    ret;
+  }
+
+  public line() :: void {
+    printf("\n");
+    self.written += 1;
+    ret;
+  }
+
+  public flush() :: void {
+    fflush(unsafe_cast<void*>(0));
+    ret;
+  }
+}
+
+public write(const char* text) :: void {
+  printf("%s", text);
+  ret;
+}
+
+public writeln(const char* text) :: void {
+  print_line(text);
+  ret;
+}
+
+public write_char(int32 ch) :: void {
+  printf("%c", ch);
+  ret;
+}
+
+public write_i32(int32 value) :: void {
+  printf("%d", value);
+  ret;
+}
+
+public write_i64(int64 value) :: void {
+  printf("%lld", value);
+  ret;
+}
+
+public write_f64(float64 value) :: void {
+  printf("%f", value);
+  ret;
+}
+
+public line() :: void {
+  printf("\n");
+  ret;
+}
+
+public flush() :: void {
+  fflush(unsafe_cast<void*>(0));
+  ret;
+}
+
+public read_i64() :: int64 {
+  int32 ch = getchar();
+
+  loop (ch == 9 || ch == 10 || ch == 13 || ch == 32) {
+    ch = getchar();
+  }
+
+  int64 sign = 1;
+  if (ch == 45) {
+    sign = 0 - 1;
+    ch = getchar();
+  }
+
+  int64 value = 0;
+  loop (ch >= 48 && ch <= 57) {
+    value *= 10;
+    value += cast<int64>(ch - 48);
+    ch = getchar();
+  }
+
+  ret value * sign;
+}
+
+public read_i32() :: int32 {
+  int32 ch = getchar();
+
+  loop (ch == 9 || ch == 10 || ch == 13 || ch == 32) {
+    ch = getchar();
+  }
+
+  int32 sign = 1;
+  if (ch == 45) {
+    sign = 0 - 1;
+    ch = getchar();
+  }
+
+  int32 value = 0;
+  loop (ch >= 48 && ch <= 57) {
+    value *= 10;
+    value += ch - 48;
+    ch = getchar();
+  }
+
+  ret value * sign;
+}
+
+public read_token() :: char* {
+  scanf("%255s", input_buffer);
+  ret ref input_buffer[0];
+}
+
+public console() :: ConsoleWriter {
+  ConsoleWriter writer = ConsoleWriter();
+  ret writer;
+}

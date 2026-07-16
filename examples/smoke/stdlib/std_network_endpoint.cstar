@@ -1,0 +1,29 @@
+// expected-exit: 33
+
+include "../../../std/network.cstar" as net
+
+main() :: int32 {
+  net.Endpoint primary = Endpoint(42, net.default_port(Protocol.Https),
+                                  Protocol.Https);
+  net.Endpoint same = net.endpoint(42, Protocol.Https);
+  net.Endpoint custom = net.endpoint_with_port(42, 8080, Protocol.Http);
+
+  int32 score = 0;
+  if (primary.secure()) {
+    score += 10;
+  }
+  if (primary.defaulted()) {
+    score += 10;
+  }
+  if (primary == same) {
+    score += 10;
+  }
+  if (!custom.secure()) {
+    score += 3;
+  }
+  if (net.http_success(204)) {
+    score += 2;
+  }
+
+  ret score;
+}

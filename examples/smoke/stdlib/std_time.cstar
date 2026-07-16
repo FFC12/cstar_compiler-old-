@@ -1,0 +1,11 @@
+// expected-exit: 85
+
+include "../../../std/time.cstar" as time
+
+main() :: int32 {
+  time.Instant start = Instant(100);
+  time.Instant finish = Instant(115);
+  int64 elapsed = time.elapsed_ticks(start, finish);
+  int64 bounded = time.clamp_timeout_ms(70);
+  ret cast<int32>(elapsed + bounded);
+}

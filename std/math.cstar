@@ -1,0 +1,130 @@
+attribute StdMathValue for struct {
+  $emit function std_math_value_metadata() :: void {
+    ret;
+  }
+}
+
+public macro math_clamp_i64($value: expr, $min: expr, $max: expr) -> expr {
+  (($value) < ($min) ? ($min) : (($value) > ($max) ? ($max) : ($value)))
+}
+
+public macro math_abs_i64($value: expr) -> expr {
+  (($value) < 0 ? (0 - ($value)) : ($value))
+}
+
+public trait Metric64 {
+  magnitude() :: int64;
+}
+
+@StdMathValue
+public struct Vec2i {
+  public int64 x;
+  public int64 y;
+
+  public constructor(int64 x, int64 y) {
+    self.x = x;
+    self.y = y;
+  }
+
+  public dot(Vec2i other) :: int64 {
+    ret self.x * other.x + self.y * other.y;
+  }
+
+  public manhattan() :: int64 {
+    ret abs_i64(self.x) + abs_i64(self.y);
+  }
+
+  public magnitude() :: int64 {
+    ret self.manhattan();
+  }
+
+  public operator +(Vec2i rhs) :: Vec2i {
+    Vec2i value = Vec2i(self.x + rhs.x, self.y + rhs.y);
+    ret value;
+  }
+
+  public operator -(Vec2i rhs) :: Vec2i {
+    Vec2i value = Vec2i(self.x - rhs.x, self.y - rhs.y);
+    ret value;
+  }
+
+  public operator ==(Vec2i rhs) :: bool {
+    ret self.x == rhs.x && self.y == rhs.y;
+  }
+}
+
+public abs_i64(int64 value) :: int64 {
+  if (value < 0) {
+    ret 0 - value;
+  }
+  ret value;
+}
+
+public min_i64(int64 left, int64 right) :: int64 {
+  if (left < right) {
+    ret left;
+  }
+  ret right;
+}
+
+public max_i64(int64 left, int64 right) :: int64 {
+  if (left > right) {
+    ret left;
+  }
+  ret right;
+}
+
+public clamp_i64(int64 value, int64 minValue, int64 maxValue) :: int64 {
+  ret math_clamp_i64(value, minValue, maxValue);
+}
+
+public sign_i64(int64 value) :: int32 {
+  if (value < 0) {
+    ret -1;
+  }
+  if (value > 0) {
+    ret 1;
+  }
+  ret 0;
+}
+
+public gcd_i64(int64 left, int64 right) :: int64 {
+  int64 a = abs_i64(left);
+  int64 b = abs_i64(right);
+  int64 next = 0;
+
+  loop (b != 0) {
+    next = a % b;
+    a = b;
+    b = next;
+  }
+
+  ret a;
+}
+
+public lerp_i64(int64 start, int64 end, int64 num, int64 den) :: int64 {
+  if (den == 0) {
+    ret start;
+  }
+  ret start + ((end - start) * num) / den;
+}
+
+public vec2i(int64 x, int64 y) :: Vec2i {
+  Vec2i value = Vec2i(x, y);
+  ret value;
+}
+
+public distance_i64(Vec2i start, Vec2i finish) :: int64 {
+  Vec2i delta = finish - start;
+  ret delta.manhattan();
+}
+
+public bounded_add_i64(int64 left, int64 right, int64 minValue, int64 maxValue) :: int64 {
+  int64 value = left + right;
+  ret clamp_i64(value, minValue, maxValue);
+}
+
+public bounded_sub_i64(int64 left, int64 right, int64 minValue, int64 maxValue) :: int64 {
+  int64 value = left - right;
+  ret clamp_i64(value, minValue, maxValue);
+}

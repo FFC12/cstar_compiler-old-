@@ -1,0 +1,106 @@
+import from "std:crt" {
+  clock() :: int64;
+}
+
+public static int64 CLOCKS_PER_SECOND = 1000000;
+
+attribute StdTimeValue for struct {
+  $emit function std_time_value_metadata() :: void {
+    ret;
+  }
+}
+
+public macro time_seconds($value: expr) -> expr {
+  (($value) * 1000)
+}
+
+public trait TickValue {
+  as_ticks() :: int64;
+}
+
+@StdTimeValue
+public struct Instant {
+  public int64 ticks;
+
+  public constructor(int64 ticks) {
+    self.ticks = ticks;
+  }
+
+  public as_ticks() :: int64 {
+    ret self.ticks;
+  }
+}
+
+@StdTimeValue
+public struct Duration with TickValue {
+  public int64 ticks;
+
+  public constructor(int64 ticks) {
+    self.ticks = ticks;
+  }
+
+  public as_ticks() :: int64 {
+    ret self.ticks;
+  }
+
+  public to_ms() :: int64 {
+    ret ticks_to_ms(self.ticks);
+  }
+
+  public operator +(Duration rhs) :: Duration {
+    Duration value = Duration(self.ticks + rhs.ticks);
+    ret value;
+  }
+
+  public operator -(Duration rhs) :: Duration {
+    Duration value = Duration(self.ticks - rhs.ticks);
+    ret value;
+  }
+}
+
+public now() :: Instant {
+  Instant instant = Instant(clock());
+  ret instant;
+}
+
+public from_ticks(int64 ticks) :: Instant {
+  Instant instant = Instant(ticks);
+  ret instant;
+}
+
+public elapsed_ticks(Instant start, Instant finish) :: int64 {
+  ret finish.ticks - start.ticks;
+}
+
+public elapsed(Instant start, Instant finish) :: Duration {
+  Duration duration = Duration(elapsed_ticks(start, finish));
+  ret duration;
+}
+
+public ticks_to_ms(int64 ticks) :: int64 {
+  ret (ticks * 1000) / CLOCKS_PER_SECOND;
+}
+
+public seconds_to_ms(int64 seconds) :: int64 {
+  ret time_seconds(seconds);
+}
+
+public clamp_timeout_ms(int64 value) :: int64 {
+  if (value < 0) {
+    ret 0;
+  }
+  if (value > 60000) {
+    ret 60000;
+  }
+  ret value;
+}
+
+public duration_from_ticks(int64 ticks) :: Duration {
+  Duration duration = Duration(ticks);
+  ret duration;
+}
+
+public duration_from_ms(int64 milliseconds) :: Duration {
+  Duration duration = Duration((milliseconds * CLOCKS_PER_SECOND) / 1000);
+  ret duration;
+}

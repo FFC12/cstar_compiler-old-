@@ -1,0 +1,40 @@
+// expected-exit: 160
+
+include "../../../std/math.cstar" as math
+include "../../../std/print.cstar" as io
+include "../../../std/time.cstar" as time
+include "../../../std/network.cstar" as net
+
+main() :: int32 {
+  math.Vec2i a = Vec2i(5, 6);
+  math.Vec2i b = Vec2i(9, 2);
+  math.Vec2i route = b - a;
+  int64 distance = route.magnitude();
+
+  time.Duration budget = time.duration_from_ticks(120);
+  time.Duration latency = Duration(14);
+  time.Duration remaining = budget - latency;
+
+  net.Endpoint endpoint = net.endpoint(7, Protocol.Https);
+  io.ConsoleWriter writer = io.console();
+  writer.write("std comprehensive ");
+  writer.flush();
+  io.write_i64(distance);
+  io.line();
+
+  int64 score = distance;
+  score += remaining.as_ticks();
+  score += math.bounded_sub_i64(70, 50, 0, 100);
+
+  if (endpoint.secure()) {
+    score += 20;
+  }
+  if (endpoint.defaulted()) {
+    score += 5;
+  }
+  if (writer.written == 1) {
+    score += 1;
+  }
+
+  ret cast<int32>(score);
+}

@@ -841,24 +841,65 @@ int64 value = input_int();
 
 `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()` ve `read_key()` şu an compiler içindeki `NativeRuntime` katmanı üzerinden CRT/POSIX çağrılarına indiriliyor. `print(...)` `printf` kullanır. `input_int()` önce `scanf("%255s", ...)` ile token okur, sonra `atoll` ile `int64` üretir; sayı olmayan token consume edilir ve `0` değerine dönüşür. `input_string()` `scanf("%255s", ...)` ile whitespace'e kadar kısa string okur ve doğrudan `print(input_string())` gibi kullanılabilir. `clear_screen()` ANSI terminal temizleme dizisini yazar ve hemen flush eder; `flush_output()` frame tabanlı console renderlarında `fflush(NULL)` ile buffer'ı boşaltır. `sleep_ms(ms)` aktif konsol demoları için milisaniyeyi mikro saniyeye çevirip `usleep` çağırır. `enable_raw_input()` ve `disable_raw_input()` POSIX terminali non-canonical, non-blocking moda alıp geri toparlar; `read_key()` tuş yokken `-1`, tuş varken ASCII/escape byte değerini `int32` döndürür. String literal kaçışları için temel `\n`, `\t`, `\"`, `\\` decode ediliyor. Gerçek stdlib/native interop tasarımı büyüdükçe bu katman ABI bağlantı noktası olarak genişletilecek.
 
-İlk stdlib yüzeyi `std/core.cstar` dosyasıdır. Bu dosya compiler içi native binding eklemeden, normal C* module/import kurallarıyla CRT'den variadic `printf` ve `getchar` alır. Bugünkü API:
+Stdlib MVP artık modül bazlı küçük bir framework olarak ele alınır. `std/core.cstar` eski `core_*` wrapper'ları için geriye uyumluluk dosyası olarak kalır; canonical yeni yüzeyler `std/print.cstar`, `std/math.cstar`, `std/time.cstar` ve `std/network.cstar` dosyalarıdır. Bu dosyalar compiler içi özel binding eklemeden, normal C* `include ... as ...`, public module API, `struct`, `trait`, value operator, `attribute`, `macro`, `enum` ve CRT import kurallarıyla çalışır.
+
+Print modülü:
 
 ```cstar
-include "../../std/core.cstar" as core
+include "../../std/print.cstar" as io
 
 main() :: int32 {
-  core.core_print("value: ");
-  core.core_print_i32(42);
-  core.core_print(" ");
-  core.core_print_f64(3.5);
-  core.core_print("\n");
+  io.write("value: ");
+  io.write_i32(42);
+  io.write(" ");
+  io.write_f64(3.5);
+  io.line();
 
-  int32 value = core.core_read_i32();
-  ret value;
+  ret 0;
 }
 ```
 
-`core_print` metni `%s` formatı ile CRT `printf`'e geçirir; C-style literal escape'ler lexer tarafından decode edilir. `core_print_i32`, `core_print_i64` ve `core_print_f64` variadic `printf` üstünden `%d`, `%lld` ve `%f` formatlarını kullanır. `core_read_i32`/`core_read_i64` `getchar` ile whitespace atlayıp signed decimal integer parse eder. `core_read_string` şimdilik `public static char[256]` buffer ve `scanf("%255s", ...)` kullanır; whitespace'e kadar token okur ve `char*` döndürür. Bu yol aynı zamanda variadic array argument ve `ref arr[0]` C pointer codegen'ini doğrular. Doğrudan native variadic import da desteklenir:
+`std/print.cstar` metni `%s`, sayıları `%d`/`%lld`/`%f` formatlarıyla CRT `printf`'e geçirir. `flush()` CRT `fflush(NULL)` çağırır. `read_i32` ve `read_i64` whitespace atlayıp signed decimal integer parse eder. `read_token` şimdilik `public static char[256]` buffer ve `scanf("%255s", ...)` kullanır.
+
+Print modülü ayrıca `TextWriter` trait'i ve `ConsoleWriter` struct'ını sağlar. `ConsoleWriter` trait conformance, constructor, method receiver, public field ve CRT flush yolunu birlikte doğrulayan canonical writer yüzeyidir. `writeln` implementation'ı modül içi `print_line` macro'sunu kullanır.
+
+`public macro` declaration'ları source include alias üzerinden stabil compile-time API olarak kullanılabilir. Örneğin `include "../../std/print.cstar" as io` sonrası `io.print_line("text")`, `include "../../std/math.cstar" as math` sonrası `math.math_clamp_i64(value, min, max)` parse öncesi expand edilir. Public macro export runtime/linkage ABI değildir; include edilen `.cstar` kaynak dosyadan compile-time olarak toplanır ve `alias.macro(...)` qualified call yüzeyiyle kullanılır.
+
+Math/time/network modülleri:
+
+```cstar
+include "../../std/math.cstar" as math
+include "../../std/time.cstar" as time
+include "../../std/network.cstar" as net
+
+main() :: int32 {
+  math.Vec2i velocity = Vec2i(6, 8);
+  int64 distance = velocity.manhattan();
+
+  time.Instant start = time.from_ticks(10);
+  time.Instant finish = time.from_ticks(17);
+  int64 elapsed = time.elapsed_ticks(start, finish);
+
+  net.Endpoint endpoint = Endpoint(12, net.default_port(Protocol.Https),
+                                   Protocol.Https);
+
+  if (net.endpoint_is_secure(endpoint)) {
+    ret cast<int32>(distance + elapsed + 50);
+  }
+
+  ret 1;
+}
+```
+
+`std/math.cstar` temel integer yardımcıları, `Metric64` trait'i, `Vec2i` value type'ı, `+`, `-`, `==` value operator'ları, `StdMathValue` attribute'u ve modül içi clamp/abs macro'ları sağlar. `Vec2i` hem method receiver hem by-value struct parametre hem de trait conformance için test edilen temel stdlib value type'tır.
+
+`std/time.cstar` `Instant` ve `Duration` value type'larını, `TickValue` trait'ini, `Duration + Duration` ve `Duration - Duration` operator'larını, tick/millisecond helper'larını ve `StdTimeValue` attribute'unu sağlar. `now()` CRT `clock()` import'una bağlıdır, deterministic testler `from_ticks` ve `duration_from_ticks` kullanır.
+
+`std/network.cstar` gerçek socket açmaz; protokol, endpoint descriptor, status classification, retry backoff ve bağlantı öncesi policy/utility yüzeyini sağlar. `Protocol` enum, `Endpoint` struct, `SecureEndpoint` trait, `Endpoint == Endpoint` operator'ı, endpoint method'ları ve `StdNetworkValue` attribute'u bu modülde birlikte kullanılır. Host string modeli gerçek string/dynamic buffer tamamlanana kadar `host_id` descriptor olarak tutulur.
+
+Stdlib smoke kapsamı sadece “derleniyor mu?” değildir. `examples/smoke/stdlib/std_public_macro_alias.cstar` public macro export'u doğrudan doğrular. `std_math_advanced.cstar`, `std_time_duration.cstar`, `std_network_endpoint.cstar`, `std_print_writer.cstar` ve `std_comprehensive_framework.cstar` dosyaları trait conformance, attribute expansion, public macro export, value operator, method receiver, include alias, enum, CRT import ve modüller arası kullanımın beraber çalıştığını doğrular.
+
+Doğrudan native variadic import da desteklenir:
 
 ```cstar
 import from "std:crt" {
@@ -1050,7 +1091,13 @@ Codegen iki parçalı:
 - Native runtime builtin `sleep_ms(ms)` -> POSIX `usleep(ms * 1000)`.
 - Native runtime builtin `enable_raw_input()` / `disable_raw_input()` -> POSIX `stty` non-canonical/sane köprüsü.
 - Native runtime builtin `read_key()` -> CRT `getchar()` ile non-blocking key polling.
-- Stdlib MVP: `std/core.cstar` CRT import üstünden `core_print*` ve `core_read*` wrapper'larını sağlar; `examples/smoke/runtime/core_print_read.cstar` ile doğrulanır.
+- Stdlib MVP:
+  - `std/print.cstar`
+  - `std/math.cstar`
+  - `std/time.cstar`
+  - `std/network.cstar`
+  - `std/core.cstar` legacy `core_*` wrapper'ları için korunur.
+  - `examples/smoke/stdlib/*.cstar` yeni modüler stdlib yüzeyini doğrular.
 - Native variadic import: `printf(const char* fmt, ...) :: int32` gibi C ABI vararg fonksiyonları LLVM vararg declaration/call olarak üretilir.
 - Binary arithmetic:
   - add/sub/mul/div/mod
@@ -1339,6 +1386,7 @@ Karar notu:
 - Macro text replacement değil, typed AST substitution olmalıdır.
 - Macro parametre kind'ları `expr`, `stmt`, `item`, `type`, `ident`, gerekirse `tokens` olarak ayrılmalıdır.
 - Mevcut compiler macro declaration'larını parse öncesi toplar, `macroName(args)` çağrılarını token düzeyinde expand eder ve normal parser/type-check/codegen hattına verir. `expr`, `stmt`, `item` ve `type` macro return kind'ları smoke seviyesinde çalışır.
+- Source include ile gelen `public macro` declaration'ları preprocess öncesi taranır ve include alias'ı üzerinden `alias.macroName(args)` olarak export edilir. Bu yüzey namespace/linkage runtime ABI değil, compile-time kaynak API'sidir.
 - `#warning "message"` compile-time warning üretir; `#error "message"` derlemeyi durdurur.
 - `#if true/false { ... } else { ... }`, `target.os` ve `target.arch` equality/inequality koşulları çalışır. `feature("x")` ve `cfg("x")` şimdilik false kabul edilir.
 - Hijyenli source-map expansion, richer `#if` expression grammar ve compile-time config'in CLI/build sistemine bağlanması sonraki metaprogramming hardening işidir.

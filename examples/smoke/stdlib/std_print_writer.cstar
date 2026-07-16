@@ -1,0 +1,15 @@
+// expected-exit: 3
+
+include "../../../std/print.cstar" as io
+
+main() :: int32 {
+  io.ConsoleWriter writer = ConsoleWriter();
+  writer.write("writer");
+  writer.line();
+  writer.write("flush");
+  writer.flush();
+  io.line();
+
+  io.print_line("module macro line");
+  ret writer.written;
+}

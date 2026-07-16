@@ -1824,7 +1824,18 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
     }
 
     lhs = binaryOpAst.m_LHS->accept(*this);
+    auto *lhsType = m_LastType;
+    const bool lhsSigned = m_LastSigned;
+
+    m_LastType = lhsType;
+    m_LastSigned = lhsSigned;
     rhs = binaryOpAst.m_RHS->accept(*this);
+
+    const bool rhsSigned = m_LastSigned;
+    if (lhsType != nullptr) {
+      m_LastType = lhsType;
+    }
+    m_LastSigned = lhsSigned && rhsSigned;
   }
 
   // NSW (No Signed Wrap) and NUW(No Unsigned Wrap)
@@ -2092,6 +2103,9 @@ ValuePtr Visitor::visit(SymbolAST &symbolAst) {
     }
   } else {
     if (!m_LastArrayIndex) {
+      auto symbolInfo = getSymbolInfo(symbolAst.m_SymbolName);
+      m_LastSigned = IsSigned(GetEffectiveStorageType(symbolInfo.type,
+                                                      symbolInfo.definedTypeName));
       m_LastType = value->getType();
       if (m_LastType->isPointerTy()) {
         llvm::LoadInst *loadedVal = nullptr;

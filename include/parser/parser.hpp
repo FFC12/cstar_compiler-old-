@@ -58,6 +58,7 @@ class CStarParser {
     std::vector<TokenInfo> body;
   };
   std::map<std::string, CompileTimeMacroDefinition> m_CompileTimeMacros;
+  std::set<std::filesystem::path> m_PreprocessedMacroIncludes;
   bool m_ErrorFlag;
   bool m_ParsingEndingFlag;
   time_t m_StartTime;
@@ -266,6 +267,12 @@ class CStarParser {
   void preprocessCompileTimeSurface();
   size_t collectMacroDefinition(size_t index,
                                 std::vector<TokenInfo>& output);
+  void collectPublicMacrosFromSourceIncludes();
+  void collectPublicMacrosFromIncludedFile(const std::filesystem::path& path,
+                                           const std::string& alias);
+  size_t collectIncludedPublicMacroDefinition(
+      size_t index, std::vector<TokenInfo>& tokens,
+      const std::string& qualifiedName);
   size_t copyAttributeDefinition(size_t index,
                                  std::vector<TokenInfo>& output);
   size_t handleDirective(size_t index, std::vector<TokenInfo>& output);

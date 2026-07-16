@@ -1,0 +1,14 @@
+// expected-exit: 33
+
+include "../../../std/math.cstar" as math
+include "../../../std/time.cstar" as time
+include "../../../std/network.cstar" as net
+
+main() :: int32 {
+  int64 score = math.math_clamp_i64(44, 0, 20);
+  score += time.time_seconds(1) / 100;
+  if (net.http_success(204)) {
+    score += 3;
+  }
+  ret cast<int32>(score);
+}

@@ -1,0 +1,11 @@
+// expected-exit: 64
+
+include "../../../std/math.cstar" as math
+
+main() :: int32 {
+  math.Vec2i left = Vec2i(6, 8);
+  math.Vec2i right = Vec2i(3, 4);
+  int64 dot = left.dot(right);
+  int64 distance = left.manhattan();
+  ret cast<int32>(dot + distance);
+}

@@ -1,0 +1,17 @@
+// expected-exit: 38
+
+include "../../../std/time.cstar" as time
+
+main() :: int32 {
+  time.Instant start = Instant(10);
+  time.Instant finish = Instant(25);
+  time.Duration elapsed = time.elapsed(start, finish);
+  time.Duration extra = Duration(7);
+  time.Duration total = elapsed + extra;
+  time.Duration correction = Duration(4);
+  time.Duration reduced = total - correction;
+
+  int64 score = reduced.as_ticks();
+  score += time.time_seconds(2) / 100;
+  ret cast<int32>(score);
+}

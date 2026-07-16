@@ -1,0 +1,11 @@
+// expected-exit: 52
+
+include "../../../std/math.cstar" as math
+
+main() :: int32 {
+  int64 a = math.abs_i64(0 - 9);
+  int64 b = math.clamp_i64(80, 0, 30);
+  int64 c = math.gcd_i64(84, 30);
+  int64 d = math.max_i64(7, 4);
+  ret cast<int32>(a + b + c + d);
+}

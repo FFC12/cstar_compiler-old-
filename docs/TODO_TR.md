@@ -114,17 +114,21 @@ Tamamlanan dil/codegen parçaları:
     - LLVM function declaration `isVarArg=true` üretilir.
     - Fixed parametreler normal type-check alır; `...` argümanları C ABI çağıran sorumluluğundadır.
     - C* içinde variadic function body yazmak henüz yoktur; bu yüzey native import/export ABI içindir.
-  - `std/core.cstar` ilk gerçek stdlib dosyası olarak eklendi:
-    - `import from "std:crt"` ile variadic `printf` ve `getchar` bağlar.
-    - `core_print`, `core_println`, `core_print_char`, `core_print_i32`, `core_print_i64`, `core_print_f64`, `core_read_i32`, `core_read_i64`, `core_read_string` sağlar.
-    - Sayı/float yazdırma artık CRT `printf` formatları üstünden yapılır.
-    - `core_read_string` geçici `public static char[256]` buffer + `scanf("%255s", ...)` kullanır; gerçek string type/dynamic buffer gelince değiştirilecek stdlib noktasıdır.
-    - `examples/smoke/runtime/core_print_read.cstar` include alias + CRT import + read/write smoke doğrulamasıdır.
-    - `examples/smoke/runtime/core_read_string.cstar` CRT `scanf` + variadic array argument + `ref arr[0]` C pointer dönüşünü doğrular.
-    - `examples/smoke/imports/import_variadic_printf.cstar` doğrudan `printf("%s %d %lld %f", ...)` ABI doğrulamasıdır.
+  - Stdlib MVP modüler ve framework yönlü hale getirildi:
+    - `std/print.cstar`: CRT `printf`/`scanf`/`getchar`/`fflush` üstünden `write`, `writeln`, `write_i32`, `write_i64`, `write_f64`, `write_char`, `line`, `flush`, `read_i32`, `read_i64`, `read_token`; ayrıca `TextWriter` trait'i, `ConsoleWriter` struct'ı, `StdPrintSurface` attribute'u ve modül içi `print_line` macro'su.
+    - `std/math.cstar`: `Metric64` trait'i, `Vec2i` value type'ı, `StdMathValue` attribute'u, modül içi clamp/abs macro'ları, `Vec2i` operator `+`, `-`, `==`, `abs_i64`, `min_i64`, `max_i64`, `clamp_i64`, `sign_i64`, `gcd_i64`, `lerp_i64`, `vec2i`, `distance_i64`, bounded add/sub helper'ları.
+    - `std/time.cstar`: `TickValue` trait'i, `Instant`, `Duration`, `StdTimeValue` attribute'u, `Duration` operator `+`/`-`, `now`, `from_ticks`, `elapsed`, `elapsed_ticks`, `duration_from_ticks`, `duration_from_ms`, `ticks_to_ms`, `seconds_to_ms`, `clamp_timeout_ms`.
+    - `std/network.cstar`: `Protocol`, `SecureEndpoint` trait'i, `Endpoint`, `StdNetworkValue` attribute'u, `Endpoint == Endpoint`, endpoint method'ları, `default_port`, `is_secure`, `status_success`, `status_redirect`, `retry_backoff_ms`, endpoint helper'ları.
+    - `std/core.cstar` eski `core_*` API için geriye uyumluluk dosyası olarak kalır.
+    - `examples/smoke/stdlib/*.cstar` yeni stdlib modüllerini ayrı ayrı, advanced feature kombinasyonlarıyla ve `std_comprehensive_framework.cstar` içinde birlikte doğrular.
+    - `public macro` declaration'ları source include alias üzerinden `alias.macroName(...)` qualified compile-time API olarak export edilir; `examples/smoke/stdlib/std_public_macro_alias.cstar` ve stdlib advanced smoke'ları `math.math_clamp_i64`, `net.http_success`, `time.time_seconds`, `io.print_line` çağrılarını doğrular.
+    - `examples/smoke/runtime/core_print_read.cstar` ve `core_read_string.cstar` legacy core wrapper'larını doğrulamaya devam eder.
+  - `examples/smoke/imports/import_variadic_printf.cstar` doğrudan `printf("%s %d %lld %f", ...)` ABI doğrulamasıdır.
   - Function call ownership codegen'i `char*`/`const char*` parametrelerini shared pointer gibi retain etmeyecek şekilde düzeltildi; CRT string ABI raw pointer kalır.
   - `ref arr[index]` codegen'i eklendi; array element adresi C ABI pointer olarak alınabilir.
   - Variadic array symbol argument codegen'i array value yerine storage pointer geçirir; `scanf("%255s", buffer)` çalışır.
+  - Function parameter list parsing comma sonrası ve kapanış parantezi öncesi newline/comment trivia'ya dayanıklı hale getirildi; `examples/smoke/core/function_param_newline_continuation.cstar` ile doğrulanır.
+  - Include edilen `.cstar` kaynak dosyalardaki `public macro` tanımları preprocess öncesi toplanır ve alias-qualified macro call expansion'a açılır.
   - Bu katman ileride stdlib/native interop ABI'sinin bağlanacağı giriş noktasıdır.
   - Açık takip: `va_list`/`va_arg` gibi C* içinde variadic body yazma modeli ayrı dil tasarımı gerektirir.
 
@@ -142,6 +146,7 @@ examples/smoke/ownership/
 examples/smoke/runtime/
 examples/smoke/enums/
 examples/smoke/structs/
+examples/smoke/stdlib/
 examples/smoke/modules/        # helper; runner skip eder
 ```
 
@@ -1734,6 +1739,10 @@ Durum:
   - `$param` token'ları çağrı argüman token'larıyla değiştirilir.
   - macro body linefeed/comment token'ları expression expansion öncesi normalize edilir.
   - Expansion fixed-point pass olarak çalışır; `#if` block'u içinden gelen macro definition/call'lar sonraki pass'te çözülür.
+  - Source include alias macro export eklendi:
+    - `public macro` declaration'ları include edilen dosyadan preprocess öncesi taranır.
+    - Çağrı syntax'ı `alias.macroName(args)` şeklindedir.
+    - `examples/smoke/stdlib/std_public_macro_alias.cstar`, `std_math_advanced.cstar`, `std_network_endpoint.cstar`, `std_time_duration.cstar`, `std_print_writer.cstar` bu yüzeyi doğrular.
 - `expr`, `stmt`, `item`, `type` return kind'ları smoke seviyesinde çalışır.
 - `#warning "message"` compile-time warning üretir ve derleme devam eder.
 - `#error "message"` compile-time parser error üretir ve derlemeyi durdurur.

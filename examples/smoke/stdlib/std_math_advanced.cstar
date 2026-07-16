@@ -1,0 +1,23 @@
+// expected-exit: 145
+
+include "../../../std/math.cstar" as math
+
+main() :: int32 {
+  math.Vec2i start = Vec2i(3, 4);
+  math.Vec2i finish = Vec2i(10, 1);
+  math.Vec2i sum = start + finish;
+  math.Vec2i expected = Vec2i(13, 5);
+  math.Vec2i delta = finish - start;
+
+  int64 total = sum.magnitude();
+  total += delta.manhattan();
+  total += math.distance_i64(start, finish);
+  total += math.bounded_add_i64(80, 50, 0, 100);
+  total += math.math_clamp_i64(-4, 0, 9);
+
+  if (sum == expected) {
+    total += 7;
+  }
+
+  ret cast<int32>(total);
+}
