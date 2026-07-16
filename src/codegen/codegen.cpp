@@ -9,6 +9,7 @@
 #include <llvm/TargetParser/Triple.h>
 #include <memory>
 #include <parser/parser.hpp>
+#include <set>
 #include <sstream>
 #include <string>
 #ifndef _WIN32
@@ -94,33 +95,80 @@ static void appendDefaultNativeLibrarySearchPaths(std::vector<std::string>& args
 #endif
 }
 
+static void appendNativeLinkArgument(std::vector<std::string>& args,
+                                     const std::string& arg) {
+  constexpr std::string_view kFrameworkPrefix = "-framework ";
+  if (arg.rfind(std::string(kFrameworkPrefix), 0) == 0) {
+    args.emplace_back("-framework");
+    args.emplace_back(arg.substr(kFrameworkPrefix.size()));
+    return;
+  }
+
+  args.push_back(arg);
+}
+
+static std::string normalizeNativeLibraryName(std::string library) {
+  constexpr std::string_view kFrameworkPrefix = "-framework ";
+  if (library.rfind(std::string(kFrameworkPrefix), 0) == 0) {
+    return library.substr(kFrameworkPrefix.size());
+  }
+
+  if (library.rfind("-l", 0) == 0 && library.size() > 2) {
+    return library.substr(2);
+  }
+
+  return library;
+}
+
+static bool isDarwinFrameworkLibrary(const std::string& library) {
+#ifdef __APPLE__
+  static const std::set<std::string> kFrameworks = {
+      "Accelerate", "AppKit",       "AudioToolbox", "AVFoundation",
+      "Carbon",     "Cocoa",        "CoreAudio",    "CoreFoundation",
+      "CoreGraphics", "CoreMedia",  "CoreVideo",    "Foundation",
+      "IOKit",      "Metal",        "OpenAL",       "OpenCL",
+      "OpenGL",     "QuartzCore",   "Security",     "SystemConfiguration"};
+  return kFrameworks.count(library) > 0;
+#else
+  (void)library;
+  return false;
+#endif
+}
+
 std::string CStarCodegen::nativeLinkArgument(const std::string& library) {
-  if (library.empty()) {
+  const auto normalized = normalizeNativeLibraryName(library);
+  if (normalized.empty()) {
     return {};
   }
 
-  if (library.rfind("-l", 0) == 0 || library.rfind("-L", 0) == 0 ||
-      library.rfind("-F", 0) == 0 || library.rfind("-Wl,", 0) == 0 ||
-      library.rfind("-framework", 0) == 0) {
-    return library;
+  if (normalized.rfind("-L", 0) == 0 || normalized.rfind("-F", 0) == 0 ||
+      normalized.rfind("-Wl,", 0) == 0) {
+    return normalized;
   }
 
-  const auto path = std::filesystem::path(library);
+  const auto path = std::filesystem::path(normalized);
   const auto ext = path.extension().string();
-  if (library.find('/') != std::string::npos ||
-      library.find('\\') != std::string::npos || ext == ".a" ||
+  if (normalized.find('/') != std::string::npos ||
+      normalized.find('\\') != std::string::npos || ext == ".a" ||
       ext == ".so" || ext == ".dylib" || ext == ".lib") {
-    return library;
+    return normalized;
   }
 
-  if (library.find(':') != std::string::npos) {
+  if (normalized.find(':') != std::string::npos) {
     return {};
+  }
+
+  if (isDarwinFrameworkLibrary(normalized)) {
+    return "-framework " + normalized;
   }
 
 #ifdef _WIN32
-  return library + ".lib";
+  if (normalized == "OpenGL") {
+    return "opengl32.lib";
+  }
+  return normalized + ".lib";
 #else
-  return "-l" + library;
+  return "-l" + normalized;
 #endif
 }
 
@@ -430,7 +478,7 @@ void CStarCodegen::build() {
     for (const auto& library : m_NativeLinkLibraries) {
       auto arg = nativeLinkArgument(library);
       if (!arg.empty()) {
-        dynamicArgs.push_back(arg);
+        appendNativeLinkArgument(dynamicArgs, arg);
       }
     }
     if (runCommand(dynamicArgs) != 0) {
@@ -450,7 +498,7 @@ void CStarCodegen::build() {
   for (const auto& library : m_NativeLinkLibraries) {
     auto arg = nativeLinkArgument(library);
     if (!arg.empty()) {
-      linkArgs.push_back(arg);
+      appendNativeLinkArgument(linkArgs, arg);
     }
   }
   if (runCommand(linkArgs) != 0) {

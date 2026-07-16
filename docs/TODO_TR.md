@@ -119,16 +119,19 @@ Tamamlanan dil/codegen parçaları:
     - `std/math.cstar`: `Metric64` trait'i, `Vec2i` value type'ı, `StdMathValue` attribute'u, modül içi clamp/abs macro'ları, `Vec2i` operator `+`, `-`, `==`, `abs_i64`, `min_i64`, `max_i64`, `clamp_i64`, `sign_i64`, `gcd_i64`, `lerp_i64`, `vec2i`, `distance_i64`, bounded add/sub helper'ları.
     - `std/time.cstar`: `TickValue` trait'i, `Instant`, `Duration`, `StdTimeValue` attribute'u, `Duration` operator `+`/`-`, `now`, `from_ticks`, `elapsed`, `elapsed_ticks`, `duration_from_ticks`, `duration_from_ms`, `ticks_to_ms`, `seconds_to_ms`, `clamp_timeout_ms`.
     - `std/network.cstar`: `Protocol`, `SecureEndpoint` trait'i, `Endpoint`, `StdNetworkValue` attribute'u, `Endpoint == Endpoint`, endpoint method'ları, `default_port`, `is_secure`, `status_success`, `status_redirect`, `retry_backoff_ms`, endpoint helper'ları.
+    - `std/fs.cstar`: CRT `fopen`/`fgetc`/`fclose` üstünden caller-owned `char[4096]` buffer'a text file okuma, `FileReadResult` value type'ı, `ReadableFile` trait'i, `StdFileValue` attribute'u, `fs_ok` public macro'su ve deterministic result kind helper'ları.
     - `std/core.cstar` eski `core_*` API için geriye uyumluluk dosyası olarak kalır.
     - `examples/smoke/stdlib/*.cstar` yeni stdlib modüllerini ayrı ayrı, advanced feature kombinasyonlarıyla ve `std_comprehensive_framework.cstar` içinde birlikte doğrular.
-    - `public macro` declaration'ları source include alias üzerinden `alias.macroName(...)` qualified compile-time API olarak export edilir; `examples/smoke/stdlib/std_public_macro_alias.cstar` ve stdlib advanced smoke'ları `math.math_clamp_i64`, `net.http_success`, `time.time_seconds`, `io.print_line` çağrılarını doğrular.
+    - `public macro` declaration'ları source include alias üzerinden `alias.macroName(...)` qualified compile-time API olarak export edilir; `examples/smoke/stdlib/std_public_macro_alias.cstar` ve stdlib advanced smoke'ları `math.math_clamp_i64`, `net.http_success`, `time.time_seconds`, `io.print_line`, `fs.fs_ok` çağrılarını doğrular.
     - `examples/smoke/runtime/core_print_read.cstar` ve `core_read_string.cstar` legacy core wrapper'larını doğrulamaya devam eder.
   - `examples/smoke/imports/import_variadic_printf.cstar` doğrudan `printf("%s %d %lld %f", ...)` ABI doğrulamasıdır.
   - Function call ownership codegen'i `char*`/`const char*` parametrelerini shared pointer gibi retain etmeyecek şekilde düzeltildi; CRT string ABI raw pointer kalır.
+  - `void*` opaque native handle ABI'si raw pointer olarak standartlaştırıldı; GLFW/CRT gibi C interop yüzeylerinde monitor/window/file handle değerleri shared pointer control-block'a sarılmaz.
   - `ref arr[index]` codegen'i eklendi; array element adresi C ABI pointer olarak alınabilir.
   - Variadic array symbol argument codegen'i array value yerine storage pointer geçirir; `scanf("%255s", buffer)` çalışır.
   - Function parameter list parsing comma sonrası ve kapanış parantezi öncesi newline/comment trivia'ya dayanıklı hale getirildi; `examples/smoke/core/function_param_newline_continuation.cstar` ile doğrulanır.
   - Include edilen `.cstar` kaynak dosyalardaki `public macro` tanımları preprocess öncesi toplanır ve alias-qualified macro call expansion'a açılır.
+  - Native link metadata linker flag değil logical library adı taşır: `import from "OpenGL" { ... }` macOS'ta backend tarafından `-framework OpenGL`, `import from "glfw" { ... }` Unix/macOS'ta `-lglfw`, Windows'ta `glfw.lib` olarak çözülür. Legacy `-lfoo` / `-framework Foo` formları normalize edilir ama canonical C* source yüzeyi değildir.
   - Bu katman ileride stdlib/native interop ABI'sinin bağlanacağı giriş noktasıdır.
   - Açık takip: `va_list`/`va_arg` gibi C* içinde variadic body yazma modeli ayrı dil tasarımı gerektirir.
 

@@ -1,0 +1,32 @@
+import from "glfw" {
+  glfwInit() :: int32;
+  glfwTerminate() :: void;
+  glfwGetError(char** description) :: int32;
+  glfwWindowHint(int32 hint, int32 value) :: void;
+  glfwCreateWindow(int32 width, int32 height, const char* title, void* monitor, void* share) :: void*;
+  glfwDestroyWindow(void* window) :: void;
+  glfwWindowShouldClose(void* window) :: int32;
+  glfwSetWindowShouldClose(void* window, int32 value) :: void;
+  glfwMakeContextCurrent(void* window) :: void;
+  glfwSwapBuffers(void* window) :: void;
+  glfwPollEvents() :: void;
+  glfwGetKey(void* window, int32 key) :: int32;
+  glfwGetFramebufferSize(void* window, int32* width, int32* height) :: void;
+}
+
+public glfw_context_version_major() :: int32 { ret 139266; }
+public glfw_context_version_minor() :: int32 { ret 139267; }
+public glfw_opengl_profile() :: int32 { ret 139272; }
+public glfw_opengl_core_profile() :: int32 { ret 204801; }
+public glfw_opengl_forward_compat() :: int32 { ret 139270; }
+public glfw_true() :: int32 { ret 1; }
+public glfw_key_escape() :: int32 { ret 256; }
+public glfw_press() :: int32 { ret 1; }
+
+public configure_modern_context() :: void {
+  glfwWindowHint(glfw_context_version_major(), 3);
+  glfwWindowHint(glfw_context_version_minor(), 2);
+  glfwWindowHint(glfw_opengl_profile(), glfw_opengl_core_profile());
+  glfwWindowHint(glfw_opengl_forward_compat(), glfw_true());
+  ret;
+}

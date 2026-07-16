@@ -207,7 +207,8 @@ static bool IsSharedPointerTy(llvm::Type *type) {
 
 static bool IsSharedPointerSymbol(const SymbolInfo &symbolInfo) {
   if (symbolInfo.type == TypeSpecifier::SPEC_CHAR ||
-      symbolInfo.type == TypeSpecifier::SPEC_UCHAR) {
+      symbolInfo.type == TypeSpecifier::SPEC_UCHAR ||
+      symbolInfo.type == TypeSpecifier::SPEC_VOID) {
     return false;
   }
   return symbolInfo.indirectionLevel > 0 && !symbolInfo.isUnique &&
@@ -218,7 +219,8 @@ static llvm::Type *GetStorageType(TypeSpecifier typeSpecifier,
                                   size_t indirectLevel, bool isUnique,
                                   bool isRef = false) {
   if ((typeSpecifier == TypeSpecifier::SPEC_CHAR ||
-       typeSpecifier == TypeSpecifier::SPEC_UCHAR) &&
+       typeSpecifier == TypeSpecifier::SPEC_UCHAR ||
+       typeSpecifier == TypeSpecifier::SPEC_VOID) &&
       indirectLevel > 0) {
     return GetType(typeSpecifier, indirectLevel, isRef);
   }
@@ -936,7 +938,8 @@ static llvm::Type *GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
   return type;
 }
 
-Visitor::FunctionParamLayout Visitor::buildFunctionParamLayout(FuncAST &funcAst) {
+Visitor::FunctionParamLayout Visitor::buildFunctionParamLayout(FuncAST &funcAst,
+                                                               bool nativeAbi) {
   FunctionParamLayout layout;
   layout.irTypes.reserve(funcAst.m_Params.size());
   layout.valueTypes.reserve(funcAst.m_Params.size());
@@ -952,10 +955,14 @@ Visitor::FunctionParamLayout Visitor::buildFunctionParamLayout(FuncAST &funcAst)
 
     auto *typeAst = static_cast<TypeAST *>(paramAst->m_TypeNode.get());
     const auto definedTypeName = DefinedTypeNameFromTypeAst(typeAst);
-    auto *valueType = GetStorageType(typeAst->m_TypeSpec,
-                                     typeAst->m_IndirectLevel,
-                                     typeAst->m_IsUniquePtr,
-                                     typeAst->m_IsRef, definedTypeName);
+    auto *valueType =
+        nativeAbi && typeAst->m_IndirectLevel > 0
+            ? GetType(typeAst->m_TypeSpec, typeAst->m_IndirectLevel,
+                      typeAst->m_IsRef)
+            : GetStorageType(typeAst->m_TypeSpec,
+                             typeAst->m_IndirectLevel,
+                             typeAst->m_IsUniquePtr,
+                             typeAst->m_IsRef, definedTypeName);
     auto *irType = typeAst->m_IsRef
                        ? llvm::PointerType::get(Visitor::Builder->getContext(), 0)
                        : valueType;
@@ -2891,6 +2898,13 @@ ValuePtr Visitor::visit(CastOpAST &castOpAst) {
 
   llvm::Type *previousType = m_LastType;
   bool previousSigned = m_LastSigned;
+  const bool expectedRawPointer =
+      previousType != nullptr && previousType->isPointerTy() &&
+      targetTypeAst->m_IndirectLevel > 0;
+  if (expectedRawPointer) {
+    targetType = previousType;
+    targetDataType = previousType;
+  }
 
   m_LastType = nullptr;
   m_LastSigned = targetSigned;
@@ -2911,7 +2925,7 @@ ValuePtr Visitor::visit(CastOpAST &castOpAst) {
   m_LastType = targetType;
   m_LastSigned = targetSigned;
 
-  if (previousType != nullptr) {
+  if (previousType != nullptr && !expectedRawPointer) {
     value = CastValueToType(value, previousType, previousSigned);
     m_LastType = previousType;
     m_LastSigned = previousSigned;
@@ -2926,13 +2940,19 @@ llvm::Function *Visitor::declareFunction(FuncAST &funcAst) {
   }
 
   auto *retType = static_cast<TypeAST *>(funcAst.m_RetType.get());
-  auto paramLayout = buildFunctionParamLayout(funcAst);
+  const bool nativeAbi = funcAst.m_IsForwardDecl || funcAst.m_IsExported;
+  auto paramLayout = buildFunctionParamLayout(funcAst, nativeAbi);
   const auto retDefinedTypeName = DefinedTypeNameFromTypeAst(retType);
+  auto *returnType =
+      nativeAbi && retType->m_IndirectLevel > 0
+          ? GetType(retType->m_TypeSpec, retType->m_IndirectLevel,
+                    retType->m_IsRef)
+          : GetStorageType(retType->m_TypeSpec, retType->m_IndirectLevel,
+                           retType->m_IsUniquePtr, retType->m_IsRef,
+                           retDefinedTypeName);
 
   auto *functionType = llvm::FunctionType::get(
-      GetStorageType(retType->m_TypeSpec, retType->m_IndirectLevel,
-                     retType->m_IsUniquePtr, retType->m_IsRef,
-                     retDefinedTypeName),
+      returnType,
       paramLayout.hasParams() ? paramLayout.irTypes : std::vector<llvm::Type *>(),
       funcAst.m_IsVariadic);
 
@@ -2949,7 +2969,9 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
   auto *function = declareFunction(funcAst);
 
   this->m_LastFuncName = funcAst.m_FuncName;
-  auto paramLayout = buildFunctionParamLayout(funcAst);
+  auto paramLayout =
+      buildFunctionParamLayout(funcAst, funcAst.m_IsForwardDecl ||
+                                            funcAst.m_IsExported);
 
   if (!funcAst.m_IsForwardDecl) {
     if (!function->empty()) {
@@ -3237,7 +3259,8 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     const bool argIsMove =
         argUnary != nullptr && argUnary->m_UnaryOpKind == U_MOVE;
     const bool paramIsShared =
-        paramInfo != nullptr && IsSharedPointerSymbol(*paramInfo);
+        paramInfo != nullptr && IsSharedPointerSymbol(*paramInfo) &&
+        paramType != nullptr && IsSharedPointerTy(paramType);
 
     if (!isVariadicArg && paramInfo != nullptr && paramInfo->isRef &&
         argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {

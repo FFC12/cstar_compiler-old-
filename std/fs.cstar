@@ -1,0 +1,103 @@
+import from "std:crt" {
+  fopen(const char* path, const char* mode) :: void*;
+  fclose(void* stream) :: int32;
+  fseek(void* stream, int64 offset, int32 origin) :: int32;
+  ftell(void* stream) :: int64;
+  rewind(void* stream) :: void;
+  fgetc(void* stream) :: int32;
+}
+
+attribute StdFileValue for struct {
+  $emit function std_file_value_metadata() :: void {
+    ret;
+  }
+}
+
+public macro fs_ok($result: expr) -> expr {
+  (($result).ok)
+}
+
+public trait ReadableFile {
+  success() :: bool;
+}
+
+@StdFileValue
+public struct FileReadResult with ReadableFile {
+  public int64 length;
+  public int32 kind;
+  public bool ok;
+
+  public constructor(int64 length, int32 kind, bool ok) {
+    self.length = length;
+    self.kind = kind;
+    self.ok = ok;
+  }
+
+  public success() :: bool {
+    ret self.ok;
+  }
+}
+
+public seek_set() :: int32 {
+  ret 0;
+}
+
+public seek_end() :: int32 {
+  ret 2;
+}
+
+public kind_missing() :: int32 {
+  ret 0;
+}
+
+public kind_regular() :: int32 {
+  ret 1;
+}
+
+public kind_too_large() :: int32 {
+  ret 2;
+}
+
+public kind_read_error() :: int32 {
+  ret 3;
+}
+
+public make_result(int64 length, int32 kind, bool ok) :: FileReadResult {
+  FileReadResult result = FileReadResult(length, kind, ok);
+  ret result;
+}
+
+public read_text_4096(const char* path, char[4096] buffer) :: FileReadResult {
+  void* file = fopen(path, "rb");
+  if (!file) {
+    ret make_result(0, kind_missing(), false);
+  }
+
+  fseek(file, 0, seek_end());
+  int64 size = ftell(file);
+  rewind(file);
+
+  if (size < 0) {
+    fclose(file);
+    ret make_result(0, kind_read_error(), false);
+  }
+
+  int64 limit = 4096;
+  if (size >= limit) {
+    fclose(file);
+    ret make_result(size, kind_too_large(), false);
+  }
+
+  int32 index = 0;
+  int32 eof = 0 - 1;
+  int32 ch = fgetc(file);
+  loop (ch != eof && index < 4095) {
+    buffer[index] = cast<char>(ch);
+    index += 1;
+    ch = fgetc(file);
+  }
+
+  fclose(file);
+  buffer[index] = '\0';
+  ret make_result(cast<int64>(index), kind_regular(), true);
+}

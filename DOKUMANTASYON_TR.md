@@ -841,7 +841,7 @@ int64 value = input_int();
 
 `print(...)`, `input_int()`, `input_string()`, `clear_screen()`, `flush_output()`, `sleep_ms(ms)`, `enable_raw_input()`, `disable_raw_input()` ve `read_key()` şu an compiler içindeki `NativeRuntime` katmanı üzerinden CRT/POSIX çağrılarına indiriliyor. `print(...)` `printf` kullanır. `input_int()` önce `scanf("%255s", ...)` ile token okur, sonra `atoll` ile `int64` üretir; sayı olmayan token consume edilir ve `0` değerine dönüşür. `input_string()` `scanf("%255s", ...)` ile whitespace'e kadar kısa string okur ve doğrudan `print(input_string())` gibi kullanılabilir. `clear_screen()` ANSI terminal temizleme dizisini yazar ve hemen flush eder; `flush_output()` frame tabanlı console renderlarında `fflush(NULL)` ile buffer'ı boşaltır. `sleep_ms(ms)` aktif konsol demoları için milisaniyeyi mikro saniyeye çevirip `usleep` çağırır. `enable_raw_input()` ve `disable_raw_input()` POSIX terminali non-canonical, non-blocking moda alıp geri toparlar; `read_key()` tuş yokken `-1`, tuş varken ASCII/escape byte değerini `int32` döndürür. String literal kaçışları için temel `\n`, `\t`, `\"`, `\\` decode ediliyor. Gerçek stdlib/native interop tasarımı büyüdükçe bu katman ABI bağlantı noktası olarak genişletilecek.
 
-Stdlib MVP artık modül bazlı küçük bir framework olarak ele alınır. `std/core.cstar` eski `core_*` wrapper'ları için geriye uyumluluk dosyası olarak kalır; canonical yeni yüzeyler `std/print.cstar`, `std/math.cstar`, `std/time.cstar` ve `std/network.cstar` dosyalarıdır. Bu dosyalar compiler içi özel binding eklemeden, normal C* `include ... as ...`, public module API, `struct`, `trait`, value operator, `attribute`, `macro`, `enum` ve CRT import kurallarıyla çalışır.
+Stdlib MVP artık modül bazlı küçük bir framework olarak ele alınır. `std/core.cstar` eski `core_*` wrapper'ları için geriye uyumluluk dosyası olarak kalır; canonical yeni yüzeyler `std/print.cstar`, `std/math.cstar`, `std/time.cstar`, `std/network.cstar` ve `std/fs.cstar` dosyalarıdır. Bu dosyalar compiler içi özel binding eklemeden, normal C* `include ... as ...`, public module API, `struct`, `trait`, value operator, `attribute`, `macro`, `enum` ve CRT import kurallarıyla çalışır.
 
 Print modülü:
 
@@ -897,7 +897,24 @@ main() :: int32 {
 
 `std/network.cstar` gerçek socket açmaz; protokol, endpoint descriptor, status classification, retry backoff ve bağlantı öncesi policy/utility yüzeyini sağlar. `Protocol` enum, `Endpoint` struct, `SecureEndpoint` trait, `Endpoint == Endpoint` operator'ı, endpoint method'ları ve `StdNetworkValue` attribute'u bu modülde birlikte kullanılır. Host string modeli gerçek string/dynamic buffer tamamlanana kadar `host_id` descriptor olarak tutulur.
 
-Stdlib smoke kapsamı sadece “derleniyor mu?” değildir. `examples/smoke/stdlib/std_public_macro_alias.cstar` public macro export'u doğrudan doğrular. `std_math_advanced.cstar`, `std_time_duration.cstar`, `std_network_endpoint.cstar`, `std_print_writer.cstar` ve `std_comprehensive_framework.cstar` dosyaları trait conformance, attribute expansion, public macro export, value operator, method receiver, include alias, enum, CRT import ve modüller arası kullanımın beraber çalıştığını doğrular.
+Dosya sistemi modülü:
+
+```cstar
+include "../../std/fs.cstar" as fs
+
+main() :: int32 {
+  char[4096] buffer;
+  fs.FileReadResult result = fs.read_text_4096("data/input.txt", buffer);
+  if (result.success()) {
+    ret cast<int32>(result.length);
+  }
+  ret result.kind;
+}
+```
+
+`std/fs.cstar` şimdilik güvenli ve predictable bir MVP yüzeyi verir: dosya içeriği caller-owned `char[4096]` buffer'a okunur, sonuç `FileReadResult` value type'ı ile döner. Bu model dynamic string/allocator tamamlanmadan heap ownership gizlemez; `ReadableFile` trait'i, `StdFileValue` attribute'u, `fs_ok(...)` public macro'su ve CRT `fopen/fgetc/fclose` import'larıyla standart kütüphane mimarisine bağlı kalır. C ABI uyumu için `char*` string pointer'ları ve `void*` opaque native handle'ları raw pointer olarak iner; C* managed/shared pointer modeli typed object pointer'larda korunur.
+
+Stdlib smoke kapsamı sadece “derleniyor mu?” değildir. `examples/smoke/stdlib/std_public_macro_alias.cstar` public macro export'u doğrudan doğrular. `std_math_advanced.cstar`, `std_time_duration.cstar`, `std_network_endpoint.cstar`, `std_print_writer.cstar`, `std_fs_read.cstar` ve `std_comprehensive_framework.cstar` dosyaları trait conformance, attribute expansion, public macro export, value operator, method receiver, include alias, enum, CRT import, dosya okuma ve modüller arası kullanımın beraber çalıştığını doğrular.
 
 Doğrudan native variadic import da desteklenir:
 
@@ -911,6 +928,8 @@ main() :: int32 {
   ret 0;
 }
 ```
+
+Native import link metadata'sı linker flag değil, logical/native library adı taşır. Örneğin `import from "OpenGL" { ... }` macOS tarafında compiler backend tarafından `-framework OpenGL` olarak çözülür; `import from "glfw" { ... }` Unix/macOS tarafında `-lglfw`, Windows tarafında `glfw.lib` olur. C* kaynaklarında `-lglfw`, `-framework OpenGL` gibi doğrudan linker flag yazılmamalıdır; bu mapping compiler/linker backend sorumluluğudur.
 
 Interactive örnek:
 
@@ -1096,6 +1115,7 @@ Codegen iki parçalı:
   - `std/math.cstar`
   - `std/time.cstar`
   - `std/network.cstar`
+  - `std/fs.cstar`
   - `std/core.cstar` legacy `core_*` wrapper'ları için korunur.
   - `examples/smoke/stdlib/*.cstar` yeni modüler stdlib yüzeyini doğrular.
 - Native variadic import: `printf(const char* fmt, ...) :: int32` gibi C ABI vararg fonksiyonları LLVM vararg declaration/call olarak üretilir.
@@ -1217,8 +1237,8 @@ main() :: int32 {
 Örnek tasarım:
 
 ```cstar
-import glClearColor(float r,float g,float b,float a) :: void from "opengl32.lib";
-import from "myLibrary.lib" {
+import glClearColor(float r,float g,float b,float a) :: void from "OpenGL";
+import from "myLibrary" {
     printf(char*) :: void;
 }
 
@@ -1233,7 +1253,8 @@ Mevcut compiler `import func(...) :: type;`, `import func(...) :: type from "lib
 Native linker davranışı:
 
 - `"m"` gibi kısa isimler Unix/macOS tarafında `-lm` olur.
-- `"opengl32.lib"`, `.a`, `.so`, `.dylib` ve path içeren değerler doğrudan linker argümanı olarak geçer.
+- `"OpenGL"` gibi platform framework/system library adları backend tarafından target platforma uygun şekilde çözülür; macOS için `-framework OpenGL`, Windows için `opengl32.lib` gibi.
+- `.a`, `.so`, `.dylib`, `.lib` ve path içeren düşük seviye değerler doğrudan linker argümanı olarak geçebilir; bu escape hatch normal std/proposal örneklerinde tercih edilmez.
 - `"std:math"` ve `"std:crt"` gibi `:` içeren logical module adları linker argümanına çevrilmez; bunlar package/module namespace tasarımı için saklanır.
 
 Executable üretirken ana dosyada `export` deklarasyonu varsa compiler warning üretir; çünkü `export` library ABI görünürlüğüdür. Dış modüller için symbol üretilecekse `--emit=staticlib` veya `--emit=dynamiclib` kullanılmalıdır.

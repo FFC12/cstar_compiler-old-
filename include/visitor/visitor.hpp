@@ -192,7 +192,8 @@ class Visitor {
     bool hasParams() const { return !irTypes.empty(); }
   };
 
-  FunctionParamLayout buildFunctionParamLayout(FuncAST& funcAst);
+  FunctionParamLayout buildFunctionParamLayout(FuncAST& funcAst,
+                                               bool nativeAbi = false);
 
   std::stack<size_t> m_SymbolIds;
 

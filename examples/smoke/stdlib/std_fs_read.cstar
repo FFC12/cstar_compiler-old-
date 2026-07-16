@@ -1,0 +1,19 @@
+// expected-exit: 21
+
+include "../../../std/fs.cstar" as fs
+
+main() :: int32 {
+  char buffer[4096];
+  fs.FileReadResult result = fs.read_text_4096(
+      "examples/smoke/stdlib/data/fs_sample.txt", buffer);
+
+  int32 score = cast<int32>(result.length);
+  if (result.success()) {
+    score += 4;
+  }
+  if (fs.fs_ok(result)) {
+    score += 5;
+  }
+
+  ret score;
+}

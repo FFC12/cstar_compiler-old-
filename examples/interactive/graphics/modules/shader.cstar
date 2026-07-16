@@ -1,0 +1,86 @@
+include "opengl.cstar" as gl
+
+attribute ShaderResource for struct {
+  $emit function shader_resource_metadata() :: void {
+    ret;
+  }
+}
+
+public trait ShaderStage {
+  ok() :: bool;
+}
+
+@ShaderResource
+public struct ShaderLoad with ShaderStage {
+  public uint32 id;
+  public bool ready;
+  public int64 source_length;
+
+  public constructor(uint32 id, bool ready, int64 sourceLength) {
+    self.id = id;
+    self.ready = ready;
+    self.source_length = sourceLength;
+  }
+
+  public ok() :: bool {
+    ret self.ready;
+  }
+}
+
+public compile_shader_from_source(uint32 shaderType, char[4096] source, int64 sourceLength, char[4096] log) :: ShaderLoad {
+  ShaderLoad result;
+  result.id = 0;
+  result.ready = false;
+  result.source_length = sourceLength;
+  if (sourceLength <= 0) {
+    ret result;
+  }
+
+  uint32 shader = glCreateShader(shaderType);
+  char* sourcePtr = ref source[0];
+  glShaderSource(shader, 1, ref sourcePtr, unsafe_cast<int32*>(0));
+  glCompileShader(shader);
+
+  int32 status = 0;
+  int32 logLength = 0;
+  glGetShaderiv(shader, gl_compile_status(), ref status);
+  if (status == 0) {
+    glGetShaderInfoLog(shader, 4096, ref logLength, log);
+    result.id = shader;
+    result.ready = false;
+    result.source_length = sourceLength;
+    ret result;
+  }
+
+  result.id = shader;
+  result.ready = true;
+  result.source_length = sourceLength;
+  ret result;
+}
+
+public link_program(ShaderLoad vertex, ShaderLoad fragment, char[4096] log) :: uint32 {
+  if (!vertex.ok()) {
+    ret 0;
+  }
+  if (!fragment.ok()) {
+    ret 0;
+  }
+
+  uint32 program = glCreateProgram();
+  glAttachShader(program, vertex.id);
+  glAttachShader(program, fragment.id);
+  glBindAttribLocation(program, 0, "a_pos");
+  glBindAttribLocation(program, 1, "a_color");
+  glBindFragDataLocation(program, 0, "frag_color");
+  glLinkProgram(program);
+
+  int32 status = 0;
+  int32 logLength = 0;
+  glGetProgramiv(program, gl_link_status(), ref status);
+  if (status == 0) {
+    glGetProgramInfoLog(program, 4096, ref logLength, log);
+    ret 0;
+  }
+
+  ret program;
+}

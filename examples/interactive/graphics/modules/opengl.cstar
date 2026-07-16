@@ -1,0 +1,44 @@
+import from "OpenGL" {
+  glViewport(int32 x, int32 y, int32 width, int32 height) :: void;
+  glClearColor(float32 red, float32 green, float32 blue, float32 alpha) :: void;
+  glClear(uint32 mask) :: void;
+  glCreateShader(uint32 shaderType) :: uint32;
+  glShaderSource(uint32 shader, int32 count, const char** source, int32* length) :: void;
+  glCompileShader(uint32 shader) :: void;
+  glGetShaderiv(uint32 shader, uint32 pname, int32* params) :: void;
+  glGetShaderInfoLog(uint32 shader, int32 maxLength, int32* length, char[4096] infoLog) :: void;
+  glCreateProgram() :: uint32;
+  glAttachShader(uint32 program, uint32 shader) :: void;
+  glBindAttribLocation(uint32 program, uint32 index, const char* name) :: void;
+  glBindFragDataLocation(uint32 program, uint32 colorNumber, const char* name) :: void;
+  glLinkProgram(uint32 program) :: void;
+  glGetProgramiv(uint32 program, uint32 pname, int32* params) :: void;
+  glGetProgramInfoLog(uint32 program, int32 maxLength, int32* length, char[4096] infoLog) :: void;
+  glUseProgram(uint32 program) :: void;
+  glDeleteShader(uint32 shader) :: void;
+  glDeleteProgram(uint32 program) :: void;
+  glGenVertexArrays(int32 count, uint32* arrays) :: void;
+  glBindVertexArray(uint32 array) :: void;
+  glGenBuffers(int32 count, uint32* buffers) :: void;
+  glBindBuffer(uint32 target, uint32 buffer) :: void;
+  glBufferData(uint32 target, int64 size, float32* data, uint32 usage) :: void;
+  glGetAttribLocation(uint32 program, const char* name) :: int32;
+  glEnableVertexAttribArray(uint32 index) :: void;
+  glVertexAttribPointer(uint32 index, int32 size, uint32 type, bool normalized, int32 stride, void* offset) :: void;
+  glDrawArrays(uint32 mode, int32 first, int32 count) :: void;
+}
+
+public gl_color_buffer_bit() :: uint32 { ret 16384; }
+public gl_vertex_shader() :: uint32 { ret 35633; }
+public gl_fragment_shader() :: uint32 { ret 35632; }
+public gl_compile_status() :: uint32 { ret 35713; }
+public gl_link_status() :: uint32 { ret 35714; }
+public gl_array_buffer() :: uint32 { ret 34962; }
+public gl_static_draw() :: uint32 { ret 35044; }
+public gl_float() :: uint32 { ret 5126; }
+public gl_triangles() :: uint32 { ret 4; }
+
+public pastel_background() :: void {
+  glClearColor(0.78, 0.84, 0.92, 1.0);
+  ret;
+}

@@ -27,8 +27,8 @@ import {
     callMe(int x8,bool y);
     dontCallMe(int32 x,int64 y);
 }
-import glClearColor(float r,float g,float b,float a) :: void from "opengl32.lib";
-import from "myLibrary.lib" {
+import glClearColor(float r,float g,float b,float a) :: void from "OpenGL";
+import from "myLibrary" {
     printf(const char* fmt, ...) :: int32;
     callMe() :: void;
 }

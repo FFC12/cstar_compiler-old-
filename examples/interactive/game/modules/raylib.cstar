@@ -1,10 +1,11 @@
 // Raylib C ABI binding for the C* interactive game.
-// Install raylib and link with -lraylib to run this example.
+// Install raylib; the compiler maps `import from "raylib"` to the target
+// platform's native linker argument.
 //
 // On macOS arm64 clang lowers raylib's small Color struct by value as i64.
 // Keep this binding ABI-shaped and pass packed RGBA values directly.
 
-import from "-lraylib" {
+import from "raylib" {
   InitWindow(int32 width, int32 height, const char* title) :: void;
   WindowShouldClose() :: bool;
   CloseWindow() :: void;

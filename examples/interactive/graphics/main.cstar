@@ -1,0 +1,148 @@
+// expected: interactive
+
+include "modules/glfw.cstar" as glfw
+include "modules/opengl.cstar" as gl
+include "modules/shader.cstar" as shader
+include "../../../std/print.cstar" as io
+include "../../../std/fs.cstar" as fs
+
+main() :: int32 {
+  if (glfwInit() == 0) {
+    io.writeln("GLFW init failed");
+    ret 1;
+  }
+
+  configure_modern_context();
+  void* window = glfwCreateWindow(860, 560, "C* OpenGL Pastel Triangle", unsafe_cast<void*>(0), unsafe_cast<void*>(0));
+  if (!window) {
+    io.writeln("Window creation failed");
+    char* glfwErrorText = unsafe_cast<char*>(0);
+    int32 glfwError = glfwGetError(ref glfwErrorText);
+    io.write("GLFW error code: ");
+    io.write_i32(glfwError);
+    io.line();
+    if (glfwErrorText) {
+      io.write("GLFW error: ");
+      io.writeln(glfwErrorText);
+    }
+    glfwTerminate();
+    ret 2;
+  }
+
+  glfwMakeContextCurrent(window);
+  pastel_background();
+
+  char vertexSource[4096];
+  char fragmentSource[4096];
+  char logBuffer[4096];
+
+  fs.FileReadResult vertexFile = fs.read_text_4096(
+      "examples/interactive/graphics/shaders/triangle.vert",
+      vertexSource);
+  fs.FileReadResult fragmentFile = fs.read_text_4096(
+      "examples/interactive/graphics/shaders/triangle.frag",
+      fragmentSource);
+
+  if (!vertexFile.success()) {
+    io.writeln("Vertex shader file read failed");
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    ret 3;
+  }
+
+  if (!fragmentFile.success()) {
+    io.writeln("Fragment shader file read failed");
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    ret 4;
+  }
+
+  shader.ShaderLoad vertex = shader.compile_shader_from_source(
+      gl_vertex_shader(),
+      vertexSource,
+      vertexFile.length,
+      logBuffer);
+
+  shader.ShaderLoad fragment = shader.compile_shader_from_source(
+      gl_fragment_shader(),
+      fragmentSource,
+      fragmentFile.length,
+      logBuffer);
+
+  uint32 program = shader.link_program(vertex, fragment, logBuffer);
+  if (program == 0) {
+    io.writeln("Shader compilation/link failed");
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    ret 5;
+  }
+
+  float32 vertices[15] = (
+      0.0, 0.0, 0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 0.0, 0.0);
+  vertices[0] = 0.0;
+  vertices[1] = 0.62;
+  vertices[2] = 0.98;
+  vertices[3] = 0.66;
+  vertices[4] = 0.70;
+  vertices[5] = 0.0 - 0.66;
+  vertices[6] = 0.0 - 0.48;
+  vertices[7] = 0.70;
+  vertices[8] = 0.86;
+  vertices[9] = 0.98;
+  vertices[10] = 0.66;
+  vertices[11] = 0.0 - 0.48;
+  vertices[12] = 0.98;
+  vertices[13] = 0.82;
+  vertices[14] = 0.58;
+
+  uint32 vao = 0;
+  uint32 vbo = 0;
+  glGenVertexArrays(1, ref vao);
+  glBindVertexArray(vao);
+  glGenBuffers(1, ref vbo);
+  glBindBuffer(gl_array_buffer(), vbo);
+  glBufferData(gl_array_buffer(), 60, ref vertices[0], gl_static_draw());
+
+  int32 posLocation = glGetAttribLocation(program, "a_pos");
+  int32 colorLocation = glGetAttribLocation(program, "a_color");
+  if (posLocation < 0 || colorLocation < 0) {
+    io.writeln("Shader attribute binding failed");
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    ret 6;
+  }
+  void* positionOffset = unsafe_cast<void*>(0);
+  void* colorOffset = unsafe_cast<void*>(8);
+  glEnableVertexAttribArray(0);
+  glVertexAttribPointer(0, 2, gl_float(), false, 20, positionOffset);
+  glEnableVertexAttribArray(1);
+  glVertexAttribPointer(1, 3, gl_float(), false, 20, colorOffset);
+
+  loop (glfwWindowShouldClose(window) == 0) {
+    if (glfwGetKey(window, glfw_key_escape()) == glfw_press()) {
+      glfwSetWindowShouldClose(window, 1);
+    }
+
+    int32 width = 0;
+    int32 height = 0;
+    glfwGetFramebufferSize(window, ref width, ref height);
+    glViewport(0, 0, width, height);
+
+    glClear(gl_color_buffer_bit());
+    glUseProgram(program);
+    glBindVertexArray(vao);
+    glDrawArrays(gl_triangles(), 0, 3);
+
+    glfwSwapBuffers(window);
+    glfwPollEvents();
+  }
+
+  glDeleteShader(vertex.id);
+  glDeleteShader(fragment.id);
+  glDeleteProgram(program);
+  glfwDestroyWindow(window);
+  glfwTerminate();
+  ret 0;
+}
