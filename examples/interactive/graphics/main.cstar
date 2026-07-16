@@ -37,10 +37,10 @@ main() :: int32 {
   char logBuffer[4096];
 
   fs.FileReadResult vertexFile = fs.read_text_4096(
-      "examples/interactive/graphics/shaders/triangle.vert",
+      "shaders/triangle.vert",
       vertexSource);
   fs.FileReadResult fragmentFile = fs.read_text_4096(
-      "examples/interactive/graphics/shaders/triangle.frag",
+      "shaders/triangle.frag",
       fragmentSource);
 
   if (!vertexFile.success()) {

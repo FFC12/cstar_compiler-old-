@@ -69,8 +69,10 @@ class CStarCodegen {
   static std::string nativeLinkArgument(const std::string& library);
   void appendIncludedSource(const std::filesystem::path& includePath,
                             std::set<std::filesystem::path>& seen);
-  int runCommand(const std::vector<std::string>& args,
-                 bool reportBackendFailure = true) const;
+  int runCommand(
+      const std::vector<std::string>& args,
+      bool reportBackendFailure = true,
+      const std::filesystem::path& workingDirectory = {}) const;
 
   // pass0 is for detecting and booking all symbols (gathering preinfo)
   // pass0.cpp

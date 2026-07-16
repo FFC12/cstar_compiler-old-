@@ -1,6 +1,8 @@
 #include <codegen/codegen.hpp>
+#include <codegen/native_link_resolver.hpp>
 #include <cstar_config.hpp>
 
+#include <algorithm>
 #include <cstring>
 #include <cstdlib>
 #include <filesystem>
@@ -12,6 +14,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <system_error>
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
@@ -85,91 +88,8 @@ std::vector<std::string> CStarCodegen::backendTargetArgs() const {
   return {"-target", targetTriple};
 }
 
-static void appendDefaultNativeLibrarySearchPaths(std::vector<std::string>& args) {
-#ifdef __APPLE__
-  for (const char* path : {"/opt/homebrew/lib", "/usr/local/lib"}) {
-    if (std::filesystem::is_directory(path)) {
-      args.emplace_back(std::string("-L") + path);
-    }
-  }
-#endif
-}
-
-static void appendNativeLinkArgument(std::vector<std::string>& args,
-                                     const std::string& arg) {
-  constexpr std::string_view kFrameworkPrefix = "-framework ";
-  if (arg.rfind(std::string(kFrameworkPrefix), 0) == 0) {
-    args.emplace_back("-framework");
-    args.emplace_back(arg.substr(kFrameworkPrefix.size()));
-    return;
-  }
-
-  args.push_back(arg);
-}
-
-static std::string normalizeNativeLibraryName(std::string library) {
-  constexpr std::string_view kFrameworkPrefix = "-framework ";
-  if (library.rfind(std::string(kFrameworkPrefix), 0) == 0) {
-    return library.substr(kFrameworkPrefix.size());
-  }
-
-  if (library.rfind("-l", 0) == 0 && library.size() > 2) {
-    return library.substr(2);
-  }
-
-  return library;
-}
-
-static bool isDarwinFrameworkLibrary(const std::string& library) {
-#ifdef __APPLE__
-  static const std::set<std::string> kFrameworks = {
-      "Accelerate", "AppKit",       "AudioToolbox", "AVFoundation",
-      "Carbon",     "Cocoa",        "CoreAudio",    "CoreFoundation",
-      "CoreGraphics", "CoreMedia",  "CoreVideo",    "Foundation",
-      "IOKit",      "Metal",        "OpenAL",       "OpenCL",
-      "OpenGL",     "QuartzCore",   "Security",     "SystemConfiguration"};
-  return kFrameworks.count(library) > 0;
-#else
-  (void)library;
-  return false;
-#endif
-}
-
 std::string CStarCodegen::nativeLinkArgument(const std::string& library) {
-  const auto normalized = normalizeNativeLibraryName(library);
-  if (normalized.empty()) {
-    return {};
-  }
-
-  if (normalized.rfind("-L", 0) == 0 || normalized.rfind("-F", 0) == 0 ||
-      normalized.rfind("-Wl,", 0) == 0) {
-    return normalized;
-  }
-
-  const auto path = std::filesystem::path(normalized);
-  const auto ext = path.extension().string();
-  if (normalized.find('/') != std::string::npos ||
-      normalized.find('\\') != std::string::npos || ext == ".a" ||
-      ext == ".so" || ext == ".dylib" || ext == ".lib") {
-    return normalized;
-  }
-
-  if (normalized.find(':') != std::string::npos) {
-    return {};
-  }
-
-  if (isDarwinFrameworkLibrary(normalized)) {
-    return "-framework " + normalized;
-  }
-
-#ifdef _WIN32
-  if (normalized == "OpenGL") {
-    return "opengl32.lib";
-  }
-  return normalized + ".lib";
-#else
-  return "-l" + normalized;
-#endif
+  return NativeLinkResolver(resolveTargetTriple()).nativeLinkArgument(library);
 }
 
 static bool IsStdSourceIncludePath(const std::filesystem::path& path) {
@@ -210,8 +130,10 @@ static std::filesystem::path ResolveSourceIncludePath(
   return std::filesystem::absolute(resolved).lexically_normal();
 }
 
-int CStarCodegen::runCommand(const std::vector<std::string>& args,
-                             bool reportBackendFailure) const {
+int CStarCodegen::runCommand(
+    const std::vector<std::string>& args,
+    bool reportBackendFailure,
+    const std::filesystem::path& workingDirectory) const {
   std::ostringstream command;
   for (size_t i = 0; i < args.size(); ++i) {
     if (i > 0) {
@@ -226,7 +148,30 @@ int CStarCodegen::runCommand(const std::vector<std::string>& args,
   }
   std::cout.flush();
   std::cerr.flush();
+
+  const auto previousWorkingDirectory = std::filesystem::current_path();
+  if (!workingDirectory.empty()) {
+    std::error_code ec;
+    std::filesystem::current_path(workingDirectory, ec);
+    if (ec) {
+      std::cerr << REDISH << "Could not enter working directory "
+                << workingDirectory.string() << ": " << ec.message() << RES
+                << std::endl;
+      return 1;
+    }
+  }
+
   int result = std::system(commandString.c_str());
+  if (!workingDirectory.empty()) {
+    std::error_code ec;
+    std::filesystem::current_path(previousWorkingDirectory, ec);
+    if (ec) {
+      std::cerr << REDISH << "Could not restore working directory "
+                << previousWorkingDirectory.string() << ": " << ec.message()
+                << RES << std::endl;
+      return 1;
+    }
+  }
   int exitCode = result;
 #ifndef _WIN32
   if (result != -1) {
@@ -444,6 +389,79 @@ void CStarCodegen::build() {
   const auto staticLibFilename = staticLibPath.string();
   const auto dynamicLibFilename = dynamicLibPath.string();
   auto targetArgs = backendTargetArgs();
+  NativeLinkResolver nativeLinkResolver(resolveTargetTriple());
+
+  auto needsWindowsOpenGLLoader = [&]() {
+    return std::any_of(m_NativeLinkLibraries.begin(),
+                       m_NativeLinkLibraries.end(),
+                       [&](const std::string& library) {
+                         return nativeLinkResolver
+                             .requiresWindowsOpenGLLoader(library);
+                       });
+  };
+
+  auto compileNativeSupportObjects = [&]() {
+    std::vector<std::string> objects;
+    if (!needsWindowsOpenGLLoader()) {
+      return objects;
+    }
+
+    const auto loaderSource =
+        std::filesystem::path(CSTAR_SOURCE_ROOT) / "runtime" /
+        "cstar_windows_opengl_loader.c";
+    const auto loaderObject =
+        (m_OutputDir / "cstar_windows_opengl_loader.obj").string();
+
+    if (!std::filesystem::exists(loaderSource)) {
+      std::cerr << REDISH << "Missing C* native support source: "
+                << loaderSource.string() << RES << std::endl;
+      exit(1);
+    }
+
+    std::vector<std::string> compileArgs{clangPath};
+    compileArgs.insert(compileArgs.end(), targetArgs.begin(), targetArgs.end());
+    compileArgs.insert(compileArgs.end(),
+                       {"-c", loaderSource.string(), "-o", loaderObject});
+    if (runCommand(compileArgs) != 0) {
+      exit(1);
+    }
+
+    objects.push_back(loaderObject);
+    return objects;
+  };
+
+  auto copyNativeRuntimeFiles =
+      [&](const std::vector<std::filesystem::path>& runtimeFiles) {
+        std::set<std::filesystem::path> copied;
+        for (const auto& source : runtimeFiles) {
+          if (source.empty() || !std::filesystem::exists(source)) {
+            continue;
+          }
+
+          const auto target = m_OutputDir / source.filename();
+          const auto normalizedSource =
+              std::filesystem::absolute(source).lexically_normal();
+          const auto normalizedTarget =
+              std::filesystem::absolute(target).lexically_normal();
+          if (normalizedSource == normalizedTarget ||
+              copied.count(normalizedTarget) > 0) {
+            continue;
+          }
+
+          std::error_code ec;
+          std::filesystem::copy_file(
+              normalizedSource, normalizedTarget,
+              std::filesystem::copy_options::overwrite_existing, ec);
+          if (ec) {
+            std::cerr << REDISH << "Could not copy native runtime dependency "
+                      << normalizedSource.string() << " to "
+                      << normalizedTarget.string() << ": " << ec.message()
+                      << RES << std::endl;
+            exit(1);
+          }
+          copied.insert(normalizedTarget);
+        }
+      };
 
   if (m_Options.emitKind == CStarEmitKind::IR) {
     if (m_Options.stats || !m_Options.runAfterBuild) {
@@ -504,20 +522,34 @@ void CStarCodegen::build() {
   }
 
   if (m_Options.emitKind == CStarEmitKind::DynamicLibrary) {
+    auto nativeSupportObjects = compileNativeSupportObjects();
     std::vector<std::string> dynamicArgs{clangPath};
+    std::vector<std::filesystem::path> runtimeFiles;
     dynamicArgs.insert(dynamicArgs.end(), targetArgs.begin(), targetArgs.end());
     dynamicArgs.insert(dynamicArgs.end(),
                        {"-shared", irFilename, "-o", dynamicLibFilename});
-    appendDefaultNativeLibrarySearchPaths(dynamicArgs);
+    dynamicArgs.insert(dynamicArgs.end(), nativeSupportObjects.begin(),
+                       nativeSupportObjects.end());
+    auto searchArgs = nativeLinkResolver.defaultSearchArgs();
+    dynamicArgs.insert(dynamicArgs.end(), searchArgs.begin(), searchArgs.end());
     for (const auto& library : m_NativeLinkLibraries) {
-      auto arg = nativeLinkArgument(library);
-      if (!arg.empty()) {
-        appendNativeLinkArgument(dynamicArgs, arg);
+      auto resolution = nativeLinkResolver.resolve(library);
+      if (resolution.skipped) {
+        continue;
       }
+      if (resolution.missing) {
+        std::cerr << REDISH << resolution.diagnostic << RES << std::endl;
+        exit(1);
+      }
+      runtimeFiles.insert(runtimeFiles.end(), resolution.runtimeFiles.begin(),
+                          resolution.runtimeFiles.end());
+      dynamicArgs.insert(dynamicArgs.end(), resolution.args.begin(),
+                         resolution.args.end());
     }
     if (runCommand(dynamicArgs) != 0) {
       exit(1);
     }
+    copyNativeRuntimeFiles(runtimeFiles);
     if (m_Options.stats || !m_Options.runAfterBuild) {
       std::cout << GRN << "Output: " << dynamicLibFilename << RES << std::endl;
     }
@@ -525,26 +557,41 @@ void CStarCodegen::build() {
     return;
   }
 
+  auto nativeSupportObjects = compileNativeSupportObjects();
   std::vector<std::string> linkArgs{clangPath};
+  std::vector<std::filesystem::path> runtimeFiles;
   linkArgs.insert(linkArgs.end(), targetArgs.begin(), targetArgs.end());
   linkArgs.insert(linkArgs.end(), {irFilename, "-o", exeFilename});
-  appendDefaultNativeLibrarySearchPaths(linkArgs);
+  linkArgs.insert(linkArgs.end(), nativeSupportObjects.begin(),
+                  nativeSupportObjects.end());
+  auto searchArgs = nativeLinkResolver.defaultSearchArgs();
+  linkArgs.insert(linkArgs.end(), searchArgs.begin(), searchArgs.end());
   for (const auto& library : m_NativeLinkLibraries) {
-    auto arg = nativeLinkArgument(library);
-    if (!arg.empty()) {
-      appendNativeLinkArgument(linkArgs, arg);
+    auto resolution = nativeLinkResolver.resolve(library);
+    if (resolution.skipped) {
+      continue;
     }
+    if (resolution.missing) {
+      std::cerr << REDISH << resolution.diagnostic << RES << std::endl;
+      exit(1);
+    }
+    runtimeFiles.insert(runtimeFiles.end(), resolution.runtimeFiles.begin(),
+                        resolution.runtimeFiles.end());
+    linkArgs.insert(linkArgs.end(), resolution.args.begin(),
+                    resolution.args.end());
   }
   if (runCommand(linkArgs) != 0) {
     exit(1);
   }
+  copyNativeRuntimeFiles(runtimeFiles);
 
   if (m_Options.stats || !m_Options.runAfterBuild) {
     std::cout << GRN << "Output: " << exeFilename << RES << std::endl;
   }
   if (m_Options.runAfterBuild) {
     int programExitCode =
-        runCommand({std::filesystem::absolute(exePath).string()}, false);
+        runCommand({std::filesystem::absolute(exePath).string()}, false,
+                   m_InputPath.parent_path());
     if (m_Options.stats) {
       std::cout << YEL << "Generated program exited with code "
                 << programExitCode << RES << std::endl;

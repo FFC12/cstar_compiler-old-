@@ -317,7 +317,7 @@ class Visitor {
     return this->m_TypeWarningMessages;
   }
   void accumulateIncompatiblePtrErrMesg(const SymbolInfo& symbolInfo,
-                                        const std::string& s);
+                                        const std::string& s = "");
   SymbolInfo getSymbolInfo(const std::string& symbolName);
   bool validateArray(IAST& binaryExpr, size_t level, size_t& index);
 

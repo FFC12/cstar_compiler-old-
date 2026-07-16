@@ -1,18 +1,64 @@
-#include <parser/parser.hpp>
+#ifndef CSTAR_PARSER_PRIVATE_HPP
+#define CSTAR_PARSER_PRIVATE_HPP
+
 #include <cstar_config.hpp>
+#include <lexer/token.hpp>
+#include <parser/parser.hpp>
 
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <limits>
-#include <set>
-#include <sstream>
 #include <string>
+#include <string_view>
 
-static bool IsProposalOnlyTopLevel(TokenKind kind) {
+namespace cstar::parser_private {
+
+inline bool TypeFlag = false;
+
+inline bool IsIgnorableExprToken(TokenKind kind) {
+  return kind == TokenKind::COMMENT || kind == TokenKind::LINEFEED;
+}
+
+inline bool CanContinueExpressionAcrossLine(TokenKind previous) {
+  return previous == TokenKind::EQUAL || previous == TokenKind::RET ||
+         previous == TokenKind::COMMA || previous == TokenKind::LPAREN ||
+         previous == TokenKind::LSQPAR || previous == TokenKind::COLON ||
+         previous == TokenKind::QMARK || previous == TokenKind::TYPEINF ||
+         previous == TokenKind::PLUS || previous == TokenKind::MINUS ||
+         previous == TokenKind::STAR || previous == TokenKind::DIV ||
+         previous == TokenKind::MOD || previous == TokenKind::AND ||
+         previous == TokenKind::LAND || previous == TokenKind::OR ||
+         previous == TokenKind::LOR || previous == TokenKind::XOR ||
+         previous == TokenKind::LT || previous == TokenKind::LTEQ ||
+         previous == TokenKind::GT || previous == TokenKind::GTEQ ||
+         previous == TokenKind::EQUALEQUAL ||
+         previous == TokenKind::NOTEQUAL || previous == TokenKind::LSHIFT ||
+         previous == TokenKind::RSHIFT || previous == TokenKind::ARROW ||
+         previous == TokenKind::DOT || previous == TokenKind::COLONCOLON;
+}
+
+inline bool IsValueOperatorToken(TokenKind kind) {
+  switch (kind) {
+    case PLUS:
+    case MINUS:
+    case STAR:
+    case DIV:
+    case MOD:
+    case EQUALEQUAL:
+    case NOTEQUAL:
+    case LT:
+    case LTEQ:
+    case GT:
+    case GTEQ:
+      return true;
+    default:
+      return false;
+  }
+}
+
+inline bool IsProposalOnlyTopLevel(TokenKind kind) {
   switch (kind) {
     case DYNAMIC:
     case PROTOCOL:
@@ -35,17 +81,17 @@ static bool IsProposalOnlyTopLevel(TokenKind kind) {
   }
 }
 
-static bool IsMacroParamKindName(const std::string& name) {
+inline bool IsMacroParamKindName(const std::string& name) {
   return name == "expr" || name == "stmt" || name == "item" ||
          name == "type" || name == "ident" || name == "tokens";
 }
 
-static bool IsMacroReturnKindName(const std::string& name) {
+inline bool IsMacroReturnKindName(const std::string& name) {
   return name == "expr" || name == "stmt" || name == "item" ||
          name == "type";
 }
 
-static std::filesystem::path ResolveLogicalIncludeSource(
+inline std::filesystem::path ResolveLogicalIncludeSource(
     const std::string& includeName) {
   if (includeName.size() >= 6 &&
       includeName.substr(includeName.size() - 6) == ".cstar") {
@@ -68,11 +114,11 @@ static std::filesystem::path ResolveLogicalIncludeSource(
   return {};
 }
 
-static bool IsStdSourceIncludePath(const std::filesystem::path& path) {
+inline bool IsStdSourceIncludePath(const std::filesystem::path& path) {
   return path.begin() != path.end() && *path.begin() == "std";
 }
 
-static std::filesystem::path ResolveConfiguredStdlibRoot() {
+inline std::filesystem::path ResolveConfiguredStdlibRoot() {
   if (const char* stdlibPath = std::getenv("CSTAR_STDLIB_PATH")) {
     if (stdlibPath[0] != '\0') {
       return std::filesystem::path(stdlibPath);
@@ -88,7 +134,7 @@ static std::filesystem::path ResolveConfiguredStdlibRoot() {
   return std::filesystem::path(CSTAR_SOURCE_ROOT) / "std";
 }
 
-static std::filesystem::path ResolveSourceIncludePath(
+inline std::filesystem::path ResolveSourceIncludePath(
     const std::filesystem::path& includePath,
     const std::filesystem::path& includingFile) {
   if (!includePath.is_relative()) {
@@ -107,27 +153,6 @@ static std::filesystem::path ResolveSourceIncludePath(
   return std::filesystem::absolute(resolved).lexically_normal();
 }
 
-void CStarParser::parse() {
-  m_TokenStream = this->m_Lexer.perform();
-  collectPublicMacrosFromSourceIncludes();
-  preprocessCompileTimeSurface();
-  if (m_StatsEnabled) {
-    this->m_Lexer.lexerStats();
-  }
-  this->m_StartTime = time(nullptr);
+}  // namespace cstar::parser_private
 
-  if (!this->m_TokenStream.empty()) {
-    // auto eof = std::move(m_TokenStream[-1]);
-    this->m_CurrToken = m_TokenStream[m_TokenIndex];  //[0]
-    this->translationUnit();
-  } else {
-    assert(false && "Parser token stream is not enough to parse!\n");
-  }
-
-  /*for(auto &node: this->m_AST) {
-    node->debugNode();
-  }*/
-
-  this->parserStats();
-}
-
+#endif

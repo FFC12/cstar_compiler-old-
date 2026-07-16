@@ -1,0 +1,411 @@
+#include <visitor/semantic/semantic_private.hpp>
+
+SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
+  SymbolInfo symbolInfo;
+
+  symbolInfo.begin = funcCallAst.m_SemLoc.begin;
+  symbolInfo.end = funcCallAst.m_SemLoc.end;
+  symbolInfo.line = funcCallAst.m_SemLoc.line;
+
+  if (!m_TypeChecking) {
+    return symbolInfo;
+  }
+
+  auto funcName =
+      resolveFunctionCallName(funcCallAst.m_FuncSymbol.get(), symbolInfo, true);
+  if (funcName.empty()) {
+    return symbolInfo;
+  }
+
+  std::vector<IAST *> argNodes;
+  auto collectArgs = [&](auto &self, IAST *node) -> void {
+    if (node == nullptr) {
+      return;
+    }
+
+    if (node->m_ExprKind == ExprKind::BinOp) {
+      auto *binOp = static_cast<BinaryOpAST *>(node);
+      if (binOp->m_BinOpKind == BinOpKind::B_COMM) {
+        self(self, binOp->m_LHS.get());
+        self(self, binOp->m_RHS.get());
+        return;
+      }
+    }
+
+    argNodes.push_back(node);
+  };
+  collectArgs(collectArgs, funcCallAst.m_Args.get());
+  const bool hasImplicitMethodReceiver =
+      methodCallReceiver(funcCallAst.m_FuncSymbol.get()) != nullptr;
+  if (auto *receiver = methodCallReceiver(funcCallAst.m_FuncSymbol.get())) {
+    argNodes.insert(argNodes.begin(), receiver);
+  }
+
+  if (funcName == "print") {
+    if (argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'print' expects at least 1 argument", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_VOID;
+    return symbolInfo;
+  }
+
+  if (funcName == "input_int") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'input_int' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_I64;
+    symbolInfo.indirectionLevel = 0;
+    return symbolInfo;
+  }
+
+  if (funcName == "input_string") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'input_string' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_CHAR;
+    symbolInfo.indirectionLevel = 1;
+    return symbolInfo;
+  }
+
+  if (funcName == "clear_screen") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'clear_screen' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_VOID;
+    return symbolInfo;
+  }
+
+  if (funcName == "flush_output") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'flush_output' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_VOID;
+    return symbolInfo;
+  }
+
+  if (funcName == "sleep_ms") {
+    if (argNodes.size() != 1) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'sleep_ms' expects exactly 1 argument", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_VOID;
+    return symbolInfo;
+  }
+
+  if (funcName == "enable_raw_input") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'enable_raw_input' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_VOID;
+    return symbolInfo;
+  }
+
+  if (funcName == "disable_raw_input") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'disable_raw_input' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_VOID;
+    return symbolInfo;
+  }
+
+  if (funcName == "read_key") {
+    if (!argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'read_key' does not accept arguments", symbolInfo);
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_I32;
+    symbolInfo.indirectionLevel = 0;
+    return symbolInfo;
+  }
+
+  if (funcName == "strong_count") {
+    if (argNodes.size() != 1) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'strong_count' expects exactly 1 argument", symbolInfo);
+    } else if (argNodes[0]->m_ExprKind != ExprKind::SymbolExpr) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Builtin 'strong_count' expects a shared pointer symbol",
+          symbolInfo);
+    } else {
+      auto *argSymbol = static_cast<SymbolAST *>(argNodes[0]);
+      SymbolInfo lookupInfo;
+      SymbolInfo matchedSymbol;
+      auto argName = argSymbol->m_SymbolName;
+      if (symbolValidation(argName, lookupInfo, matchedSymbol)) {
+        if (matchedSymbol.indirectionLevel == 0 || matchedSymbol.isUnique) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Builtin 'strong_count' expects a shared pointer symbol",
+              symbolInfo, DiagnosticCode::SemanticOwnership);
+        }
+      }
+    }
+    symbolInfo.type = TypeSpecifier::SPEC_I64;
+    symbolInfo.indirectionLevel = 0;
+    return symbolInfo;
+  }
+
+  auto signatureIt = FunctionTable.find(funcName);
+  if (signatureIt == FunctionTable.end()) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Function '" + funcName + "' was not declared",
+        symbolInfo);
+    return symbolInfo;
+  }
+
+  const auto &signature = signatureIt->second;
+  if (m_TypeChecking && m_CurrentFunctionIsStatic &&
+      !signature.returnType.isStatic) {
+    this->m_TypeErrorMessages.emplace_back(
+        "static function cannot call non-static function '" + funcName + "'",
+        symbolInfo);
+  }
+  if ((!signature.isVariadic && signature.params.size() != argNodes.size()) ||
+      (signature.isVariadic && argNodes.size() < signature.params.size())) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Function '" + funcName + "' expects " +
+            (signature.isVariadic
+                 ? "at least " + std::to_string(signature.params.size())
+                 : std::to_string(signature.params.size())) +
+            " argument(s), but " +
+            std::to_string(argNodes.size()) + " provided",
+        symbolInfo);
+    return signature.returnType;
+  }
+
+  const bool callValueIsChecked =
+      m_LastVarDecl || m_LastAssignment || m_LastRetExpr || m_LastBinOp;
+  const auto expectedCallResultType =
+      m_LastRetExpr ? m_LastFuncRetTypeInfo.type : m_ExpectedType;
+  auto previousExpectedType = m_ExpectedType;
+  auto previousLastSymbolInfo = m_LastSymbolInfo;
+  auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+  auto previousLastBinOpHasPtr = m_LastBinOpHasAtLeastOnePtr;
+
+  auto moveSourceSymbol = [](IAST *node) -> SymbolAST * {
+    if (node == nullptr || node->m_ExprKind != ExprKind::UnaryOp) {
+      return nullptr;
+    }
+
+    auto *unary = static_cast<UnaryOpAST *>(node);
+    if (unary->m_UnaryOpKind != U_MOVE ||
+        unary->m_Node->m_ExprKind != ExprKind::SymbolExpr) {
+      return nullptr;
+    }
+
+    return static_cast<SymbolAST *>(unary->m_Node.get());
+  };
+
+  for (size_t i = 0; i < argNodes.size(); ++i) {
+    const bool isVariadicArg = i >= signature.params.size();
+    if (hasImplicitMethodReceiver && i == 0 && signature.params[i].isRef) {
+      continue;
+    }
+
+    if (isVariadicArg) {
+      if (argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
+        auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
+        SymbolInfo argInfo;
+        SymbolInfo matchedSymbol;
+        argInfo.symbolName = argSymbol->m_SymbolName;
+        argInfo.begin = argSymbol->m_SemLoc.begin;
+        argInfo.end = argSymbol->m_SemLoc.end;
+        argInfo.line = argSymbol->m_SemLoc.line;
+        symbolValidation(argSymbol->m_SymbolName, argInfo, matchedSymbol);
+      }
+      continue;
+    }
+
+    m_LastSymbolInfo = signature.params[i];
+    if (m_LastSymbolInfo.isRef) {
+      m_LastSymbolInfo.indirectionLevel += 1;
+    }
+    m_LastSymbolInfo.symbolId = m_SymbolId;
+    m_LastSymbolInfo.scopeId = m_ScopeId;
+    m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
+    m_ExpectedType = signature.params[i].type;
+    m_DefinedTypeFlag = signature.params[i].type == TypeSpecifier::SPEC_DEFINED;
+    m_DefinedTypeName = signature.params[i].definedTypeName;
+    m_LastBinOpHasAtLeastOnePtr = false;
+
+    const bool parameterIsOwnedPointer =
+        signature.params[i].indirectionLevel > 0 &&
+        !signature.params[i].isRef && !signature.params[i].isSubscriptable;
+    auto *argMoveSource = moveSourceSymbol(argNodes[i]);
+    SymbolInfo movedCallSource;
+    bool markMovedCallSource = false;
+    if (parameterIsOwnedPointer && argMoveSource != nullptr) {
+      SymbolInfo lookupInfo;
+      SymbolInfo movedSource;
+      auto sourceName = argMoveSource->m_SymbolName;
+      if (symbolValidation(sourceName, lookupInfo, movedSource, true)) {
+        if (movedSource.isNoMove) {
+          SymbolInfo argInfo;
+          argInfo.begin = argMoveSource->m_SemLoc.begin;
+          argInfo.end = argMoveSource->m_SemLoc.end;
+          argInfo.line = argMoveSource->m_SemLoc.line;
+          this->m_TypeErrorMessages.emplace_back(
+              "'nomove' pointer cannot be moved", argInfo,
+              DiagnosticCode::SemanticOwnership);
+        } else if (movedSource.indirectionLevel == 0 ||
+            movedSource.isUnique != signature.params[i].isUnique) {
+          SymbolInfo argInfo;
+          argInfo.begin = argMoveSource->m_SemLoc.begin;
+          argInfo.end = argMoveSource->m_SemLoc.end;
+          argInfo.line = argMoveSource->m_SemLoc.line;
+          this->m_TypeErrorMessages.emplace_back(
+              "'move' argument requires matching pointer ownership kind",
+              argInfo, DiagnosticCode::SemanticOwnership);
+        } else {
+          movedCallSource = movedSource;
+          markMovedCallSource = true;
+        }
+      }
+    }
+
+    if (argNodes[i]->m_ExprKind == ExprKind::ScalarExpr) {
+      auto *scalar = static_cast<ScalarOrLiteralAST *>(argNodes[i]);
+      const auto expectedType = signature.params[i].type;
+      const bool expectedInteger = IsIntegerType(expectedType);
+
+      if ((expectedInteger && scalar->m_IsBoolean) ||
+          (expectedType == TypeSpecifier::SPEC_BOOL && !scalar->m_IsBoolean)) {
+        SymbolInfo argInfo;
+        argInfo.begin = scalar->m_SemLoc.begin;
+        argInfo.end = scalar->m_SemLoc.end;
+        argInfo.line = scalar->m_SemLoc.line;
+        this->m_TypeErrorMessages.emplace_back(
+            "Function argument " + std::to_string(i + 1) +
+                " is incompatible with parameter type '" +
+                GetTypeStr(expectedType) + "'",
+            argInfo);
+        continue;
+      }
+    } else if (argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
+      SymbolInfo argInfo;
+      SymbolInfo matchedSymbol;
+      argInfo.symbolName = argSymbol->m_SymbolName;
+      argInfo.begin = argSymbol->m_SemLoc.begin;
+      argInfo.end = argSymbol->m_SemLoc.end;
+      argInfo.line = argSymbol->m_SemLoc.line;
+
+      auto argSymbolName = argSymbol->m_SymbolName;
+      if (!symbolValidation(argSymbolName, argInfo, matchedSymbol)) {
+        continue;
+      }
+
+      const auto expectedType = signature.params[i].type;
+      const auto actualType = matchedSymbol.type;
+      if (signature.params[i].indirectionLevel > 0 &&
+          !signature.params[i].isRef && signature.params[i].isUnique &&
+          matchedSymbol.indirectionLevel > 0 && matchedSymbol.isUnique) {
+        this->m_TypeErrorMessages.emplace_back(
+            "unique pointer function argument cannot be copied; use 'move' "
+            "to transfer ownership",
+            argInfo, DiagnosticCode::SemanticOwnership);
+        continue;
+      }
+
+      if (signature.params[i].isSubscriptable != matchedSymbol.isSubscriptable) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Function argument " + std::to_string(i + 1) +
+                " is incompatible with array parameter",
+            argInfo);
+        continue;
+      }
+
+      if (signature.params[i].isSubscriptable) {
+        if (signature.params[i].arrayDimensions.size() !=
+            matchedSymbol.arrayDimensions.size()) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Function argument " + std::to_string(i + 1) +
+                  " has incompatible array dimension count",
+              argInfo);
+          continue;
+        }
+
+        bool dimensionMismatch = false;
+        for (size_t dim = 0; dim < signature.params[i].arrayDimensions.size();
+             ++dim) {
+          if (signature.params[i].arrayDimensions[dim] !=
+              matchedSymbol.arrayDimensions[dim]) {
+            dimensionMismatch = true;
+            break;
+          }
+        }
+
+        if (dimensionMismatch) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Function argument " + std::to_string(i + 1) +
+                  " has incompatible array size",
+              argInfo);
+          continue;
+        }
+      }
+
+      const bool boolMismatch =
+          (IsIntegerType(expectedType) && actualType == TypeSpecifier::SPEC_BOOL) ||
+          (expectedType == TypeSpecifier::SPEC_BOOL && IsIntegerType(actualType));
+
+      if (boolMismatch) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Function argument " + std::to_string(i + 1) +
+                " is incompatible with parameter type '" +
+                GetTypeStr(expectedType) + "'",
+            argInfo);
+        continue;
+      }
+    }
+
+    if (!(hasImplicitMethodReceiver && i == 0 && signature.params[i].isRef)) {
+      argNodes[i]->acceptBefore(*this);
+    }
+    if (markMovedCallSource) {
+      m_MovedUniqueSymbols.insert(SymbolStateKey(movedCallSource));
+    }
+  }
+
+  m_ExpectedType = previousExpectedType;
+  m_LastSymbolInfo = previousLastSymbolInfo;
+  m_DefinedTypeFlag = previousDefinedTypeFlag;
+  m_LastBinOpHasAtLeastOnePtr = previousLastBinOpHasPtr;
+
+  symbolInfo = signature.returnType;
+  symbolInfo.symbolName = funcName;
+
+  if (callValueIsChecked && IsPrimitiveType(expectedCallResultType) &&
+      IsPrimitiveType(symbolInfo.type) &&
+      expectedCallResultType != symbolInfo.type) {
+    const bool expectedInteger = IsIntegerType(expectedCallResultType);
+    const bool actualInteger = IsIntegerType(symbolInfo.type);
+    const bool boolMismatch =
+        expectedCallResultType == TypeSpecifier::SPEC_BOOL ||
+        symbolInfo.type == TypeSpecifier::SPEC_BOOL;
+
+    if (boolMismatch || expectedCallResultType == TypeSpecifier::SPEC_VOID ||
+        symbolInfo.type == TypeSpecifier::SPEC_VOID) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Function '" + funcName + "' returns '" +
+              GetTypeStr(symbolInfo.type) + "', but '" +
+              GetTypeStr(expectedCallResultType) + "' is expected",
+          symbolInfo);
+    } else if (expectedInteger && actualInteger &&
+               LosslessCasting(expectedCallResultType, symbolInfo.type)) {
+      this->m_TypeWarningMessages.emplace_back(
+          "Function '" + funcName + "' returns '" +
+              GetTypeStr(symbolInfo.type) + "', which is casting to '" +
+              GetTypeStr(expectedCallResultType) +
+              "'. Potential data loss might be occured!",
+          symbolInfo);
+    }
+  }
+
+  return symbolInfo;
+}
