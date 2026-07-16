@@ -1,0 +1,10 @@
+// expected-exit: 9
+
+macro i32() -> type {
+  int32
+}
+
+main() :: int32 {
+  i32() value = 9;
+  ret value;
+}

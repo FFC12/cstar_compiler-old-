@@ -1,0 +1,12 @@
+// expected-exit: 16
+
+macro clamp($value: expr, $min: expr, $max: expr) -> expr {
+  (($value) < ($min) ? ($min) : (($value) > ($max) ? ($max) : ($value)))
+}
+
+main() :: int32 {
+  int32 low = clamp(-5, 0, 10);
+  int32 mid = clamp(6, 0, 10);
+  int32 high = clamp(42, 0, 10);
+  ret low + mid + high;
+}

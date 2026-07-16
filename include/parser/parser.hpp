@@ -2,6 +2,7 @@
 #define PARSER_HPP
 #include <ast/assignment_ast.hpp>
 #include <ast/ast.hpp>
+#include <ast/attribute_ast.hpp>
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
 #include <ast/control_flow_ast.hpp>
@@ -11,6 +12,7 @@
 #include <ast/func_call_ast.hpp>
 #include <ast/if_stmt.hpp>
 #include <ast/loop_stmt.hpp>
+#include <ast/macro_ast.hpp>
 #include <ast/new_ast.hpp>
 #include <ast/param_ast.hpp>
 #include <ast/ret_ast.hpp>
@@ -27,12 +29,14 @@
 #include <diagnostics/diagnostic.hpp>
 #include <filesystem>
 #include <lexer/lexer.hpp>
+#include <map>
 #include <memory>
 #include <parser/hint_qualifier.hpp>
 #include <parser/op_prec.hpp>
 #include <parser/type_specifiers.hpp>
 #include <parser/visibility_specifiers.hpp>
 #include <queue>
+#include <set>
 #include <string>
 
 class CStarParser {
@@ -47,6 +51,13 @@ class CStarParser {
   std::vector<std::string> m_NativeLinkLibraries;
   std::vector<std::filesystem::path> m_SourceIncludes;
   std::vector<std::string> m_ModuleAliases;
+  std::set<std::string> m_AttributeDefinitions;
+  struct CompileTimeMacroDefinition {
+    std::string name;
+    std::vector<std::string> params;
+    std::vector<TokenInfo> body;
+  };
+  std::map<std::string, CompileTimeMacroDefinition> m_CompileTimeMacros;
   bool m_ErrorFlag;
   bool m_ParsingEndingFlag;
   time_t m_StartTime;
@@ -240,6 +251,10 @@ class CStarParser {
   void translationUnit();
   void parseIncludeDirective();
   void parseLinkageBlock(VisibilitySpecifier visibilitySpecifier);
+  void parseAttributeDecl(DeclarationModifiers declarationModifiers);
+  void parseAttributeAnnotation();
+  void parseMacroDecl(DeclarationModifiers declarationModifiers);
+  void parseDirective();
   void parseEnumDecl(DeclarationModifiers declarationModifiers,
                      bool isFlags = false);
   void parseStructDecl(DeclarationModifiers declarationModifiers);
@@ -247,6 +262,19 @@ class CStarParser {
   std::string parseLinkSource();
   void registerNativeLinkLibrary(const std::string& library);
   void skipTopLevelTrivia();
+  void skipBalanced(TokenKind open, TokenKind close);
+  void preprocessCompileTimeSurface();
+  size_t collectMacroDefinition(size_t index,
+                                std::vector<TokenInfo>& output);
+  size_t copyAttributeDefinition(size_t index,
+                                 std::vector<TokenInfo>& output);
+  size_t handleDirective(size_t index, std::vector<TokenInfo>& output);
+  bool evaluateDirectiveCondition(size_t begin, size_t end);
+  bool tryExpandMacroCall(size_t& index, std::vector<TokenInfo>& output);
+  size_t skipBalancedInTokenStream(size_t index, TokenKind open,
+                                   TokenKind close) const;
+  MacroParamKind parseMacroParamKind();
+  MacroReturnKind parseMacroReturnKind();
   ShortcutOp typeOfShortcutOp(const TokenInfo& token);
   Type typeOf(const TokenInfo& token);
   TypeQualifier typeQualifierOf(const TokenInfo& tokenInfo);

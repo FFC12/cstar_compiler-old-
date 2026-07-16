@@ -73,6 +73,7 @@ enum TokenKind {
   RPAREN,
   LSQPAR,
   RSQPAR,
+  AT,
   HASH,
   COLONCOLON,
   COLON,
@@ -649,6 +650,8 @@ class CStarLexer {
       return FLAGS;
     else if (ident == "enum")
       return ENUM;
+    else if (ident == "for")
+      return FOR;
     else if (ident == "break")
       return BREAK;
     else if (ident == "continue")
@@ -927,6 +930,7 @@ class CStarLexer {
       case '$':
         return DOLLAR;
       case '@':
+        return AT;
       case '`': {
         return UNHANDLED;
       }
@@ -1001,8 +1005,14 @@ class CStarLexer {
         return "self";
       case IS:
         return "is";
+      case ATTRIB:
+        return "attribute";
       case FLAGS:
         return "flags";
+      case ENUM:
+        return "enum";
+      case FOR:
+        return "for";
       case CAST:
         return "cast";
       case PUBLIC:
@@ -1051,6 +1061,8 @@ class CStarLexer {
         return "[";
       case RSQPAR:
         return "]";
+      case AT:
+        return "@";
       case COLONCOLON:
         return "::";
       case COLON:

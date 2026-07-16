@@ -1,0 +1,15 @@
+// expected-exit: 11
+
+#if true {
+  answer() :: int32 {
+    ret 11;
+  }
+} else {
+  answer() :: int32 {
+    ret 99;
+  }
+}
+
+main() :: int32 {
+  ret answer();
+}

@@ -1,0 +1,11 @@
+// expected-exit: 5
+
+#if false {
+  skipped() :: int32 {
+    ret 99;
+  }
+}
+
+main() :: int32 {
+  ret 5;
+}

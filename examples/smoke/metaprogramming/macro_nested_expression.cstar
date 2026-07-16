@@ -1,0 +1,18 @@
+// expected-exit: 32
+
+macro add($a: expr, $b: expr) -> expr {
+  (($a) + ($b))
+}
+
+macro square($x: expr) -> expr {
+  (($x) * ($x))
+}
+
+macro mix($a: expr, $b: expr, $c: expr) -> expr {
+  add(square($a), add($b, $c))
+}
+
+main() :: int32 {
+  int32 value = mix(5, 3, 4);
+  ret value;
+}

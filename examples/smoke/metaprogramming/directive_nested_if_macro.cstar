@@ -1,0 +1,21 @@
+// expected-exit: 27
+
+#if true {
+  #if target.os != "definitely-not-an-os" {
+    macro selected_value() -> expr {
+      27
+    }
+  } else {
+    macro selected_value() -> expr {
+      99
+    }
+  }
+} else {
+  macro selected_value() -> expr {
+    1
+  }
+}
+
+main() :: int32 {
+  ret selected_value();
+}

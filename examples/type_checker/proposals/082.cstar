@@ -1,0 +1,10 @@
+// expected: diagnostic
+// expected-code: CST1001
+
+macro add($a: expr, $b: expr) -> expr {
+  $a + $b
+}
+
+main() :: int32 {
+  ret add(1);
+}

@@ -1,0 +1,15 @@
+// expected-exit: 23
+
+macro ScoreType() -> type {
+  int32
+}
+
+struct ScoreBox {
+  public ScoreType() value;
+}
+
+main() :: int32 {
+  ScoreBox box;
+  box.value = 23;
+  ret box.value;
+}

@@ -1,5 +1,6 @@
 #include <ast/assignment_ast.hpp>
 #include <ast/ast.hpp>
+#include <ast/attribute_ast.hpp>
 #include <ast/binary_op_ast.hpp>
 #include <ast/cast_op_ast.hpp>
 #include <ast/control_flow_ast.hpp>
@@ -9,6 +10,7 @@
 #include <ast/func_call_ast.hpp>
 #include <ast/if_stmt.hpp>
 #include <ast/loop_stmt.hpp>
+#include <ast/macro_ast.hpp>
 #include <ast/new_ast.hpp>
 #include <ast/option_stmt.hpp>
 #include <ast/param_ast.hpp>
@@ -27,6 +29,36 @@
 #include <set>
 
 using DiagnosticCode = cstar::diagnostics::DiagnosticCode;
+
+SymbolInfo Visitor::preVisit(AttributeAST &attributeAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.symbolName = attributeAst.m_Name;
+  symbolInfo.begin = attributeAst.m_SemLoc.begin;
+  symbolInfo.end = attributeAst.m_SemLoc.end;
+  symbolInfo.line = attributeAst.m_SemLoc.line;
+  symbolInfo.type = TypeSpecifier::SPEC_VOID;
+  return symbolInfo;
+}
+
+SymbolInfo Visitor::preVisit(MacroAST &macroAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.symbolName = macroAst.m_Name;
+  symbolInfo.begin = macroAst.m_SemLoc.begin;
+  symbolInfo.end = macroAst.m_SemLoc.end;
+  symbolInfo.line = macroAst.m_SemLoc.line;
+  symbolInfo.type = TypeSpecifier::SPEC_VOID;
+  return symbolInfo;
+}
+
+SymbolInfo Visitor::preVisit(DirectiveAST &directiveAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.symbolName = directiveAst.m_Name;
+  symbolInfo.begin = directiveAst.m_SemLoc.begin;
+  symbolInfo.end = directiveAst.m_SemLoc.end;
+  symbolInfo.line = directiveAst.m_SemLoc.line;
+  symbolInfo.type = TypeSpecifier::SPEC_VOID;
+  return symbolInfo;
+}
 
 static std::string SymbolStateKey(const SymbolInfo &symbolInfo) {
   return std::to_string(symbolInfo.scopeId) + "#" +

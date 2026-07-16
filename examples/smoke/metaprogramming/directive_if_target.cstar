@@ -1,0 +1,15 @@
+// expected-exit: 64
+
+#if target.arch == "arm64" {
+  arch_value() :: int32 {
+    ret 64;
+  }
+} else {
+  arch_value() :: int32 {
+    ret 64;
+  }
+}
+
+main() :: int32 {
+  ret arch_value();
+}

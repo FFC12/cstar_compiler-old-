@@ -1,0 +1,11 @@
+// expected-exit: 8
+
+macro bump($value: ident) -> stmt {
+  $value += 1
+}
+
+main() :: int32 {
+  int32 n = 7;
+  bump(n);
+  ret n;
+}

@@ -66,6 +66,7 @@ struct BinOpOrVal {
 };
 
 class IAST;
+class AttributeAST;
 class CastOpAST;
 class BinaryOpAST;
 class AssignmentAST;
@@ -73,6 +74,8 @@ class FuncCallAST;
 class FuncAST;
 class IfStmtAST;
 class LoopStmtAST;
+class MacroAST;
+class DirectiveAST;
 class OptionStmtAST;
 class NewAST;
 class BreakStmtAST;
@@ -249,6 +252,9 @@ class Visitor {
       : m_TypeTable(typeTable), m_TypeChecking(typeCheck) {}
 
   ValuePtr visit(VarAST& varAst);
+  ValuePtr visit(AttributeAST& attributeAst);
+  ValuePtr visit(MacroAST& macroAst);
+  ValuePtr visit(DirectiveAST& directiveAst);
   ValuePtr visit(AssignmentAST& assignmentAst);
   ValuePtr visit(BinaryOpAST& binaryOpAst);
   ValuePtr visit(CastOpAST& castOpAst);
@@ -274,6 +280,9 @@ class Visitor {
   llvm::Function* declareFunction(FuncAST& funcAst);
 
   SymbolInfo preVisit(VarAST& varAst);
+  SymbolInfo preVisit(AttributeAST& attributeAst);
+  SymbolInfo preVisit(MacroAST& macroAst);
+  SymbolInfo preVisit(DirectiveAST& directiveAst);
   SymbolInfo preVisit(AssignmentAST& assignmentAst);
   SymbolInfo preVisit(BinaryOpAST& binaryOpAst);
   SymbolInfo preVisit(CastOpAST& castOpAst);

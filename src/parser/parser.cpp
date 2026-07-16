@@ -13,7 +13,6 @@ static bool IsProposalOnlyTopLevel(TokenKind kind) {
     case PROTOCOL:
     case STATE:
     case DYN:
-    case MACRO:
     case CONSTRUCTOR:
     case DESTRUCTOR:
     case ALLOCATOR:
@@ -24,7 +23,6 @@ static bool IsProposalOnlyTopLevel(TokenKind kind) {
     case AWAIT:
     case SELF:
     case IS:
-    case ATTRIB:
     case PROTO:
       return true;
     default:
@@ -32,8 +30,19 @@ static bool IsProposalOnlyTopLevel(TokenKind kind) {
   }
 }
 
+static bool IsMacroParamKindName(const std::string& name) {
+  return name == "expr" || name == "stmt" || name == "item" ||
+         name == "type" || name == "ident" || name == "tokens";
+}
+
+static bool IsMacroReturnKindName(const std::string& name) {
+  return name == "expr" || name == "stmt" || name == "item" ||
+         name == "type";
+}
+
 void CStarParser::parse() {
   m_TokenStream = this->m_Lexer.perform();
+  preprocessCompileTimeSurface();
   if (m_StatsEnabled) {
     this->m_Lexer.lexerStats();
   }
@@ -60,6 +69,469 @@ void CStarParser::skipTopLevelTrivia() {
   }
 }
 
+size_t CStarParser::skipBalancedInTokenStream(size_t index, TokenKind open,
+                                              TokenKind close) const {
+  size_t depth = 0;
+  while (index < m_TokenStream.size()) {
+    const auto kind = m_TokenStream[index].getTokenKind();
+    if (kind == open) {
+      depth += 1;
+    } else if (kind == close) {
+      if (depth == 0) {
+        return index;
+      }
+      depth -= 1;
+      if (depth == 0) {
+        return index + 1;
+      }
+    }
+    index += 1;
+  }
+  return index;
+}
+
+size_t CStarParser::collectMacroDefinition(
+    size_t index, std::vector<TokenInfo>& output) {
+  auto macroToken = m_TokenStream[index];
+  index += 1;
+  if (index >= m_TokenStream.size() ||
+      m_TokenStream[index].getTokenKind() != TokenKind::IDENT) {
+    ParserError("Expected macro name", macroToken);
+  }
+
+  CompileTimeMacroDefinition macro;
+  macro.name = m_TokenStream[index].getTokenAsStr();
+  if (m_CompileTimeMacros.count(macro.name) != 0) {
+    ParserError("Redefinition of macro '" + macro.name + "'",
+                m_TokenStream[index]);
+  }
+  index += 1;
+
+  if (index >= m_TokenStream.size() ||
+      m_TokenStream[index].getTokenKind() != TokenKind::LPAREN) {
+    ParserError("Expected macro parameter list", macroToken);
+  }
+  index += 1;
+
+  std::set<std::string> paramNames;
+  while (index < m_TokenStream.size() &&
+         m_TokenStream[index].getTokenKind() != TokenKind::RPAREN) {
+    if (m_TokenStream[index].getTokenKind() == TokenKind::LINEFEED ||
+        m_TokenStream[index].getTokenKind() == TokenKind::COMMA) {
+      index += 1;
+      continue;
+    }
+    if (m_TokenStream[index].getTokenKind() != TokenKind::DOLLAR) {
+      ParserError("Expected '$' before macro parameter", m_TokenStream[index]);
+    }
+    index += 1;
+    if (index >= m_TokenStream.size() ||
+        m_TokenStream[index].getTokenKind() != TokenKind::IDENT) {
+      ParserError("Expected macro parameter name", macroToken);
+    }
+    const auto paramName = m_TokenStream[index].getTokenAsStr();
+    if (paramNames.count(paramName) != 0) {
+      ParserError("Redefinition of macro parameter '" + paramName + "'",
+                  m_TokenStream[index]);
+    }
+    paramNames.insert(paramName);
+    macro.params.push_back(paramName);
+    index += 1;
+    if (index >= m_TokenStream.size() ||
+        m_TokenStream[index].getTokenKind() != TokenKind::COLON) {
+      ParserError("Expected macro parameter kind", macroToken);
+    }
+    index += 1;
+    if (index >= m_TokenStream.size() ||
+        m_TokenStream[index].getTokenKind() != TokenKind::IDENT) {
+      ParserError("Expected macro parameter kind", macroToken);
+    }
+    if (!IsMacroParamKindName(m_TokenStream[index].getTokenAsStr())) {
+      ParserError("Unknown macro parameter kind '" +
+                      m_TokenStream[index].getTokenAsStr() +
+                      "'. Expected expr, stmt, item, type, ident or tokens",
+                  m_TokenStream[index]);
+    }
+    index += 1;
+  }
+
+  if (index >= m_TokenStream.size()) {
+    ParserError("Unterminated macro parameter list", macroToken);
+  }
+  index += 1;
+
+  if (index >= m_TokenStream.size() ||
+      m_TokenStream[index].getTokenKind() != TokenKind::ARROW) {
+    ParserError("Expected macro return kind", macroToken);
+  }
+  index += 1;
+  if (index >= m_TokenStream.size() ||
+      m_TokenStream[index].getTokenKind() != TokenKind::IDENT) {
+    ParserError("Expected macro return kind", macroToken);
+  }
+  if (!IsMacroReturnKindName(m_TokenStream[index].getTokenAsStr())) {
+    ParserError("Unknown macro return kind '" +
+                    m_TokenStream[index].getTokenAsStr() +
+                    "'. Expected expr, stmt, item or type",
+                m_TokenStream[index]);
+  }
+  index += 1;
+
+  while (index < m_TokenStream.size() &&
+         m_TokenStream[index].getTokenKind() == TokenKind::LINEFEED) {
+    index += 1;
+  }
+  if (index >= m_TokenStream.size() ||
+      m_TokenStream[index].getTokenKind() != TokenKind::LBRACK) {
+    ParserError("Expected macro body", macroToken);
+  }
+
+  const size_t bodyBegin = index + 1;
+  const size_t bodyEndExclusive =
+      skipBalancedInTokenStream(index, TokenKind::LBRACK, TokenKind::RBRACK);
+  if (bodyEndExclusive <= bodyBegin) {
+    ParserError("Unterminated macro body", macroToken);
+  }
+  for (size_t i = bodyBegin; i + 1 < bodyEndExclusive; ++i) {
+    if (m_TokenStream[i].getTokenKind() == TokenKind::LINEFEED ||
+        m_TokenStream[i].getTokenKind() == TokenKind::COMMENT) {
+      continue;
+    }
+    macro.body.push_back(m_TokenStream[i]);
+  }
+  m_CompileTimeMacros[macro.name] = std::move(macro);
+
+  if (!output.empty() &&
+      output.back().getTokenKind() != TokenKind::LINEFEED) {
+    output.emplace_back(TokenKind::LINEFEED,
+                        macroToken.getTokenPositionInfo(), "\n", false);
+  }
+  return bodyEndExclusive;
+}
+
+size_t CStarParser::copyAttributeDefinition(
+    size_t index, std::vector<TokenInfo>& output) {
+  const size_t start = index;
+  while (index < m_TokenStream.size() &&
+         m_TokenStream[index].getTokenKind() != TokenKind::LBRACK) {
+    index += 1;
+  }
+  if (index >= m_TokenStream.size()) {
+    ParserError("Expected attribute body", m_TokenStream[start]);
+  }
+
+  const size_t end = skipBalancedInTokenStream(index, TokenKind::LBRACK,
+                                               TokenKind::RBRACK);
+  for (size_t i = start; i < end && i < m_TokenStream.size(); ++i) {
+    output.push_back(m_TokenStream[i]);
+  }
+  return end;
+}
+
+bool CStarParser::evaluateDirectiveCondition(size_t begin, size_t end) {
+  while (begin < end &&
+         m_TokenStream[begin].getTokenKind() == TokenKind::LINEFEED) {
+    begin += 1;
+  }
+
+  bool negate = false;
+  if (begin < end && m_TokenStream[begin].getTokenKind() == TokenKind::NOT) {
+    negate = true;
+    begin += 1;
+  }
+
+  bool value = false;
+  if (begin < end && m_TokenStream[begin].getTokenKind() == TokenKind::TRUE) {
+    value = true;
+  } else if (begin < end &&
+             m_TokenStream[begin].getTokenKind() == TokenKind::FALSE) {
+    value = false;
+  } else if (begin + 2 < end &&
+             m_TokenStream[begin].getTokenKind() == TokenKind::IDENT &&
+             m_TokenStream[begin].getTokenAsStr() == "target" &&
+             m_TokenStream[begin + 1].getTokenKind() == TokenKind::DOT &&
+             m_TokenStream[begin + 2].getTokenKind() == TokenKind::IDENT) {
+    const auto property = m_TokenStream[begin + 2].getTokenAsStr();
+    std::string actual;
+    if (property == "os") {
+#if defined(_WIN32)
+      actual = "windows";
+#elif defined(__APPLE__)
+      actual = "macos";
+#elif defined(__linux__)
+      actual = "linux";
+#else
+      actual = "unknown";
+#endif
+    } else if (property == "arch") {
+#if defined(__aarch64__) || defined(_M_ARM64)
+      actual = "arm64";
+#elif defined(__x86_64__) || defined(_M_X64)
+      actual = "x64";
+#else
+      actual = "unknown";
+#endif
+    } else {
+      ParserError("Unknown target property '" + property + "'",
+                  m_TokenStream[begin + 2]);
+    }
+
+    if (begin + 4 < end &&
+        m_TokenStream[begin + 3].getTokenKind() == TokenKind::EQUALEQUAL &&
+        m_TokenStream[begin + 4].getTokenKind() == TokenKind::LITERAL) {
+      value = actual == m_TokenStream[begin + 4].getTokenAsStr();
+    } else if (begin + 4 < end &&
+               m_TokenStream[begin + 3].getTokenKind() ==
+                   TokenKind::NOTEQUAL &&
+               m_TokenStream[begin + 4].getTokenKind() == TokenKind::LITERAL) {
+      value = actual != m_TokenStream[begin + 4].getTokenAsStr();
+    } else {
+      ParserError("Expected target comparison in #if", m_TokenStream[begin]);
+    }
+  } else if (begin + 3 < end &&
+             m_TokenStream[begin].getTokenKind() == TokenKind::IDENT &&
+             (m_TokenStream[begin].getTokenAsStr() == "feature" ||
+              m_TokenStream[begin].getTokenAsStr() == "cfg") &&
+             m_TokenStream[begin + 1].getTokenKind() == TokenKind::LPAREN &&
+             m_TokenStream[begin + 2].getTokenKind() == TokenKind::LITERAL &&
+             m_TokenStream[begin + 3].getTokenKind() == TokenKind::RPAREN) {
+    value = false;
+  } else {
+    ParserError("Unsupported #if condition", m_TokenStream[begin]);
+  }
+
+  return negate ? !value : value;
+}
+
+size_t CStarParser::handleDirective(size_t index,
+                                    std::vector<TokenInfo>& output) {
+  auto hashToken = m_TokenStream[index];
+  const size_t directiveIndex = index + 1;
+  if (directiveIndex >= m_TokenStream.size()) {
+    ParserError("Expected directive name after '#'", hashToken);
+  }
+
+  const auto directiveKind = m_TokenStream[directiveIndex].getTokenKind();
+  const auto directiveName = m_TokenStream[directiveIndex].getTokenAsStr();
+  if (directiveKind == TokenKind::IF) {
+    size_t conditionEnd = directiveIndex + 1;
+    while (conditionEnd < m_TokenStream.size() &&
+           m_TokenStream[conditionEnd].getTokenKind() != TokenKind::LBRACK &&
+           m_TokenStream[conditionEnd].getTokenKind() != TokenKind::_EOF) {
+      conditionEnd += 1;
+    }
+    if (conditionEnd >= m_TokenStream.size() ||
+        m_TokenStream[conditionEnd].getTokenKind() != TokenKind::LBRACK) {
+      ParserError("Expected block after #if condition", hashToken);
+    }
+
+    const bool condition =
+        evaluateDirectiveCondition(directiveIndex + 1, conditionEnd);
+    const size_t ifEnd = skipBalancedInTokenStream(
+        conditionEnd, TokenKind::LBRACK, TokenKind::RBRACK);
+    if (ifEnd <= conditionEnd) {
+      ParserError("Unterminated #if block", hashToken);
+    }
+
+    size_t elseStart = ifEnd;
+    while (elseStart < m_TokenStream.size() &&
+           m_TokenStream[elseStart].getTokenKind() == TokenKind::LINEFEED) {
+      elseStart += 1;
+    }
+    size_t elseEnd = elseStart;
+    bool hasElse = false;
+    if (elseStart < m_TokenStream.size() &&
+        m_TokenStream[elseStart].getTokenKind() == TokenKind::ELSE) {
+      hasElse = true;
+      elseStart += 1;
+      while (elseStart < m_TokenStream.size() &&
+             m_TokenStream[elseStart].getTokenKind() == TokenKind::LINEFEED) {
+        elseStart += 1;
+      }
+      if (elseStart >= m_TokenStream.size() ||
+          m_TokenStream[elseStart].getTokenKind() != TokenKind::LBRACK) {
+        ParserError("Expected block after #else", hashToken);
+      }
+      elseEnd = skipBalancedInTokenStream(elseStart, TokenKind::LBRACK,
+                                          TokenKind::RBRACK);
+    }
+
+    const size_t selectedOpen = condition ? conditionEnd : elseStart;
+    const size_t selectedEnd = condition ? ifEnd : elseEnd;
+    if (condition || hasElse) {
+      for (size_t i = selectedOpen + 1; i + 1 < selectedEnd; ++i) {
+        output.push_back(m_TokenStream[i]);
+      }
+      if (!output.empty() &&
+          output.back().getTokenKind() != TokenKind::LINEFEED) {
+        output.emplace_back(TokenKind::LINEFEED,
+                            hashToken.getTokenPositionInfo(), "\n", false);
+      }
+    }
+    return hasElse ? elseEnd : ifEnd;
+  }
+
+  size_t lineEnd = directiveIndex + 1;
+  while (lineEnd < m_TokenStream.size() &&
+         m_TokenStream[lineEnd].getTokenKind() != TokenKind::LINEFEED &&
+         m_TokenStream[lineEnd].getTokenKind() != TokenKind::_EOF) {
+    lineEnd += 1;
+  }
+
+  if (directiveKind == TokenKind::IDENT && directiveName == "warning") {
+    std::string message = "compile-time warning";
+    if (directiveIndex + 1 < lineEnd) {
+      message = m_TokenStream[directiveIndex + 1].getTokenAsStr();
+    }
+    auto pos = hashToken.getTokenPositionInfo();
+    ParserWarning(message, pos.begin, pos.end, pos.line);
+  } else if (directiveKind == TokenKind::IDENT && directiveName == "error") {
+    std::string message = "compile-time error";
+    if (directiveIndex + 1 < lineEnd) {
+      message = m_TokenStream[directiveIndex + 1].getTokenAsStr();
+    }
+    ParserError(message, hashToken);
+  } else {
+    ParserError("Unsupported compile-time directive '#" + directiveName + "'",
+                hashToken);
+  }
+
+  if (lineEnd < m_TokenStream.size() &&
+      m_TokenStream[lineEnd].getTokenKind() == TokenKind::LINEFEED) {
+    output.push_back(m_TokenStream[lineEnd]);
+    return lineEnd + 1;
+  }
+  return lineEnd;
+}
+
+bool CStarParser::tryExpandMacroCall(size_t& index,
+                                     std::vector<TokenInfo>& output) {
+  if (m_TokenStream[index].getTokenKind() != TokenKind::IDENT) {
+    return false;
+  }
+
+  auto macroIt = m_CompileTimeMacros.find(m_TokenStream[index].getTokenAsStr());
+  if (macroIt == m_CompileTimeMacros.end()) {
+    return false;
+  }
+
+  if (index + 1 >= m_TokenStream.size() ||
+      m_TokenStream[index + 1].getTokenKind() != TokenKind::LPAREN) {
+    return false;
+  }
+
+  const auto callToken = m_TokenStream[index];
+  size_t cursor = index + 2;
+  std::vector<std::vector<TokenInfo>> args;
+  std::vector<TokenInfo> currentArg;
+  size_t parenDepth = 0;
+  size_t bracketDepth = 0;
+  size_t squareDepth = 0;
+  while (cursor < m_TokenStream.size()) {
+    const auto kind = m_TokenStream[cursor].getTokenKind();
+    if (kind == TokenKind::LPAREN) {
+      parenDepth += 1;
+    } else if (kind == TokenKind::RPAREN) {
+      if (parenDepth == 0 && bracketDepth == 0 && squareDepth == 0) {
+        if (!currentArg.empty() || !args.empty()) {
+          args.push_back(std::move(currentArg));
+        }
+        break;
+      }
+      parenDepth -= 1;
+    } else if (kind == TokenKind::LBRACK) {
+      bracketDepth += 1;
+    } else if (kind == TokenKind::RBRACK && bracketDepth > 0) {
+      bracketDepth -= 1;
+    } else if (kind == TokenKind::LSQPAR) {
+      squareDepth += 1;
+    } else if (kind == TokenKind::RSQPAR && squareDepth > 0) {
+      squareDepth -= 1;
+    } else if (kind == TokenKind::COMMA && parenDepth == 0 &&
+               bracketDepth == 0 && squareDepth == 0) {
+      args.push_back(std::move(currentArg));
+      currentArg = {};
+      cursor += 1;
+      continue;
+    }
+
+    currentArg.push_back(m_TokenStream[cursor]);
+    cursor += 1;
+  }
+
+  if (cursor >= m_TokenStream.size() ||
+      m_TokenStream[cursor].getTokenKind() != TokenKind::RPAREN) {
+    ParserError("Unterminated macro call", callToken);
+  }
+
+  const auto& macro = macroIt->second;
+  if (args.size() != macro.params.size()) {
+    ParserError("Macro '" + macro.name + "' expects " +
+                    std::to_string(macro.params.size()) + " argument(s), got " +
+                    std::to_string(args.size()),
+                callToken);
+  }
+
+  for (size_t i = 0; i < macro.body.size(); ++i) {
+    if (macro.body[i].getTokenKind() == TokenKind::DOLLAR &&
+        i + 1 < macro.body.size() &&
+        macro.body[i + 1].getTokenKind() == TokenKind::IDENT) {
+      const auto paramName = macro.body[i + 1].getTokenAsStr();
+      auto paramIt =
+          std::find(macro.params.begin(), macro.params.end(), paramName);
+      if (paramIt != macro.params.end()) {
+        const auto paramIndex =
+            static_cast<size_t>(std::distance(macro.params.begin(), paramIt));
+        output.insert(output.end(), args[paramIndex].begin(),
+                      args[paramIndex].end());
+        i += 1;
+        continue;
+      }
+    }
+    output.push_back(macro.body[i]);
+  }
+
+  index = cursor + 1;
+  return true;
+}
+
+void CStarParser::preprocessCompileTimeSurface() {
+  for (size_t pass = 0; pass < 8; ++pass) {
+    std::vector<TokenInfo> output;
+    output.reserve(m_TokenStream.size());
+    bool changed = false;
+
+    for (size_t i = 0; i < m_TokenStream.size();) {
+      if (m_TokenStream[i].getTokenKind() == TokenKind::ATTRIB) {
+        i = copyAttributeDefinition(i, output);
+        continue;
+      }
+      if (m_TokenStream[i].getTokenKind() == TokenKind::MACRO) {
+        i = collectMacroDefinition(i, output);
+        changed = true;
+        continue;
+      }
+      if (m_TokenStream[i].getTokenKind() == TokenKind::HASH) {
+        i = handleDirective(i, output);
+        changed = true;
+        continue;
+      }
+      if (tryExpandMacroCall(i, output)) {
+        changed = true;
+        continue;
+      }
+
+      output.push_back(m_TokenStream[i]);
+      i += 1;
+    }
+
+    m_TokenStream = std::move(output);
+    if (!changed) {
+      break;
+    }
+  }
+}
+
 void CStarParser::registerNativeLinkLibrary(const std::string& library) {
   if (library.empty()) {
     return;
@@ -69,6 +541,262 @@ void CStarParser::registerNativeLinkLibrary(const std::string& library) {
                 library) == m_NativeLinkLibraries.end()) {
     m_NativeLinkLibraries.push_back(library);
   }
+}
+
+void CStarParser::skipBalanced(TokenKind open, TokenKind close) {
+  expected(open);
+  size_t depth = 0;
+  do {
+    if (is(open)) {
+      depth += 1;
+    } else if (is(close)) {
+      if (depth == 0) {
+        ParserError("Unexpected closing token while parsing balanced block",
+                    currentTokenInfo());
+      }
+      depth -= 1;
+    }
+
+    this->advance();
+  } while (depth > 0 && !is(TokenKind::_EOF));
+
+  if (depth != 0) {
+    ParserError("Unterminated balanced block", prevTokenInfo());
+  }
+}
+
+void CStarParser::parseAttributeDecl(
+    DeclarationModifiers declarationModifiers) {
+  if (declarationModifiers.linkage == VisibilitySpecifier::VIS_IMPORT ||
+      declarationModifiers.linkage == VisibilitySpecifier::VIS_EXPORT) {
+    ParserError("attribute is a compile-time transform, not import/export "
+                "linkage",
+                currentTokenInfo());
+  }
+  if (declarationModifiers.isStatic) {
+    ParserError("static attribute declarations are not valid",
+                currentTokenInfo());
+  }
+
+  auto attributeToken = currentTokenInfo();
+  auto posInfo = attributeToken.getTokenPositionInfo();
+  const size_t begin = posInfo.begin;
+  const size_t line = posInfo.line;
+
+  this->advance();
+  expected(TokenKind::IDENT);
+  const auto attributeName = currentTokenStr();
+  if (m_AttributeDefinitions.count(attributeName) != 0) {
+    ParserError("Redefinition of attribute '" + attributeName + "'",
+                currentTokenInfo());
+  }
+  m_AttributeDefinitions.insert(attributeName);
+  this->advance();
+
+  expected(TokenKind::FOR);
+  this->advance();
+  skipTopLevelTrivia();
+
+  if (!is(TokenKind::STRUCT)) {
+    ParserError("attribute MVP only supports `for struct`",
+                currentTokenInfo());
+  }
+  this->advance();
+  skipTopLevelTrivia();
+
+  expected(TokenKind::LBRACK);
+  skipBalanced(TokenKind::LBRACK, TokenKind::RBRACK);
+  posInfo = prevTokenInfo().getTokenPositionInfo();
+  SemanticLoc semLoc(begin, posInfo.end, line);
+
+  this->m_AST.emplace_back(std::make_unique<AttributeAST>(
+      attributeName, AttributeTargetKind::Struct, semLoc));
+}
+
+void CStarParser::parseAttributeAnnotation() {
+  auto atToken = currentTokenInfo();
+  this->advance();
+  expected(TokenKind::IDENT);
+  const auto attributeName = currentTokenStr();
+  if (m_AttributeDefinitions.count(attributeName) == 0) {
+    ParserError("Unknown attribute '" + attributeName + "'",
+                currentTokenInfo());
+  }
+  this->advance();
+
+  if (is(TokenKind::LPAREN)) {
+    skipBalanced(TokenKind::LPAREN, TokenKind::RPAREN);
+  }
+
+  (void)atToken;
+  (void)attributeName;
+}
+
+MacroParamKind CStarParser::parseMacroParamKind() {
+  expected(TokenKind::IDENT);
+  const auto kindName = currentTokenStr();
+  if (kindName == "expr") {
+    this->advance();
+    return MacroParamKind::Expr;
+  }
+  if (kindName == "stmt") {
+    this->advance();
+    return MacroParamKind::Stmt;
+  }
+  if (kindName == "item") {
+    this->advance();
+    return MacroParamKind::Item;
+  }
+  if (kindName == "type") {
+    this->advance();
+    return MacroParamKind::Type;
+  }
+  if (kindName == "ident") {
+    this->advance();
+    return MacroParamKind::Ident;
+  }
+  if (kindName == "tokens") {
+    this->advance();
+    return MacroParamKind::Tokens;
+  }
+
+  ParserError("Unknown macro parameter kind '" + kindName +
+                  "'. Expected expr, stmt, item, type, ident or tokens",
+              currentTokenInfo());
+  return MacroParamKind::Tokens;
+}
+
+MacroReturnKind CStarParser::parseMacroReturnKind() {
+  expected(TokenKind::IDENT);
+  const auto kindName = currentTokenStr();
+  if (kindName == "expr") {
+    this->advance();
+    return MacroReturnKind::Expr;
+  }
+  if (kindName == "stmt") {
+    this->advance();
+    return MacroReturnKind::Stmt;
+  }
+  if (kindName == "item") {
+    this->advance();
+    return MacroReturnKind::Item;
+  }
+  if (kindName == "type") {
+    this->advance();
+    return MacroReturnKind::Type;
+  }
+
+  ParserError("Unknown macro return kind '" + kindName +
+                  "'. Expected expr, stmt, item or type",
+              currentTokenInfo());
+  return MacroReturnKind::Expr;
+}
+
+void CStarParser::parseMacroDecl(
+    DeclarationModifiers declarationModifiers) {
+  if (declarationModifiers.linkage == VisibilitySpecifier::VIS_IMPORT ||
+      declarationModifiers.linkage == VisibilitySpecifier::VIS_EXPORT) {
+    ParserError("macro is a compile-time transform, not import/export linkage",
+                currentTokenInfo());
+  }
+  if (declarationModifiers.isStatic) {
+    ParserError("static macro declarations are not valid",
+                currentTokenInfo());
+  }
+
+  auto macroToken = currentTokenInfo();
+  auto posInfo = macroToken.getTokenPositionInfo();
+  const size_t begin = posInfo.begin;
+  const size_t line = posInfo.line;
+
+  this->advance();
+  expected(TokenKind::IDENT);
+  const auto macroName = currentTokenStr();
+  this->advance();
+
+  expected(TokenKind::LPAREN);
+  this->advance();
+
+  std::vector<MacroParamInfo> params;
+  while (!is(TokenKind::RPAREN) && !is(TokenKind::_EOF)) {
+    skipTopLevelTrivia();
+    if (is(TokenKind::RPAREN)) {
+      break;
+    }
+
+    expected(TokenKind::DOLLAR);
+    this->advance();
+    expected(TokenKind::IDENT);
+    MacroParamInfo param;
+    param.name = currentTokenStr();
+    this->advance();
+    expected(TokenKind::COLON);
+    this->advance();
+    param.kind = parseMacroParamKind();
+    params.push_back(std::move(param));
+
+    skipTopLevelTrivia();
+    if (is(TokenKind::COMMA)) {
+      this->advance();
+      continue;
+    }
+    if (!is(TokenKind::RPAREN)) {
+      expected({TokenKind::COMMA, TokenKind::RPAREN});
+    }
+  }
+
+  expected(TokenKind::RPAREN);
+  this->advance();
+  skipTopLevelTrivia();
+  expected(TokenKind::ARROW);
+  this->advance();
+  skipTopLevelTrivia();
+  const auto returnKind = parseMacroReturnKind();
+  skipTopLevelTrivia();
+
+  expected(TokenKind::LBRACK);
+  skipBalanced(TokenKind::LBRACK, TokenKind::RBRACK);
+  posInfo = prevTokenInfo().getTokenPositionInfo();
+  SemanticLoc semLoc(begin, posInfo.end, line);
+
+  this->m_AST.emplace_back(std::make_unique<MacroAST>(
+      macroName, std::move(params), returnKind, semLoc));
+
+  ParserHint(
+      "Macro declarations are parsed as typed C* metaprogramming surface, "
+      "but hygienic expansion/source mapping is not implemented yet.",
+      macroToken);
+  ParserError("macro expansion is proposal-only in this compiler phase",
+              macroToken);
+}
+
+void CStarParser::parseDirective() {
+  auto hashToken = currentTokenInfo();
+  auto posInfo = hashToken.getTokenPositionInfo();
+  this->advance();
+
+  std::string directiveName;
+  if (is(TokenKind::IF)) {
+    directiveName = "if";
+  } else if (is(TokenKind::IDENT)) {
+    directiveName = currentTokenStr();
+  } else {
+    ParserError("Expected directive name after '#'", currentTokenInfo());
+  }
+
+  SemanticLoc semLoc(posInfo.begin,
+                     currentTokenInfo().getTokenPositionInfo().end,
+                     posInfo.line);
+  this->m_AST.emplace_back(
+      std::make_unique<DirectiveAST>(directiveName, semLoc));
+
+  ParserHint(
+      "Directive syntax is parsed as C* compile-time config surface, "
+      "but directive evaluation is not implemented yet.",
+      hashToken);
+  ParserError("directive '#" + directiveName +
+                  "' is proposal-only in this compiler phase",
+              hashToken);
 }
 
 std::string CStarParser::parseLinkSource() {
@@ -682,6 +1410,16 @@ void CStarParser::translationUnit() {
       continue;
     }
 
+    if (is(TokenKind::AT)) {
+      parseAttributeAnnotation();
+      continue;
+    }
+
+    if (is(TokenKind::HASH)) {
+      parseDirective();
+      continue;
+    }
+
     if (isPackageMark(this->m_CurrToken)) {
       parseIncludeDirective();
       continue;
@@ -699,6 +1437,16 @@ void CStarParser::translationUnit() {
           parseDeclarationModifiers(false);
 
       skipTopLevelTrivia();
+      if (is(TokenKind::ATTRIB)) {
+        parseAttributeDecl(declarationModifiers);
+        continue;
+      }
+
+      if (is(TokenKind::MACRO)) {
+        parseMacroDecl(declarationModifiers);
+        continue;
+      }
+
       if (is(TokenKind::STRUCT)) {
         parseStructDecl(declarationModifiers);
         continue;

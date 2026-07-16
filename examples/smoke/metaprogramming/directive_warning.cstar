@@ -1,0 +1,5 @@
+#warning "compile-time warning smoke"
+
+main() :: int32 {
+  ret 0;
+}

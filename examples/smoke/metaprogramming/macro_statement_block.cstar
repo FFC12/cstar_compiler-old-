@@ -1,0 +1,12 @@
+// expected-exit: 15
+
+macro add_twice($target: ident, $value: expr) -> stmt {
+  $target += $value;
+  $target += $value
+}
+
+main() :: int32 {
+  int32 total = 3;
+  add_twice(total, 6);
+  ret total;
+}

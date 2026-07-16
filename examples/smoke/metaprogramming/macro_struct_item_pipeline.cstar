@@ -1,0 +1,22 @@
+// expected-exit: 33
+
+macro define_pair() -> item {
+  struct Pair {
+    public int32 left;
+    public int32 right;
+  }
+
+  make_pair(int32 left, int32 right) :: Pair {
+    Pair p;
+    p.left = left;
+    p.right = right;
+    ret p;
+  }
+}
+
+define_pair()
+
+main() :: int32 {
+  Pair pair = make_pair(12, 21);
+  ret pair.left + pair.right;
+}

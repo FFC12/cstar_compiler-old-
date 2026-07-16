@@ -1,0 +1,29 @@
+// expected-exit: 58
+
+attribute DebugLayout for struct {
+  $emit function ignored_debug() :: void {
+    ret;
+  }
+}
+
+macro define_model($name: ident) -> item {
+  @DebugLayout
+  struct $name {
+    public int32 id;
+    public int32 score;
+  }
+
+  make_model(int32 id, int32 score) :: $name {
+    $name model;
+    model.id = id;
+    model.score = score;
+    ret model;
+  }
+}
+
+define_model(Player)
+
+main() :: int32 {
+  Player player = make_model(19, 39);
+  ret player.id + player.score;
+}

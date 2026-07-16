@@ -1,0 +1,8 @@
+// expected: diagnostic
+// expected-code: CST1001
+
+#error "compile-time error stops compilation"
+
+main() :: int32 {
+  ret 0;
+}

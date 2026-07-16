@@ -1,0 +1,20 @@
+// expected-exit: 42
+
+attribute DebugLayout for struct {
+  $emit function debug_layout() :: void {
+    ret;
+  }
+}
+
+@DebugLayout
+struct PlayerProfile {
+  int32 id;
+  int32 score;
+}
+
+main() :: int32 {
+  PlayerProfile profile;
+  profile.id = 7;
+  profile.score = 35;
+  ret profile.id + profile.score;
+}

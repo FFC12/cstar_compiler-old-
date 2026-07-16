@@ -1,0 +1,11 @@
+// expected-exit: 13
+
+#if true {
+  macro selected() -> expr {
+    13
+  }
+}
+
+main() :: int32 {
+  ret selected();
+}

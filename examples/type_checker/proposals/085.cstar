@@ -1,0 +1,12 @@
+// expected: diagnostic
+// expected-code: CST1001
+
+attribute Debug for struct {
+}
+
+attribute Debug for struct {
+}
+
+main() :: int32 {
+  ret 0;
+}

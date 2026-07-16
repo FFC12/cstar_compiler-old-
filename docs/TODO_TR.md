@@ -1665,22 +1665,27 @@ Concept split kararı:
 Durum:
 
 - Lexer `attribute` keyword'ünü tanır.
-- Parser `attribute` için controlled proposal diagnostic üretir.
-- AST/semantic yok.
-
-Kalan:
-
-- `attribute Name for <kind> { ... }` grammar'ını parser/AST seviyesine indir.
-- `@Name(args)` item annotation grammar'ını ekle.
-- Attribute target kind'larını ilk MVP'de sınırlı tut:
-  - `struct`
-  - ileride `function`, `enum`, `field`, `module`
-- Attribute'ın trait'ten farkını yaz:
+- Lexer `@` token'ını ve `for` keyword'ünü tanır.
+- Parser `attribute Name for struct { ... }` declaration grammar'ını dengeli block skip ile okur.
+- Parser `@Name(args)` item annotation grammar'ını okur.
+- `AttributeAST` eklendi; 8.1 MVP hedefi olarak sadece `for struct` kabul edilir.
+- Attribute declaration ve annotation yüzeyi compiler pipeline'ında kabul edilir; `for struct` metadata MVP'si codegen'i bozmaz.
+- Attribute body şimdilik dengeli token block olarak saklanmadan skip edilir; gerçek `$emit` generation aşağıdaki backlog'dadır.
+- Attribute adı checked hale getirildi:
+  - Duplicate attribute definition diagnostic üretir.
+  - Bilinmeyen `@Name` annotation diagnostic üretir.
+- Doküman attribute/trait/protocol ayrımını açıklar:
   - trait: type capability/contract.
-  - attribute: compile-time transformation/reflection helper.
-- Attribute'ın protocol'den farkını yaz:
   - protocol: value state/typestate contract.
   - attribute: item/type üzerinde checked compile-time transform.
+- Positive smoke:
+  - `examples/smoke/metaprogramming/attribute_struct_metadata.cstar`
+- Negative diagnostic:
+  - `examples/type_checker/proposals/084.cstar`
+  - `examples/type_checker/proposals/085.cstar`
+
+8.2+ expansion/reflection backlog:
+
 - Reflection yüzeyi:
   - `name($item)`, `fields($item)`, `methods($item)`.
   - field metadata: name/type/visibility/qualifier/offset.
@@ -1695,7 +1700,12 @@ Kalan:
   - original + generated item pass0/pass1.
 - Attribute layout'u gizlice değiştirmemeli, private field'ı public yapmamalı, runtime metadata üretmemeli ve trait/protocol conformance'ı bypass etmemeli.
 - Function body rewrite ilk MVP'ye alınmamalı; gerekirse ayrı ve daha riskli macro capability olarak tasarlanmalı.
-- İlk MVP sadece parse + controlled diagnostic olmalı; expansion sonra.
+- İleride target kind genişletmesi:
+  - `function`
+  - `enum`
+  - `field`
+  - `module`
+- Expansion gelene kadar 8.1 tamam sayılır; gerçek item emission 8.2 macro/directive ve reflection altyapısıyla birlikte açılmalı.
 
 ### 8.2 Macro / Directive
 
@@ -1703,32 +1713,63 @@ Durum:
 
 - Lexer `#` ve `$` tanır.
 - Lexer `macro` keyword'ünü tanır.
-- `@` şu an unhandled.
-- Parser macro/directive AST yok.
-
-Kalan:
-
-- `macro name($arg: kind, ...) -> expr|stmt|item|type { ... }` grammar'ını parser/AST seviyesine indir.
-- Macro parameter kind setini netleştir:
+- `@` artık attribute annotation token'ıdır.
+- Parser `macro name($arg: kind, ...) -> expr|stmt|item|type { ... }` grammar'ını dengeli block skip ile okur.
+- Macro parametre kind seti parser seviyesinde net:
   - `expr`
   - `stmt`
   - `item`
   - `type`
   - `ident`
-  - `tokens` yalnız escape hatch olarak.
-- Macro return kind'ı `expr`, `stmt`, `item`, `type` ile sınırlı başlamalı.
-- Macro expansion zamanı:
-  - parse-time mı,
-  - semantic-time mı,
-  - IR-before-codegen mi?
+  - `tokens`
+- Macro return kind seti parser seviyesinde net:
+  - `expr`
+  - `stmt`
+  - `item`
+  - `type`
+- `MacroAST` ve `DirectiveAST` eklendi.
+- Compile-time preprocess pass eklendi:
+  - macro declaration'ları token stream'den toplanır ve normal AST parse'a düşmeden kaldırılır.
+  - macro call'ları declaration body token'larıyla expand edilir.
+  - `$param` token'ları çağrı argüman token'larıyla değiştirilir.
+  - macro body linefeed/comment token'ları expression expansion öncesi normalize edilir.
+  - Expansion fixed-point pass olarak çalışır; `#if` block'u içinden gelen macro definition/call'lar sonraki pass'te çözülür.
+- `expr`, `stmt`, `item`, `type` return kind'ları smoke seviyesinde çalışır.
+- `#warning "message"` compile-time warning üretir ve derleme devam eder.
+- `#error "message"` compile-time parser error üretir ve derlemeyi durdurur.
+- `#if true/false { ... } else { ... }` block selection çalışır.
+- `#if target.os == "..."` / `!=` ve `#if target.arch == "..."` / `!=` target condition yüzeyi çalışır.
+- `feature("name")` ve `cfg("name")` koşulları şimdilik false döner; `!feature(...)` formu bu sayede fallback seçebilir.
+- Positive smoke:
+  - `examples/smoke/metaprogramming/macro_expression.cstar`
+  - `examples/smoke/metaprogramming/macro_statement.cstar`
+  - `examples/smoke/metaprogramming/macro_item.cstar`
+  - `examples/smoke/metaprogramming/macro_type.cstar`
+  - `examples/smoke/metaprogramming/directive_warning.cstar`
+  - `examples/smoke/metaprogramming/directive_if_true.cstar`
+  - `examples/smoke/metaprogramming/directive_if_false_skip.cstar`
+  - `examples/smoke/metaprogramming/directive_if_target.cstar`
+  - `examples/smoke/metaprogramming/directive_if_macro_definition.cstar`
+- Negative diagnostic:
+  - `examples/type_checker/proposals/079.cstar`
+  - `examples/type_checker/proposals/080.cstar`
+  - `examples/type_checker/proposals/081.cstar`
+  - `examples/type_checker/proposals/082.cstar`
+  - `examples/type_checker/proposals/083.cstar`
+
+İleri macro expansion/directive evaluation backlog:
+
+- Mevcut macro expansion zamanı parse öncesi token-stream preprocess'tir; ileride AST/source-map aware expansion katmanı gerekebilir.
+- `ident` ve `tokens` kind'ları parse/arity düzeyinde kabul edilir; bunlar için daha sıkı shape validation ileride yapılmalı.
 - Hijyen/hygiene kuralları.
 - Error reporting ve source span mapping.
 - Macro local isimleri caller scope'una sızmamalı.
 - Macro diagnostic'i hem macro tanımını hem çağrı yerini gösterebilmeli.
-- `#if`, `#warning`, `#error`, `cfg(...)`, `feature(...)`, `target.*` compile-time config yüzeyini tasarla.
+- `cfg(...)`, `feature(...)`, `target.*` değerlerini CLI/build config tarafına bağla.
 - `build.mode`, `target.os`, `target.arch`, `feature("name")`, `cfg("key")`, `cfg_int("key")` gibi değerlerin nereden besleneceği CLI/build config tarafında tasarlanmalı.
-- `#if` kör text replacement değil, parsed item/statement selection olarak çalışmalı.
+- `#if` expression grammar'ı `&&`, `||`, parentheses ve richer constant expression ile genişletilmeli.
 - Protocol ile macro/directive karıştırılmamalı; protocol gizli hook sistemi olmayacak.
+- Macro/directive MVP'si tamam sayılır; sonraki sırada 8.3 enum/tagged layout değerlendirmesi var.
 
 ### 8.3 Enum / Explicit Tagged Layout
 

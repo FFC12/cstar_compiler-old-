@@ -1,0 +1,13 @@
+// expected-exit: 42
+
+macro define_answer() -> item {
+  answer() :: int32 {
+    ret 42;
+  }
+}
+
+define_answer()
+
+main() :: int32 {
+  ret answer();
+}

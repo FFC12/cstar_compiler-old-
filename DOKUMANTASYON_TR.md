@@ -30,7 +30,7 @@ Projede öne çıkan fikirler:
 - `loop(...) { ... }` ile hem while benzeri hem iterable/range benzeri döngü fikri.
 - `cast<T>(expr)` ve `unsafe_cast<T>(expr)` ayrımı.
 - `move`, `typeof`, `sizeof` gibi unary operator fikirleri.
-- `struct` ve compile-time `trait` MVP'si başlamıştır; `attribute`, `protocol`, `dynamic protocol`, directive/macro gibi daha ileri fikirler tasarlanmış, fakat mevcut compiler bunları henüz gerçek lowering olarak derleyemiyor.
+- `struct`, compile-time `trait`, attribute metadata MVP'si ve macro/directive MVP'si başlamıştır. `attribute` tanımı/annotation compiler pipeline'ında kabul edilir; expression/statement/item/type macro çağrıları parse öncesi token expansion ile çalışır; `#warning`/`#error` compile-time diagnostic üretir; temel `#if/#else` block selection çalışır. `protocol`, `dynamic protocol` gibi daha ileri fikirler tasarlanmış, fakat mevcut compiler bunları henüz gerçek lowering olarak derleyemiyor.
 
 ## 2. Depo Yapısı
 
@@ -210,13 +210,13 @@ uchar, char, bool,
 vec2, vec3, vec4,
 void, any,
 attribute, prototype, enum, flags,
-break, continue,
+for, break, continue,
 nil, true, false
 ```
 
-Lexer enum'unda `NATIVE`, `MATRIX`, `VECTOR`, `EXTERN`, `FOR` gibi token'lar da var; ancak bunların keyword classification tarafında tam karşılığı yok ya da parser tarafından kullanılmıyor.
+Lexer enum'unda `NATIVE`, `MATRIX`, `VECTOR`, `EXTERN` gibi token'lar da var; ancak bunların keyword classification tarafında tam karşılığı yok ya da parser tarafından kullanılmıyor.
 
-Yeni proposal/lifecycle keyword'leri (`protocol`, `dynamic`, `state`, `struct`, `trait`, `attribute`, `macro`, `with`, `constructor`, `destructor`, `drop`, `new`, `shared`, `operator`, `allocator`, `except`, `throw`, `defer`, `self`, `is`, `dyn`) lexer tarafından tanınır. Parser `struct Name { field; ... }`, `trait Name { ... }`, `struct T with Trait`, `enum Name : repr { Member }`, `flags enum Name : repr { Member = bit }`, `new Type(args)`, `shared new Type(args)` ve `drop value;` yüzeylerini gerçek grammar olarak işler; diğer ileri proposal keyword'leri top-level kullanımlarda controlled proposal diagnostic üretir. Eski `policy` kelimesi yeni canonical grammar'da reserved değildir.
+Yeni proposal/lifecycle keyword'leri (`protocol`, `dynamic`, `state`, `struct`, `trait`, `attribute`, `macro`, `with`, `constructor`, `destructor`, `drop`, `new`, `shared`, `operator`, `allocator`, `except`, `throw`, `defer`, `self`, `is`, `dyn`) lexer tarafından tanınır. Parser `struct Name { field; ... }`, `trait Name { ... }`, `struct T with Trait`, `enum Name : repr { Member }`, `flags enum Name : repr { Member = bit }`, `new Type(args)`, `shared new Type(args)`, `drop value;`, `attribute Name for struct { ... }`, `@Name(args)`, `macro name($arg: kind) -> kind { ... }` ve `#directive ...` yüzeylerini gerçek grammar olarak işler. Macro expansion, `#warning/#error` compile-time diagnostic ve temel `#if/#else` evaluation MVP'si çalışır; richer `#if` expression grammar, source-map/hygiene ve diğer ileri proposal keyword'leri controlled proposal diagnostic veya explicit unsupported diagnostic üretir. Eski `policy` kelimesi yeni canonical grammar'da reserved değildir.
 
 ### 4.2 Literal ve scalar desteği
 
@@ -1219,6 +1219,7 @@ struct PlayerProfile {
 Karar notu:
 
 - `attribute`, trait/protocol yerine geçmez.
+- Mevcut compiler `attribute Name for struct { ... }` ve `@Name(args)` formlarını parse eder ve metadata MVP'si olarak kabul eder. Duplicate attribute definition ve bilinmeyen annotation diagnostic üretir. Generated item emission henüz açılmadığı için `$emit` body şimdilik yürütülmez.
 - Trait type capability contract, protocol typestate/state contract, attribute ise compile-time transformation/reflection alanıdır.
 - Attribute item/type üzerinde metadata veya checked transform üretir.
 - Reflection ilk aşamada sınırlıdır: `name($item)`, `fields($item)`, `methods($item)`, `has_attribute(...)`, `attribute_args(...)`, `sizeof(Type)` ve `alignof(Type)`.
@@ -1337,6 +1338,10 @@ Karar notu:
 
 - Macro text replacement değil, typed AST substitution olmalıdır.
 - Macro parametre kind'ları `expr`, `stmt`, `item`, `type`, `ident`, gerekirse `tokens` olarak ayrılmalıdır.
+- Mevcut compiler macro declaration'larını parse öncesi toplar, `macroName(args)` çağrılarını token düzeyinde expand eder ve normal parser/type-check/codegen hattına verir. `expr`, `stmt`, `item` ve `type` macro return kind'ları smoke seviyesinde çalışır.
+- `#warning "message"` compile-time warning üretir; `#error "message"` derlemeyi durdurur.
+- `#if true/false { ... } else { ... }`, `target.os` ve `target.arch` equality/inequality koşulları çalışır. `feature("x")` ve `cfg("x")` şimdilik false kabul edilir.
+- Hijyenli source-map expansion, richer `#if` expression grammar ve compile-time config'in CLI/build sistemine bağlanması sonraki metaprogramming hardening işidir.
 - Expansion hygienic olmalı; macro local isimleri caller scope'una sızmamalıdır.
 - Diagnostic source-map ile çağrı yerini göstermelidir.
 - Protocol gizli hook zinciri değil, typestate/state analizi olarak kalmalıdır.
