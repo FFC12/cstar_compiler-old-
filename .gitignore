@@ -6,6 +6,8 @@
 build/
 build-*/
 .cstar-out/
+tests/stress/out/
+tests/performance/out/
 /*.exe
 /*.ll
 /*.out

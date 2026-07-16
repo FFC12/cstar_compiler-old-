@@ -884,6 +884,16 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
       BuildQualifierLevels(varAst.m_TypeQualifier, symbolInfo.indirectionLevel,
                            symbolInfo.isRef);
 
+  if (symbolInfo.indirectionLevel > 1 &&
+      (varAst.m_TypeQualifier == TypeQualifier::Q_CONST ||
+       varAst.m_TypeQualifier == TypeQualifier::Q_CONSTPTR ||
+       varAst.m_TypeQualifier == TypeQualifier::Q_CONSTREF)) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Multi-level pointer qualifiers require explicit per-level qualifier "
+        "syntax; this declaration would be ambiguous in the current MVP",
+        symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
+  }
+
   symbolInfo.isNeededEval = true;
 
   if (!varAst.m_RHS) {
@@ -1999,6 +2009,14 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
             } else {
               symbolValidation(symbolName, lookup, resolved);
             }
+            return resolved;
+          }
+          if (m_DroppedSemanticSymbols.count(SymbolStateKey(resolved)) > 0) {
+            this->m_TypeErrorMessages.emplace_back(
+                "value '" + resolved.symbolName +
+                    "' was dropped and cannot be used before being "
+                    "reinitialized",
+                lookup, DiagnosticCode::SemanticOwnership);
             return resolved;
           }
           if (resolved.type == TypeSpecifier::SPEC_DEFINED &&

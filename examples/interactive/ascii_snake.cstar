@@ -20,6 +20,7 @@ main() :: int32 {
   int32 alive = 1;
   int32 dx = 1;
   int32 dy = 0;
+  int32 negativeOne = 0 - 1;
   int32 food_x = 5;
   int32 food_y = 3;
   int32 speed = 180;
@@ -92,10 +93,10 @@ main() :: int32 {
         if (arrow == 65 && dy != 1) {
           dx = 0;
           dy = 0 - 1;
-        } elif (arrow == 66 && dy != 0 - 1) {
+        } elif (arrow == 66 && dy != negativeOne) {
           dx = 0;
           dy = 1;
-        } elif (arrow == 67 && dx != 0 - 1) {
+        } elif (arrow == 67 && dx != negativeOne) {
           dx = 1;
           dy = 0;
         } elif (arrow == 68 && dx != 1) {
@@ -106,10 +107,10 @@ main() :: int32 {
     } elif ((key == 119 || key == 87) && dy != 1) {
       dx = 0;
       dy = 0 - 1;
-    } elif ((key == 115 || key == 83) && dy != 0 - 1) {
+    } elif ((key == 115 || key == 83) && dy != negativeOne) {
       dx = 0;
       dy = 1;
-    } elif ((key == 100 || key == 68) && dx != 0 - 1) {
+    } elif ((key == 100 || key == 68) && dx != negativeOne) {
       dx = 1;
       dy = 0;
     } elif ((key == 97 || key == 65) && dx != 1) {

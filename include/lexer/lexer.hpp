@@ -2,6 +2,7 @@
 #define LEXER_HPP
 #include <base.hpp>
 #include <cassert>
+#include <cstdlib>
 #include <ctime>
 #include <iostream>
 #include <map>
@@ -288,7 +289,7 @@ class CStarLexer {
       return '\0';
     } else {
       std::cerr << "Out of index in the buffer...Probably corrupted data\n\n";
-      std::abort();
+      std::exit(1);
       return ' ';  // for making the compiler silent
     }
   }
@@ -310,7 +311,7 @@ class CStarLexer {
       return '\0';
     } else {
       std::cerr << "Out of index in the buffer...Probably corrupted data\n\n";
-      std::abort();
+      std::exit(1);
       return ' ';  // for making the compiler silent
     }
   }
@@ -399,7 +400,7 @@ class CStarLexer {
     while (_c != '"') {
       if (m_Index > m_BufferView.size()) {
         std::cerr << "Missing terminating \" character\n";
-        std::abort();
+        std::exit(1);
       }
 
       _keyword += _c;
@@ -436,7 +437,7 @@ class CStarLexer {
       while (true) {
         if (m_Index > m_BufferView.size()) {
           std::cerr << "Missing terminating '*/' multi-line comment\n";
-          std::abort();
+          std::exit(1);
         }
 
         _c = nextChar();
@@ -462,7 +463,7 @@ class CStarLexer {
     while (_c != '\'') {
       if (m_Index > m_BufferView.size()) {
         std::cerr << "Missing terminating \' character\n";
-        std::abort();
+        std::exit(1);
       }
       _keyword += _c;
       _c = nextChar();

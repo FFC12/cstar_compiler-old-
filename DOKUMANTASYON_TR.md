@@ -92,6 +92,22 @@ VSCode F5/debug akışı için `.vscode` yapılandırmaları da eklendi.
 
 `expected-exit`, generated executable'ın process exit status değeridir. Yani `ret 7;` console'a `7` yazdırmaz; programın exit code'unu `7` yapar. Terminalde doğrudan `.exe` çalıştırıldığında Windows bu değeri ekrana basmaz, PowerShell tarafında `$LASTEXITCODE` ile görülür. Smoke runner bu değeri otomatik yakalar ve `[OK] ... (exit N)` şeklinde doğrular.
 
+Smoke ve type-checker suite'lerine ek olarak seed'li stress/fuzz runner da vardır:
+
+```sh
+python3 tools/stress_fuzz.py --cases 200 --mutations 80 --seed 12666
+```
+
+Bu runner geçerli/geçersiz C* programları üretir, `examples/smoke` ve `std` corpus'unu mutate eder ve her case'i compile-only modda dener. Rastgele input diagnostic üretebilir; bu normaldir. Bug sayılan durumlar compiler crash'i, assert/segfault, sanitizer/traceback çıktısı ve timeout/hang'dir. Reproducer dosyaları, loglar ve en yavaş case listesi `tests/stress/out/` altında tutulur. Test stratejisi `tests/stress/README_TR.md` içinde detaylıdır.
+
+Performans baseline için C/C++ karşılaştırmalı runner vardır:
+
+```sh
+python3 tools/perf_benchmark.py --work 1000000 --compile-iters 5 --run-iters 15
+```
+
+Bu runner aynı workload'u C*, C ve C++ kaynak olarak üretir; compile wall time, executable size, runtime wall time ve return code ölçer. Varsayılan C/C++ profili `-O0`'dır; C* bugünkü backend hattıyla açık optimizer profili taşımadığı için bu debug baseline daha okunaklıdır. Release karşılaştırması için `--c-opt -O2 --cpp-opt -O2` kullanılabilir. Çıktılar `tests/performance/out/results.csv` ve `tests/performance/out/REPORT.md` altındadır; plan `tests/performance/README_TR.md` içinde tutulur.
+
 Güncel küçük çalışan çekirdek `examples/smoke/` altındadır. Smoke dosyaları artık tek klasörde yığılmaz; konuya göre `core`, `casts`, `arrays`, `control_flow`, `functions`, `imports`, `pointers`, `ownership`, `runtime`, `enums` ve `structs` alt klasörlerine ayrılır. `examples/smoke/modules/` yalnızca include helper dosyaları içindir ve runner tarafından bilinçli skip edilir. Bu set şu anda runner'ın skip ettiği module helper dosyaları hariç 134/134 başarılıdır; toplam 137 smoke dosyasının 3 tanesi bilinçli skip edilir:
 
 - minimal program ve `ret expr`
@@ -1188,7 +1204,7 @@ include {
 include "std:math:PI" as PI
 ```
 
-Compiler artık `include involved { ... }`, `include { ... }` ve `include "module" as alias` formlarını gerçek grammar olarak parse eder. `include` hedefi `.cstar` ile biten yerel bir dosyaysa dosya ana compilation unit'e parse/merge edilir; böylece başka dosyadaki public global deklarasyonlar hedeflenebilir. Bugün function/variable yolu smoke testlerle sabitlenmiştir. Top-level `public struct`, `public trait` ve `public enum` için de `mod.Type` alias type syntax'ı çalışır; bugünkü source-merge mimarisinde bu isimler semantic olarak public type'ın gerçek adına iner. Include edilen public struct field'ları default private kabul edilir; module dışından yalnız `public` field erişilebilir. Struct'ın kendi method'ları private field'lara erişebilir. Gerçek namespace/type identity hâlâ ayrı tamamlanacak iştir.
+Compiler artık `include involved { ... }`, `include { ... }` ve `include "module" as alias` formlarını gerçek grammar olarak parse eder. `include` hedefi `.cstar` ile biten yerel bir dosyaysa dosya ana compilation unit'e parse/merge edilir; böylece başka dosyadaki public global deklarasyonlar hedeflenebilir. `std:math`, `std:print`, `std:fs` gibi logical std package hedefleri de repo `std/` köküne çözülür; `std:math:abs_i64` gibi member hedefleri bugünkü MVP'de `std/math.cstar` dosyasını dahil eder ve sembol filtreleme/re-export aşamasına hazır canonical syntax olarak kabul edilir. Bugün function/variable yolu smoke testlerle sabitlenmiştir. Top-level `public struct`, `public trait` ve `public enum` için de `mod.Type` alias type syntax'ı çalışır; bugünkü source-merge mimarisinde bu isimler semantic olarak public type'ın gerçek adına iner. Include edilen public struct field'ları default private kabul edilir; module dışından yalnız `public` field erişilebilir. Struct'ın kendi method'ları private field'lara erişebilir. Gerçek namespace/type identity hâlâ ayrı tamamlanacak iştir.
 
 ```cstar
 include "modules/math_module.cstar" as math
@@ -1199,6 +1215,29 @@ main() :: int32 {
 ```
 
 `as` alias'ı function call lookup için çalışır; `math.add_from_module(...)` gibi alias member çağrısı include edilen module içindeki `public add_from_module` imzasına çözülür. Type pozisyonlarında `geo.Point`, `geo.Color` ve `geo.Drawable` gibi aliaslı public type isimleri kullanılabilir. Include edilen local module yalnızca `public` deklarasyonları ve gerekli native `import` forward deklarasyonlarını dışarı açar. Modifier yazılmayan declaration private kabul edilir ve alias üzerinden çağrılamaz; `examples/type_checker/imports/052.cstar` private function erişimini, `examples/type_checker/imports/private_module_type_alias.cstar` private type erişimini doğrular.
+
+Std package include yüzeyi:
+
+```cstar
+include involved {
+    "std:math"
+}
+
+include {
+    "std:math:abs_i64"
+}
+
+include "std:math" as math
+
+main() :: int32 {
+    int64 a = abs_i64(0 - 5);
+    int64 b = math.abs_i64(0 - 7);
+    int64 c = math.math_abs_i64(a);
+    ret cast<int32>(a + b + c);
+}
+```
+
+Aliaslı include public macro export'u da toplar; `math.math_abs_i64(...)` gibi qualified compile-time macro çağrıları source include preprocess aşamasında expand edilir. Bu yüzey `examples/smoke/imports/include_std_package.cstar` ile doğrulanır.
 
 Module API yüzeyi için hedef kural:
 

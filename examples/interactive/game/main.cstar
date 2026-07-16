@@ -64,13 +64,17 @@ main() :: int32 {
         }
       }
 
-      if (objectA.y > screen_height() + 24) {
+      int32 objectAY = objectA.y;
+      int32 objectBY = objectB.y;
+      int32 objectCY = objectC.y;
+      int32 bottomLimit = screen_height() + 24;
+      if (objectAY > bottomLimit) {
         objectA = reset_object(objectA, frame + 19, 0);
       }
-      if (objectB.y > screen_height() + 24) {
+      if (objectBY > bottomLimit) {
         objectB = reset_object(objectB, frame + 29, 1);
       }
-      if (objectC.y > screen_height() + 24) {
+      if (objectCY > bottomLimit) {
         objectC = reset_object(objectC, frame + 37, 2);
       }
 

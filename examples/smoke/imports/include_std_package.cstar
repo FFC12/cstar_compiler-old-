@@ -1,0 +1,19 @@
+// expected: pass
+// expected-exit: 17
+
+include involved {
+  "std:math"
+}
+
+include {
+  "std:math:abs_i64"
+}
+
+include "std:math" as math
+
+main() :: int32 {
+  int64 direct = abs_i64(0 - 5);
+  int64 qualified = math.abs_i64(0 - 7);
+  int64 macroValue = math.math_abs_i64(direct);
+  ret cast<int32>(direct + qualified + macroValue);
+}

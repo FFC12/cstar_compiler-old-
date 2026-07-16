@@ -44,6 +44,29 @@ static bool IsMacroReturnKindName(const std::string& name) {
          name == "type";
 }
 
+static std::filesystem::path ResolveLogicalIncludeSource(
+    const std::string& includeName) {
+  if (includeName.size() >= 6 &&
+      includeName.substr(includeName.size() - 6) == ".cstar") {
+    return std::filesystem::path(includeName);
+  }
+
+  constexpr std::string_view kStdPrefix = "std:";
+  if (includeName.rfind(std::string(kStdPrefix), 0) == 0) {
+    auto logical = includeName.substr(kStdPrefix.size());
+    const auto memberSeparator = logical.find(':');
+    if (memberSeparator != std::string::npos) {
+      logical = logical.substr(0, memberSeparator);
+    }
+    if (logical.empty()) {
+      logical = "core";
+    }
+    return std::filesystem::path("std") / (logical + ".cstar");
+  }
+
+  return {};
+}
+
 void CStarParser::parse() {
   m_TokenStream = this->m_Lexer.perform();
   collectPublicMacrosFromSourceIncludes();
@@ -88,8 +111,8 @@ void CStarParser::collectPublicMacrosFromSourceIncludes() {
     }
 
     const auto includeName = m_TokenStream[cursor].getTokenAsStr();
-    if (includeName.size() < 6 ||
-        includeName.substr(includeName.size() - 6) != ".cstar") {
+    auto includePath = ResolveLogicalIncludeSource(includeName);
+    if (includePath.empty()) {
       continue;
     }
     cursor += 1;
@@ -117,10 +140,14 @@ void CStarParser::collectPublicMacrosFromSourceIncludes() {
       continue;
     }
 
-    std::filesystem::path includePath(includeName);
     if (includePath.is_relative()) {
-      auto sourcePath = std::filesystem::path(m_Lexer.getFilepath().get());
-      includePath = sourcePath.parent_path() / includePath;
+      if (includePath.begin() != includePath.end() &&
+          *includePath.begin() == "std") {
+        includePath = std::filesystem::current_path() / includePath;
+      } else {
+        auto sourcePath = std::filesystem::path(m_Lexer.getFilepath().get());
+        includePath = sourcePath.parent_path() / includePath;
+      }
     }
     includePath = std::filesystem::absolute(includePath).lexically_normal();
     collectPublicMacrosFromIncludedFile(includePath,
@@ -1497,6 +1524,11 @@ void CStarParser::parseIncludeDirective() {
       skipTopLevelTrivia();
       if (is(TokenKind::LITERAL) || is(TokenKind::LETTER) ||
           is(TokenKind::IDENT)) {
+        const auto includeName = currentTokenStr();
+        auto sourceInclude = ResolveLogicalIncludeSource(includeName);
+        if (!sourceInclude.empty()) {
+          m_SourceIncludes.emplace_back(std::move(sourceInclude));
+        }
         this->advance();
       } else if (!is(TokenKind::RBRACK)) {
         ParserError("Expected include target", currentTokenInfo());
@@ -1521,9 +1553,9 @@ void CStarParser::parseIncludeDirective() {
       skipTopLevelTrivia();
       if (is(TokenKind::LITERAL) || is(TokenKind::LETTER)) {
         auto includeName = currentTokenStr();
-        if (includeName.size() >= 6 &&
-            includeName.substr(includeName.size() - 6) == ".cstar") {
-          m_SourceIncludes.emplace_back(includeName);
+        auto sourceInclude = ResolveLogicalIncludeSource(includeName);
+        if (!sourceInclude.empty()) {
+          m_SourceIncludes.emplace_back(std::move(sourceInclude));
         }
         this->advance();
       } else if (!is(TokenKind::RBRACK)) {
@@ -1545,9 +1577,9 @@ void CStarParser::parseIncludeDirective() {
 
   if (is(TokenKind::LITERAL) || is(TokenKind::LETTER)) {
     auto includeName = currentTokenStr();
-    if (includeName.size() >= 6 &&
-        includeName.substr(includeName.size() - 6) == ".cstar") {
-      m_SourceIncludes.emplace_back(includeName);
+    auto sourceInclude = ResolveLogicalIncludeSource(includeName);
+    if (!sourceInclude.empty()) {
+      m_SourceIncludes.emplace_back(std::move(sourceInclude));
     }
     this->advance();
     skipTopLevelTrivia();

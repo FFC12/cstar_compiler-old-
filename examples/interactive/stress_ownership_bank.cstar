@@ -10,17 +10,18 @@ normalize_amount(int32 value) :: int32 {
     ret value;
 }
 
-apply_transfer(int32* fromBalance, int32* toBalance, int32 amount) :: int32 {
+apply_transfer(int32& fromBalance, int32& toBalance, int32 amount) :: int32 {
     if (amount <= 0) {
         ret 0;
     }
 
-    if (deref fromBalance < amount) {
+    int32 available = fromBalance;
+    if (available < amount) {
         ret 0;
     }
 
-    deref fromBalance -= amount;
-    deref toBalance += amount;
+    fromBalance -= amount;
+    toBalance += amount;
     ret amount;
 }
 
@@ -79,8 +80,8 @@ main() :: int32 {
     int32* bRef = ref accountB;
     int32* cRef = ref accountC;
 
-    int32 movedAB = apply_transfer(aRef, bRef, first);
-    int32 movedBC = apply_transfer(bRef, cRef, second);
+    int32 movedAB = apply_transfer(ref accountA, ref accountB, first);
+    int32 movedBC = apply_transfer(ref accountB, ref accountC, second);
 
     int32 snapshot[6] = (0, 0, 0, 0, 0, 0);
     snapshot[0] = accountA;

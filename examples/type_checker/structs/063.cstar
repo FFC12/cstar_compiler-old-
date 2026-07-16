@@ -1,4 +1,4 @@
-// expected: fail
+// expected: diagnostic
 // expected-code: CST1001
 
 struct Meter {

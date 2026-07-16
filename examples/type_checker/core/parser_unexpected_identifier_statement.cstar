@@ -1,0 +1,9 @@
+// expected: diagnostic
+
+main() :: int32 {
+  if (1) {
+    retref 4;
+  }
+
+  ret 0;
+}

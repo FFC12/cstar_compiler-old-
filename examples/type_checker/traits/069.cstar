@@ -1,4 +1,5 @@
-// expected-fail: CST2001
+// expected: diagnostic
+// expected-code: CST2001
 
 struct NotAllocator {
   int32 tag;

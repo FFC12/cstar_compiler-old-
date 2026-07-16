@@ -1,0 +1,6 @@
+// expected: diagnostic
+
+main() :: int32 {
+  {ne value;
+  ret 0;
+}

@@ -22,6 +22,18 @@ Tamamlanan altyapı:
 - `tools/run_examples.bat` eklendi; Windows execution policy'ye takılmadan suite parametreleri geçirilebiliyor.
 - Smoke runner `// expected-exit: N` etiketini okuyup generated executable'ın process exit status değerini doğruluyor.
 - Example runner `// expected-code: CSTNNNN` etiketini okuyup diagnostic suite'lerinde beklenen hata kodunu doğruluyor.
+- Seed'li stress/fuzz runner eklendi:
+  - `tools/stress_fuzz.py` external dependency gerektirmeden rastgele C* programları üretir, invalid case'ler oluşturur ve `examples/smoke` + `std` corpus'unu mutate eder.
+  - Diagnostic normal kabul edilir; crash, assert, segfault, sanitizer failure ve timeout bug sayılır.
+  - Reproducer/log çıktıları `tests/stress/out/` altında tutulur.
+  - Plan ve kullanım notları `tests/stress/README_TR.md` içindedir.
+- C/C++ karşılaştırmalı performance benchmark runner eklendi:
+  - `tools/perf_benchmark.py` aynı workload'u C*, C ve C++ kaynak olarak üretir.
+  - Compile wall time, executable size, runtime wall time ve process return code ölçülür.
+  - C median bazlı ratio tablosu üretir; runtime signal/crash durumunu ayrı işaretler.
+  - Ham sonuçlar `tests/performance/out/results.csv`, rapor `tests/performance/out/REPORT.md` altındadır.
+  - Plan ve kullanım notları `tests/performance/README_TR.md` içindedir.
+  - Benchmark'ın yakaladığı loop içi local `alloca` stack büyümesi düzeltildi; local/param/loop slot'ları function entry block'ta allocate edilir. Regression: `examples/smoke/control_flow/loop_local_array_pressure.cstar`.
 - `examples/smoke/` ve `examples/type_checker/` artık düz dosya yığını değildir; runner recursive çalıştığı için testler konuya göre alt klasörlere ayrıldı. `modules/` klasörleri yalnızca include helper dosyalarıdır ve suite tarafından skip edilir.
 - Compiler banner ve diagnostic çıktıları `include/diagnostics/*` altında toplandı.
 - Diagnostic formatı dosya yolu, satır, sütun, severity, hata kodu ve caret marker gösterecek hale getirildi.
@@ -1244,6 +1256,13 @@ Tamamlanan:
 - Yerel `.cstar` include dosyaları ana compilation unit'e parse/merge ediliyor.
   - `examples/smoke/imports/include_module_function.cstar`
   - `examples/smoke/modules/math_module.cstar`
+- Logical std package include resolver eklendi:
+  - `include "std:math" as math` repo `std/math.cstar` dosyasına çözülür.
+  - `include { "std:math" "std:math:abs_i64" }` block formu aynı resolver üzerinden çalışır.
+  - `include involved { "std:math" }` otomatik/package include yüzeyi olarak parse edilip std source include'a bağlanır.
+  - Member target formu (`std:math:abs_i64`) bugünkü MVP'de package dosyasını dahil eder; sembol bazlı filtreleme/re-export ileride namespace/type identity aşamasında derinleşir.
+  - Aliaslı std include public macro export'u da toplar: `math.math_abs_i64(...)`.
+  - `examples/smoke/imports/include_std_package.cstar`
 - Basit `import func(...) :: type;` call codegen ile bağlandı.
   - `import abs(int32) :: int32;`
   - `import abs(int32 value) :: int32;`

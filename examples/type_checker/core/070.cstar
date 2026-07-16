@@ -1,4 +1,5 @@
-// expected-fail: CST1001
+// expected: diagnostic
+// expected-code: CST1001
 
 main() :: int32 {
   static int32 counter = 0;

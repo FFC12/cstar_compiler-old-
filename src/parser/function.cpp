@@ -519,6 +519,7 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
   this->advance();
 
   while (!is(TokenKind::RBRACK)) {
+    const size_t statementStartIndex = m_TokenIndex;
     TypeQualifier typeQualifier = TypeQualifier::Q_NONE;
     bool hasConstness = false;
 
@@ -915,6 +916,11 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
       }
 
       // option - case
+    }
+
+    if (m_TokenIndex == statementStartIndex && !is(TokenKind::RBRACK) &&
+        !is(TokenKind::_EOF)) {
+      ParserError("Unexpected token in scope", currentTokenInfo());
     }
   }
 

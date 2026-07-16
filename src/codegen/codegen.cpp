@@ -211,7 +211,11 @@ void CStarCodegen::appendIncludedSource(
     std::set<std::filesystem::path>& seen) {
   auto resolved = includePath;
   if (resolved.is_relative()) {
-    resolved = m_InputPath.parent_path() / resolved;
+    if (resolved.begin() != resolved.end() && *resolved.begin() == "std") {
+      resolved = std::filesystem::current_path() / resolved;
+    } else {
+      resolved = m_InputPath.parent_path() / resolved;
+    }
   }
   resolved = std::filesystem::absolute(resolved).lexically_normal();
 

@@ -4,7 +4,7 @@ main(int argc, char** argv) :: int {
 }
 
 func(uint k) :: void {
-    constptr char* mesg = "Hello world";
+    const char* mesg = "Hello world";
     char a = 'A';
     uint8 p = -128;
     float z = k;

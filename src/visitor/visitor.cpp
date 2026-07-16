@@ -1251,8 +1251,10 @@ static llvm::Function *CreateGlobalFuncSubToMain(
 
 static llvm::Value *CreateAlloca(const std::string &name, llvm::Type *type) {
   llvm::Function *parentFunc = Visitor::Builder->GetInsertBlock()->getParent();
+  llvm::IRBuilder<> entryBuilder(
+      &parentFunc->getEntryBlock(), parentFunc->getEntryBlock().begin());
   llvm::AllocaInst *var =
-      Visitor::Builder->CreateAlloca(type, nullptr, llvm::Twine(name));
+      entryBuilder.CreateAlloca(type, nullptr, llvm::Twine(name));
 
   return var;
 }
@@ -1335,8 +1337,7 @@ static llvm::Value *ExtractSharedPointerCount(llvm::Value *handle) {
 static llvm::Value *CreateSharedPointerCounter(const std::string &name,
                                                uint64_t initialValue) {
   auto *counterType = Visitor::Builder->getInt64Ty();
-  auto *counter = Visitor::Builder->CreateAlloca(
-      counterType, nullptr, llvm::Twine(name + ".strong"));
+  auto *counter = CreateAlloca(name + ".strong", counterType);
   Visitor::Builder->CreateStore(
       llvm::ConstantInt::get(counterType, initialValue), counter);
   return counter;
@@ -2340,8 +2341,8 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       getElementsOfArray(*varAst.m_RHS, elements);
 
       if (varAst.m_IsLocal) {
-        auto *storage = Builder->CreateAlloca(arrayType, nullptr,
-                                              llvm::Twine(varAst.m_Name));
+        auto *storage = llvm::dyn_cast<llvm::AllocaInst>(
+            CreateAlloca(varAst.m_Name, arrayType));
         auto *zero = llvm::ConstantAggregateZero::get(arrayType);
         Builder->CreateStore(zero, storage);
 
@@ -2836,7 +2837,8 @@ ValuePtr Visitor::visit(BinaryOpAST &binaryOpAst) {
       }
     } else {
       if (m_LastInitializerList) {
-        auto ptr = Builder->CreateAlloca(arrayType, nullptr);
+        auto *ptr = llvm::dyn_cast<llvm::AllocaInst>(
+            CreateAlloca("array.init", arrayType));
         std::vector<BinOpOrVal> elements;
         getElementsOfArray(binaryOpAst, elements);
 
@@ -3020,8 +3022,8 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
         if (paramLayout.isArray[paramNo]) {
           m_ArrayParamValueTypes[paramName] = valueType;
         }
-        m_LocalVarsOnScope[paramName] = Visitor::Builder->CreateAlloca(
-            paramType, nullptr, llvm::Twine(paramName));
+        m_LocalVarsOnScope[paramName] = llvm::dyn_cast<llvm::AllocaInst>(
+            CreateAlloca(paramName, paramType));
         Visitor::Builder->CreateStore(&param, m_LocalVarsOnScope[paramName]);
       }
     }
@@ -3803,7 +3805,8 @@ ValuePtr Visitor::visit(LoopStmtAST &loopStmtAst) {
                                parentFunc);
 
   llvm::Type *indexType = Builder->getInt64Ty();
-  auto *indexSlot = Builder->CreateAlloca(indexType, nullptr, "loop.index");
+  auto *indexSlot =
+      llvm::dyn_cast<llvm::AllocaInst>(CreateAlloca("loop.index", indexType));
   llvm::Value *startValue = llvm::ConstantInt::get(indexType, 0);
   llvm::Value *endValue = nullptr;
   llvm::Value *iterStorage = nullptr;
@@ -3861,7 +3864,7 @@ ValuePtr Visitor::visit(LoopStmtAST &loopStmtAst) {
       insertedLocals.insert(name);
     }
 
-    auto *slot = Builder->CreateAlloca(type, nullptr, name);
+    auto *slot = llvm::dyn_cast<llvm::AllocaInst>(CreateAlloca(name, type));
     Builder->CreateStore(initialValue, slot);
     m_LocalVarsOnScope[name] = slot;
     return slot;

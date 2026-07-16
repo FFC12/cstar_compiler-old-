@@ -1,11 +1,11 @@
 include "raylib.cstar"
 
 public struct Paddle {
-  int32 x;
-  int32 y;
-  int32 width;
-  int32 height;
-  int32 speed;
+  public int32 x;
+  public int32 y;
+  public int32 width;
+  public int32 height;
+  public int32 speed;
 
   constructor() {
     self.x = 0;
@@ -22,11 +22,11 @@ public struct Paddle {
 }
 
 public struct FallingObject {
-  int32 x;
-  int32 y;
-  int32 radius;
-  int32 speed;
-  int32 kind;
+  public int32 x;
+  public int32 y;
+  public int32 radius;
+  public int32 speed;
+  public int32 kind;
 
   constructor() {
     self.x = 0;
@@ -40,8 +40,8 @@ public struct FallingObject {
 }
 
 public struct ScoreBoard {
-  int32 score;
-  int32 misses;
+  public int32 score;
+  public int32 misses;
 
   constructor() {
     self.score = 0;
@@ -62,9 +62,9 @@ public struct ScoreBoard {
 }
 
 public struct GameSnapshot {
-  int32 frame;
-  int32 running;
-  int32 gameOver;
+  public int32 frame;
+  public int32 running;
+  public int32 gameOver;
 
   constructor() {
     self.frame = 0;

@@ -1,15 +1,14 @@
 // expected: diagnostic (proposal)
 //Auto importing with involved. this means all standard libraries which needed by this unit to be imported, will be imported by automatically
 include involved {
-    'ML',
-    'X', //sin -> X.sin
-    'Y', //sin -> Y.sin
+    "std:math",
+    "std:print",
 }
 
 // also particularly we can import a package or even only a function from it as well
 include {
     "std:math"
-    "std:math:cos"
+    "std:math:abs_i64"
 }
 
 // PI is acting like a constant but just a symbol
