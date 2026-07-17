@@ -7,6 +7,18 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
   symbolInfo.end = scalarAst.m_SemLoc.end;
   symbolInfo.line = scalarAst.m_SemLoc.line;
 
+  if (scalarAst.m_IsNil) {
+    symbolInfo.type = TypeSpecifier::SPEC_NIL;
+    symbolInfo.value = scalarAst.m_Value;
+    if (this->m_TypeChecking) {
+      this->m_TypeErrorMessages.emplace_back(
+          "`nil` requires an explicitly nullable pointer type (`T*?` or "
+          "`T^?`); plain `T*`, `T^` and `T&` are non-null by default",
+          symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
+    }
+    return symbolInfo;
+  }
+
   if (this->m_TypeChecking) {
     if (this->m_LastReferenced) {
       this->m_TypeErrorMessages.emplace_back(

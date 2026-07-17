@@ -384,6 +384,8 @@ int32^? maybe_owned = nil;   // nullable unique pointer proposal
 
 `T*`, `T^` ve `T&` non-null kabul edilir. `T&` nullable olmaz; reference var olan storage'a alias demektir. Null gerekliyse `T*?` veya `T^?` gibi açık nullable pointer yazılır. `nil` yalnız nullable pointer bağlamında legal olmalıdır. `deref` nullable pointer üzerinde non-null proof olmadan reddedilir; `if (p)` gibi bir check scope içinde pointer'ı non-null'a narrow edebilir. Move edilen pointer'ın runtime iç temsilde null'a çekilmesi kullanıcı açısından nullable pointer değildir; semantic state `moved` kalır ve yeniden initialize edilmeden kullanım diagnostic üretir.
 
+Bugünkü compiler `nil` literal'ini expression olarak tanır; nullable pointer type syntax'ı açılana kadar `int32* p = nil;`, `int32^ p = nil;` ve `p = nil;` gibi non-null pointer bağlamlarını `CST2100` ile reddeder.
+
 ### 6.4 Qualifier'lar
 
 ```cstar

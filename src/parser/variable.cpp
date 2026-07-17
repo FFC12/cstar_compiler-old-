@@ -176,7 +176,7 @@ ASTNode CStarParser::advanceArrayInitializerElement() {
 
   if (is(TokenKind::SCALARD) || is(TokenKind::SCALARI) ||
       is(TokenKind::LETTER) || is(TokenKind::LITERAL) || is(TokenKind::TRUE) ||
-      is(TokenKind::FALSE)) {
+      is(TokenKind::FALSE) || is(TokenKind::NIL)) {
     return advanceConstantOrLiteral();
   }
 

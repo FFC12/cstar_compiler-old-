@@ -920,10 +920,15 @@ Kalan tasarım kararı: pointer nullability.
   - Moved-from pointer'ın iç temsilde null'a çekilmesi kullanıcı tarafından “nullable value” olarak görülmemeli; semantic state `moved` olarak kalmalı ve yeniden initialize edilmeden kullanım `CST2105` üretmeli.
 - Kısa vadeli MVP:
   - Var olan non-null pointer davranışını koru.
-  - `T*?` / `T^?` syntax henüz uygulanana kadar kullanıcının `nil` assignment yapmasını controlled proposal diagnostic ile reddet.
+  - `T*?` / `T^?` syntax henüz uygulanana kadar kullanıcının `nil` assignment yapmasını controlled proposal diagnostic ile reddet. Tamamlandı:
+    - `nil` expression literal olarak parse edilir.
+    - Non-null `T*`, `T^` ve `T&` bağlamında `CST2100` diagnostic üretir.
+    - `examples/type_checker/pointers/036.cstar`
+    - `examples/type_checker/pointers/037.cstar`
+    - `examples/type_checker/pointers/038.cstar`
   - Native interop ve allocator failure için null dönen raw pointer konusunu Aşama 8.5 allocation failure policy ve fallible `new?` ile birlikte çöz.
 - Test adayları:
-  - `int32* p = nil;` controlled diagnostic.
+  - `int32* p = nil;` controlled diagnostic. Tamamlandı.
   - `int32*? p = nil;` nullable syntax açılınca pass.
   - `deref p` nullable pointer için check öncesi diagnostic.
   - `if (p) { ret deref p; }` flow narrowing pass.

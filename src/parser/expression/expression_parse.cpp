@@ -75,6 +75,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
            kind == TokenKind::SCALARD ||
            kind == TokenKind::SCALARI || kind == TokenKind::LITERAL ||
            kind == TokenKind::TRUE || kind == TokenKind::FALSE ||
+           kind == TokenKind::NIL ||
            isType(token);
   };
 

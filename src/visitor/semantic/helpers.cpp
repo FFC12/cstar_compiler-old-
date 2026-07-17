@@ -497,7 +497,9 @@ SymbolInfo InferScalarLiteralType(ScalarOrLiteralAST *scalar) {
   info.end = loc.end;
   info.line = loc.line;
   info.value = scalar->getValue();
-  if (scalar->isLiteral()) {
+  if (scalar->isNil()) {
+    info.type = TypeSpecifier::SPEC_NIL;
+  } else if (scalar->isLiteral()) {
     info.type = TypeSpecifier::SPEC_CHAR;
     info.indirectionLevel = 1;
     info.isConstVal = true;

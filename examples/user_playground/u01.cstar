@@ -1,0 +1,14 @@
+// read_value(readonly int32* p) :: int32 {
+//   deref p = 20; // diagnostics
+//   ret deref p;
+// }
+
+read_value(int32* p) :: int32 {
+  deref p = 20; // okay
+  ret deref p;
+}
+
+main() :: int32 {
+  int32 value = 7;
+  ret read_value(ref value);
+}

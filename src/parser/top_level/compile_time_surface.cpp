@@ -1,5 +1,12 @@
 #include <parser/parser_private.hpp>
 
+#include <cstring>
+#include <cstdlib>
+#include <fstream>
+#include <memory>
+#include <sstream>
+#include <vector>
+
 using namespace cstar::parser_private;
 
 void CStarParser::collectPublicMacrosFromSourceIncludes() {

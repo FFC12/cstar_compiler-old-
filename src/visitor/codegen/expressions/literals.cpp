@@ -3,6 +3,17 @@
 ValuePtr Visitor::visit(ScalarOrLiteralAST &scalarAst) {
   llvm::Value *value = nullptr;
 
+  if (scalarAst.m_IsNil) {
+    if (m_LastType != nullptr && IsSharedPointerTy(m_LastType)) {
+      return CreateNullSharedPointerHandle();
+    }
+    if (m_LastType != nullptr && m_LastType->isPointerTy()) {
+      return llvm::ConstantPointerNull::get(
+          llvm::cast<llvm::PointerType>(m_LastType));
+    }
+    return llvm::ConstantInt::get(Builder->getInt64Ty(), 0);
+  }
+
   // TODO: m_LastType is always null for the binary operation which is not RHS
   // of any vardecl.
   if (m_LastType == nullptr) {
