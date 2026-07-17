@@ -60,15 +60,10 @@ inline bool IsValueOperatorToken(TokenKind kind) {
 
 inline bool IsProposalOnlyTopLevel(TokenKind kind) {
   switch (kind) {
-    case PROTOCOL:
-    case STATE:
     case DYN:
     case CONSTRUCTOR:
     case DESTRUCTOR:
     case ALLOCATOR:
-    case EXCEPT:
-    case THROW:
-    case DEFER:
     case ASYNC:
     case AWAIT:
     case SELF:

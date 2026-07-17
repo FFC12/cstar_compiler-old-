@@ -1,0 +1,32 @@
+// expected: diagnostic
+
+struct FileHandle {
+    int32 raw;
+
+    constructor() {
+        self.raw = 0;
+        ret;
+    }
+
+    open() :: void {
+        self.raw = 1;
+        ret;
+    }
+
+    read() :: int32 {
+        ret self.raw;
+    }
+}
+
+protocol FileState for FileHandle {
+    state closed, opened;
+    default closed;
+
+    closed -> opened :: open();
+    read() :: !closed;
+}
+
+main() :: int32 {
+    closed FileHandle file = FileHandle();
+    ret file.read();
+}

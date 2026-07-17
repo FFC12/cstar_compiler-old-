@@ -1,0 +1,78 @@
+// expected: pass
+// expected-exit: 38
+
+enum PipelineError : uint16 {
+    None,
+    LimitTooSmall,
+}
+
+int32 close_count = 0;
+int32 defer_count = 0;
+
+struct Cursor {
+    int32 seed;
+
+    constructor() {
+        self.seed = 0;
+        ret;
+    }
+
+    open() :: void {
+        self.seed = 3;
+        ret;
+    }
+
+    mix(int32 value) :: int32 {
+        self.seed = ((self.seed * 7) + value) % 97;
+        ret self.seed;
+    }
+
+    close() :: void {
+        close_count += 1;
+        self.seed = 0;
+        ret;
+    }
+}
+
+protocol CursorState for Cursor {
+    state closed, opened;
+    default closed;
+
+    closed -> opened :: open();
+    opened -> closed :: close();
+
+    mix(int32 value) :: !closed;
+
+    scope_exit opened -> closed :: close();
+}
+
+weighted_checksum(int32 limit) except PipelineError :: int32 {
+    if (limit < 3) {
+        throw PipelineError.LimitTooSmall;
+    }
+
+    defer {
+        defer_count += 1;
+    }
+
+    closed Cursor cursor = Cursor();
+    cursor.open();
+
+    int32 values[5] = (3, 1, 4, 1, 5);
+    int32 acc = 0;
+    int32 mixed = 0;
+    int32 weight = 0;
+
+    loop (i in [0, 5]) {
+        mixed = cursor.mix(values[i]);
+        weight = (i % 2 == 0) ? 2 : 3;
+        acc += (mixed & 15) * weight;
+    }
+
+    ret (acc % 50) + close_count + defer_count;
+}
+
+main() except PipelineError :: int32 {
+    int32 value = weighted_checksum(5);
+    ret value + (close_count * 10) + (defer_count * 5);
+}

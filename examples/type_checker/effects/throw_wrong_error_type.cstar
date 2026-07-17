@@ -1,0 +1,20 @@
+// expected: diagnostic
+
+enum IoError : uint16 {
+    None,
+    Failed,
+}
+
+enum ParseError : uint16 {
+    None,
+    BadToken,
+}
+
+parse_value() except IoError :: int32 {
+    throw ParseError.BadToken;
+    ret 0;
+}
+
+main() except IoError :: int32 {
+    ret parse_value();
+}

@@ -1,0 +1,9 @@
+// expected: diagnostic
+
+parse_value() except MissingError :: int32 {
+    ret 0;
+}
+
+main() except MissingError :: int32 {
+    ret parse_value();
+}

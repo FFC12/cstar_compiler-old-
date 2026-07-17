@@ -1,0 +1,14 @@
+// expected: diagnostic
+
+enum IoError : uint16 {
+    None,
+    CleanupFailed,
+}
+
+main() except IoError :: int32 {
+    defer {
+        throw IoError.CleanupFailed;
+    }
+
+    ret 0;
+}

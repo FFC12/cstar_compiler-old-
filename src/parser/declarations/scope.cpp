@@ -347,6 +347,39 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         expected(TokenKind::SEMICOLON);
         this->advance();
         scope.emplace_back(std::make_unique<DropStmtAST>(symbolName, semLoc));
+      } else if (is(TokenKind::THROW)) {
+        PositionInfo posInfo = currentTokenInfo().getTokenPositionInfo();
+        size_t begin = posInfo.begin;
+        size_t line = posInfo.line;
+
+        bool throwOutOfSize = false;
+        if (nextTokenInfo(throwOutOfSize).getTokenKind() ==
+            TokenKind::SEMICOLON) {
+          ParserError("`throw` expects an error expression", currentTokenInfo());
+        }
+
+        auto errorExpr = std::move(this->expression(false, 0, true));
+        posInfo = currentTokenInfo().getTokenPositionInfo();
+        SemanticLoc semLoc = SemanticLoc(begin, posInfo.end, line);
+
+        expected(TokenKind::SEMICOLON);
+        this->advance();
+        scope.emplace_back(
+            std::make_unique<ThrowStmtAST>(std::move(errorExpr), semLoc));
+      } else if (is(TokenKind::DEFER)) {
+        PositionInfo posInfo = currentTokenInfo().getTokenPositionInfo();
+        size_t begin = posInfo.begin;
+        size_t line = posInfo.line;
+        this->advance();
+
+        expected(TokenKind::LBRACK);
+        std::vector<ASTNode> deferScope;
+        this->advanceScope(deferScope);
+
+        posInfo = prevTokenInfo().getTokenPositionInfo();
+        SemanticLoc semLoc = SemanticLoc(begin, posInfo.end, line);
+        scope.emplace_back(
+            std::make_unique<DeferStmtAST>(std::move(deferScope), semLoc));
       } else if (is(TokenKind::RET)) {
         ASTNode retExpr;
         bool noReturn = false;

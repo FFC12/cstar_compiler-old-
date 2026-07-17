@@ -48,6 +48,7 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
     symbolInfo.indirectionLevel = typeInfo->m_IndirectLevel;
     symbolInfo.isNullable = typeInfo->m_IsNullable;
     symbolInfo.isDynamicTraitObject = typeInfo->m_IsDynamicTraitObject;
+    symbolInfo.protocolStates = typeInfo->acceptBefore(*this).protocolStates;
   }
   symbolInfo.qualifierLevels =
       BuildQualifierLevels(paramAst.m_TypeQualifier, symbolInfo.indirectionLevel,
@@ -94,6 +95,20 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
     }
   }
   symbolInfo.isParam = true;
+
+  if (m_TypeChecking && symbolInfo.type == TypeSpecifier::SPEC_DEFINED &&
+      !symbolInfo.definedTypeName.empty()) {
+    if (symbolInfo.protocolStates.empty()) {
+      if (const auto* protocol = protocolForType(symbolInfo.definedTypeName)) {
+        if (!protocol->defaultState.empty()) {
+          symbolInfo.protocolStates[protocol->name] = protocol->defaultState;
+        }
+      }
+    }
+    if (!symbolInfo.protocolStates.empty()) {
+      m_LocalProtocolStates[symbolInfo.symbolName] = symbolInfo.protocolStates;
+    }
+  }
 
   if (m_TypeChecking) {
     if (symbolInfo.isNoMove &&

@@ -1382,7 +1382,7 @@ Proposal hedefleri ve kapsam kararı:
 - `struct`
 - `trait`
 - custom allocator benzeri fikirler.
-- `protocol` / `dynamic protocol`: state-flow ve runtime tag gerektirdiği için Aşama 8+ ileri proposal kapsamına taşındı; Aşama 7 çıkışında keyword rezervasyonu ve controlled diagnostic yeterlidir.
+- `protocol` / `dynamic protocol`: Aşama 7 çıkışında ileri proposal olarak ayrılmıştı. Güncel durum için §8.6'ya bak: static/provable protocol MVP'ye indi; dynamic runtime tag ve `.=` lowering ileri sertleştirme olarak kaldı.
 
 Durum:
 
@@ -1476,7 +1476,7 @@ Durum:
   - `examples/smoke/trait_struct_conformance.cstar`
   - `examples/type_checker/068.cstar`
   - `examples/type_checker/069.cstar`
-- `protocol`, `dynamic protocol`, `dynamic Trait` ve ileri lifetime keyword'leri için controlled proposal diagnostic/rezervasyon korunur.
+- Static/provable `protocol` artık §8.6 altında MVP'dir; `dynamic protocol`, `.=` runtime tag lowering, `dynamic Trait` shared axis ve ileri lifetime keyword'leri için controlled diagnostic/rezervasyon korunur.
 - Eski `policy for T { ... }` runtime hook modeli ve `policy protocol` çift isimli form superseded kabul edildi.
 - Ana yön `protocol Name for Type { ... }`: compile-time typestate/state contract.
 - `static protocol` gereksizdir; static/provable davranış default kabul edilir.
@@ -1507,7 +1507,7 @@ Son kontrol ve ileri takip:
   - Bugünkü MVP explicit allocator'ı hem payload data hem strong-count metadata için kullanır.
   - Strong-count metadata ayrı allocation'dır; compiler ileride aynı contract altında fused layout üretebilir.
   - Failure policy explicit signature/effect modeline bağlanacak.
-- `protocol` parser/flow tasarımı Aşama 8+ ileri proposal olarak kaldı:
+- Static `protocol` parser/flow tasarımı §8.6'da MVP'ye indi; aşağıdaki maddeler tamamlanan yüzeyi ve kalan scope-exit/dynamic sertleştirmeyi özetler:
   - `protocol FileState for FileHandle { ... }`
   - `state closed, opened;`
   - `default closed;`
@@ -1682,8 +1682,8 @@ Kalan:
     - `examples/type_checker/074.cstar`
 - Generic bound syntax proposal'ı.
 - Allocation failure eski policy hook yerine explicit `except`/`throw` veya result-like dönüş modeliyle tasarlanmalı.
-- `protocol`/`dynamic protocol` grammar ve flow analysis Aşama 8+ ileri proposal olarak kaldı:
-  - `examples/type_checker/075.cstar`
+- Static `protocol` grammar ve flow analysis §8.6'da MVP'ye indi; `dynamic protocol` runtime tag lowering ileri proposal olarak kaldı:
+  - `examples/type_checker/proposals/075.cstar` artık eksik protocol body semantic diagnostic'ini doğrular.
 
 ## Aşama 8 - Metaprogramming ve İleri Proposal
 
@@ -1989,77 +1989,88 @@ Kalan:
 
 Durum:
 
-- `.=` token olarak tanınır ve protocol proposal diagnostic üretir.
-- `protocol`, `dynamic protocol`, `state`, `is` lexer seviyesinde ayrılmıştır.
-- `examples/papers/protocol.cstar` canonical proposal dosyasıdır.
+- `protocol Name for Type { ... }` parser/AST/pass0 hattına indi:
+  - protocol adı, target type, state seti, default state.
+  - static transition table: `closed -> opened :: open();`
+  - forbidden-call table: `read() :: !closed;`
+  - scope-exit transition table metadata'sı: `scope_exit opened -> closed :: close();`
+- Static/provable protocol default kabul edilir; `static protocol` canonical syntax değildir ve diagnostic üretir.
+- State-qualified type yüzeyi çalışır:
+  - `opened FileHandle^`
+  - `closed FileHandle`
+  - `const opened FileHandle^`
+  - çoklu state qualifier parse edilir; semantic tarafı protocol başına state slot map'i taşır.
+- Pass1 static flow MVP'si çalışır:
+  - method call sonrası state transition.
+  - forbidden call diagnostic: `read() :: !closed`.
+  - return type state match diagnostic.
+  - initializer/fallible call sonucu state bilgisinin local flow'a taşınması.
+- Protocol declaration validation çalışır:
+  - target struct varlığı kontrol edilir.
+  - transition/forbidden/scope_exit method referansları doğrulanır.
+  - `scope_exit` method'u instance method olmalı, user argümanı almamalı ve fallible olmamalıdır.
+- `scope_exit A -> B :: method();` codegen cleanup hattına iner:
+  - `ret`, implicit fallthrough ve `throw` çıkışlarında otomatik cleanup çağrısı üretilir.
+  - explicit close sonrası state `closed` olduğu için otomatik ikinci close üretilmez.
+  - cleanup sırası: explicit `defer`, protocol `scope_exit`, destructor/drop/release.
+- `.=` token olarak tanınır ve yalnız dynamic/provability-gap protocol için reserved kalır.
+- `dynamic protocol` parse edilir fakat runtime tag/discriminant lowering henüz açılmaz; controlled semantic diagnostic üretir.
+- `examples/smoke/protocol/static_file_flow.cstar` valid open/read/close akışını doğrular.
+- `examples/smoke/protocol/scope_exit_return.cstar` return edge cleanup'ını doğrular.
+- `examples/smoke/protocol/scope_exit_throw.cstar` throw edge cleanup'ını doğrular.
+- `examples/smoke/protocol/scope_exit_no_double_close.cstar` explicit close sonrası otomatik ikinci cleanup olmadığını doğrular.
+- `examples/smoke/protocol/stateful_checksum_pipeline.cstar` protocol + except + defer + enum + array + loop + ternary + bit/arithmetic kombinasyonunu doğrular.
+- `examples/type_checker/protocol/closed_file_read.cstar` closed state forbidden call diagnostic'ini doğrular.
+- `examples/type_checker/protocol/return_state_mismatch.cstar` state-qualified return mismatch diagnostic'ini doğrular.
+- `examples/type_checker/protocol/scope_exit_unknown_method.cstar` bilinmeyen cleanup method diagnostic'ini doğrular.
+- `examples/type_checker/protocol/scope_exit_requires_no_args.cstar` argüman isteyen scope_exit method diagnostic'ini doğrular.
+- `examples/papers/protocol.cstar` canonical uzun vadeli proposal dosyasıdır.
 - Eski `policy for T` ve `policy protocol` superseded kabul edilir.
 
-Kalan:
+İleri sertleştirme:
 
-- `protocol Name for Type { ... }` parser/AST:
-  - protocol adı.
-  - target type.
-  - state seti.
-  - default state.
-  - transition table.
-  - forbidden-call table.
-  - scope-exit transition table.
-- Static/provable protocol default olmalı; `static protocol` syntax'ı eklenmemeli.
-- State-qualified type yüzeyi:
-  - `opened FileHandle^`
-  - `closed FileHandle^`
-  - `const opened FileHandle^`
-  - çoklu state slot: `opened locked FileHandle^`
-- Pass1 flow analysis:
-  - method call sonrası state transition.
-  - return type state match.
-  - moved pointer ile state bilgisinin taşınması.
-  - forbidden call diagnostic: `read() :: !closed`.
-  - `state is ...` / `value is state` kontrolü.
-- `scope_exit A -> B :: method();` cleanup edge:
-  - `ret`, `throw`, `break`, `continue` yollarında çalışmalı.
-  - cleanup order reverse acquisition order.
-  - cleanup transition cleanup-safe/noexcept kabul edilmeli.
-  - fallible cleanup explicit user code gerektirmeli.
-- Çoklu protocol state slot'u tek birleşik enum'a indirgenmemeli; her protocol kendi named slot'una sahip olmalı.
-- `dynamic protocol`:
-  - explicit runtime discriminant/tag field.
-  - `.=` yalnız dynamic/provability-gap transition için.
-  - hidden hook table/hashmap/virtual dispatch yok.
-  - `.=` lowering switch/check olarak `--show-desugar` ile görünür olmalı.
-- Test adayları:
-  - valid open/read/close state flow pass.
-  - closed file read diagnostic.
-  - scope-exit cleanup on return.
-  - scope-exit cleanup on throw.
-  - `.=` dynamic protocol controlled diagnostic -> ileride lowering smoke.
+- `value is state` / `state is ...` narrowing grammar ve flow proof.
+- Dynamic protocol runtime discriminant/tag field ve `.=` lowering.
+- `--show-desugar` ile `.=` dynamic check ve scope-exit cleanup edge'lerinin gösterilmesi.
+- Çoklu protocol slot'larının karmaşık branch/loop merge noktalarında lattice ile birleştirilmesi.
 
 ### 8.7 Effects / Except / Throw / Defer
 
 Durum:
 
-- `except`, `throw`, `defer` keyword'leri lexer seviyesinde tanınır.
-- Parser/AST/effect semantic yok veya proposal diagnostic seviyesindedir.
-- Protocol scope-exit modeli `throw` yollarını da kapsayacak şekilde tasarlandı.
-
-Kalan:
-
-- Function signature effect grammar:
+- `except`, `throw`, `defer` keyword'leri lexer/parser/AST/semantic/codegen hattına indi.
+- Function signature effect grammar çalışır:
   - `fn(...) except ErrorType :: ReturnType`
-  - no-effect function'dan fallible call yapıldığında diagnostic.
-- `throw Expr;` statement AST/semantic.
-- Error type olarak ilk MVP'de scalar enum veya explicit result-like type tercih edilmeli.
-- Unwind/lowering stratejisi:
-  - ilk MVP structured early-return lowering olabilir.
-  - gerçek platform exception ABI'si sonraya bırakılabilir.
-- `defer` statement:
+  - eski `except :: ReturnType` formu geçici compatibility olarak parse edilir, fakat canonical form typed error belirtmelidir.
+- Function signature table `canThrow` ve `errorTypeName` taşır.
+- No-effect function'dan fallible call diagnostic üretir.
+- `throw Expr;` statement AST/semantic çalışır:
+  - yalnız `except` function içinde kullanılabilir.
+  - `except ErrorType` ile `throw Expr` enum/defined-type uyumu kontrol edilir.
+  - cleanup/defer içinden `throw` MVP'de reddedilir; fallible cleanup explicit user code ister.
+- İlk lowering stratejisi structured early-return'dür:
+  - platform exception ABI kullanılmaz.
+  - `throw` cleanup'ları çalıştırır ve mevcut function return type'ının zero/default değerini döndürür.
+  - error payload propagation/result object modeli sonraki aşamaya bırakıldı.
+- `defer { ... }` statement çalışır:
   - explicit cleanup block.
-  - protocol `scope_exit` ile çakışmayan net sıra.
-  - reverse lexical order.
-- Cleanup safety:
-  - defer/scope-exit içinden throw policy'si netleşmeli.
-  - fallible cleanup açıkça handle edilmeli.
-- `--show-desugar` defer ve scope-exit cleanup edge'lerini göstermeli.
+  - reverse lexical order ile function/scope çıkış cleanup hattında çalışır.
+  - `ret`, implicit fallthrough, `break`, `continue` ve `throw` cleanup hattına bağlanır.
+- Testler:
+  - `examples/smoke/effects/defer_cleanup.cstar`
+  - `examples/smoke/effects/defer_lifo_order.cstar`
+  - `examples/smoke/effects/defer_on_throw.cstar`
+  - `examples/type_checker/effects/throw_without_except.cstar`
+  - `examples/type_checker/effects/fallible_call_without_except.cstar`
+  - `examples/type_checker/effects/defer_throw.cstar`
+  - `examples/type_checker/effects/throw_wrong_error_type.cstar`
+  - `examples/type_checker/effects/except_unknown_error_type.cstar`
+
+İleri sertleştirme:
+
+- Error payload propagation için explicit result-like ABI veya dedicated effect return slot.
+- `defer` için gerçek lexical scope stack'i; bugünkü MVP function-level active defer listesini kullanır.
+- `--show-desugar` ile defer/scope-exit cleanup edge'lerinin gösterilmesi.
 
 ### 8.8 Concurrency / Async / Task Ownership
 

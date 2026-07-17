@@ -15,6 +15,7 @@
 #include <ast/macro_ast.hpp>
 #include <ast/new_ast.hpp>
 #include <ast/param_ast.hpp>
+#include <ast/protocol_ast.hpp>
 #include <ast/ret_ast.hpp>
 #include <ast/scalar_ast.hpp>
 #include <ast/struct_ast.hpp>
@@ -263,6 +264,11 @@ class CStarParser {
                      bool isFlags = false);
   void parseStructDecl(DeclarationModifiers declarationModifiers);
   void parseTraitDecl(DeclarationModifiers declarationModifiers);
+  void parseProtocolDecl(DeclarationModifiers declarationModifiers,
+                         bool isDynamic = false);
+  std::vector<std::string> collectStateQualifiersBeforeType();
+  void applyStateQualifiers(ASTNode& typeNode,
+                            const std::vector<std::string>& states);
   std::string parseLinkSource();
   void registerNativeLinkLibrary(const std::string& library);
   void skipTopLevelTrivia();

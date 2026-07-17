@@ -16,6 +16,8 @@ class FuncAST : public IAST {
   bool m_IsStatic;
   bool m_IsVariadic;
   bool m_HasExplicitReturnType;
+  bool m_CanThrow;
+  std::string m_ErrorTypeName;
   AccessSpecifier m_Access;
 
  public:
@@ -23,7 +25,8 @@ class FuncAST : public IAST {
           std::vector<ASTNode>&& scope, TypeQualifier retTypeQualifier,
           bool isForwardDecl, bool isExported, bool isStatic,
           bool isVariadic, bool hasExplicitReturnType, AccessSpecifier access,
-          SemanticLoc semLoc)
+          SemanticLoc semLoc, bool canThrow = false,
+          std::string errorTypeName = {})
       : IAST(semLoc),
         m_FuncName(std::move(funcName)),
         m_RetType(std::move(retType)),
@@ -34,6 +37,8 @@ class FuncAST : public IAST {
         m_IsStatic(isStatic),
         m_IsVariadic(isVariadic),
         m_HasExplicitReturnType(hasExplicitReturnType),
+        m_CanThrow(canThrow),
+        m_ErrorTypeName(std::move(errorTypeName)),
         m_Access(access),
         m_IsForwardDecl(isForwardDecl) {
     this->m_ASTKind = ASTKind::Decl;
@@ -81,6 +86,8 @@ class FuncAST : public IAST {
   }
 
   bool isVariadic() const { return m_IsVariadic; }
+  bool canThrow() const { return m_CanThrow; }
+  const std::string& errorTypeName() const { return m_ErrorTypeName; }
 
   ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
 };

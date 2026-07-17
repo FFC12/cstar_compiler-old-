@@ -54,6 +54,29 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   symbolInfo.isUnique = varAst.m_IsUniquePtr;
   symbolInfo.isNullable = varAst.m_IsNullable;
   symbolInfo.isDynamicTraitObject = varAst.m_IsDynamicTraitObject;
+  if (!varAst.m_StateQualifiers.empty()) {
+    for (const auto& state : varAst.m_StateQualifiers) {
+      bool matched = false;
+      for (const auto& entry : ProtocolTable) {
+        const auto& protocol = entry.second;
+        if (protocol.targetTypeName != symbolInfo.definedTypeName) {
+          continue;
+        }
+        if (std::find(protocol.states.begin(), protocol.states.end(), state) !=
+            protocol.states.end()) {
+          symbolInfo.protocolStates[protocol.name] = state;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched && m_TypeChecking) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Unknown protocol state qualifier '" + state + "' for type '" +
+                symbolInfo.definedTypeName + "'",
+            symbolInfo);
+      }
+    }
+  }
   symbolInfo.isCastable = true;
   symbolInfo.isPublic = varAst.m_AccessSpec == ACCESS_PUBLIC;
   symbolInfo.isStatic = varAst.m_IsStatic ||
@@ -377,6 +400,10 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
             symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
       }
       symbolInfo.ptrAliases = std::move(tempSymbolInfo.ptrAliases);
+      if (symbolInfo.protocolStates.empty() &&
+          !tempSymbolInfo.protocolStates.empty()) {
+        symbolInfo.protocolStates = tempSymbolInfo.protocolStates;
+      }
       if (auto *moveSource = dynamicMoveSource()) {
         SymbolInfo source;
         SymbolInfo lookup;
@@ -409,6 +436,24 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
             symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
       }
       symbolInfo.ptrAliases = std::move(tempSmbolInfo.ptrAliases);
+      if (symbolInfo.protocolStates.empty() &&
+          !tempSmbolInfo.protocolStates.empty()) {
+        symbolInfo.protocolStates = tempSmbolInfo.protocolStates;
+      }
+    }
+  }
+
+  if (m_TypeChecking && symbolInfo.type == TypeSpecifier::SPEC_DEFINED &&
+      !symbolInfo.definedTypeName.empty()) {
+    if (symbolInfo.protocolStates.empty()) {
+      if (const auto* protocol = protocolForType(symbolInfo.definedTypeName)) {
+        if (!protocol->defaultState.empty()) {
+          symbolInfo.protocolStates[protocol->name] = protocol->defaultState;
+        }
+      }
+    }
+    if (!symbolInfo.protocolStates.empty()) {
+      m_LocalProtocolStates[symbolInfo.symbolName] = symbolInfo.protocolStates;
     }
   }
 

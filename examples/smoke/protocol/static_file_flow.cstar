@@ -1,0 +1,42 @@
+// expected: pass
+
+struct FileHandle {
+    int32 raw;
+
+    constructor() {
+        self.raw = 0;
+        ret;
+    }
+
+    open() :: void {
+        self.raw = 41;
+        ret;
+    }
+
+    read() :: int32 {
+        ret self.raw + 1;
+    }
+
+    close() :: void {
+        self.raw = 0;
+        ret;
+    }
+}
+
+protocol FileState for FileHandle {
+    state closed, opened;
+    default closed;
+
+    closed -> opened :: open();
+    opened -> closed :: close();
+
+    read() :: !closed;
+}
+
+main() :: int32 {
+    closed FileHandle file = FileHandle();
+    file.open();
+    int32 value = file.read();
+    file.close();
+    ret value;
+}

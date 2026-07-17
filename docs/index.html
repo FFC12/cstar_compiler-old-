@@ -335,6 +335,7 @@ hr.soft{border:0; border-top:1px solid var(--line-soft); margin:34px 0}
     <a href="#struct"><span class="no">14</span><span class="tr">Struct ve Yaşam Döngüsü</span><span class="en">Structs &amp; Lifecycle</span></a>
     <a href="#enum"><span class="no">15</span><span class="tr">Enum, Flags ve Option</span><span class="en">Enums, Flags &amp; Option</span></a>
     <a href="#trait"><span class="no">16</span><span class="tr">Trait ve Value Operatörler</span><span class="en">Traits &amp; Value Operators</span></a>
+    <a href="#protocol-effects"><span class="no">16.5</span><span class="tr">Protocol ve Effects</span><span class="en">Protocols &amp; Effects</span></a>
     <div class="toc-part"><span class="tr">Bölüm V · Organizasyon</span><span class="en">Part V · Organization</span></div>
     <a href="#moduller"><span class="no">17</span><span class="tr">Modüller ve Native Interop</span><span class="en">Modules &amp; Native Interop</span></a>
     <a href="#meta"><span class="no">18</span><span class="tr">Metaprogramlama</span><span class="en">Metaprogramming</span></a>
@@ -1587,6 +1588,109 @@ main() :: int32 {
       </div>
     </div>
   </section>
+  <!-- ============ 16.5 PROTOCOL / EFFECTS ============ -->
+  <section class="ch" id="protocol-effects">
+    <div class="ch-head"><span class="ch-no">§16.5</span>
+      <h2><span class="tr">Protocol, Typestate ve Effects</span><span class="en">Protocols, Typestate &amp; Effects</span></h2>
+    </div>
+    <p class="ch-intro tr">Protocol, bir değerin hangi güvenli durumda olduğunu type-checker'a anlatır. Effect sistemi ise hata ve cleanup akışını görünür yapar: <code>except</code> fallible fonksiyon imzasıdır, <code>throw</code> structured early-exit üretir, <code>defer</code> çıkışta çalışacak cleanup bloğudur.</p>
+    <p class="ch-intro en">A protocol tells the type checker which safe state a value is in. The effect system makes error and cleanup flow visible: <code>except</code> marks a fallible function signature, <code>throw</code> lowers to structured early-exit, and <code>defer</code> is a cleanup block that runs at exit.</p>
+
+    <h3><span class="h3-no">16.5.1</span><span class="tr">Static Protocol / Typestate</span><span class="en">Static Protocol / Typestate</span></h3>
+    <div class="code"><div class="code-bar"><span class="code-name">examples/smoke/protocol/static_file_flow.cstar</span><span class="grow"></span><span class="tag ok">✓ pass</span></div><pre><code class="lang-cstar">struct FileHandle {
+  int32 raw;
+
+  constructor() {
+    self.raw = 0;
+    ret;
+  }
+
+  open() :: void {
+    self.raw = 41;
+    ret;
+  }
+
+  read() :: int32 {
+    ret self.raw + 1;
+  }
+
+  close() :: void {
+    self.raw = 0;
+    ret;
+  }
+}
+
+protocol FileState for FileHandle {
+  state closed, opened;
+  default closed;
+
+  closed -&gt; opened :: open();
+  opened -&gt; closed :: close();
+
+  read() :: !closed;
+}
+
+main() :: int32 {
+  closed FileHandle file = FileHandle();
+  file.open();              // state: closed -&gt; opened
+  int32 value = file.read(); // legal: not closed
+  file.close();             // state: opened -&gt; closed
+  ret value;
+}</code></pre></div>
+    <p class="tr"><code>protocol</code> allocation, dispatch veya gizli hook değildir; yalnızca statik durum sözleşmesidir. <code>read() :: !closed</code>, receiver <code>closed</code> state'indeyken çağrıyı reddeder. Transition satırları method çağrısından sonra local flow state'ini günceller.</p>
+    <p class="en"><code>protocol</code> is not allocation, dispatch, or a hidden hook; it is only a static state contract. <code>read() :: !closed</code> rejects the call while the receiver is in <code>closed</code>. Transition rows update the local flow state after method calls.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">closed_file_read.cstar</span><span class="grow"></span><span class="tag err">✗ diagnostic</span></div><pre><code class="lang-cstar">main() :: int32 {
+  closed FileHandle file = FileHandle();
+  ret file.read(); // diagnostic: FileState forbids read while closed
+}</code></pre></div>
+
+    <div class="code"><div class="code-bar"><span class="code-name">examples/smoke/protocol/scope_exit_return.cstar</span><span class="grow"></span><span class="tag ok">pass / exit 1</span></div><pre><code class="lang-cstar">protocol FileState for FileHandle {
+  state closed, opened;
+  default closed;
+
+  closed -&gt; opened :: open();
+  opened -&gt; closed :: close();
+
+  scope_exit opened -&gt; closed :: close();
+}
+
+use_file() :: void {
+  closed FileHandle file = FileHandle();
+  file.open();
+  ret; // compiler emits file.close() on this exit edge
+}</code></pre></div>
+    <p class="tr"><code>scope_exit A -&gt; B :: method();</code> artÄ±k yalnÄ±zca metadata deÄŸildir; codegen cleanup hattÄ±na iner. Method instance method olmalÄ±, user argÃ¼manÄ± almamalÄ± ve fallible olmamalÄ±dÄ±r. Explicit <code>file.close()</code> sonrasÄ± state <code>closed</code> olduÄŸu iÃ§in otomatik ikinci close Ã¼retilmez.</p>
+    <p class="en"><code>scope_exit A -&gt; B :: method();</code> is no longer just metadata; it lowers into the codegen cleanup path. The method must be an instance method, accept no user arguments, and be non-fallible. After an explicit <code>file.close()</code>, the state is <code>closed</code>, so no second automatic close is emitted.</p>
+
+    <h3><span class="h3-no">16.5.2</span><span class="tr"><code>except</code>, <code>throw</code> ve Fallible Call</span><span class="en"><code>except</code>, <code>throw</code>, and Fallible Calls</span></h3>
+    <div class="code"><div class="code-bar"><span class="code-name">effects.cstar</span><span class="grow"></span><span class="tag ok">✓ pass</span></div><pre><code class="lang-cstar">enum IoError : uint16 {
+  None,
+  Failed,
+}
+
+read_value() except IoError :: int32 {
+  ret 7;
+}
+
+main() except IoError :: int32 {
+  int32 value = read_value(); // legal: caller is also except
+  ret value;
+}</code></pre></div>
+    <p class="tr">Fallible function çağrısı, caller'ın da <code>except</code> olmasını ister. No-effect fonksiyondan fallible call yapmak diagnostic'tir; bu, hata akışının signature'da görünür kalmasını sağlar. <code>throw Expr;</code> ifadesinin enum/defined type'ı, function imzasındaki <code>except ErrorType</code> ile uyumlu olmalıdır. İlk MVP platform exception ABI kullanmaz; cleanup'ları çalıştıran structured early-return lowering üretir.</p>
+    <p class="en">Calling a fallible function requires the caller to be <code>except</code> as well. A fallible call from a no-effect function is a diagnostic, keeping error flow visible in signatures. The enum/defined type of <code>throw Expr;</code> must match the function's <code>except ErrorType</code>. The first MVP does not use platform exception ABI; it lowers to structured early-return after running cleanups.</p>
+
+    <h3><span class="h3-no">16.5.3</span><span class="tr"><code>defer</code>: Açık Cleanup Bloğu</span><span class="en"><code>defer</code>: Explicit Cleanup Blocks</span></h3>
+    <div class="code"><div class="code-bar"><span class="code-name">examples/smoke/effects/defer_cleanup.cstar</span><span class="grow"></span><span class="tag ok">✓ pass</span></div><pre><code class="lang-cstar">main() :: int32 {
+  defer {
+    print("defer cleanup\n");
+  }
+
+  print("body\n");
+  ret 0;
+}</code></pre></div>
+    <p class="tr"><code>defer</code> blokları reverse lexical order ile cleanup hattına eklenir. <code>ret</code>, implicit fallthrough, <code>break</code>, <code>continue</code> ve <code>throw</code> cleanup çalıştırır. Cleanup içinden <code>throw</code> bu MVP'de reddedilir; fallible cleanup açık kullanıcı koduyla handle edilmelidir.</p>
+    <p class="en"><code>defer</code> blocks are added to the cleanup path in reverse lexical order. <code>ret</code>, implicit fallthrough, <code>break</code>, <code>continue</code>, and <code>throw</code> run cleanups. Throwing from cleanup is rejected in this MVP; fallible cleanup must be handled explicitly by user code.</p>
+  </section>
   <!-- ============ 17 MODULLER ============ -->
   <section class="ch" id="moduller">
     <div class="ch-head"><span class="ch-no">§17</span>
@@ -2234,19 +2338,23 @@ main() :: int32 {
 Meter^? maybe = new?(arena) Meter(7);
 int32^ owned_value = new(arena) int32(7);</code></pre></div>
 
-    <h3><span class="h3-no">22.3</span><span class="tr">Protocol / Typestate</span><span class="en">Protocol / Typestate</span></h3>
-    <p class="tr">Protocol, <em>durum güvenliği</em> içindir — allocation veya dispatch değildir. Varsayılan protocol statik/kanıtlanabilir; <code>dynamic protocol</code> runtime fallback'tir. <code>.=</code> operatörü yalnızca dynamic/provability-gap geçişlerine ayrılır. Scope-exit durum temizliği <code>ret</code>, <code>throw</code>, <code>break</code>, <code>continue</code> kenarlarının tamamında çalışmak zorundadır:</p>
-    <p class="en">Protocols exist for <em>state safety</em> — not allocation, not dispatch. The default protocol is static/provable; <code>dynamic protocol</code> is the runtime fallback. The <code>.=</code> operator is reserved solely for dynamic/provability-gap transitions. Scope-exit state cleanup must run on every edge: <code>ret</code>, <code>throw</code>, <code>break</code>, <code>continue</code>:</p>
-    <div class="code"><div class="code-bar"><span class="code-name">protocol.cstar</span><span class="grow"></span><span class="tag prop">◆ proposal</span></div><pre><code class="lang-cstar">protocol FileState for FileHandle {
-  state closed, opened;
+    <h3><span class="h3-no">22.3</span><span class="tr">Dynamic Protocol</span><span class="en">Dynamic Protocols</span></h3>
+    <p class="tr">Static/provable protocol ve <code>scope_exit</code> cleanup edge'leri artık çalışan yüzeydedir (§16.5). Proposal alanında kalan parça, runtime state tag isteyen <code>dynamic protocol</code> ve <code>.=</code> dynamic/provability-gap transition lowering'idir. Bu lowering gizli hook table veya hashmap kullanmayacak; <code>--show-desugar</code> ile görülebilir switch/check çağrılarına inecektir:</p>
+    <p class="en">Static/provable protocols and <code>scope_exit</code> cleanup edges are now part of the working surface (§16.5). The remaining proposal area is <code>dynamic protocol</code> for runtime state tags and <code>.=</code> dynamic/provability-gap transition lowering. This lowering will not use hidden hook tables or hashmaps; <code>--show-desugar</code> must expose the generated switch/check calls:</p>
+    <div class="code"><div class="code-bar"><span class="code-name">dynamic-protocol.cstar</span><span class="grow"></span><span class="tag prop">◆ proposal</span></div><pre><code class="lang-cstar">dynamic protocol ConnectionState for Connection {
+  state idle, sending, failed;
+  default idle;
 
-  default closed;
+  idle    -&gt; sending :: send();
+  sending -&gt; idle    :: ack();
+  sending -&gt; failed  :: timeout();
+}
 
-  closed -&gt; opened :: open();
-  opened -&gt; closed :: close();
-
-  read() :: !closed;                    // closed durumda çağrılamaz / uncallable when closed
-  scope_exit opened -&gt; closed :: close();
+handle(idle Connection^ conn) :: void {
+  conn .= try_send();        // runtime tag check + visible desugar
+  if (conn is failed) {
+    ret;
+  }
 }</code></pre></div>
 
     <h3><span class="h3-no">22.4</span><span class="tr">Trait Object Genişlemeleri</span><span class="en">Trait Object Extensions</span></h3>

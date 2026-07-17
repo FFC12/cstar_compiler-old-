@@ -1,5 +1,4 @@
 // expected: diagnostic
-// expected-code: CST1001
 
 protocol FileState for FileHandle {
 }

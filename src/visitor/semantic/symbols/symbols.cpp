@@ -23,6 +23,10 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
     if (!this->m_LastLoopDataSymbol && !this->m_LastLoopIndexSymbol &&
         !this->m_LastParamSymbol) {
       if (symbolValidation(symbolName, symbolInfo, matchedSymbol)) {
+        if (auto flowIt = m_LocalProtocolStates.find(symbolName);
+            flowIt != m_LocalProtocolStates.end()) {
+          matchedSymbol.protocolStates = flowIt->second;
+        }
         this->m_MatchedSymbolType = matchedSymbol.type;
         if (matchedSymbol.indirectionLevel > 0 &&
             m_MovedUniqueSymbols.count(SymbolStateKey(matchedSymbol)) > 0) {

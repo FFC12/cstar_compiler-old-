@@ -13,8 +13,14 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
   bool isRef = false;
   bool isNullable = false;
   bool isMoveInit = false;
+  std::vector<std::string> stateQualifiers;
 
   auto begin = currentTokenInfo().getTokenPositionInfo().begin;
+  if (!is(TokenKind::DYNAMIC)) {
+    stateQualifiers = collectStateQualifiersBeforeType();
+    isDefinedType = isDefinedType || !stateQualifiers.empty();
+  }
+
   if (is(TokenKind::DYNAMIC)) {
     auto dynamicType = advanceDynamicTraitType();
     auto *typeAst = static_cast<TypeAST *>(dynamicType.get());
@@ -110,7 +116,7 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
         declarationModifiers.isStatic,
         indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
         std::move(arrayDimensions), semLoc, isMoveInit, isNullable,
-        isDynamicTraitObject);
+        isDynamicTraitObject, stateQualifiers);
 
     ast->setDeclKind(getDeclKind(declarationModifiers.linkage));
 
@@ -137,7 +143,7 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
         declarationModifiers.isStatic,
         indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
         std::move(arrayDimensions), semLoc, isMoveInit, isNullable,
-        isDynamicTraitObject);
+        isDynamicTraitObject, stateQualifiers);
 
     ast->setDeclKind(getDeclKind(declarationModifiers.linkage));
 

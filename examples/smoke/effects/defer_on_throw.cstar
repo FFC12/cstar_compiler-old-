@@ -1,0 +1,23 @@
+// expected: pass
+// expected-exit: 7
+
+enum IoError : uint16 {
+    None,
+    Failed,
+}
+
+int32 cleaned = 0;
+
+fail() except IoError :: int32 {
+    defer {
+        cleaned = 7;
+    }
+
+    throw IoError.Failed;
+    ret 1;
+}
+
+main() except IoError :: int32 {
+    int32 ignored = fail();
+    ret cleaned;
+}

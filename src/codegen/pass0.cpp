@@ -15,6 +15,7 @@ void CStarCodegen::pass0() {
   Visitor::StructTable.clear();
   Visitor::TraitTable.clear();
   Visitor::EnumTable.clear();
+  Visitor::ProtocolTable.clear();
   Visitor::LLVMStructTypes.clear();
 
   // TODO: Will be revised
@@ -68,6 +69,13 @@ void CStarCodegen::pass0() {
                         symbolInfo);
         }
         this->m_DefinedTypes[symbolInfo.definedTypeName] = 1;
+      } else if (ast->getDeclKind() == DeclKind::ProtocolDecl) {
+        Visitor preVisitor(this->m_DefinedTypes);
+        auto symbolInfo = ast->acceptBefore(preVisitor);
+        auto messages = preVisitor.getUnknownTypeErrorMessages();
+        for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
+          SemanticError(it->message, it->symbolInfo, it->code);
+        }
       } else if (ast->getDeclKind() == DeclKind::FuncDecl ||
           ast->getDeclKind() == DeclKind::ImportFuncDecl ||
           ast->getDeclKind() == DeclKind::ExportFuncDecl) {
@@ -81,6 +89,9 @@ void CStarCodegen::pass0() {
         signature.returnType = tempSymbolInfo;
         signature.isVariadic =
             static_cast<FuncAST *>(ast.get())->isVariadic();
+        signature.canThrow = static_cast<FuncAST *>(ast.get())->canThrow();
+        signature.errorTypeName =
+            static_cast<FuncAST *>(ast.get())->errorTypeName();
         for (auto& symbolInfo : preVisitor.getSymbolInfoList()) {
           if (symbolInfo.isParam) {
             signature.params.push_back(symbolInfo);

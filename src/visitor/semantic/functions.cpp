@@ -22,6 +22,7 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
     symbolInfo.isUnique = retType->m_IsUniquePtr;
     symbolInfo.isNullable = retType->m_IsNullable;
     symbolInfo.isDynamicTraitObject = retType->m_IsDynamicTraitObject;
+    symbolInfo.protocolStates = retType->acceptBefore(*this).protocolStates;
     symbolInfo.qualifierLevels = BuildQualifierLevels(
         funcAst.m_RetTypeQualifier, symbolInfo.indirectionLevel,
         symbolInfo.isRef);
@@ -110,9 +111,26 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
 
   if (m_TypeChecking) {
     const bool previousStaticFunction = m_CurrentFunctionIsStatic;
+    const bool previousCanThrow = m_CurrentFunctionCanThrow;
+    const auto previousErrorTypeName = m_CurrentFunctionErrorTypeName;
     const auto previousStructMethodOwner = m_CurrentStructMethodOwner;
     m_DroppedSemanticSymbols.clear();
+    m_LocalProtocolStates.clear();
     m_CurrentFunctionIsStatic = funcAst.m_IsStatic;
+    m_CurrentFunctionCanThrow = funcAst.m_CanThrow;
+    m_CurrentFunctionErrorTypeName = funcAst.m_ErrorTypeName;
+    if (m_CurrentFunctionCanThrow && m_CurrentFunctionErrorTypeName.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "except function should declare an error type: `except ErrorType :: "
+          "ReturnType`",
+          symbolInfo);
+    } else if (m_CurrentFunctionCanThrow &&
+               EnumTable.count(m_CurrentFunctionErrorTypeName) == 0 &&
+               this->m_TypeTable.count(m_CurrentFunctionErrorTypeName) == 0) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Unknown except error type '" + m_CurrentFunctionErrorTypeName + "'",
+          symbolInfo);
+    }
     std::string currentMethodOwner;
     std::string currentMethodName;
     if (SplitStructMethodName(funcAst.m_FuncName, currentMethodOwner,
@@ -132,6 +150,8 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
       typeCheckerScopeHandler(node);
     }
     m_CurrentFunctionIsStatic = previousStaticFunction;
+    m_CurrentFunctionCanThrow = previousCanThrow;
+    m_CurrentFunctionErrorTypeName = previousErrorTypeName;
     m_CurrentStructMethodOwner = previousStructMethodOwner;
   } else {
     for (auto &param : funcAst.m_Params) {

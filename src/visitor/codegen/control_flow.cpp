@@ -437,6 +437,7 @@ ValuePtr Visitor::visit(BreakStmtAST &breakStmtAst) {
     return nullptr;
   }
 
+  emitScopeExitDestructors();
   return Builder->CreateBr(m_LoopBreakTargets.back());
 }
 
@@ -445,11 +446,33 @@ ValuePtr Visitor::visit(ContinueStmtAST &continueStmtAst) {
     return nullptr;
   }
 
+  emitScopeExitDestructors();
   return Builder->CreateBr(m_LoopContinueTargets.back());
 }
 
 ValuePtr Visitor::visit(DropStmtAST &dropStmtAst) {
   return emitDropForSymbol(dropStmtAst.m_SymbolName, true);
+}
+
+ValuePtr Visitor::visit(DeferStmtAST &deferStmtAst) {
+  if (!m_EmittingDefers) {
+    m_ActiveDefers.push_back(&deferStmtAst);
+  }
+  return nullptr;
+}
+
+ValuePtr Visitor::visit(ThrowStmtAST &throwStmtAst) {
+  if (throwStmtAst.m_ErrorExpr != nullptr) {
+    throwStmtAst.m_ErrorExpr->accept(*this);
+  }
+
+  llvm::Function *function = Builder->GetInsertBlock()->getParent();
+  llvm::Type *returnType = function->getReturnType();
+  emitScopeExitDestructors();
+  if (returnType->isVoidTy()) {
+    return Builder->CreateRetVoid();
+  }
+  return Builder->CreateRet(llvm::Constant::getNullValue(returnType));
 }
 
 ValuePtr Visitor::visit(ParamAST &paramAst) { return nullptr; }

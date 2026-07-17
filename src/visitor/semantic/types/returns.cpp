@@ -84,6 +84,28 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {
             "without an `if (ptr)` non-null proof",
             symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
       }
+      for (const auto& expectedState : m_LastFuncRetTypeInfo.protocolStates) {
+        auto actualIt = returnedInfo.protocolStates.find(expectedState.first);
+        std::string actualState;
+        if (actualIt != returnedInfo.protocolStates.end()) {
+          actualState = actualIt->second;
+        } else if (!returnedInfo.symbolName.empty()) {
+          auto flowIt = m_LocalProtocolStates.find(returnedInfo.symbolName);
+          if (flowIt != m_LocalProtocolStates.end()) {
+            auto flowStateIt = flowIt->second.find(expectedState.first);
+            if (flowStateIt != flowIt->second.end()) {
+              actualState = flowStateIt->second;
+            }
+          }
+        }
+        if (!actualState.empty() && actualState != expectedState.second) {
+          this->m_TypeErrorMessages.emplace_back(
+              "return value state mismatch for protocol '" +
+                  expectedState.first + "': expected '" +
+                  expectedState.second + "', got '" + actualState + "'",
+              symbolInfo);
+        }
+      }
       if (markMovedReturnSource) {
         m_MovedUniqueSymbols.insert(SymbolStateKey(movedReturnSource));
       }

@@ -425,3 +425,64 @@ SymbolInfo Visitor::preVisit(ContinueStmtAST &continueStmtAst) {
 
   return symbolInfo;
 }
+
+SymbolInfo Visitor::preVisit(ThrowStmtAST &throwStmtAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.begin = throwStmtAst.m_SemLoc.begin;
+  symbolInfo.end = throwStmtAst.m_SemLoc.end;
+  symbolInfo.line = throwStmtAst.m_SemLoc.line;
+
+  if (m_TypeChecking && !m_CurrentFunctionCanThrow) {
+    this->m_TypeErrorMessages.emplace_back(
+        "`throw` can only be used inside a function declared with `except`",
+        symbolInfo);
+  }
+
+  if (m_TypeChecking && m_InsideCleanupBlock) {
+    this->m_TypeErrorMessages.emplace_back(
+        "`throw` from defer/scope-exit cleanup is not allowed in the current "
+        "MVP; handle fallible cleanup explicitly before leaving the scope",
+        symbolInfo);
+  }
+
+  if (m_TypeChecking && throwStmtAst.m_ErrorExpr != nullptr) {
+    const auto previousDefinedTypeFlag = m_DefinedTypeFlag;
+    const auto previousDefinedTypeName = m_DefinedTypeName;
+    m_DefinedTypeFlag = !m_CurrentFunctionErrorTypeName.empty();
+    m_DefinedTypeName = m_CurrentFunctionErrorTypeName;
+    auto thrownInfo = throwStmtAst.m_ErrorExpr->acceptBefore(*this);
+    m_DefinedTypeFlag = previousDefinedTypeFlag;
+    m_DefinedTypeName = previousDefinedTypeName;
+
+    if (!m_CurrentFunctionErrorTypeName.empty() &&
+        thrownInfo.type == TypeSpecifier::SPEC_DEFINED &&
+        !thrownInfo.definedTypeName.empty() &&
+        thrownInfo.definedTypeName != m_CurrentFunctionErrorTypeName) {
+      this->m_TypeErrorMessages.emplace_back(
+          "throw expression type '" + thrownInfo.definedTypeName +
+              "' is incompatible with except error type '" +
+              m_CurrentFunctionErrorTypeName + "'",
+          symbolInfo);
+    }
+  }
+
+  return symbolInfo;
+}
+
+SymbolInfo Visitor::preVisit(DeferStmtAST &deferStmtAst) {
+  SymbolInfo symbolInfo;
+  symbolInfo.begin = deferStmtAst.m_SemLoc.begin;
+  symbolInfo.end = deferStmtAst.m_SemLoc.end;
+  symbolInfo.line = deferStmtAst.m_SemLoc.line;
+
+  const bool previousInsideCleanup = m_InsideCleanupBlock;
+  m_InsideCleanupBlock = true;
+  enterScope(false);
+  for (auto& node : deferStmtAst.m_Scope) {
+    typeCheckerScopeHandler(node);
+  }
+  exitScope(false);
+  m_InsideCleanupBlock = previousInsideCleanup;
+
+  return symbolInfo;
+}

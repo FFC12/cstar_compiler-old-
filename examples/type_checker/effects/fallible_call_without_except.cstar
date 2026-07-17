@@ -1,0 +1,15 @@
+// expected: diagnostic
+
+enum IoError : uint16 {
+    None,
+    Failed,
+}
+
+read_value() except IoError :: int32 {
+    ret 7;
+}
+
+main() :: int32 {
+    int32 value = read_value();
+    ret value;
+}

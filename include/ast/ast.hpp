@@ -44,6 +44,7 @@ enum DeclKind {
   StructDecl,
   TraitDecl,
   EnumDecl,
+  ProtocolDecl,
   PackageDecl,
   PackageInvDecl,
 };
@@ -54,6 +55,8 @@ enum StmtKind {
   BreakStmt,
   ContinueStmt,
   DropStmt,
+  ThrowStmt,
+  DeferStmt,
   OptionStmt,
 };
 

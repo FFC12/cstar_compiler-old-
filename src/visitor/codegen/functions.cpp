@@ -53,6 +53,11 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
     m_ScopeSharedPointerReleases.clear();
     m_CodegenDroppedSymbols.clear();
     m_HeapAllocations.clear();
+    m_ActiveDefers.clear();
+    m_EmittingDefers = false;
+    m_CodegenProtocolStates.clear();
+    m_CodegenProtocolStateOrder.clear();
+    m_EmittingProtocolScopeExit = false;
 
     llvm::BasicBlock *funcBlock = llvm::BasicBlock::Create(
         Visitor::Builder->getContext(), "entry", function);
@@ -494,6 +499,7 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     m_LastType = function->getReturnType();
   }
 
+  applyCodegenProtocolMethodCall(funcName, funcCallAst);
   return call;
 }
 

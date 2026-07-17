@@ -81,6 +81,8 @@ class NewAST;
 class BreakStmtAST;
 class ContinueStmtAST;
 class DropStmtAST;
+class ThrowStmtAST;
+class DeferStmtAST;
 class EnumAST;
 class ParamAST;
 class RetAST;
@@ -88,6 +90,7 @@ class ScalarOrLiteralAST;
 class SymbolAST;
 class StructAST;
 class TraitAST;
+class ProtocolAST;
 class TypeAST;
 class UnaryOpAST;
 class FixAST;
@@ -122,7 +125,12 @@ class Visitor {
   SymbolInfo m_LastSymbolInfo;
   SymbolInfo m_LastFuncRetTypeInfo;
   bool m_CurrentFunctionIsStatic = false;
+  bool m_CurrentFunctionCanThrow = false;
+  std::string m_CurrentFunctionErrorTypeName;
+  bool m_InsideCleanupBlock = false;
   std::string m_CurrentStructMethodOwner;
+  std::map<std::string, std::map<std::string, std::string>>
+      m_LocalProtocolStates;
 
   // Those are for if we're checking
   // some types which's pointing a address (ptr-type)
@@ -169,6 +177,12 @@ class Visitor {
   std::map<std::string, llvm::Value*> m_SharedPointerRefCounts;
   std::vector<SymbolInfo> m_ScopeDestructors;
   std::vector<SymbolInfo> m_ScopeSharedPointerReleases;
+  std::vector<DeferStmtAST*> m_ActiveDefers;
+  bool m_EmittingDefers = false;
+  std::map<std::string, std::map<std::string, std::string>>
+      m_CodegenProtocolStates;
+  std::vector<std::string> m_CodegenProtocolStateOrder;
+  bool m_EmittingProtocolScopeExit = false;
   std::set<std::string> m_CodegenDroppedSymbols;
   struct HeapAllocationInfo {
     std::string typeName;
@@ -232,7 +246,16 @@ class Visitor {
   void registerScopeSharedPointerRelease(const SymbolInfo& symbolInfo);
   ValuePtr emitDropForSymbol(const std::string& symbolName,
                              bool markDropped);
+  void emitActiveDefers();
+  void registerCodegenProtocolStates(const SymbolInfo& symbolInfo);
+  void applyCodegenProtocolMethodCall(const std::string& funcName,
+                                      FuncCallAST& funcCallAst);
+  void emitProtocolScopeExitCleanups();
   void emitScopeExitDestructors();
+  void applyProtocolMethodCall(const std::string& funcName,
+                               FuncCallAST& funcCallAst,
+                               SymbolInfo& symbolInfo);
+  const ProtocolInfo* protocolForType(const std::string& typeName) const;
 
  public:
   // These are from pass0;
@@ -242,6 +265,7 @@ class Visitor {
   static std::map<std::string, StructInfo> StructTable;
   static std::map<std::string, TraitInfo> TraitTable;
   static std::map<std::string, EnumInfo> EnumTable;
+  static std::map<std::string, ProtocolInfo> ProtocolTable;
   static std::map<std::string, llvm::StructType*> LLVMStructTypes;
   static std::set<std::string> ModuleAliases;
   static size_t SymbolId, ScopeId;
@@ -271,6 +295,8 @@ class Visitor {
   ValuePtr visit(BreakStmtAST& breakStmtAst);
   ValuePtr visit(ContinueStmtAST& continueStmtAst);
   ValuePtr visit(DropStmtAST& dropStmtAst);
+  ValuePtr visit(ThrowStmtAST& throwStmtAst);
+  ValuePtr visit(DeferStmtAST& deferStmtAst);
   ValuePtr visit(ParamAST& paramAst);
   ValuePtr visit(RetAST& retAst);
   ValuePtr visit(UnaryOpAST& unaryOpAst);
@@ -280,6 +306,7 @@ class Visitor {
   ValuePtr visit(StructAST& structAst);
   ValuePtr visit(TraitAST& traitAst);
   ValuePtr visit(EnumAST& enumAst);
+  ValuePtr visit(ProtocolAST& protocolAst);
   ValuePtr visit(FixAST& fixAst);
   llvm::Function* declareFunction(FuncAST& funcAst);
 
@@ -299,6 +326,8 @@ class Visitor {
   SymbolInfo preVisit(BreakStmtAST& breakStmtAst);
   SymbolInfo preVisit(ContinueStmtAST& continueStmtAst);
   SymbolInfo preVisit(DropStmtAST& dropStmtAst);
+  SymbolInfo preVisit(ThrowStmtAST& throwStmtAst);
+  SymbolInfo preVisit(DeferStmtAST& deferStmtAst);
   SymbolInfo preVisit(ParamAST& paramAst);
   SymbolInfo preVisit(RetAST& retAst);
   SymbolInfo preVisit(UnaryOpAST& unaryOpAst);
@@ -308,6 +337,7 @@ class Visitor {
   SymbolInfo preVisit(StructAST& structAst);
   SymbolInfo preVisit(TraitAST& traitAst);
   SymbolInfo preVisit(EnumAST& enumAst);
+  SymbolInfo preVisit(ProtocolAST& protocolAst);
   SymbolInfo preVisit(FixAST& fixAst);
 
   void finalizeCodegen();

@@ -1,0 +1,45 @@
+// expected: pass
+// expected-exit: 1
+
+int32 closed_count = 0;
+
+struct FileHandle {
+    int32 raw;
+
+    constructor() {
+        self.raw = 0;
+        ret;
+    }
+
+    open() :: void {
+        self.raw = 1;
+        ret;
+    }
+
+    close() :: void {
+        closed_count += 1;
+        self.raw = 0;
+        ret;
+    }
+}
+
+protocol FileState for FileHandle {
+    state closed, opened;
+    default closed;
+
+    closed -> opened :: open();
+    opened -> closed :: close();
+
+    scope_exit opened -> closed :: close();
+}
+
+use_file() :: void {
+    closed FileHandle file = FileHandle();
+    file.open();
+    ret;
+}
+
+main() :: int32 {
+    use_file();
+    ret closed_count;
+}

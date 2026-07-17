@@ -126,6 +126,22 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
     this->advance();
   }
 
+  bool canThrow = false;
+  std::string errorTypeName;
+  if (is(TokenKind::EXCEPT)) {
+    canThrow = true;
+    this->advance();
+    while (is(TokenKind::LINEFEED) || is(TokenKind::COMMENT)) {
+      this->advance();
+    }
+    if (is(TokenKind::IDENT)) {
+      errorTypeName = advanceDefinedTypeName();
+    } else if (!is(TokenKind::COLONCOLON)) {
+      ParserError("`except` expects an error enum/type before `::`",
+                  currentTokenInfo());
+    }
+  }
+
   ASTNode returnType;
   TypeQualifier retTypeQualifier = TypeQualifier::Q_NONE;
   bool hasExplicitReturnType = false;
@@ -138,6 +154,8 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
       this->advance();
     }
 
+    auto returnStateQualifiers = collectStateQualifiersBeforeType();
+
     if (is(TokenKind::DYNAMIC)) {
       returnType = this->advanceDynamicTraitType();
     } else if (isType(currentTokenInfo())) {
@@ -147,6 +165,7 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
     } else {
       ParserError("Unexpected token", currentTokenInfo());
     }
+    applyStateQualifiers(returnType, returnStateQualifiers);
   } else {  // void by default
     posInfo = this->currentTokenInfo().getTokenPositionInfo();
     SemanticLoc semLoc = SemanticLoc(posInfo.begin, posInfo.end, posInfo.line);
@@ -185,7 +204,7 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
       funcName, std::move(returnType), std::move(params), std::move(scope),
       retTypeQualifier, isForwardDecl, isExported,
       declarationModifiers.isStatic, isVariadic, hasExplicitReturnType,
-      declarationModifiers.access, semLoc);
+      declarationModifiers.access, semLoc, canThrow, errorTypeName);
 
   this->m_AST.emplace_back(std::move(func));
 }

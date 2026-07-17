@@ -3,6 +3,8 @@
 #include <ast/ast.hpp>
 #include <parser/type_specifiers.hpp>
 #include <parser/types.hpp>
+#include <string>
+#include <vector>
 
 class TypeAST : public IAST {
   friend Visitor;
@@ -14,6 +16,7 @@ class TypeAST : public IAST {
   bool m_IsRef;
   bool m_IsNullable;
   bool m_IsDynamicTraitObject;
+  std::vector<std::string> m_StateQualifiers;
 
  public:
   TypeAST(TypeSpecifier typeSpec, ASTNode symbol, bool isUniquePtr,
@@ -35,6 +38,9 @@ class TypeAST : public IAST {
 
   void setIsRef(bool v) { this->m_IsRef = true; }
   void setIsNullable(bool v) { this->m_IsNullable = v; }
+  void setStateQualifiers(std::vector<std::string> states) {
+    m_StateQualifiers = std::move(states);
+  }
 
   [[nodiscard]] TypeSpecifier typeSpec() const { return m_TypeSpec; }
   [[nodiscard]] const ASTNode& symbol() const { return m_Symbol; }
@@ -44,6 +50,9 @@ class TypeAST : public IAST {
   [[nodiscard]] bool isNullable() const { return m_IsNullable; }
   [[nodiscard]] bool isDynamicTraitObject() const {
     return m_IsDynamicTraitObject;
+  }
+  [[nodiscard]] const std::vector<std::string>& stateQualifiers() const {
+    return m_StateQualifiers;
   }
 
   void debugNode() override {

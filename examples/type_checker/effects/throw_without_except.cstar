@@ -1,0 +1,10 @@
+// expected: diagnostic
+
+enum IoError : uint16 {
+    None,
+    Failed,
+}
+
+main() :: int32 {
+    throw IoError.Failed;
+}

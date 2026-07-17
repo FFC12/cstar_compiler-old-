@@ -17,6 +17,7 @@
 #include <ast/new_ast.hpp>
 #include <ast/option_stmt.hpp>
 #include <ast/param_ast.hpp>
+#include <ast/protocol_ast.hpp>
 #include <ast/ret_ast.hpp>
 #include <ast/scalar_ast.hpp>
 #include <ast/struct_ast.hpp>

@@ -41,9 +41,11 @@ param_again:
 
   size_t beginLoc = currentTokenInfo().getTokenPositionInfo().begin;
   size_t line = currentTokenInfo().getTokenPositionInfo().line;
+  auto stateQualifiers = collectStateQualifiersBeforeType();
 
   if (is(TokenKind::DYNAMIC)) {
     auto type = this->advanceDynamicTraitType();
+    applyStateQualifiers(type, stateQualifiers);
 
     std::vector<ASTNode> arrayDimensions;
     bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
@@ -69,6 +71,7 @@ param_again:
     params.emplace_back(std::move(param));
   } else if (isType(currentTokenInfo())) {  // cast allowed
     auto type = this->advanceType();
+    applyStateQualifiers(type, stateQualifiers);
 
     std::vector<ASTNode> arrayDimensions;
     bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
@@ -112,6 +115,7 @@ param_again:
         nextToken == TokenKind::LSQPAR) {  // cast allowed
       // %100 defined type
       auto type = this->advanceDefinedType();
+      applyStateQualifiers(type, stateQualifiers);
 
       std::vector<ASTNode> arrayDimensions;
       bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
@@ -153,6 +157,7 @@ param_again:
         }
 
         auto type = this->advanceType();
+        applyStateQualifiers(type, stateQualifiers);
 
         std::vector<ASTNode> arrayDimensions;
         bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
@@ -211,6 +216,7 @@ param_again:
           params.emplace_back(std::move(param));
         } else {
           auto type = this->advanceDefinedType();
+          applyStateQualifiers(type, stateQualifiers);
 
           if (!isForwardDecl) {
             expected(TokenKind::IDENT);

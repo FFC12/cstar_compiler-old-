@@ -1,0 +1,21 @@
+// expected: pass
+// expected-exit: 21
+
+int32 cleanup_order = 0;
+
+run() :: void {
+    defer {
+        cleanup_order = cleanup_order * 10 + 1;
+    }
+
+    defer {
+        cleanup_order = cleanup_order * 10 + 2;
+    }
+
+    ret;
+}
+
+main() :: int32 {
+    run();
+    ret cleanup_order;
+}

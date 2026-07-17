@@ -16,7 +16,9 @@ void Visitor::scopeHandler(std::unique_ptr<IAST> &node,
       node->acceptBefore(*this);
     } else if (node->m_StmtKind == StmtKind::BreakStmt ||
                node->m_StmtKind == StmtKind::ContinueStmt ||
-               node->m_StmtKind == StmtKind::DropStmt) {
+               node->m_StmtKind == StmtKind::DropStmt ||
+               node->m_StmtKind == StmtKind::ThrowStmt ||
+               node->m_StmtKind == StmtKind::DeferStmt) {
       node->acceptBefore(*this);
     }
   } else if (node->m_ASTKind == ASTKind::Expr &&
@@ -55,7 +57,9 @@ void Visitor::typeCheckerScopeHandler(std::unique_ptr<IAST> &node) {
       node->acceptBefore(*this);
     } else if (node->m_StmtKind == StmtKind::BreakStmt ||
                node->m_StmtKind == StmtKind::ContinueStmt ||
-               node->m_StmtKind == StmtKind::DropStmt) {
+               node->m_StmtKind == StmtKind::DropStmt ||
+               node->m_StmtKind == StmtKind::ThrowStmt ||
+               node->m_StmtKind == StmtKind::DeferStmt) {
       node->acceptBefore(*this);
     }
   } else if (node->m_ASTKind == ASTKind::Expr &&

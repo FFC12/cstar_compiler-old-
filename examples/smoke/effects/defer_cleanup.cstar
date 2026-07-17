@@ -1,0 +1,10 @@
+// expected: pass
+
+main() :: int32 {
+    defer {
+        print("defer cleanup\n");
+    }
+
+    print("body\n");
+    ret 0;
+}

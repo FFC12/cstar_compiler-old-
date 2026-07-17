@@ -170,6 +170,18 @@ void CStarParser::translationUnit() {
         continue;
       }
 
+      if (is(TokenKind::PROTOCOL)) {
+        parseProtocolDecl(declarationModifiers);
+        continue;
+      }
+
+      if (is(TokenKind::DYNAMIC)) {
+        this->advance();
+        expected(TokenKind::PROTOCOL);
+        parseProtocolDecl(declarationModifiers, true);
+        continue;
+      }
+
       if (is(TokenKind::FLAGS)) {
         parseEnumDecl(declarationModifiers, true);
         continue;

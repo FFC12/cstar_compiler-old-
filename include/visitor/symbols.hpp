@@ -60,6 +60,28 @@ struct EnumInfo {
   std::map<std::string, size_t> memberIndexes;
 };
 
+struct ProtocolTransitionInfo {
+  std::string fromState;
+  std::string toState;
+  std::string methodName;
+};
+
+struct ProtocolForbiddenCallInfo {
+  std::string methodName;
+  std::string forbiddenState;
+};
+
+struct ProtocolInfo {
+  std::string name;
+  std::string targetTypeName;
+  std::vector<std::string> states;
+  std::string defaultState;
+  std::vector<ProtocolTransitionInfo> transitions;
+  std::vector<ProtocolForbiddenCallInfo> forbiddenCalls;
+  std::vector<ProtocolTransitionInfo> scopeExitTransitions;
+  bool isDynamic = false;
+};
+
 // This is using for pipelining informations
 // also it contains type informations as well.
 struct SymbolInfo {
@@ -102,6 +124,7 @@ struct SymbolInfo {
   std::map<size_t, std::string> ptrAliases;
   std::string symbolName;
   std::string definedTypeName;
+  std::map<std::string, std::string> protocolStates;
   std::string assocFuncName;  // if it's global, then no assoc. func.
   TypeSpecifier type = TypeSpecifier::SPEC_VOID;
   SymbolScope symbolScope = SymbolScope::IfSt;
@@ -114,6 +137,8 @@ struct FunctionSignature {
   SymbolInfo returnType;
   std::vector<SymbolInfo> params;
   bool isVariadic = false;
+  bool canThrow = false;
+  std::string errorTypeName;
 };
 
 using FunctionSignatureTable = std::map<std::string, FunctionSignature>;

@@ -57,4 +57,57 @@ class DropStmtAST : public IAST {
   ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
 };
 
+class ThrowStmtAST : public IAST {
+  friend Visitor;
+  ASTNode m_ErrorExpr;
+
+ public:
+  ThrowStmtAST(ASTNode errorExpr, SemanticLoc semLoc)
+      : IAST(semLoc), m_ErrorExpr(std::move(errorExpr)) {
+    this->m_ASTKind = ASTKind::Stmt;
+    this->m_StmtKind = StmtKind::ThrowStmt;
+  }
+
+  void debugNode() override {
+    std::cout << "throw";
+    if (m_ErrorExpr) {
+      std::cout << " ";
+      m_ErrorExpr->debugNode();
+    }
+  }
+
+  SymbolInfo acceptBefore(Visitor& visitor) override {
+    return visitor.preVisit(*this);
+  }
+
+  ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
+};
+
+class DeferStmtAST : public IAST {
+  friend Visitor;
+  std::vector<ASTNode> m_Scope;
+
+ public:
+  DeferStmtAST(std::vector<ASTNode>&& scope, SemanticLoc semLoc)
+      : IAST(semLoc), m_Scope(std::move(scope)) {
+    this->m_ASTKind = ASTKind::Stmt;
+    this->m_StmtKind = StmtKind::DeferStmt;
+  }
+
+  void debugNode() override {
+    std::cout << "defer {\n";
+    for (auto& node : m_Scope) {
+      node->debugNode();
+      std::cout << ";\n";
+    }
+    std::cout << "}";
+  }
+
+  SymbolInfo acceptBefore(Visitor& visitor) override {
+    return visitor.preVisit(*this);
+  }
+
+  ValuePtr accept(Visitor& visitor) override { return visitor.visit(*this); }
+};
+
 #endif

@@ -203,9 +203,41 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
   return result;
 }
 
+void Visitor::emitActiveDefers() {
+  auto *insertBlock = Builder->GetInsertBlock();
+  if (insertBlock == nullptr || insertBlock->getTerminator() != nullptr) {
+    return;
+  }
+
+  if (m_EmittingDefers) {
+    return;
+  }
+
+  m_EmittingDefers = true;
+  for (auto it = m_ActiveDefers.rbegin(); it != m_ActiveDefers.rend(); ++it) {
+    for (auto& node : (*it)->m_Scope) {
+      if (Builder->GetInsertBlock()->getTerminator() != nullptr) {
+        break;
+      }
+      node->accept(*this);
+    }
+  }
+  m_EmittingDefers = false;
+}
+
 void Visitor::emitScopeExitDestructors() {
   auto *insertBlock = Builder->GetInsertBlock();
   if (insertBlock == nullptr || insertBlock->getTerminator() != nullptr) {
+    return;
+  }
+
+  emitActiveDefers();
+  if (Builder->GetInsertBlock()->getTerminator() != nullptr) {
+    return;
+  }
+
+  emitProtocolScopeExitCleanups();
+  if (Builder->GetInsertBlock()->getTerminator() != nullptr) {
     return;
   }
 

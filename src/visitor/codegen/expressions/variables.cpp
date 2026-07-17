@@ -117,6 +117,7 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       m_LastSigned = previousSigned;
       Builder->CreateCall(function, args);
       registerScopeDestructor(getSymbolInfo(varAst.m_Name));
+      registerCodegenProtocolStates(getSymbolInfo(varAst.m_Name));
       this->m_LastVarDecl = false;
       this->m_LastType = nullptr;
       this->m_LastDefinedTypeName.clear();
@@ -372,7 +373,9 @@ ValuePtr Visitor::visit(VarAST &varAst) {
   }
 
   if (varAst.m_IsLocal && varAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED) {
-    registerScopeDestructor(getSymbolInfo(varAst.m_Name));
+    auto symbolInfo = getSymbolInfo(varAst.m_Name);
+    registerScopeDestructor(symbolInfo);
+    registerCodegenProtocolStates(symbolInfo);
   }
 
   return value;

@@ -253,6 +253,13 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
   }
 
   const auto &signature = signatureIt->second;
+  if (signature.canThrow && !m_CurrentFunctionCanThrow) {
+    this->m_TypeErrorMessages.emplace_back(
+        "fallible function '" + funcName +
+            "' can only be called from an `except` function or an explicit "
+            "result-handling form",
+        symbolInfo);
+  }
   if (m_TypeChecking && m_CurrentFunctionIsStatic &&
       !signature.returnType.isStatic) {
     this->m_TypeErrorMessages.emplace_back(
@@ -472,6 +479,9 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
 
   symbolInfo = signature.returnType;
   symbolInfo.symbolName = funcName;
+  symbolInfo.begin = funcCallAst.m_SemLoc.begin;
+  symbolInfo.end = funcCallAst.m_SemLoc.end;
+  symbolInfo.line = funcCallAst.m_SemLoc.line;
 
   if (callValueIsChecked && IsPrimitiveType(expectedCallResultType) &&
       IsPrimitiveType(symbolInfo.type) &&
@@ -500,5 +510,6 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     }
   }
 
+  applyProtocolMethodCall(funcName, funcCallAst, symbolInfo);
   return symbolInfo;
 }
