@@ -45,6 +45,20 @@ struct AssignmentTarget {
 };
 
 llvm::PointerType* GetI8PtrTy();
+llvm::StructType* GetDynamicTraitObjectTy();
+llvm::StructType* GetDynamicTraitVTableTy(const std::string& traitName);
+llvm::GlobalVariable* GetOrCreateDynamicTraitVTable(
+    const std::string& traitName, const std::string& concreteTypeName);
+int DynamicTraitMethodIndex(const std::string& traitName,
+                            const std::string& methodName);
+std::string DynamicTraitDispatchName(const std::string& traitName,
+                                     const std::string& methodName);
+bool ParseDynamicTraitDispatchName(const std::string& dispatchName,
+                                   std::string& traitName,
+                                   std::string& methodName);
+const FunctionSignature* FindDynamicTraitMethodSignature(
+    const std::string& traitName, const std::string& methodName,
+    std::string* concreteMethodName = nullptr);
 llvm::Type* GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
                     bool isRef = false);
 llvm::StructType* GetSharedPointerTy();

@@ -1591,7 +1591,7 @@ packet_size(Packet& packet) :: usize {
 
 ### 15.7 Dynamic trait object proposal
 
-`with Trait` static conformance'dır ve vtable üretmez. Runtime dispatch isteyen kod bunu açık ve uzun `dynamic Trait` ile ister. Kısa `dyn` alias'ı canonical değildir; sistem programlama dili için runtime maliyetin syntax'ta görünmesi tercih edilir. Mevcut compiler `dynamic Trait&`, `dynamic Trait*`, `dynamic Trait^` type grammar'ını ve named-value erase syntax'ını tanır; trait hedefini ve kaynak struct conformance'ını semantic olarak doğrular. Vtable ABI/dispatch lowering henüz uygulanmadığı için valid kullanım controlled `CST2001` diagnostic üretir:
+`with Trait` static conformance'dır ve vtable üretmez. Runtime dispatch isteyen kod bunu açık ve uzun `dynamic Trait` ile ister. Kısa `dyn` alias'ı canonical değildir; sistem programlama dili için runtime maliyetin syntax'ta görünmesi tercih edilir. Mevcut compiler borrowed `dynamic Trait&` için named-value erase syntax'ını, vtable global üretimini ve dynamic method dispatch lowering'ini destekler. Trait hedefi ve kaynak struct conformance'ı semantic olarak doğrulanır:
 
 ```cstar
 log_dynamic(dynamic Logger& logger, const char* message) :: void {
@@ -1606,11 +1606,11 @@ dynamic Logger& erased = dynamic ref logger as Logger;
 Representation contract:
 
 - `dynamic Trait&`: borrowed trait object.
-- `dynamic Trait*`: shared trait object; C* shared handle retain/release eder.
-- `dynamic Trait^`: unique trait object; move-only sahiplik taşır.
+- `dynamic Trait*`: shared trait object; C* shared handle retain/release edecektir, shared lowering henüz diagnostic üretir.
+- `dynamic Trait^`: unique trait object; `dynamic move owned as Trait` ile unique heap pointer sahipliğini devralır.
 - Temel ABI `{ data: void*, vtable: constptr TraitVTable* }`.
 - `dynamic ref value as Trait`: value'nun type'ı `Trait` sağlıyorsa borrowed trait object üretir.
-- `dynamic move value as Trait`: value'nun type'ı `Trait` sağlıyorsa unique trait object üretir ve source moved state'e geçmelidir.
+- `dynamic move value as Trait`: source `T^` unique heap pointer ise unique trait object üretir, source pointer null yapılır ve dynamic object düşerken concrete destructor + free çalışır.
 - `unsafe_cast` trait object üretmez; vtable doğruluğu compiler sorumluluğudur.
 - Public/export ABI'de repr explicit olmalıdır; C boundary için `void* data` + generated vtable pointer struct'ı ayrı yazılır.
 

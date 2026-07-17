@@ -1181,6 +1181,13 @@ Tamamlanan:
 
 İleri aşama: Bu alt aşamada temel loop yüzeyi tamamlandı. Sequence/trait tabanlı genel iterable, reverse/step range ve bounds politikası ileride stdlib/trait aşamasına taşındı.
 
+Regression notu:
+
+- Dynamic trait stress testleri sırasında bulunan loop body symbol lookup açığı giderildi. Loop synthetic sembolleri type-checking lookup listesine de eklenir, loop scope çıkışında temizlenir ve dynamic dispatch argüman validation aynı scope context'iyle çalışır.
+  - `examples/smoke/control_flow/loop_condition_var_function_arg.cstar`
+  - `examples/smoke/control_flow/loop_iter_var_function_arg.cstar`
+  - `examples/type_checker/control_flow/loop_iter_var_not_visible_after_loop.cstar`
+
 ### 5.2 Option / Match Benzeri Yapı
 
 Enum odaklı statement MVP tamamlandı.
@@ -1887,30 +1894,42 @@ Durum:
 - Dynamic trait type hedefinin gerçek bir trait olması semantic olarak doğrulanır; struct/type hedefleri controlled diagnostic üretir.
 - `dynamic ref value as Trait` ve `dynamic move value as Trait` erase syntax'ı named-value MVP olarak parser/semantic yüzeyine alındı.
 - Erase syntax hedefinin trait olması ve kaynak struct'ın ilgili trait'i sağlaması semantic olarak doğrulanır.
-- ABI/vtable lowering henüz uygulanmadığı için valid dynamic trait type kullanımı `CST2001` diagnostic üretir.
-- Negative diagnostic:
+- Borrowed dynamic trait object MVP çalışır:
+  - `dynamic Trait&` ABI representation `{ data: void*, vtable: constptr TraitVTable* }`.
+  - `dynamic ref value as Trait` concrete struct + trait ikilisi için generated vtable global'i üretir.
+  - `writer.write(...)` ve return value'lu dynamic method call vtable dispatch'e iner.
+- Unique dynamic trait object MVP çalışır:
+  - `dynamic Trait^` fat object storage kullanır.
+  - `dynamic move owned as Trait` yalnız `T^` unique heap pointer source kabul eder.
+  - Heap ownership source'tan dynamic object'a taşınır; source pointer null yapılır.
+  - `drop erased` ve scope-exit concrete destructor + free edge'ini çalıştırır.
+- Smoke:
+  - `examples/smoke/traits/dynamic_trait_borrowed_dispatch.cstar`
+  - `examples/smoke/traits/dynamic_trait_return_dispatch.cstar`
+  - `examples/smoke/traits/dynamic_trait_unique_move_drop.cstar`
+- Passing proposal surface:
   - `examples/type_checker/proposals/086.cstar`
+  - `examples/type_checker/proposals/089.cstar`
+- Negative diagnostic:
   - `examples/type_checker/proposals/087.cstar`
   - `examples/type_checker/proposals/088.cstar`
-  - `examples/type_checker/proposals/089.cstar`
   - `examples/type_checker/proposals/090.cstar`
   - `examples/type_checker/proposals/091.cstar`
   - `examples/type_checker/proposals/092.cstar`
 
 Kalan:
 
-- Representation contract: `{ data: void*, vtable: constptr TraitVTable* }`.
 - Erase syntax'ın complex expression kaynaklarını desteklemesi: `dynamic ref make_writer() as Writer` gibi formlar vtable lowering ile birlikte genişletilmeli.
 - `unsafe_cast` trait object üretememeli; vtable doğruluğu compiler sorumluluğu olmalı.
-- Dynamic trait object construction: erase expression `{ data, vtable }` değerini üretmeli.
-- Vtable method imzası üretimi ve dispatch lowering.
-- Dynamic trait method call:
-  - `writer.write(data)` vtable dispatch'e inmeli.
-  - return/param ABI static trait requirement'ı ile uyumlu olmalı.
-- Ownership davranışı handle marker üzerinden ayrılmalı: borrowed `&`, shared `*`, unique `^`.
+- Trait requirement signature'ı bugün ilk concrete implementation signature'ından türetilir; canonical trait method signature table ayrıca tutulmalı.
+- Ownership davranışı handle marker üzerinden ayrılmalı:
+  - borrowed `&` çalışır.
+  - unique `^` unique heap source için çalışır.
+  - shared `*` retain/release + destructor edge'e bağlanmalı.
+- Dynamic unique moved-after-use diagnostic'i method-call receiver gibi bazı expression yüzeylerinde güçlendirilmeli.
 - Public/export ABI için generated vtable struct ve data pointer repr'ı açık olmalı.
 - Type erasure diagnostics:
-  - trait'i sağlamayan type için `dynamic ref value as Trait` reddi.
+  - trait'i sağlamayan type için `dynamic ref value as Trait` reddi çalışır.
   - moved-after-use ve shared retain/release davranışı normal ownership sistemiyle aynı kalmalı.
 
 ### 8.5 Allocator / New Lowering Contract

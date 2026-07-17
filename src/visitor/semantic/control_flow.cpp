@@ -108,6 +108,7 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
 
   const bool wasInsideLoop = this->m_LastLoop;
   this->m_LastLoop = true;
+  std::vector<SymbolInfo> syntheticLoopSymbols;
   auto makeLoopSymbol = [&](SymbolAST *symbolAst, TypeSpecifier type,
                             size_t indirectionLevel = 0) {
     SymbolInfo loopSymbol;
@@ -123,10 +124,9 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
     loopSymbol.scopeId = m_ScopeId;
     loopSymbol.scopeLevel = m_ScopeLevel;
     loopSymbol.symbolId = 0;
-    if (!m_TypeChecking) {
-      this->m_SymbolInfos.push_back(loopSymbol);
-      this->m_LastScopeSymbols.emplace_back(loopSymbol.symbolName, loopSymbol);
-    }
+    syntheticLoopSymbols.push_back(loopSymbol);
+    this->m_LastScopeSymbols.emplace_back(loopSymbol.symbolName, loopSymbol);
+    this->m_SymbolInfos.push_back(loopSymbol);
   };
   auto validateSymbolInCurrentScope = [&](std::string &name,
                                           SymbolInfo &lookupInfo,
@@ -266,6 +266,41 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
 
   for (auto &node : loopStmtAst.m_Scope) {
     scopeHandler(node, SymbolScope::LoopSt);
+  }
+
+  if (!syntheticLoopSymbols.empty()) {
+    m_LastScopeSymbols.erase(
+        std::remove_if(
+            m_LastScopeSymbols.begin(), m_LastScopeSymbols.end(),
+            [&](const SymbolInfoEntry &entry) {
+              return std::any_of(
+                  syntheticLoopSymbols.begin(), syntheticLoopSymbols.end(),
+                  [&](const SymbolInfo &loopSymbol) {
+                    return entry.symbolName == loopSymbol.symbolName &&
+                           entry.symbolInfo.scopeId == loopSymbol.scopeId &&
+                           entry.symbolInfo.scopeLevel ==
+                               loopSymbol.scopeLevel &&
+                           entry.symbolInfo.symbolScope ==
+                               SymbolScope::LoopSt;
+                  });
+            }),
+        m_LastScopeSymbols.end());
+    if (m_TypeChecking) {
+      m_SymbolInfos.erase(
+          std::remove_if(
+              m_SymbolInfos.begin(), m_SymbolInfos.end(),
+              [&](const SymbolInfo &entry) {
+                return std::any_of(
+                    syntheticLoopSymbols.begin(), syntheticLoopSymbols.end(),
+                    [&](const SymbolInfo &loopSymbol) {
+                      return entry.symbolName == loopSymbol.symbolName &&
+                             entry.scopeId == loopSymbol.scopeId &&
+                             entry.scopeLevel == loopSymbol.scopeLevel &&
+                             entry.symbolScope == SymbolScope::LoopSt;
+                    });
+              }),
+          m_SymbolInfos.end());
+    }
   }
 
   this->m_LastLoop = wasInsideLoop;

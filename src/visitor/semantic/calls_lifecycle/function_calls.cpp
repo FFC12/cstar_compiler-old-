@@ -1,5 +1,42 @@
 #include <visitor/semantic/semantic_private.hpp>
 
+static bool ParseDynamicDispatchName(const std::string &name,
+                                     std::string &traitName,
+                                     std::string &methodName) {
+  const std::string prefix = "$dynamic.";
+  if (name.rfind(prefix, 0) != 0) {
+    return false;
+  }
+
+  const auto rest = name.substr(prefix.size());
+  const auto split = rest.rfind('.');
+  if (split == std::string::npos || split == 0 || split + 1 >= rest.size()) {
+    return false;
+  }
+
+  traitName = rest.substr(0, split);
+  methodName = rest.substr(split + 1);
+  return true;
+}
+
+static const FunctionSignature *FindDynamicDispatchSignature(
+    const std::string &traitName, const std::string &methodName) {
+  for (const auto &structEntry : Visitor::StructTable) {
+    const auto &traits = structEntry.second.traits;
+    if (std::find(traits.begin(), traits.end(), traitName) == traits.end()) {
+      continue;
+    }
+
+    const auto candidate = structEntry.first + "." + methodName;
+    auto signatureIt = Visitor::FunctionTable.find(candidate);
+    if (signatureIt != Visitor::FunctionTable.end()) {
+      return &signatureIt->second;
+    }
+  }
+
+  return nullptr;
+}
+
 SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
   SymbolInfo symbolInfo;
 
@@ -151,6 +188,62 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
+  std::string dynamicTraitName;
+  std::string dynamicMethodName;
+  if (ParseDynamicDispatchName(funcName, dynamicTraitName,
+                               dynamicMethodName)) {
+    const auto *signature =
+        FindDynamicDispatchSignature(dynamicTraitName, dynamicMethodName);
+    if (signature == nullptr) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Dynamic trait method '" + dynamicTraitName + "." +
+              dynamicMethodName +
+              "' has no concrete implementation signature to dispatch",
+          symbolInfo);
+      return symbolInfo;
+    }
+
+    if (argNodes.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Dynamic trait method call requires a receiver", symbolInfo);
+      return symbolInfo;
+    }
+
+    const auto explicitArgCount = argNodes.size() - 1;
+    const auto requiredExplicitArgCount =
+        signature->params.empty() ? 0 : signature->params.size() - 1;
+    if (explicitArgCount != requiredExplicitArgCount) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Dynamic trait method '" + dynamicTraitName + "." +
+              dynamicMethodName + "' expects " +
+              std::to_string(requiredExplicitArgCount) +
+              " argument(s), but " + std::to_string(explicitArgCount) +
+              " provided",
+          symbolInfo);
+      return signature->returnType;
+    }
+
+    for (size_t i = 1; i < argNodes.size() && i < signature->params.size();
+         ++i) {
+      m_LastSymbolInfo = signature->params[i];
+      m_LastSymbolInfo.symbolId = m_SymbolId;
+      m_LastSymbolInfo.scopeId = m_ScopeId;
+      m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
+      if (m_LastSymbolInfo.isRef && !m_LastSymbolInfo.isDynamicTraitObject) {
+        m_LastSymbolInfo.indirectionLevel += 1;
+      }
+      m_ExpectedType = signature->params[i].type;
+      m_DefinedTypeFlag =
+          signature->params[i].type == TypeSpecifier::SPEC_DEFINED;
+      m_DefinedTypeName = signature->params[i].definedTypeName;
+      argNodes[i]->acceptBefore(*this);
+    }
+
+    symbolInfo = signature->returnType;
+    symbolInfo.symbolName = funcName;
+    return symbolInfo;
+  }
+
   auto signatureIt = FunctionTable.find(funcName);
   if (signatureIt == FunctionTable.end()) {
     this->m_TypeErrorMessages.emplace_back(
@@ -223,7 +316,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     }
 
     m_LastSymbolInfo = signature.params[i];
-    if (m_LastSymbolInfo.isRef) {
+    if (m_LastSymbolInfo.isRef && !m_LastSymbolInfo.isDynamicTraitObject) {
       m_LastSymbolInfo.indirectionLevel += 1;
     }
     m_LastSymbolInfo.symbolId = m_SymbolId;

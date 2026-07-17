@@ -376,16 +376,19 @@ Visitor::FunctionParamLayout Visitor::buildFunctionParamLayout(FuncAST &funcAst,
     auto *typeAst = static_cast<TypeAST *>(paramAst->m_TypeNode.get());
     const auto definedTypeName = DefinedTypeNameFromTypeAst(typeAst);
     auto *valueType =
-        nativeAbi && typeAst->m_IndirectLevel > 0
-            ? GetType(typeAst->m_TypeSpec, typeAst->m_IndirectLevel,
-                      typeAst->m_IsRef)
-            : GetStorageType(typeAst->m_TypeSpec,
-                             typeAst->m_IndirectLevel,
-                             typeAst->m_IsUniquePtr,
-                             typeAst->m_IsRef, definedTypeName);
-    auto *irType = typeAst->m_IsRef
-                       ? llvm::PointerType::get(Visitor::Builder->getContext(), 0)
-                       : valueType;
+        typeAst->m_IsDynamicTraitObject
+            ? static_cast<llvm::Type *>(GetDynamicTraitObjectTy())
+            : (nativeAbi && typeAst->m_IndirectLevel > 0
+                   ? GetType(typeAst->m_TypeSpec, typeAst->m_IndirectLevel,
+                             typeAst->m_IsRef)
+                   : GetStorageType(typeAst->m_TypeSpec,
+                                    typeAst->m_IndirectLevel,
+                                    typeAst->m_IsUniquePtr,
+                                    typeAst->m_IsRef, definedTypeName));
+    auto *irType =
+        (typeAst->m_IsRef && !typeAst->m_IsDynamicTraitObject)
+            ? llvm::PointerType::get(Visitor::Builder->getContext(), 0)
+            : valueType;
 
     if (paramAst->m_IsSubscriptable) {
       valueType = GetArrayType(valueType, paramAst->m_ArrDim);
@@ -394,7 +397,8 @@ Visitor::FunctionParamLayout Visitor::buildFunctionParamLayout(FuncAST &funcAst,
 
     layout.valueTypes.push_back(valueType);
     layout.irTypes.push_back(irType);
-    layout.isReference.push_back(typeAst->m_IsRef);
+    layout.isReference.push_back(typeAst->m_IsRef &&
+                                 !typeAst->m_IsDynamicTraitObject);
     layout.isArray.push_back(paramAst->m_IsSubscriptable);
 
     if (paramAst->m_Symbol0 != nullptr) {

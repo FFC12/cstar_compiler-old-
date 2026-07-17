@@ -18,7 +18,8 @@ case ve beklenmeyen backend davranışlarını yakalamaktır.
 
 3. **Generated fuzz**
    - Seed'li rastgele ama çoğunlukla geçerli C* programları üretir.
-   - Arithmetic, if/else, loop, array, struct ve method yüzeyini zorlar.
+   - Arithmetic, if/else, loop, array, struct, method ve dynamic trait object
+     yüzeyini zorlar.
 
 4. **Invalid fuzz**
    - Bilerek hatalı program üretir.
@@ -82,6 +83,7 @@ kontrollü diagnostic olarak kapatsın.
 - nested expression/newline continuation
 - pointer/reference/ownership flow
 - struct field/method/lifecycle
+- dynamic trait object ABI, vtable dispatch, unique move/drop lifecycle
 - native ABI pointer lowering
 - array initializer ve multidim indexing
 

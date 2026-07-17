@@ -1,0 +1,15 @@
+// expected: pass
+// expected-exit: 9
+
+double_value(int32 value) :: int32 {
+  ret value * 2;
+}
+
+main() :: int32 {
+  int32 values[3] = (1, 2, 3);
+  int32 total = 0;
+  loop (value in values) {
+    total += double_value(value);
+  }
+  ret total - 3;
+}

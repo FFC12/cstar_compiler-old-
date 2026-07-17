@@ -4,9 +4,11 @@ ValuePtr Visitor::visit(VarAST &varAst) {
   llvm::Value *value;
   this->m_LastVarDecl = true;
   const auto definedTypeName = DefinedTypeNameFromVarAst(varAst);
-  auto type = GetStorageType(varAst.m_TypeSpec, varAst.m_IndirectLevel,
-                             varAst.m_IsUniquePtr, varAst.m_IsRef,
-                             definedTypeName);
+  auto type = varAst.m_IsDynamicTraitObject
+                  ? GetDynamicTraitObjectTy()
+                  : GetStorageType(varAst.m_TypeSpec, varAst.m_IndirectLevel,
+                                   varAst.m_IsUniquePtr, varAst.m_IsRef,
+                                   definedTypeName);
   this->m_LastType = type;
   this->m_LastDefinedTypeName = definedTypeName;
   this->m_LastGlobVar = !varAst.m_IsLocal;
@@ -228,6 +230,16 @@ ValuePtr Visitor::visit(VarAST &varAst) {
     auto *rhsUnary = dynamic_cast<UnaryOpAST *>(varAst.m_RHS.get());
     const bool rhsIsMove =
         rhsUnary != nullptr && rhsUnary->m_UnaryOpKind == U_MOVE;
+    auto *rhsCast = dynamic_cast<CastOpAST *>(varAst.m_RHS.get());
+    auto dynamicMoveSource = [&]() -> SymbolAST * {
+      if (rhsCast == nullptr ||
+          rhsCast->m_CastOpKind != CastOpKind::C_DYNAMIC_MOVE_AS ||
+          rhsCast->m_Node == nullptr ||
+          rhsCast->m_Node->m_ExprKind != ExprKind::SymbolExpr) {
+        return nullptr;
+      }
+      return static_cast<SymbolAST *>(rhsCast->m_Node.get());
+    };
 
     value = varAst.m_RHS->accept(*this);
     value = CastValueToType(value, type, this->m_LastSigned);
@@ -247,6 +259,28 @@ ValuePtr Visitor::visit(VarAST &varAst) {
                                               rhsSymbol->m_SymbolName);
             Builder->CreateStore(CreateNullSharedPointerHandle(),
                                  sourceStorage);
+          }
+          if (auto *moveSource = dynamicMoveSource()) {
+            auto sourceInfo = getSymbolInfo(moveSource->m_SymbolName);
+            auto *sourceStorage =
+                FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                            moveSource->m_SymbolName);
+            if (sourceStorage != nullptr) {
+              auto *sourceType =
+                  GetStorageType(sourceInfo.type, sourceInfo.indirectionLevel,
+                                 sourceInfo.isUnique, sourceInfo.isRef,
+                                 sourceInfo.definedTypeName);
+              Builder->CreateStore(llvm::Constant::getNullValue(sourceType),
+                                   sourceStorage);
+            }
+
+            auto heapIt = m_HeapAllocations.find(moveSource->m_SymbolName);
+            if (heapIt != m_HeapAllocations.end()) {
+              m_HeapAllocations[varAst.m_Name] = heapIt->second;
+              m_HeapAllocations.erase(heapIt);
+            }
+            m_CodegenDroppedSymbols.insert(moveSource->m_SymbolName);
+            m_CodegenDroppedSymbols.erase(varAst.m_Name);
           }
         }
       } else {

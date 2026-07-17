@@ -1,0 +1,16 @@
+// expected: pass
+// expected-exit: 10
+
+add_one(int32 value) :: int32 {
+  ret value + 1;
+}
+
+main() :: int32 {
+  int32 i = 0;
+  int32 total = 0;
+  loop (i < 4) {
+    total += add_one(i);
+    i += 1;
+  }
+  ret total;
+}

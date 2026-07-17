@@ -97,6 +97,34 @@ std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
           return {};
         }
 
+        if (matchedReceiver.isDynamicTraitObject) {
+          auto traitIt = TraitTable.find(matchedReceiver.definedTypeName);
+          if (traitIt == TraitTable.end()) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Dynamic trait method receiver target '" +
+                    matchedReceiver.definedTypeName + "' must name a trait",
+                receiverInfo);
+            return {};
+          }
+
+          const bool hasRequirement = std::any_of(
+              traitIt->second.requirements.begin(),
+              traitIt->second.requirements.end(),
+              [&](const TraitRequirementInfo &requirement) {
+                return requirement.name == member->m_SymbolName;
+              });
+          if (!hasRequirement) {
+            this->m_TypeErrorMessages.emplace_back(
+                "Trait '" + matchedReceiver.definedTypeName +
+                    "' has no dynamic method '" + member->m_SymbolName + "'",
+                symbolInfo);
+            return {};
+          }
+
+          return "$dynamic." + matchedReceiver.definedTypeName + "." +
+                 member->m_SymbolName;
+        }
+
         auto methodName =
             matchedReceiver.definedTypeName + "." + member->m_SymbolName;
         if (FunctionTable.count(methodName) == 0) {
@@ -120,6 +148,10 @@ std::string Visitor::resolveFunctionCallName(IAST *node, SymbolInfo &symbolInfo,
 
       auto receiverInfo = getSymbolInfo(alias->m_SymbolName);
       if (receiverInfo.type == TypeSpecifier::SPEC_DEFINED) {
+        if (receiverInfo.isDynamicTraitObject) {
+          return "$dynamic." + receiverInfo.definedTypeName + "." +
+                 member->m_SymbolName;
+        }
         return receiverInfo.definedTypeName + "." + member->m_SymbolName;
       }
 

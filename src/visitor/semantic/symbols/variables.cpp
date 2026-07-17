@@ -89,10 +89,11 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
           "dynamic trait object target '" + symbolInfo.definedTypeName +
               "' must name a trait",
           symbolInfo);
-    } else {
+    } else if (!symbolInfo.isRef && !symbolInfo.isUnique) {
       this->m_TypeErrorMessages.emplace_back(
-          "dynamic trait object ABI/vtable lowering is not implemented yet",
-          symbolInfo);
+          "shared dynamic trait object lowering is not implemented yet; use "
+          "`dynamic Trait&` or `dynamic Trait^`",
+          symbolInfo, DiagnosticCode::SemanticOwnership);
     }
   }
 
@@ -233,6 +234,7 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
     this->m_LastSymbolInfo = symbolInfo;
     auto rhsAsSymbol = dynamic_cast<SymbolAST *>(varAst.m_RHS.get());
     auto rhsAsUnary = dynamic_cast<UnaryOpAST *>(varAst.m_RHS.get());
+    auto rhsAsCast = dynamic_cast<CastOpAST *>(varAst.m_RHS.get());
     const bool rhsIsMoveExpr =
         rhsAsUnary != nullptr && rhsAsUnary->m_UnaryOpKind == U_MOVE;
     std::string constructorName;
@@ -260,6 +262,16 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
 
     SymbolInfo uniqueMoveSource;
     bool markUniqueMoveSource = false;
+    auto dynamicMoveSource = [&]() -> SymbolAST * {
+      if (rhsAsCast == nullptr ||
+          rhsAsCast->m_CastOpKind != CastOpKind::C_DYNAMIC_MOVE_AS ||
+          rhsAsCast->m_Node == nullptr ||
+          rhsAsCast->m_Node->m_ExprKind != ExprKind::SymbolExpr) {
+        return nullptr;
+      }
+      return static_cast<SymbolAST *>(rhsAsCast->m_Node.get());
+    };
+
     if (varAst.m_IsMoveInit) {
       SymbolInfo source;
       if (symbolInfo.indirectionLevel == 0) {
@@ -365,7 +377,19 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
             symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
       }
       symbolInfo.ptrAliases = std::move(tempSymbolInfo.ptrAliases);
-      if (markUniqueMoveSource) {
+      if (auto *moveSource = dynamicMoveSource()) {
+        SymbolInfo source;
+        SymbolInfo lookup;
+        lookup.symbolName = moveSource->m_SymbolName;
+        lookup.begin = moveSource->m_SemLoc.begin;
+        lookup.end = moveSource->m_SemLoc.end;
+        lookup.line = moveSource->m_SemLoc.line;
+        auto sourceName = moveSource->m_SymbolName;
+        if (symbolValidation(sourceName, lookup, source, true)) {
+          m_MovedUniqueSymbols.insert(SymbolStateKey(source));
+          m_MovedUniqueSymbols.erase(SymbolStateKey(symbolInfo));
+        }
+      } else if (markUniqueMoveSource) {
         m_MovedUniqueSymbols.insert(SymbolStateKey(uniqueMoveSource));
         m_MovedUniqueSymbols.erase(SymbolStateKey(symbolInfo));
       } else if (symbolInfo.indirectionLevel > 0) {

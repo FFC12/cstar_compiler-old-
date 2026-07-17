@@ -92,6 +92,19 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
     }
   }
 
+  if (!isLocalSymbol) {
+    for (auto it = this->m_SymbolInfos.rbegin();
+         it != this->m_SymbolInfos.rend(); ++it) {
+      if (it->symbolName == symbolName &&
+          it->symbolScope == SymbolScope::LoopSt &&
+          it->scopeLevel <= scopeLevel) {
+        matchedSymbol = *it;
+        isLocalSymbol = true;
+        break;
+      }
+    }
+  }
+
   if (!isLocalSymbol && !isGlobSymbol && !noError) {
     this->m_TypeErrorMessages.emplace_back(
         "'" + symbolName + "' was not declared in this scope or global scope",

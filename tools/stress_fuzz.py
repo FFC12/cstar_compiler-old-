@@ -151,6 +151,87 @@ main() :: int32 {{
 """
 
 
+def gen_valid_dynamic_trait_program(rng: random.Random, index: int) -> str:
+    base = rng.randint(1, 12)
+    delta0 = rng.randint(1, 7)
+    delta1 = rng.randint(1, 7)
+    if rng.random() < 0.5:
+        return f"""// generated: valid-dynamic-trait-borrowed
+// seed-index: {index}
+
+trait MeterLike {{
+  add(int32 value) :: int32;
+  read() :: int32;
+}}
+
+struct MeterBox with MeterLike {{
+  int32 value;
+
+  constructor(int32 value) {{
+    self.value = value;
+    ret;
+  }}
+
+  add(int32 value) :: int32 {{
+    self.value += value;
+    ret self.value;
+  }}
+
+  read() :: int32 {{
+    ret self.value;
+  }}
+}}
+
+drive(dynamic MeterLike& meter) :: int32 {{
+  int32 first = meter.add({delta0});
+  int32 second = meter.add({delta1});
+  ret first + second + meter.read();
+}}
+
+main() :: int32 {{
+  MeterBox meter = MeterBox({base});
+  dynamic MeterLike& erased = dynamic ref meter as MeterLike;
+  ret drive(erased);
+}}
+"""
+
+    return f"""// generated: valid-dynamic-trait-unique
+// seed-index: {index}
+
+int32 destroyed = 0;
+
+trait Reading {{
+  read() :: int32;
+}}
+
+struct HeapReading with Reading {{
+  int32 value;
+
+  constructor(int32 value) {{
+    self.value = value;
+    ret;
+  }}
+
+  destructor() {{
+    destroyed = self.value;
+    ret;
+  }}
+
+  read() :: int32 {{
+    ret self.value;
+  }}
+}}
+
+main() :: int32 {{
+  HeapReading^ reading = new HeapReading({base});
+  dynamic Reading^ erased = dynamic move reading as Reading;
+  int32 value = erased.read();
+  drop erased;
+  ret value + destroyed - {base};
+}}
+"""
+
+
 def gen_invalid_program(rng: random.Random, index: int) -> str:
     variants = [
         """main() :: int32 {
@@ -174,6 +255,39 @@ main() :: int32 { ret 0; }
         """main() :: int32 {
   int32 values[2] = (1, 2, 3);
   ret values[0];
+}
+""",
+        """trait Writer {
+  write(const char* data) :: void;
+}
+struct SilentWriter {
+  constructor() { ret; }
+}
+main() :: int32 {
+  SilentWriter writer = SilentWriter();
+  dynamic Writer& erased = dynamic ref writer as Writer;
+  ret 0;
+}
+""",
+        """trait Metric {
+  value() :: int32;
+}
+struct Counter with Metric {
+  constructor() { ret; }
+  value() :: int32 { ret 1; }
+}
+main() :: int32 {
+  Counter counter = Counter();
+  dynamic Metric^ erased = dynamic move counter as Metric;
+  ret 0;
+}
+""",
+        """trait Metric {
+  value() :: int32;
+}
+main() :: int32 {
+  dynamic Metric*? metric = nil;
+  ret 0;
 }
 """,
     ]
@@ -282,6 +396,8 @@ def main(argv: list[str]) -> int:
     for index in range(args.cases):
         if index % 5 == 0:
             source = gen_invalid_program(rng, index)
+        elif index % 7 == 0:
+            source = gen_valid_dynamic_trait_program(rng, index)
         elif index % 3 == 0:
             source = gen_valid_struct_program(rng, index)
         else:

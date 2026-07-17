@@ -8,12 +8,19 @@ struct ConsoleWriter with Writer {
   }
 
   write(const char* data) :: void {
+    print(data);
     ret;
   }
+}
+
+log(dynamic Writer& writer) :: void {
+  writer.write("dynamic writer dispatch\n");
+  ret;
 }
 
 main() :: int32 {
   ConsoleWriter writer = ConsoleWriter();
   dynamic Writer& erased = dynamic ref writer as Writer;
+  log(erased);
   ret 0;
 }

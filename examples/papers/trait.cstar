@@ -88,6 +88,10 @@ dynamic_example() :: int32 {
 //   recognized and checked against trait declarations.
 // - `dynamic ref value as Trait` and `dynamic move value as Trait` are
 //   recognized for named values and checked against static trait conformance.
-// - ABI/vtable representation, trait-object construction and dispatch lowering
-//   are still pending, so valid dynamic trait object use produces a controlled
-//   diagnostic today.
+// - Borrowed `dynamic Trait&` lowers to `{ data: void*, vtable: ptr }` and
+//   method calls dispatch through generated concrete vtable globals.
+// - Owned `dynamic Trait^` lowers from a unique heap pointer source and keeps
+//   destructor/free ownership on the dynamic object.
+// - Shared `dynamic Trait*` lowering is still pending because retain/release
+//   and last-release destructor edges must be connected to the ownership
+//   runtime.

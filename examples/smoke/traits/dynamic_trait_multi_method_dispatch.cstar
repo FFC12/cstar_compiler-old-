@@ -1,0 +1,37 @@
+// expected: pass
+// expected-exit: 32
+
+trait Accumulator {
+  add(int32 value) :: int32;
+  current() :: int32;
+}
+
+struct BoxCounter with Accumulator {
+  int32 total;
+
+  constructor(int32 initial) {
+    self.total = initial;
+    ret;
+  }
+
+  add(int32 value) :: int32 {
+    self.total += value;
+    ret self.total;
+  }
+
+  current() :: int32 {
+    ret self.total;
+  }
+}
+
+run(dynamic Accumulator& acc) :: int32 {
+  int32 a = acc.add(4);
+  int32 b = acc.add(7);
+  ret a + b + acc.current();
+}
+
+main() :: int32 {
+  BoxCounter counter = BoxCounter(2);
+  dynamic Accumulator& acc = dynamic ref counter as Accumulator;
+  ret run(acc);
+}

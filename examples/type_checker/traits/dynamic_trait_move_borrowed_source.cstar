@@ -1,0 +1,22 @@
+// expected: diagnostic
+// expected-code: CST2105
+
+trait Metric {
+  value() :: int32;
+}
+
+struct Counter with Metric {
+  constructor() {
+    ret;
+  }
+
+  value() :: int32 {
+    ret 1;
+  }
+}
+
+main() :: int32 {
+  Counter counter = Counter();
+  dynamic Metric^ erased = dynamic move counter as Metric;
+  ret 0;
+}

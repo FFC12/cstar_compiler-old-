@@ -1,6 +1,3 @@
-// expected: diagnostic
-// expected-code: CST2001
-
 trait Writer {
   write(const char* data) :: void;
 }

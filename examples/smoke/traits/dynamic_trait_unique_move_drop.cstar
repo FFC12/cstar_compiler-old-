@@ -1,0 +1,34 @@
+// expected: pass
+// expected-exit: 5
+
+int32 destroyed = 0;
+
+trait Metric {
+  value() :: int32;
+}
+
+struct Counter with Metric {
+  int32 current;
+
+  constructor(int32 value) {
+    self.current = value;
+    ret;
+  }
+
+  destructor() {
+    destroyed = self.current;
+    ret;
+  }
+
+  value() :: int32 {
+    ret self.current;
+  }
+}
+
+main() :: int32 {
+  Counter^ owned = new Counter(5);
+  dynamic Metric^ erased = dynamic move owned as Metric;
+  int32 value = erased.value();
+  drop erased;
+  ret value + destroyed - 5;
+}

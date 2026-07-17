@@ -1,0 +1,37 @@
+// expected: pass
+// expected-exit: 17
+
+int32 destroyed = 0;
+
+trait Gauge {
+  read() :: int32;
+}
+
+struct HeapGauge with Gauge {
+  int32 value;
+
+  constructor(int32 value) {
+    self.value = value;
+    ret;
+  }
+
+  destructor() {
+    destroyed = self.value;
+    ret;
+  }
+
+  read() :: int32 {
+    ret self.value;
+  }
+}
+
+make_and_read() :: int32 {
+  HeapGauge^ gauge = new HeapGauge(17);
+  dynamic Gauge^ erased = dynamic move gauge as Gauge;
+  ret erased.read();
+}
+
+main() :: int32 {
+  int32 value = make_and_read();
+  ret value + destroyed - 17;
+}

@@ -1,19 +1,18 @@
+// expected: diagnostic
+// expected-code: CST2001
+
 trait Writer {
   write(const char* data) :: void;
 }
 
-struct ConsoleWriter with Writer {
+struct PartialWriter with Writer {
   constructor() {
-    ret;
-  }
-
-  write(const char* data) :: void {
     ret;
   }
 }
 
 main() :: int32 {
-  ConsoleWriter writer = ConsoleWriter();
+  PartialWriter writer = PartialWriter();
   dynamic Writer& erased = dynamic ref writer as Writer;
   ret 0;
 }

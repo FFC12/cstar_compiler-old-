@@ -10,7 +10,9 @@ llvm::Function *Visitor::declareFunction(FuncAST &funcAst) {
   auto paramLayout = buildFunctionParamLayout(funcAst, nativeAbi);
   const auto retDefinedTypeName = DefinedTypeNameFromTypeAst(retType);
   auto *returnType =
-      nativeAbi && retType->m_IndirectLevel > 0
+      retType->m_IsDynamicTraitObject
+          ? static_cast<llvm::Type *>(GetDynamicTraitObjectTy())
+      : nativeAbi && retType->m_IndirectLevel > 0
           ? GetType(retType->m_TypeSpec, retType->m_IndirectLevel,
                     retType->m_IsRef)
           : GetStorageType(retType->m_TypeSpec, retType->m_IndirectLevel,
@@ -252,6 +254,76 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     return value;
   }
 
+  std::string dynamicTraitName;
+  std::string dynamicMethodName;
+  if (ParseDynamicTraitDispatchName(funcName, dynamicTraitName,
+                                    dynamicMethodName)) {
+    if (argNodes.empty() ||
+        argNodes[0]->m_ExprKind != ExprKind::SymbolExpr) {
+      assert(false && "Dynamic trait method call requires a symbol receiver.");
+    }
+
+    std::string concreteMethodName;
+    const auto *signature = FindDynamicTraitMethodSignature(
+        dynamicTraitName, dynamicMethodName, &concreteMethodName);
+    auto *concreteFunction = Module->getFunction(concreteMethodName);
+    if (signature == nullptr || concreteFunction == nullptr) {
+      assert(false &&
+             "Dynamic trait method dispatch requires a concrete signature.");
+    }
+
+    auto *receiverSymbol = static_cast<SymbolAST *>(argNodes[0]);
+    auto *receiverStorage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                        receiverSymbol->m_SymbolName);
+    if (receiverStorage == nullptr) {
+      assert(false && "Dynamic trait receiver storage was not found.");
+    }
+
+    auto *object = Builder->CreateLoad(GetDynamicTraitObjectTy(),
+                                       receiverStorage,
+                                       receiverSymbol->m_SymbolName + ".dyn");
+    auto *dataPtr = Builder->CreateExtractValue(object, {0}, "dyn.data");
+    auto *vtablePtr = Builder->CreateExtractValue(object, {1}, "dyn.vtable");
+    auto *vtableTy = GetDynamicTraitVTableTy(dynamicTraitName);
+    const auto methodIndex =
+        DynamicTraitMethodIndex(dynamicTraitName, dynamicMethodName);
+    if (vtableTy == nullptr || methodIndex < 0) {
+      assert(false && "Dynamic trait vtable method was not found.");
+    }
+
+    auto *methodSlot = Builder->CreateStructGEP(
+        vtableTy, vtablePtr, static_cast<unsigned>(methodIndex),
+        "dyn.method.slot");
+    auto *methodPtr = Builder->CreateLoad(GetI8PtrTy(), methodSlot,
+                                          "dyn.method");
+
+    std::vector<llvm::Value *> args;
+    args.push_back(dataPtr);
+
+    llvm::Type *previousType = m_LastType;
+    bool previousSigned = m_LastSigned;
+    for (size_t i = 1; i < argNodes.size(); ++i) {
+      auto *paramType = concreteFunction->getFunctionType()->getParamType(i);
+      m_LastType = paramType;
+      m_LastSigned = true;
+      auto *argValue = argNodes[i]->accept(*this);
+      argValue = CastValueToType(argValue, paramType, m_LastSigned);
+      args.push_back(argValue);
+    }
+    m_LastType = previousType;
+    m_LastSigned = previousSigned;
+
+    auto *call = Builder->CreateCall(concreteFunction->getFunctionType(),
+                                     methodPtr, args,
+                                     concreteFunction->getReturnType()->isVoidTy()
+                                         ? ""
+                                         : "dyn.call");
+    if (!concreteFunction->getReturnType()->isVoidTy()) {
+      m_LastType = concreteFunction->getReturnType();
+    }
+    return call;
+  }
+
   if (funcName == "strong_count") {
     if (argNodes.size() != 1 ||
         argNodes[0]->m_ExprKind != ExprKind::SymbolExpr) {
@@ -337,6 +409,7 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
         paramType != nullptr && IsSharedPointerTy(paramType);
 
     if (!isVariadicArg && paramInfo != nullptr && paramInfo->isRef &&
+        !paramInfo->isDynamicTraitObject &&
         argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
       auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
       auto *storage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,

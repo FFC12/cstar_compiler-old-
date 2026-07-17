@@ -51,10 +51,11 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
           "dynamic trait object return target '" + symbolInfo.definedTypeName +
               "' must name a trait",
           symbolInfo);
-    } else {
+    } else if (!symbolInfo.isRef) {
       this->m_TypeErrorMessages.emplace_back(
-          "dynamic trait object ABI/vtable lowering is not implemented yet",
-          symbolInfo);
+          "owned dynamic trait object lowering is not implemented yet; use "
+          "`dynamic Trait&` for borrowed dispatch",
+          symbolInfo, DiagnosticCode::SemanticOwnership);
     }
   }
 

@@ -1,0 +1,38 @@
+// expected: pass
+// expected-exit: 27
+
+trait Stepper {
+  step(int32 delta) :: int32;
+}
+
+struct Runner with Stepper {
+  int32 value;
+
+  constructor(int32 start) {
+    self.value = start;
+    ret;
+  }
+
+  step(int32 delta) :: int32 {
+    self.value += delta;
+    ret self.value;
+  }
+}
+
+drive(dynamic Stepper& stepper, int32 rounds) :: int32 {
+  int32 deltas[4] = (1, 2, 4, 5);
+  int32 total = 0;
+  loop (delta in deltas) {
+    if (delta == rounds) {
+      break;
+    }
+    total += stepper.step(delta);
+  }
+  ret total;
+}
+
+main() :: int32 {
+  Runner runner = Runner(1);
+  dynamic Stepper& stepper = dynamic ref runner as Stepper;
+  ret drive(stepper, 9);
+}

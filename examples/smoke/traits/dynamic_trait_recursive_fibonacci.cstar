@@ -1,0 +1,29 @@
+// expected: pass
+// expected-exit: 55
+
+fib_impl(int32 n) :: int32 {
+  if (n <= 1) {
+    ret n;
+  }
+  ret fib_impl(n - 1) + fib_impl(n - 2);
+}
+
+trait Fibonacci {
+  fib(int32 n) :: int32;
+}
+
+struct RecursiveFib with Fibonacci {
+  constructor() {
+    ret;
+  }
+
+  fib(int32 n) :: int32 {
+    ret fib_impl(n);
+  }
+}
+
+main() :: int32 {
+  RecursiveFib calc = RecursiveFib();
+  dynamic Fibonacci& erased = dynamic ref calc as Fibonacci;
+  ret erased.fib(10);
+}

@@ -81,6 +81,15 @@ SymbolInfo Visitor::preVisit(CastOpAST &castOpAst) {
       sourceInfo = castOpAst.m_Node->acceptBefore(*this);
     }
 
+    if (castOpAst.m_CastOpKind == CastOpKind::C_DYNAMIC_MOVE_AS &&
+        (sourceInfo.indirectionLevel == 0 || !sourceInfo.isUnique ||
+         sourceInfo.isRef)) {
+      this->m_TypeErrorMessages.emplace_back(
+          "`dynamic move` currently requires a unique ownership pointer source",
+          symbolInfo, DiagnosticCode::SemanticOwnership);
+      return symbolInfo;
+    }
+
     const auto structIt = StructTable.find(sourceInfo.definedTypeName);
     if (structIt == StructTable.end()) {
       this->m_TypeErrorMessages.emplace_back(
@@ -106,9 +115,6 @@ SymbolInfo Visitor::preVisit(CastOpAST &castOpAst) {
       return symbolInfo;
     }
 
-    this->m_TypeErrorMessages.emplace_back(
-        "dynamic trait object ABI/vtable lowering is not implemented yet",
-        symbolInfo);
     return symbolInfo;
   }
 

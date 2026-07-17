@@ -1,0 +1,28 @@
+trait Metric {
+  value() :: int32;
+}
+
+struct Counter with Metric {
+  int32 current;
+
+  constructor(int32 value) {
+    self.current = value;
+    ret;
+  }
+
+  value() :: int32 {
+    ret self.current;
+  }
+}
+
+read_metric(dynamic Metric& metric) :: int32 {
+  ret metric.value();
+}
+
+main() :: int32 {
+  Counter counter = Counter(42);
+  dynamic Metric& erased = dynamic ref counter as Metric;
+  int32 value = read_metric(erased);
+  print(value);
+  ret value;
+}

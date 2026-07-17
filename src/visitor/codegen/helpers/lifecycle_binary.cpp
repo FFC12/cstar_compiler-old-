@@ -54,6 +54,39 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
     auto *destructor = Module->getFunction(heapInfo.typeName + ".destructor");
     llvm::Function *function = Builder->GetInsertBlock()->getParent();
 
+    if (symbolInfo.isDynamicTraitObject) {
+      auto *object = Builder->CreateLoad(GetDynamicTraitObjectTy(), storage,
+                                         symbolName + ".drop.dyn");
+      auto *data = Builder->CreateExtractValue(object, {0},
+                                               symbolName + ".drop.dyn.data");
+      auto *isLive = Builder->CreateICmpNE(
+          data, llvm::ConstantPointerNull::get(GetI8PtrTy()),
+          symbolName + ".drop.dyn.live");
+      auto *destroyBB = llvm::BasicBlock::Create(
+          Builder->getContext(), "heap.dynamic.destroy", function);
+      auto *contBB = llvm::BasicBlock::Create(
+          Builder->getContext(), "heap.dynamic.cont", function);
+      Builder->CreateCondBr(isLive, destroyBB, contBB);
+
+      Builder->SetInsertPoint(destroyBB);
+      if (destructor != nullptr) {
+        Builder->CreateCall(destructor, {data});
+      }
+      freeHeapData(data);
+      if (markDropped) {
+        Builder->CreateStore(
+            llvm::ConstantAggregateZero::get(GetDynamicTraitObjectTy()),
+            storage);
+      }
+      Builder->CreateBr(contBB);
+
+      Builder->SetInsertPoint(contBB);
+      if (markDropped) {
+        m_CodegenDroppedSymbols.insert(symbolName);
+      }
+      return object;
+    }
+
     if (heapInfo.isShared) {
       auto *handle = Builder->CreateLoad(GetSharedPointerTy(), storage,
                                          symbolName + ".drop.heap.sp");

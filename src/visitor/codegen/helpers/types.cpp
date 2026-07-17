@@ -47,6 +47,126 @@ llvm::StructType *GetSharedPointerTy() {
   return llvm::StructType::get(ctx, {GetI8PtrTy(), GetI8PtrTy()});
 }
 
+llvm::StructType *GetDynamicTraitObjectTy() {
+  auto &ctx = Visitor::Builder->getContext();
+  return llvm::StructType::get(ctx, {GetI8PtrTy(), GetI8PtrTy()});
+}
+
+llvm::StructType *GetDynamicTraitVTableTy(const std::string &traitName) {
+  const auto key = "$dynamic.vtable." + traitName;
+  auto existing = Visitor::LLVMStructTypes.find(key);
+  if (existing != Visitor::LLVMStructTypes.end()) {
+    return existing->second;
+  }
+
+  auto traitIt = Visitor::TraitTable.find(traitName);
+  if (traitIt == Visitor::TraitTable.end()) {
+    return nullptr;
+  }
+
+  auto *ptrTy = GetI8PtrTy();
+  std::vector<llvm::Type *> fields(traitIt->second.requirements.size(), ptrTy);
+  auto *vtableTy = llvm::StructType::create(Visitor::Builder->getContext(),
+                                            fields, key);
+  Visitor::LLVMStructTypes[key] = vtableTy;
+  return vtableTy;
+}
+
+int DynamicTraitMethodIndex(const std::string &traitName,
+                            const std::string &methodName) {
+  auto traitIt = Visitor::TraitTable.find(traitName);
+  if (traitIt == Visitor::TraitTable.end()) {
+    return -1;
+  }
+
+  const auto &requirements = traitIt->second.requirements;
+  for (size_t i = 0; i < requirements.size(); ++i) {
+    if (requirements[i].name == methodName) {
+      return static_cast<int>(i);
+    }
+  }
+  return -1;
+}
+
+std::string DynamicTraitDispatchName(const std::string &traitName,
+                                     const std::string &methodName) {
+  return "$dynamic." + traitName + "." + methodName;
+}
+
+bool ParseDynamicTraitDispatchName(const std::string &dispatchName,
+                                   std::string &traitName,
+                                   std::string &methodName) {
+  const std::string prefix = "$dynamic.";
+  if (dispatchName.rfind(prefix, 0) != 0) {
+    return false;
+  }
+
+  const auto rest = dispatchName.substr(prefix.size());
+  const auto split = rest.rfind('.');
+  if (split == std::string::npos || split == 0 || split + 1 >= rest.size()) {
+    return false;
+  }
+
+  traitName = rest.substr(0, split);
+  methodName = rest.substr(split + 1);
+  return true;
+}
+
+const FunctionSignature *FindDynamicTraitMethodSignature(
+    const std::string &traitName, const std::string &methodName,
+    std::string *concreteMethodName) {
+  for (const auto &structEntry : Visitor::StructTable) {
+    const auto &traits = structEntry.second.traits;
+    if (std::find(traits.begin(), traits.end(), traitName) == traits.end()) {
+      continue;
+    }
+
+    const auto candidate = structEntry.first + "." + methodName;
+    auto signatureIt = Visitor::FunctionTable.find(candidate);
+    if (signatureIt != Visitor::FunctionTable.end()) {
+      if (concreteMethodName != nullptr) {
+        *concreteMethodName = candidate;
+      }
+      return &signatureIt->second;
+    }
+  }
+
+  return nullptr;
+}
+
+llvm::GlobalVariable *GetOrCreateDynamicTraitVTable(
+    const std::string &traitName, const std::string &concreteTypeName) {
+  const auto globalName = "$dynamic.vtable." + concreteTypeName + "." +
+                          traitName;
+  if (auto *existing = Visitor::Module->getGlobalVariable(globalName)) {
+    return existing;
+  }
+
+  auto *vtableTy = GetDynamicTraitVTableTy(traitName);
+  auto traitIt = Visitor::TraitTable.find(traitName);
+  if (vtableTy == nullptr || traitIt == Visitor::TraitTable.end()) {
+    return nullptr;
+  }
+
+  std::vector<llvm::Constant *> entries;
+  entries.reserve(traitIt->second.requirements.size());
+  for (const auto &requirement : traitIt->second.requirements) {
+    auto *function = Visitor::Module->getFunction(concreteTypeName + "." +
+                                                  requirement.name);
+    if (function == nullptr) {
+      return nullptr;
+    }
+    entries.push_back(function);
+  }
+
+  auto *initializer = llvm::ConstantStruct::get(vtableTy, entries);
+  auto *global = new llvm::GlobalVariable(
+      *Visitor::Module, vtableTy, true, llvm::GlobalValue::PrivateLinkage,
+      initializer, globalName);
+  global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+  return global;
+}
+
 std::string DefinedTypeNameFromTypeAst(TypeAST *typeAst) {
   if (typeAst == nullptr || typeAst->typeSpec() != TypeSpecifier::SPEC_DEFINED ||
       typeAst->symbol() == nullptr ||
@@ -218,8 +338,23 @@ llvm::Type *GetStructFieldLLVMType(const StructFieldInfo &field) {
 }
 
 llvm::Type *GetSymbolLLVMType(const SymbolInfo &symbolInfo) {
+  if (symbolInfo.isDynamicTraitObject) {
+    return GetDynamicTraitObjectTy();
+  }
+
   return GetStorageType(symbolInfo.type, symbolInfo.indirectionLevel,
                         symbolInfo.isUnique, symbolInfo.isRef,
+                        symbolInfo.definedTypeName);
+}
+
+llvm::Type *GetStorageType(TypeSpecifier typeSpecifier,
+                           size_t indirectLevel, bool isUnique, bool isRef,
+                           const SymbolInfo &symbolInfo) {
+  if (symbolInfo.isDynamicTraitObject) {
+    return GetDynamicTraitObjectTy();
+  }
+
+  return GetStorageType(typeSpecifier, indirectLevel, isUnique, isRef,
                         symbolInfo.definedTypeName);
 }
 
