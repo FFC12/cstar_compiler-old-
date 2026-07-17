@@ -333,6 +333,10 @@ ValuePtr Visitor::visit(VarAST &varAst) {
     m_HeapAllocations[varAst.m_Name] = std::move(allocationInfo);
   }
 
+  if (varAst.m_IsLocal) {
+    registerScopeSharedPointerRelease(getSymbolInfo(varAst.m_Name));
+  }
+
   if (varAst.m_IsLocal && varAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED) {
     registerScopeDestructor(getSymbolInfo(varAst.m_Name));
   }

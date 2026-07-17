@@ -998,7 +998,13 @@ Tamamlanan:
 
 Kalan:
 
-- Scope çıkışı/destructor lowering ile final strong-count release.
+- Scope çıkışı/destructor lowering ile final strong-count release tamamlandı:
+  - local shared handle alias'ları scope çıkışında reverse-order atomic release üretir.
+  - by-value shared pointer parametreleri function exit/return yolunda release edilir.
+  - `ReleaseSharedPointer` artık `atomicrmw sub 1` üretir; önceki `sub -1` strong-count artırma bug'ı giderildi.
+  - heap shared owner son release'i gördüğünde destructor + data free + control-count free hattına iner.
+  - `examples/smoke/ownership/shared_pointer_scope_release.cstar`
+  - `examples/smoke/ownership/shared_pointer_param_scope_release.cstar`
 - Heap allocation/control-block layout `new`/allocator sistemi ile birleştirilecek.
 
 ### 3.3 Qualifier

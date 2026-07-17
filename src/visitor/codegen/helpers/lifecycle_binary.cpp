@@ -135,11 +135,12 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
     if (IsSharedPointerSymbol(symbolInfo)) {
       auto *handle = Builder->CreateLoad(GetSharedPointerTy(), storage,
                                          symbolName + ".drop.sp");
-      self = ExtractSharedPointerData(handle);
+      ReleaseSharedPointer(handle);
       if (markDropped) {
-        ReleaseSharedPointer(handle);
         Builder->CreateStore(CreateNullSharedPointerHandle(), storage);
+        m_CodegenDroppedSymbols.insert(symbolName);
       }
+      return handle;
     } else {
       auto *pointerType = GetType(symbolInfo.type, symbolInfo.indirectionLevel);
       self = Builder->CreateLoad(pointerType, storage, symbolName + ".drop.ptr");
@@ -172,6 +173,15 @@ void Visitor::emitScopeExitDestructors() {
   for (auto it = m_ScopeDestructors.rbegin();
        it != m_ScopeDestructors.rend(); ++it) {
     if (m_CodegenDroppedSymbols.count(it->symbolName) != 0) {
+      continue;
+    }
+    emitDropForSymbol(it->symbolName, false);
+  }
+
+  for (auto it = m_ScopeSharedPointerReleases.rbegin();
+       it != m_ScopeSharedPointerReleases.rend(); ++it) {
+    if (m_CodegenDroppedSymbols.count(it->symbolName) != 0 ||
+        m_HeapAllocations.count(it->symbolName) != 0) {
       continue;
     }
     emitDropForSymbol(it->symbolName, false);

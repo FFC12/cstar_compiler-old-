@@ -48,6 +48,7 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
     m_ReferenceParamValueTypes.clear();
     m_ArrayParamValueTypes.clear();
     m_ScopeDestructors.clear();
+    m_ScopeSharedPointerReleases.clear();
     m_CodegenDroppedSymbols.clear();
     m_HeapAllocations.clear();
 
@@ -89,6 +90,13 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
         m_LocalVarsOnScope[paramName] = llvm::dyn_cast<llvm::AllocaInst>(
             CreateAlloca(paramName, paramType));
         Visitor::Builder->CreateStore(&param, m_LocalVarsOnScope[paramName]);
+        auto signatureIt = FunctionTable.find(funcAst.m_FuncName);
+        if (signatureIt != FunctionTable.end() &&
+            paramNo < signatureIt->second.params.size()) {
+          auto paramInfo = signatureIt->second.params[paramNo];
+          paramInfo.symbolName = paramName;
+          registerScopeSharedPointerRelease(paramInfo);
+        }
       }
     }
 

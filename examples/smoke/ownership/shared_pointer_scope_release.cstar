@@ -1,0 +1,29 @@
+// expected: pass
+// expected-exit: 7
+
+int32 cleaned = 0;
+
+struct Resource {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+    ret;
+  }
+
+  destructor() {
+    cleaned = 7;
+    ret;
+  }
+}
+
+run() :: int32 {
+  Resource* first = shared new Resource(3);
+  Resource* second = first;
+  ret strong_count(first) as int32;
+}
+
+main() :: int32 {
+  int32 count = run();
+  ret cleaned;
+}

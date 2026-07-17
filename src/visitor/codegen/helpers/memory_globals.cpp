@@ -365,8 +365,10 @@ void AtomicBumpSharedPointer(llvm::Value *handle, int64_t delta) {
 
   auto *count = Visitor::Builder->CreatePointerCast(
       countAsI8, llvm::PointerType::get(Visitor::Builder->getContext(), 0));
+  const auto magnitude = delta < 0 ? static_cast<uint64_t>(-delta)
+                                   : static_cast<uint64_t>(delta);
   auto *amount = llvm::ConstantInt::get(Visitor::Builder->getInt64Ty(),
-                                        static_cast<uint64_t>(delta), true);
+                                        magnitude, false);
   Visitor::Builder->CreateAtomicRMW(
       delta >= 0 ? llvm::AtomicRMWInst::Add : llvm::AtomicRMWInst::Sub, count,
       amount, llvm::MaybeAlign(), llvm::AtomicOrdering::AcquireRelease);
@@ -442,4 +444,13 @@ void Visitor::registerScopeDestructor(const SymbolInfo &symbolInfo) {
 
   m_CodegenDroppedSymbols.erase(symbolInfo.symbolName);
   m_ScopeDestructors.push_back(symbolInfo);
+}
+
+void Visitor::registerScopeSharedPointerRelease(const SymbolInfo &symbolInfo) {
+  if (!IsSharedPointerSymbol(symbolInfo) || symbolInfo.isGlob) {
+    return;
+  }
+
+  m_CodegenDroppedSymbols.erase(symbolInfo.symbolName);
+  m_ScopeSharedPointerReleases.push_back(symbolInfo);
 }

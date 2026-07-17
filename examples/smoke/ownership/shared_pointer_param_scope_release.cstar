@@ -1,0 +1,23 @@
+// expected: pass
+// expected-exit: 21
+
+struct Resource {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+    ret;
+  }
+}
+
+observe(Resource* resource) :: int32 {
+  ret strong_count(resource) as int32;
+}
+
+main() :: int32 {
+  Resource* resource = shared new Resource(5);
+  int32 during = observe(resource);
+  int32 after = strong_count(resource) as int32;
+  drop resource;
+  ret during * 10 + after;
+}

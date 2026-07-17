@@ -167,6 +167,7 @@ class Visitor {
   std::map<std::string, llvm::GlobalVariable*> m_GlobalVars;
   std::map<std::string, llvm::Value*> m_SharedPointerRefCounts;
   std::vector<SymbolInfo> m_ScopeDestructors;
+  std::vector<SymbolInfo> m_ScopeSharedPointerReleases;
   std::set<std::string> m_CodegenDroppedSymbols;
   struct HeapAllocationInfo {
     std::string typeName;
@@ -227,6 +228,7 @@ class Visitor {
   std::string resolveFunctionCallName(IAST* node, SymbolInfo& symbolInfo,
                                       bool emitDiagnostics);
   void registerScopeDestructor(const SymbolInfo& symbolInfo);
+  void registerScopeSharedPointerRelease(const SymbolInfo& symbolInfo);
   ValuePtr emitDropForSymbol(const std::string& symbolName,
                              bool markDropped);
   void emitScopeExitDestructors();
