@@ -1,0 +1,15 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+struct Meter {
+  int32 value;
+
+  constructor(int32 initial) :: void {
+    self.value = initial;
+  }
+}
+
+main() :: int32 {
+  Meter meter = Meter(7);
+  ret meter.value;
+}

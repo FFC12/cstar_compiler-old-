@@ -1,0 +1,18 @@
+// expected: pass
+// expected-exit: 7
+
+struct Meter {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+  }
+
+  destructor() {
+  }
+}
+
+main() :: int32 {
+  Meter meter = Meter(7);
+  ret meter.value;
+}

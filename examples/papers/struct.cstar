@@ -10,6 +10,9 @@
 // - `struct` owns concrete memory layout.
 // - `constructor` initializes existing storage; it does not allocate.
 // - `destructor` closes object lifetime; it does not free storage.
+// - Constructor/destructor have no explicit return type; they are void
+//   lifecycle entries and may omit trailing `ret;`.
+// - Destructor is `destructor()` and does not accept user parameters.
 // - `drop value;` is explicit early release.
 // - Scope-exit calls destructors for live by-value local values.
 // - `new` is not a method; it is a compiler-reserved allocation operator.

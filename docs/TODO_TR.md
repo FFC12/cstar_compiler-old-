@@ -1442,8 +1442,11 @@ Durum:
   - `examples/type_checker/063.cstar`
   - `examples/type_checker/064.cstar`
 - Destructor/drop/scope-exit MVP'si tamamlandı:
-  - `destructor(...) { ... }` struct body içinde method olarak parse edilir.
-  - Internal lowering normal method modeliyle `StructName.destructor(self&, ...)` fonksiyonuna iner.
+  - `destructor() { ... }` struct body içinde lifecycle method olarak parse edilir.
+  - Internal lowering normal method modeliyle `StructName.destructor(self&)` fonksiyonuna iner.
+  - Constructor/destructor explicit return type kabul etmez; lifecycle return her zaman void kabul edilir.
+  - Constructor/destructor sonunda `ret;` yazmak zorunlu değildir; void lifecycle method sonunda compiler implicit return üretir.
+  - Destructor user parametre kabul etmez; constructor user argument alabilir.
   - `drop value;` statement'ı destructor'ı çağırır, değeri dropped/moved state'e çeker ve sonraki kullanım `CST2105` diagnostic üretir.
   - By-value local struct variable için function return/implicit scope-exit öncesinde destructor otomatik çağrılır.
   - `value.destructor()` ve `ptr.destructor()` normal kullanıcı yüzeyi değildir; `CST2105` ile `drop value;` öneren diagnostic üretir.
@@ -1451,6 +1454,10 @@ Durum:
   - `examples/smoke/struct_destructor_method.cstar`
   - `examples/smoke/struct_pointer_destructor_method.cstar`
   - `examples/smoke/struct_scope_exit_destructor.cstar`
+  - `examples/smoke/structs/struct_lifecycle_implicit_return.cstar`
+  - `examples/type_checker/structs/072.cstar`
+  - `examples/type_checker/structs/073.cstar`
+  - `examples/type_checker/structs/074.cstar`
   - `examples/type_checker/061.cstar`
   - `examples/type_checker/065.cstar`
   - `examples/type_checker/066.cstar`
@@ -1614,7 +1621,7 @@ Tamamlanan:
   - `examples/type_checker/063.cstar`
   - `examples/type_checker/064.cstar`
 - Destructor/drop/scope-exit MVP'si:
-  - `destructor(...) { ... }`
+  - `destructor() { ... }`
   - `drop value;`
   - by-value local struct için return/implicit scope-exit destructor çağrısı
   - direct `value.destructor()` diagnostic

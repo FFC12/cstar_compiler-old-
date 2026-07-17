@@ -46,31 +46,50 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
 
   std::string methodOwner;
   std::string methodName;
-  if (SplitStructMethodName(funcAst.m_FuncName, methodOwner, methodName) &&
-      methodName == "new") {
-    if (!funcAst.m_IsStatic) {
-      this->m_TypeErrorMessages.emplace_back(
-          "struct 'new' allocation entry must be static and called as '" +
-              methodOwner + "::new(...)'",
-          symbolInfo);
-    }
+  if (SplitStructMethodName(funcAst.m_FuncName, methodOwner, methodName)) {
+    if (methodName == "constructor" || methodName == "destructor") {
+      if (funcAst.m_HasExplicitReturnType) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Lifecycle method '" + methodName +
+                "' does not accept an explicit return type; it is always void",
+            symbolInfo);
+      }
 
-    if (symbolInfo.type != TypeSpecifier::SPEC_DEFINED ||
-        symbolInfo.definedTypeName != methodOwner) {
-      this->m_TypeErrorMessages.emplace_back(
-          "struct 'new' allocation entry must return '" + methodOwner + "^' "
-          "or '" + methodOwner + "*'",
-          symbolInfo);
-    } else if (symbolInfo.indirectionLevel == 0) {
-      this->m_TypeErrorMessages.emplace_back(
-          "by-value construction uses the constructor syntax '" + methodOwner +
-              "(...)'; 'new' is reserved for allocation entries",
-          symbolInfo);
-    } else {
-      this->m_TypeErrorMessages.emplace_back(
-          "struct 'new' allocation lowering requires allocator/control-block "
-          "support and is not implemented yet",
-          symbolInfo);
+      if (methodName == "destructor") {
+        const size_t userParamCount =
+            funcAst.m_Params.empty() ? 0 : funcAst.m_Params.size() - 1;
+        if (userParamCount != 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Lifecycle method 'destructor' cannot accept user parameters",
+              symbolInfo);
+        }
+      }
+    } else if (methodName == "new") {
+      if (!funcAst.m_IsStatic) {
+        this->m_TypeErrorMessages.emplace_back(
+            "struct 'new' allocation entry must be static and called as '" +
+                methodOwner + "::new(...)'",
+            symbolInfo);
+      }
+
+      if (symbolInfo.type != TypeSpecifier::SPEC_DEFINED ||
+          symbolInfo.definedTypeName != methodOwner) {
+        this->m_TypeErrorMessages.emplace_back(
+            "struct 'new' allocation entry must return '" + methodOwner + "^' "
+            "or '" + methodOwner + "*'",
+            symbolInfo);
+      } else if (symbolInfo.indirectionLevel == 0) {
+        this->m_TypeErrorMessages.emplace_back(
+            "by-value construction uses the constructor syntax '" +
+                methodOwner + "(...)'; 'new' is reserved for allocation "
+                "entries",
+            symbolInfo);
+      } else {
+        this->m_TypeErrorMessages.emplace_back(
+            "struct 'new' allocation lowering requires allocator/control-block "
+            "support and is not implemented yet",
+            symbolInfo);
+      }
     }
   }
 

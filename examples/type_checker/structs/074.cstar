@@ -1,0 +1,14 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+struct Meter {
+  int32 value;
+
+  destructor(int32 code) {
+  }
+}
+
+main() :: int32 {
+  Meter meter;
+  ret 0;
+}

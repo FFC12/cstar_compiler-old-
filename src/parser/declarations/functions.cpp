@@ -128,7 +128,9 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
 
   ASTNode returnType;
   TypeQualifier retTypeQualifier = TypeQualifier::Q_NONE;
+  bool hasExplicitReturnType = false;
   if (is(TokenKind::COLONCOLON)) {
+    hasExplicitReturnType = true;
     this->advance();
 
     if (isTypeQualifier(currentTokenInfo())) {
@@ -180,8 +182,8 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
   auto func = std::make_unique<FuncAST>(
       funcName, std::move(returnType), std::move(params), std::move(scope),
       retTypeQualifier, isForwardDecl, isExported,
-      declarationModifiers.isStatic, isVariadic, declarationModifiers.access,
-      semLoc);
+      declarationModifiers.isStatic, isVariadic, hasExplicitReturnType,
+      declarationModifiers.access, semLoc);
 
   this->m_AST.emplace_back(std::move(func));
 }
