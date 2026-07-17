@@ -415,8 +415,8 @@ hello C*
       <li class="en"><strong><code>constructor</code> is not allocation.</strong> It initializes existing storage. <code>destructor</code> is not free; it is the close of object lifetime.</li>
       <li class="tr"><strong><code>new</code> derleyiciye ayrılmıştır.</strong> Kullanıcı <code>operator new</code> yazamaz; allocation semantiği dilin kontrolündedir.</li>
       <li class="en"><strong><code>new</code> is compiler-reserved.</strong> Users cannot write <code>operator new</code>; allocation semantics belong to the language.</li>
-      <li class="tr"><strong>Trait varsayılan olarak statiktir.</strong> Runtime dispatch ancak gelecekteki <code>dynamic Trait</code> yüzeyiyle, açıkça istenerek gelecektir.</li>
-      <li class="en"><strong>Traits are static by default.</strong> Runtime dispatch will only arrive through the future <code>dynamic Trait</code> surface, explicitly requested.</li>
+      <li class="tr"><strong>Trait varsayılan olarak statiktir.</strong> Runtime dispatch yalnızca açık <code>dynamic Trait&amp;</code>/<code>dynamic Trait^</code> yüzeyiyle istenir.</li>
+      <li class="en"><strong>Traits are static by default.</strong> Runtime dispatch is requested only through the explicit <code>dynamic Trait&amp;</code>/<code>dynamic Trait^</code> surface.</li>
       <li class="tr"><strong>Proposal özellikler sessizce kabul edilmez.</strong> Henüz tamamlanmamış her yüzey kontrollü bir diagnostic üretir — asla sessiz yanlış davranış değil.</li>
       <li class="en"><strong>Proposal features are never silently accepted.</strong> Every unfinished surface produces a controlled diagnostic — never silent misbehavior.</li>
     </ul>
@@ -686,8 +686,8 @@ x &amp;= 3;   x |= 4;   x ^= 2;</code></pre></div>
       <li class="en"><code>!</code> lowers condition-like values to <code>bool</code>.</li>
       <li class="tr"><code>~</code> yalnızca tamsayı veya flags enum üzerinde geçerlidir; <code>~1.5</code> diagnostic üretir.</li>
       <li class="en"><code>~</code> is valid only on integers or flags enums; <code>~1.5</code> produces a diagnostic.</li>
-      <li class="tr"><code>++</code>/<code>--</code> prefix ve postfix biçimde, <em>statement</em> düzeyinde skaler değişken mutasyonudur — overload edilemez (§16.2).</li>
-      <li class="en"><code>++</code>/<code>--</code>, prefix and postfix, are scalar variable mutation at <em>statement</em> level — they cannot be overloaded (§16.2).</li>
+      <li class="tr"><code>++</code>/<code>--</code> prefix ve postfix biçimde, <em>statement</em> düzeyinde skaler değişken mutasyonudur — overload edilemez (§16.3).</li>
+      <li class="en"><code>++</code>/<code>--</code>, prefix and postfix, are scalar variable mutation at <em>statement</em> level — they cannot be overloaded (§16.3).</li>
     </ul>
 
     <h3><span class="h3-no">6.3</span><span class="tr">Karşılaştırma: Kategorilere Saygı</span><span class="en">Comparison: Respecting Categories</span></h3>
@@ -741,8 +741,8 @@ bool c = a &gt; b;   // diagnostic: bool sıralanamaz / bool cannot be ordered</
     <h3><span class="h3-no">7.1</span><span class="tr">Güvenli Cast: <code>cast&lt;T&gt;</code> ve <code>as</code></span><span class="en">Safe Casts: <code>cast&lt;T&gt;</code> and <code>as</code></span></h3>
     <div class="code"><div class="code-bar"><span class="code-name">safe-casts.cstar</span><span class="grow"></span><span class="tag ok">✓ pass</span></div><pre><code class="lang-cstar">int32 a = cast&lt;int32&gt;(4.9);   // fonksiyon-benzeri biçim / function-like form → 4
 int32 b = 5 as int32;         // infix biçim / infix form</code></pre></div>
-    <p class="tr">İki biçim aynı semantiği taşır; <code>cast&lt;T&gt;</code> iç içe ifadelerde, <code>as</code> ise akıcı okunan tek dönüşümlerde tercih edilir. Sayısal daralma (float → int) açık cast ister; primitive genişleme bağlamları (ör. <code>bool</code> → <code>int32</code> parametre kuralı, §8.3) dilin tanımladığı yerlerde örtük çalışır.</p>
-    <p class="en">Both forms carry identical semantics; <code>cast&lt;T&gt;</code> reads better nested, <code>as</code> reads better as a single fluent conversion. Numeric narrowing (float → int) demands an explicit cast; primitive widening contexts (e.g. the <code>bool</code> → <code>int32</code> parameter rule, §8.3) work implicitly where the language defines them.</p>
+    <p class="tr">İki biçim aynı semantiği taşır; <code>cast&lt;T&gt;</code> iç içe ifadelerde, <code>as</code> ise akıcı okunan tek dönüşümlerde tercih edilir. Sayısal daralma (float → int) açık cast ister; primitive genişleme bağlamları (ör. <code>bool</code> → <code>int32</code> parametre kuralı, §8.2) dilin tanımladığı yerlerde örtük çalışır.</p>
+    <p class="en">Both forms carry identical semantics; <code>cast&lt;T&gt;</code> reads better nested, <code>as</code> reads better as a single fluent conversion. Numeric narrowing (float → int) demands an explicit cast; primitive widening contexts (e.g. the <code>bool</code> → <code>int32</code> parameter rule, §8.2) work implicitly where the language defines them.</p>
 
     <h3><span class="h3-no">7.2</span><span class="tr">Kategori Sınırı: Value ↔ Pointer</span><span class="en">The Category Boundary: Value ↔ Pointer</span></h3>
     <p class="tr">Güvenli cast, value kategorisi ile pointer kategorisi arasındaki sınırı <strong>geçemez</strong>. Bir pointer'ı tamsayıya çevirmek adres aritmetiği dünyasına adım atmaktır ve bu adım asla kazara atılmaz:</p>
@@ -816,6 +816,23 @@ non_castable(x bool) :: int32 {
         <p class="en">Variadic signatures (<code>...</code>) exist only in native imports (§17.3). A variadic function <em>body</em> cannot be written in C*; that surface exists for C ABI calls. The language will not open its own variadic model until a type-safe design is ready.</p>
       </div>
     </div>
+
+    <h3><span class="h3-no">8.3</span><span class="tr">Özyineleme</span><span class="en">Recursion</span></h3>
+    <p class="tr">Fonksiyonlar kendi kendilerini çağırabilir. Özyineleme, normal call graph'ın parçasıdır: dönüş tipi açık yazılır, base case normal <code>if</code> ile kurulur ve recursive çağrı sıradan ifade gibi davranır.</p>
+    <p class="en">Functions may call themselves. Recursion is part of the normal call graph: the return type is explicit, the base case is written with a regular <code>if</code>, and the recursive call behaves like any other expression.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">recursive-fibonacci.cstar</span><span class="grow"></span><span class="tag ok">✓ pass · exit 55</span></div><pre><code class="lang-cstar">fib(int32 n) :: int32 {
+  if (n &lt;= 1) {
+    ret n;
+  }
+
+  ret fib(n - 1) + fib(n - 2);
+}
+
+main() :: int32 {
+  ret fib(10);
+}</code></pre></div>
+    <p class="tr">Özyineleme struct layout özyinelemesiyle karıştırılmamalıdır: fonksiyon çağrısı runtime stack üzerinde ilerler; by-value kendini içeren struct alanı ise sonsuz boyut üreteceği için yasaktır (§14.1).</p>
+    <p class="en">Recursion should not be confused with recursive struct layout: function calls progress on the runtime stack; a by-value struct field containing its own type would have infinite size and is rejected (§14.1).</p>
   </section>
 
   <!-- ============ 09 KONTROL ============ -->
@@ -881,6 +898,28 @@ non_castable(x bool) :: int32 {
         <p class="en">In the C family, <code>for(;;)</code>, <code>while</code>, and <code>do-while</code> do the same job with three grammars, and <code>for</code>'s three-slot header is the classic home of off-by-one bugs. C* moves <em>what</em> the iteration runs over into a single form: condition, range, or collection — the parenthesis says which, and the body is always the same. The reader memorizes exactly one grammar.</p>
       </div>
     </div>
+    <h3><span class="h3-no">9.3</span><span class="tr">Döngü Scope'u ve Argümanlar</span><span class="en">Loop Scope and Arguments</span></h3>
+    <p class="tr">Döngü başlığında üretilen semboller yalnızca gövdede yaşar. Gövde içinde normal local gibi davranırlar: fonksiyona argüman verilebilir, dynamic trait method'una geçirilebilir ve aritmetikte kullanılabilir. Döngü kapandıktan sonra aynı sembol görünür değildir.</p>
+    <p class="en">Symbols produced by the loop header live only inside the body. Within that body they behave like normal locals: they can be passed to functions, passed into dynamic trait methods, and used in arithmetic. Once the loop closes, the symbol is no longer visible.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">loop-scope-call.cstar</span><span class="grow"></span><span class="tag ok">✓ pass · exit 10</span></div><pre><code class="lang-cstar">add_one(int32 value) :: int32 {
+  ret value + 1;
+}
+
+main() :: int32 {
+  int32 total = 0;
+
+  loop (i in [0, 3]) {
+    total += add_one(i);
+  }
+
+  ret total;
+}</code></pre></div>
+    <div class="code"><div class="code-bar"><span class="code-name">loop-scope-diagnostic.cstar</span><span class="grow"></span><span class="tag err">✗ diagnostic</span></div><pre><code class="lang-cstar">main() :: int32 {
+  loop (i in [1, 3]) {
+  }
+
+  ret i;   // diagnostic: i döngüden sonra görünmez / not visible after loop
+}</code></pre></div>
   </section>
 
   <!-- ============ 10 DIZILER ============ -->
@@ -1372,10 +1411,140 @@ main() :: int32 {
   Meter meter = Meter(7);
   ret meter.value();
 }</code></pre></div>
-    <p class="tr">Conformance beyanı tanımın üstündedir ve derleyici sözleşmenin her method'unu imza düzeyinde eşleştirir. Runtime dispatch, ancak gelecekteki <code>dynamic Trait</code> yüzeyiyle (§22.4) ve açıkça istenerek gelecektir — varsayılan dünya vtable'sızdır.</p>
-    <p class="en">The conformance declaration sits on the definition, and the compiler matches every method of the contract at the signature level. Runtime dispatch will arrive only through the future <code>dynamic Trait</code> surface (§22.4), explicitly requested — the default world is vtable-free.</p>
+    <p class="tr">Conformance beyanı tanımın üstündedir ve derleyici sözleşmenin her method'unu imza düzeyinde eşleştirir. Varsayılan çağrı dünyası vtable'sızdır: <code>meter.value()</code> doğrudan concrete method'a iner. Runtime dispatch istenirse <code>dynamic</code> yüzeyi ayrıca yazılır (§16.2).</p>
+    <p class="en">The conformance declaration sits on the definition, and the compiler matches every method of the contract at the signature level. The default call world is vtable-free: <code>meter.value()</code> lowers directly to the concrete method. Runtime dispatch is requested separately through the <code>dynamic</code> surface (§16.2).</p>
 
-    <h3><span class="h3-no">16.2</span><span class="tr">Value Operator Overloading</span><span class="en">Value Operator Overloading</span></h3>
+    <h3><span class="h3-no">16.2</span><span class="tr">Dynamic Trait Object'leri</span><span class="en">Dynamic Trait Objects</span></h3>
+    <p class="tr"><code>dynamic Trait</code>, statik conformance kanıtını runtime dispatch'e çeviren açık yüzeydir. Tipteki ownership işareti korunur: <code>dynamic Writer&amp;</code> ödünç alınmış trait object'tir, <code>dynamic Writer^</code> heap sahipliğini taşıyan trait object'tir. <code>dynamic</code> kelimesi maliyetin ve vtable geçişinin kodda görünür kalmasını sağlar.</p>
+    <p class="en"><code>dynamic Trait</code> is the explicit surface that turns a static conformance proof into runtime dispatch. The ownership sigil is preserved: <code>dynamic Writer&amp;</code> is a borrowed trait object, while <code>dynamic Writer^</code> carries heap ownership. The <code>dynamic</code> keyword keeps the cost and vtable crossing visible in code.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">dynamic-trait-borrowed.cstar</span><span class="grow"></span><span class="tag ok">✓ pass</span></div><pre><code class="lang-cstar">trait Writer {
+  write(const char* data) :: void;
+}
+
+struct ConsoleWriter with Writer {
+  constructor() {
+    ret;
+  }
+
+  write(const char* data) :: void {
+    print(data);
+    ret;
+  }
+}
+
+log(dynamic Writer&amp; writer) :: void {
+  writer.write("dynamic writer dispatch\n");
+  ret;
+}
+
+main() :: int32 {
+  ConsoleWriter writer = ConsoleWriter();
+  dynamic Writer&amp; erased = dynamic ref writer as Writer;
+  log(erased);
+  ret 0;
+}</code></pre></div>
+    <p class="tr">Borrowed dynamic trait object kaynak nesnenin ömrünü sahiplenmez; yalnızca concrete değere ve o concrete tip için üretilmiş vtable'a bakar. Eksik method, yanlış trait adı veya trait'i implement etmeyen concrete tip diagnostic üretir.</p>
+    <p class="en">A borrowed dynamic trait object does not own the source object's lifetime; it points at the concrete value and the vtable generated for that concrete type. A missing method, wrong trait name, or concrete type that does not implement the trait produces a diagnostic.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">dynamic-trait-multi-method.cstar</span><span class="grow"></span><span class="tag ok">✓ pass · exit 32</span></div><pre><code class="lang-cstar">trait Accumulator {
+  add(int32 value) :: int32;
+  current() :: int32;
+}
+
+struct BoxCounter with Accumulator {
+  int32 total;
+
+  constructor(int32 initial) {
+    self.total = initial;
+    ret;
+  }
+
+  add(int32 value) :: int32 {
+    self.total += value;
+    ret self.total;
+  }
+
+  current() :: int32 {
+    ret self.total;
+  }
+}
+
+run(dynamic Accumulator&amp; acc) :: int32 {
+  int32 a = acc.add(4);
+  int32 b = acc.add(7);
+  ret a + b + acc.current();
+}
+
+main() :: int32 {
+  BoxCounter counter = BoxCounter(2);
+  dynamic Accumulator&amp; acc = dynamic ref counter as Accumulator;
+  ret run(acc);
+}</code></pre></div>
+    <p class="tr">Dynamic dispatch normal ifade sistemine dahildir: method dönüşleri değişkene alınabilir, aritmetiğe katılabilir, döngü içinde çağrılabilir ve recursive fonksiyonlarla birlikte kullanılabilir.</p>
+    <p class="en">Dynamic dispatch participates in the normal expression system: method returns can be stored in variables, used in arithmetic, called inside loops, and composed with recursive functions.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">dynamic-trait-owned.cstar</span><span class="grow"></span><span class="tag ok">✓ pass · exit 17</span></div><pre><code class="lang-cstar">int32 destroyed = 0;
+
+trait Gauge {
+  read() :: int32;
+}
+
+struct HeapGauge with Gauge {
+  int32 value;
+
+  constructor(int32 value) {
+    self.value = value;
+    ret;
+  }
+
+  destructor() {
+    destroyed = self.value;
+    ret;
+  }
+
+  read() :: int32 {
+    ret self.value;
+  }
+}
+
+make_and_read() :: int32 {
+  HeapGauge^ gauge = new HeapGauge(17);
+  dynamic Gauge^ erased = dynamic move gauge as Gauge;
+  ret erased.read();
+}
+
+main() :: int32 {
+  int32 value = make_and_read();
+  ret value + destroyed - 17;
+}</code></pre></div>
+    <p class="tr"><code>dynamic move gauge as Gauge</code> unique sahipliği dynamic trait object'e taşır ve kaynak unique pointer'ı kullanılamaz hâle getirir. Scope-exit veya açık <code>drop</code>, concrete destructor'ı ve allocation release yolunu concrete tipe göre çağırır; trait object ömrü de normal ownership analiziyle yönetilir.</p>
+    <p class="en"><code>dynamic move gauge as Gauge</code> transfers unique ownership into the dynamic trait object and invalidates the source unique pointer. Scope-exit or explicit <code>drop</code> calls the concrete destructor and release path for the concrete type; the trait object's lifetime is governed by the normal ownership analysis.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">dynamic-trait-recursive-fib.cstar</span><span class="grow"></span><span class="tag ok">✓ pass · exit 55</span></div><pre><code class="lang-cstar">fib_impl(int32 n) :: int32 {
+  if (n &lt;= 1) {
+    ret n;
+  }
+  ret fib_impl(n - 1) + fib_impl(n - 2);
+}
+
+trait Fibonacci {
+  fib(int32 n) :: int32;
+}
+
+struct RecursiveFib with Fibonacci {
+  constructor() {
+    ret;
+  }
+
+  fib(int32 n) :: int32 {
+    ret fib_impl(n);
+  }
+}
+
+main() :: int32 {
+  RecursiveFib calc = RecursiveFib();
+  dynamic Fibonacci&amp; erased = dynamic ref calc as Fibonacci;
+  ret erased.fib(10);
+}</code></pre></div>
+
+    <h3><span class="h3-no">16.3</span><span class="tr">Value Operator Overloading</span><span class="en">Value Operator Overloading</span></h3>
     <div class="code"><div class="code-bar"><span class="code-name">value-operators.cstar</span><span class="grow"></span><span class="tag ok">✓ pass · exit 1</span></div><pre><code class="lang-cstar">struct Rank {
   int32 value;
 
@@ -2080,12 +2249,11 @@ int32^ owned_value = new(arena) int32(7);</code></pre></div>
   scope_exit opened -&gt; closed :: close();
 }</code></pre></div>
 
-    <h3><span class="h3-no">22.4</span><span class="tr">Dynamic Trait</span><span class="en">Dynamic Traits</span></h3>
-    <p class="tr">Bugün trait statik conformance'tır (§16). Gelecekteki dynamic trait object açık olmak zorundadır — ownership ekseni <code>&amp;</code>, <code>*</code>, <code>^</code> ile aynı kalır, yalnızca dispatch dinamikleşir:</p>
-    <p class="en">Today, traits are static conformance (§16). The future dynamic trait object must be explicit — the ownership axis stays identical across <code>&amp;</code>, <code>*</code>, <code>^</code>; only dispatch turns dynamic:</p>
-    <div class="code"><div class="code-bar"><span class="code-name">dynamic-trait.cstar</span><span class="grow"></span><span class="tag prop">◆ proposal</span></div><pre><code class="lang-cstar">dynamic Writer&amp; writer          // ödünç alınmış dynamic / borrowed dynamic
-dynamic Writer* shared_writer   // paylaşılan dynamic / shared dynamic
-dynamic Writer^ owned_writer    // sahipli dynamic / owned dynamic</code></pre></div>
+    <h3><span class="h3-no">22.4</span><span class="tr">Trait Object Genişlemeleri</span><span class="en">Trait Object Extensions</span></h3>
+    <p class="tr"><code>dynamic Trait&amp;</code> ve <code>dynamic Trait^</code> çalışan dil yüzeyindedir (§16.2). Kalan genişleme alanı, shared ownership ekseninin trait object ABI'sine tam eklenmesi ve generic trait object sözleşmeleridir. Bu tasarımda da ilke değişmez: ownership işareti tipte görünür kalır, dispatch maliyeti <code>dynamic</code> kelimesiyle açık yazılır.</p>
+    <p class="en"><code>dynamic Trait&amp;</code> and <code>dynamic Trait^</code> are part of the working language surface (§16.2). The remaining extension area is adding the shared-ownership axis fully to the trait-object ABI and defining generic trait-object contracts. The principle stays unchanged: the ownership sigil remains visible in the type, and the dispatch cost is spelled with <code>dynamic</code>.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">trait-object-extension.cstar</span><span class="grow"></span><span class="tag prop">◆ proposal</span></div><pre><code class="lang-cstar">dynamic Writer* shared_writer   // shared dynamic trait object
+dynamic Iterator&lt;T&gt;&amp; iterator   // generic trait object contract</code></pre></div>
 
     <h3><span class="h3-no">22.5</span><span class="tr">Tagged Data</span><span class="en">Tagged Data</span></h3>
     <p class="tr">Enum bugün skaler tag'dir. Gelecekteki <code>tagged</code> sugar'ı, açık tag + payload storage layout'una iner: ABI-visible tag, açık variant storage ve <code>packet.Data.len</code> gibi tag-aware checked erişim.</p>
