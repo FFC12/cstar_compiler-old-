@@ -20,6 +20,7 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
     symbolInfo.isConstVal = funcAst.m_RetTypeQualifier == Q_CONST;
     symbolInfo.isRef = retType->m_IsRef;
     symbolInfo.isUnique = retType->m_IsUniquePtr;
+    symbolInfo.isNullable = retType->m_IsNullable;
     symbolInfo.qualifierLevels = BuildQualifierLevels(
         funcAst.m_RetTypeQualifier, symbolInfo.indirectionLevel,
         symbolInfo.isRef);

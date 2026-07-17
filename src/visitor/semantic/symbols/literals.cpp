@@ -11,10 +11,16 @@ SymbolInfo Visitor::preVisit(ScalarOrLiteralAST &scalarAst) {
     symbolInfo.type = TypeSpecifier::SPEC_NIL;
     symbolInfo.value = scalarAst.m_Value;
     if (this->m_TypeChecking) {
-      this->m_TypeErrorMessages.emplace_back(
-          "`nil` requires an explicitly nullable pointer type (`T*?` or "
-          "`T^?`); plain `T*`, `T^` and `T&` are non-null by default",
-          symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
+      const bool targetAllowsNil =
+          this->m_LastSymbolInfo.isNullable &&
+          this->m_LastSymbolInfo.indirectionLevel > 0 &&
+          !this->m_LastSymbolInfo.isRef;
+      if (!targetAllowsNil) {
+        this->m_TypeErrorMessages.emplace_back(
+            "`nil` requires an explicitly nullable pointer type (`T*?` or "
+            "`T^?`); plain `T*`, `T^` and `T&` are non-null by default",
+            symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
+      }
     }
     return symbolInfo;
   }

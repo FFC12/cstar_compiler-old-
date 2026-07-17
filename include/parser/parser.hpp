@@ -52,6 +52,7 @@ class CStarParser {
   std::vector<std::filesystem::path> m_SourceIncludes;
   std::vector<std::string> m_ModuleAliases;
   std::set<std::string> m_AttributeDefinitions;
+  std::string m_PendingLanguageItem;
   struct CompileTimeMacroDefinition {
     std::string name;
     std::vector<std::string> params;
@@ -64,6 +65,7 @@ class CStarParser {
   time_t m_StartTime;
   bool m_LocalScopeFlag;
   bool m_StatsEnabled;
+  bool m_LastPointerTypeNullable = false;
 
   const char* tokenToStr(TokenKind kind) noexcept {
     return m_Lexer.tokenAsStr(kind);
@@ -255,6 +257,7 @@ class CStarParser {
   void parseAttributeDecl(DeclarationModifiers declarationModifiers);
   void parseAttributeAnnotation();
   void parseMacroDecl(DeclarationModifiers declarationModifiers);
+  void parseLanguageItemAnnotation(bool hashStyle);
   void parseDirective();
   void parseEnumDecl(DeclarationModifiers declarationModifiers,
                      bool isFlags = false);

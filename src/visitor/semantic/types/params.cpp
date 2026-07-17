@@ -46,6 +46,7 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
     symbolInfo.isRef = typeInfo->m_IsRef;
     symbolInfo.isUnique = typeInfo->m_IsUniquePtr;
     symbolInfo.indirectionLevel = typeInfo->m_IndirectLevel;
+    symbolInfo.isNullable = typeInfo->m_IsNullable;
   }
   symbolInfo.qualifierLevels =
       BuildQualifierLevels(paramAst.m_TypeQualifier, symbolInfo.indirectionLevel,

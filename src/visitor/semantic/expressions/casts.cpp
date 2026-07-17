@@ -51,6 +51,7 @@ SymbolInfo Visitor::preVisit(CastOpAST &castOpAst) {
     symbolInfo.indirectionLevel = targetType->m_IndirectLevel;
     symbolInfo.isRef = targetType->m_IsRef;
     symbolInfo.isUnique = targetType->m_IsUniquePtr;
+    symbolInfo.isNullable = targetType->m_IsNullable;
     return symbolInfo;
   }
 
@@ -140,6 +141,7 @@ SymbolInfo Visitor::preVisit(CastOpAST &castOpAst) {
   symbolInfo.indirectionLevel = targetType->m_IndirectLevel;
   symbolInfo.isRef = targetType->m_IsRef;
   symbolInfo.isUnique = targetType->m_IsUniquePtr;
+  symbolInfo.isNullable = targetType->m_IsNullable;
 
   return symbolInfo;
 }

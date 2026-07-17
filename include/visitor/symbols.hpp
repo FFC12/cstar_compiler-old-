@@ -25,6 +25,7 @@ struct StructFieldInfo {
   size_t indirectionLevel = 0;
   bool isUnique = false;
   bool isRef = false;
+  bool isNullable = false;
   bool isPublic = false;
 };
 
@@ -43,6 +44,7 @@ struct TraitRequirementInfo {
 struct TraitInfo {
   std::string name;
   std::vector<TraitRequirementInfo> requirements;
+  std::string languageItem;
 };
 
 struct EnumMemberInfo {
@@ -84,6 +86,7 @@ struct SymbolInfo {
   bool isStatic = false;
   bool isExported = false;
   bool isImported = false;
+  bool isNullable = false;
 
   std::string value;
   std::vector<size_t> arrayDimensions;

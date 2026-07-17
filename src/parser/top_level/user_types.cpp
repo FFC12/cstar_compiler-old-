@@ -43,8 +43,11 @@ void CStarParser::parseTraitDecl(DeclarationModifiers declarationModifiers) {
   SemanticLoc semLoc(begin, posInfo.end, line);
   this->advance();
 
+  const auto languageItem = m_PendingLanguageItem;
+  m_PendingLanguageItem.clear();
   this->m_AST.emplace_back(std::make_unique<TraitAST>(
-      traitName, std::move(requirements), declarationModifiers.access, semLoc));
+      traitName, std::move(requirements), declarationModifiers.access,
+      languageItem, semLoc));
 
   skipTopLevelTrivia();
   if (is(TokenKind::SEMICOLON)) {

@@ -11,6 +11,7 @@ SymbolInfo Visitor::preVisit(TraitAST &traitAst) {
 
   TraitInfo info;
   info.name = traitAst.m_Name;
+  info.languageItem = traitAst.m_LanguageItem;
   std::set<std::string> names;
   for (const auto &requirement : traitAst.m_Requirements) {
     if (names.count(requirement.name) != 0) {
@@ -23,6 +24,27 @@ SymbolInfo Visitor::preVisit(TraitAST &traitAst) {
     }
     names.insert(requirement.name);
     info.requirements.push_back(requirement);
+  }
+
+  if (!info.languageItem.empty()) {
+    for (const auto &entry : TraitTable) {
+      if (entry.second.languageItem == info.languageItem &&
+          entry.first != info.name) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Language item '" + info.languageItem +
+                "' is already bound to trait '" + entry.first + "'",
+            symbolInfo);
+      }
+    }
+
+    if (info.languageItem == "allocator") {
+      if (names.count("alloc") == 0 || names.count("free") == 0) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Language item 'allocator' requires trait methods 'alloc' and "
+            "'free'",
+            symbolInfo);
+      }
+    }
   }
 
   TraitTable[info.name] = std::move(info);

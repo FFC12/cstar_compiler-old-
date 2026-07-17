@@ -143,6 +143,7 @@ class Visitor {
   bool m_LastCondExpr = false;
   bool m_LastRetExpr = false;
   bool m_LastFixExpr = false;
+  std::set<std::string> m_NonNullFlowSymbols;
   std::set<std::string> m_MovedUniqueSymbols;
   std::set<std::string> m_DroppedSemanticSymbols;
   std::vector<size_t> m_LastArrayDims;

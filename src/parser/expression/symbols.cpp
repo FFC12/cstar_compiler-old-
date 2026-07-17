@@ -16,12 +16,17 @@ ASTNode CStarParser::advanceSymbol() {
     bool isUniquePtr = false;
     size_t indirectionLevel = 0;
     bool isRef = false;
+    bool isNullable = false;
 
     if (TypeFlag) {
       if (is(TokenKind::AND)) {
         isRef = true;
         this->advance();
         semLoc.end += indirectionLevel;
+        if (is(TokenKind::QMARK)) {
+          ParserError("References cannot be nullable; use an explicit pointer type",
+                      currentTokenInfo());
+        }
       } else {
         // This is symbol to type transition (Actually this can be done when
         // performed semantic analysis for this node but we make things easier
@@ -32,6 +37,7 @@ ASTNode CStarParser::advanceSymbol() {
           transitionFlag = true;
 
           indirectionLevel = advancePointerType(isUniquePtr);
+          isNullable = m_LastPointerTypeNullable;
           // std::cout << "Symbol to Type Transition Indirection Level: "
           //           << indirectionLevel << "\n";
           semLoc.end += indirectionLevel;
@@ -42,7 +48,8 @@ ASTNode CStarParser::advanceSymbol() {
     if (transitionFlag) {
       return std::make_unique<TypeAST>(TypeSpecifier::SPEC_DEFINED,
                                        std::move(symbolNode), isUniquePtr, true,
-                                       isRef, indirectionLevel, semLoc);
+                                       isRef, indirectionLevel, semLoc,
+                                       isNullable);
     } else {
       return std::move(symbolNode);
     }

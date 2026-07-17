@@ -1,0 +1,18 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+#[lang(allocator)]
+trait FirstAllocator {
+  alloc(usize bytes, usize align) :: void*;
+  free(void* ptr, usize bytes, usize align) :: void;
+}
+
+#[lang(allocator)]
+trait SecondAllocator {
+  alloc(usize bytes, usize align) :: void*;
+  free(void* ptr, usize bytes, usize align) :: void;
+}
+
+main() :: int32 {
+  ret 0;
+}

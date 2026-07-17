@@ -58,6 +58,17 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
                     symbolInfo);
               }
 
+              if (matchedSymbol.indirectionLevel > 0 &&
+                  !this->m_LastSymbolInfo.isNullable &&
+                  matchedSymbol.isNullable &&
+                  m_NonNullFlowSymbols.count(matchedSymbol.symbolName) == 0 &&
+                  !m_LastCondExpr && !m_LastDereferenced) {
+                this->m_TypeErrorMessages.emplace_back(
+                    "Nullable pointer cannot be used where a non-null pointer "
+                    "is required without an `if (ptr)` non-null proof",
+                    symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
+              }
+
               if (m_LastSubscriptable) {
                 if (m_LastSubscriptable == matchedSymbol.isSubscriptable) {
                   // all arrays has indirection level since nature of being

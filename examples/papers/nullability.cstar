@@ -15,6 +15,12 @@
 // - `if (p)` on a nullable pointer narrows it to non-null inside the true branch.
 // - Moved-from pointers may be represented as null internally, but source values
 //   are semantically `moved`, not nullable.
+//
+// Compiler status:
+// - `T*?`, `T^?`, `nil`, unchecked nullable dereference diagnostics and
+//   `if (p)` true-branch narrowing are implemented.
+// - `new?` / `shared new?` produce nullable ownership handles. Runtime
+//   allocation-failure policy still belongs to the allocator/effect phase.
 
 read_non_null(int32* ptr) :: int32 {
     ret deref ptr;

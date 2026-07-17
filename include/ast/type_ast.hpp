@@ -12,16 +12,18 @@ class TypeAST : public IAST {
   bool m_IsUniquePtr;
   bool m_IsPrimitiveType;
   bool m_IsRef;
+  bool m_IsNullable;
 
  public:
   TypeAST(TypeSpecifier typeSpec, ASTNode symbol, bool isUniquePtr,
           bool isPrimitive, bool isRef, size_t indirectLevel,
-          SemanticLoc& semanticLoc)
+          SemanticLoc& semanticLoc, bool isNullable = false)
       : IAST(semanticLoc),
         m_TypeSpec(typeSpec),
         m_Symbol(std::move(symbol)),
         m_IsUniquePtr(isUniquePtr),
         m_IsRef(isRef),
+        m_IsNullable(isNullable),
         m_IsPrimitiveType(isPrimitive),
         m_IndirectLevel(indirectLevel) {
     this->m_ASTKind = ASTKind::Expr;
@@ -29,6 +31,7 @@ class TypeAST : public IAST {
   }
 
   void setIsRef(bool v) { this->m_IsRef = true; }
+  void setIsNullable(bool v) { this->m_IsNullable = v; }
 
   [[nodiscard]] TypeSpecifier typeSpec() const { return m_TypeSpec; }
   [[nodiscard]] const ASTNode& symbol() const { return m_Symbol; }

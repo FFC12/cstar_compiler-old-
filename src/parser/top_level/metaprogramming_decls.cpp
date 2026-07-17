@@ -88,6 +88,26 @@ void CStarParser::parseAttributeAnnotation() {
   this->advance();
   expected(TokenKind::IDENT);
   const auto attributeName = currentTokenStr();
+  if (attributeName == "lang") {
+    this->advance();
+    expected(TokenKind::LPAREN);
+    this->advance();
+    expected({TokenKind::IDENT, TokenKind::ALLOCATOR});
+    const auto languageItem = currentTokenStr();
+    if (languageItem != "allocator") {
+      ParserError("Unknown C* language item '" + languageItem + "'",
+                  currentTokenInfo());
+    }
+    this->advance();
+    expected(TokenKind::RPAREN);
+    this->advance();
+    if (!m_PendingLanguageItem.empty()) {
+      ParserError("Only one language item annotation can be pending at a time",
+                  atToken);
+    }
+    m_PendingLanguageItem = languageItem;
+    return;
+  }
   if (m_AttributeDefinitions.count(attributeName) == 0) {
     ParserError("Unknown attribute '" + attributeName + "'",
                 currentTokenInfo());
@@ -100,6 +120,51 @@ void CStarParser::parseAttributeAnnotation() {
 
   (void)atToken;
   (void)attributeName;
+}
+
+void CStarParser::parseLanguageItemAnnotation(bool hashStyle) {
+  auto annotationToken = currentTokenInfo();
+
+  if (hashStyle) {
+    expected(TokenKind::HASH);
+    this->advance();
+    expected(TokenKind::LSQPAR);
+    this->advance();
+  } else {
+    expected(TokenKind::AT);
+    this->advance();
+  }
+
+  expected(TokenKind::IDENT);
+  const auto annotationName = currentTokenStr();
+  if (annotationName != "lang") {
+    ParserError("Expected language item annotation `lang(...)`",
+                currentTokenInfo());
+  }
+  this->advance();
+
+  expected(TokenKind::LPAREN);
+  this->advance();
+  expected({TokenKind::IDENT, TokenKind::ALLOCATOR});
+  const auto languageItem = currentTokenStr();
+  if (languageItem != "allocator") {
+    ParserError("Unknown C* language item '" + languageItem + "'",
+                currentTokenInfo());
+  }
+  this->advance();
+  expected(TokenKind::RPAREN);
+  this->advance();
+
+  if (hashStyle) {
+    expected(TokenKind::RSQPAR);
+    this->advance();
+  }
+
+  if (!m_PendingLanguageItem.empty()) {
+    ParserError("Only one language item annotation can be pending at a time",
+                annotationToken);
+  }
+  m_PendingLanguageItem = languageItem;
 }
 
 MacroParamKind CStarParser::parseMacroParamKind() {

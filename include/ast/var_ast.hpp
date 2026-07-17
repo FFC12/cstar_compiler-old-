@@ -25,6 +25,7 @@ class VarAST : public IAST {
   bool m_IsInitializerList;
   bool m_IsMoveInit;
   bool m_IsStatic;
+  bool m_IsNullable;
 
  public:
   VarAST(std::string name, ASTNode typeName, std::unique_ptr<IAST> RHS, TypeSpecifier type_spec,
@@ -32,7 +33,8 @@ class VarAST : public IAST {
          AccessSpecifier accessSpec, bool isStatic,
          size_t indirectLevel, bool isRef, bool isUnique, bool isLocal,
          bool isInitializerList, std::vector<ASTNode> arrayDim,
-         SemanticLoc& semanticLoc, bool isMoveInit = false)
+         SemanticLoc& semanticLoc, bool isMoveInit = false,
+         bool isNullable = false)
       : IAST(semanticLoc),
         m_Name(std::move(name)),
         m_Typename(std::move(typeName)),
@@ -48,6 +50,7 @@ class VarAST : public IAST {
         m_IsInitializerList(isInitializerList),
         m_IsMoveInit(isMoveInit),
         m_IsStatic(isStatic),
+        m_IsNullable(isNullable),
         m_ArrDim(std::move(arrayDim)) {
     this->m_ASTKind = ASTKind::Decl;
     this->m_AccessSpecifier = accessSpec;

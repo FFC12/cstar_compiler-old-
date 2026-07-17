@@ -13,6 +13,11 @@ ASTNode CStarParser::advanceNewExpression(bool isShared) {
 
   expected(TokenKind::NEW);
   this->advance();
+  bool isFallible = false;
+  if (is(TokenKind::QMARK)) {
+    isFallible = true;
+    this->advance();
+  }
 
   ASTNode allocator = nullptr;
   if (is(TokenKind::LPAREN)) {
@@ -48,5 +53,6 @@ ASTNode CStarParser::advanceNewExpression(bool isShared) {
   auto endPos = prevTokenInfo().getTokenPositionInfo();
   SemanticLoc semLoc(startPos.begin, endPos.end, startPos.line);
   return std::make_unique<NewAST>(typeName, std::move(allocator),
-                                  std::move(args), isShared, semLoc);
+                                  std::move(args), isShared, isFallible,
+                                  semLoc);
 }

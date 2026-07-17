@@ -1,0 +1,17 @@
+// expected: diagnostic
+// expected-code: CST2100
+
+struct Meter {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+    ret;
+  }
+}
+
+main() :: int32 {
+  Meter^ owned = new? Meter(4);
+  drop owned;
+  ret 0;
+}

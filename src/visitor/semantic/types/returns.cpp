@@ -75,7 +75,15 @@ SymbolInfo Visitor::preVisit(RetAST &retAst) {
         }
       }
 
-      retAst.m_RetExpr->acceptBefore(*this);
+      auto returnedInfo = retAst.m_RetExpr->acceptBefore(*this);
+      if (returnedInfo.isNullable && !m_LastFuncRetTypeInfo.isNullable &&
+          returnedInfo.indirectionLevel > 0 &&
+          m_NonNullFlowSymbols.count(returnedInfo.symbolName) == 0) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Nullable pointer cannot be returned as a non-null pointer "
+            "without an `if (ptr)` non-null proof",
+            symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
+      }
       if (markMovedReturnSource) {
         m_MovedUniqueSymbols.insert(SymbolStateKey(movedReturnSource));
       }

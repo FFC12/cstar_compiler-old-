@@ -536,8 +536,39 @@ ValuePtr Visitor::visit(NewAST &newAst) {
   }
 
   if (newAst.m_IsShared) {
-    auto *counterRaw = CreateDefaultHeapAlloc(Builder->getInt64Ty(),
-                                             "new.shared.count");
+    llvm::Value *counterRaw = nullptr;
+    if (newAst.m_Allocator != nullptr &&
+        newAst.m_Allocator->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *allocatorSymbol =
+          static_cast<SymbolAST *>(newAst.m_Allocator.get());
+      auto allocatorInfo = getSymbolInfo(allocatorSymbol->m_SymbolName);
+      auto *allocatorStorage =
+          FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                      allocatorSymbol->m_SymbolName);
+      auto *allocFunction = Module->getFunction(allocatorInfo.definedTypeName +
+                                                ".alloc");
+      if (allocatorStorage != nullptr && allocFunction != nullptr) {
+        if (allocatorInfo.isRef &&
+            m_ReferenceParamValueTypes.count(allocatorSymbol->m_SymbolName) >
+                0) {
+          auto *slotType = GetPointeeType(allocatorStorage);
+          allocatorStorage = CreateLoad(
+              allocatorStorage, slotType,
+              allocatorSymbol->m_SymbolName + ".allocator.count.ref");
+        }
+        auto *countSize =
+            llvm::ConstantInt::get(Builder->getInt64Ty(), 8);
+        auto *countAlign =
+            llvm::ConstantInt::get(Builder->getInt64Ty(), 8);
+        counterRaw = Builder->CreateCall(
+            allocFunction, {allocatorStorage, countSize, countAlign},
+            "new.shared.count.alloc");
+      }
+    }
+    if (counterRaw == nullptr) {
+      counterRaw = CreateDefaultHeapAlloc(Builder->getInt64Ty(),
+                                          "new.shared.count");
+    }
     auto *one = llvm::ConstantInt::get(Builder->getInt64Ty(), 1);
     Builder->CreateStore(one, counterRaw);
     auto *handle = CreateSharedPointerHandle(storage, counterRaw);

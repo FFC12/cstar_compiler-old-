@@ -159,6 +159,7 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
         resolved.indirectionLevel = field.indirectionLevel;
         resolved.isUnique = field.isUnique;
         resolved.isRef = field.isRef;
+        resolved.isNullable = field.isNullable;
         resolved.isSubscriptable = false;
         resolved.arrayDimensions.clear();
         resolved.begin = fieldSymbol->m_SemLoc.begin;

@@ -137,6 +137,7 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
           resolved.indirectionLevel = field.indirectionLevel;
           resolved.isUnique = field.isUnique;
           resolved.isRef = field.isRef;
+          resolved.isNullable = field.isNullable;
           resolved.isSubscriptable = false;
           resolved.arrayDimensions.clear();
           resolved.isConstVal = false;
@@ -173,7 +174,17 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
                 "It's not a indirectable or not a valid indirection level",
                 symbolInfo);
           } else {
+            if (matchedSymbol.isNullable &&
+                m_NonNullFlowSymbols.count(matchedSymbol.symbolName) == 0) {
+              m_TypeErrorMessages.emplace_back(
+                  "Nullable pointer must be proven non-null before "
+                  "dereference assignment; guard it with `if (ptr)` first",
+                  symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
+            }
             matchedSymbol.indirectionLevel -= assignmentAst.m_DerefLevel;
+            if (matchedSymbol.indirectionLevel == 0) {
+              matchedSymbol.isNullable = false;
+            }
 
             indirectable = true;
           }
@@ -347,6 +358,14 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
         //      this->m_LastIde
         //        if(indirectable)
         auto rhs = assignmentAst.m_RHS->acceptBefore(*this);
+        if (rhs.isNullable && !matchedSymbol.isNullable &&
+            rhs.indirectionLevel > 0 &&
+            m_NonNullFlowSymbols.count(rhs.symbolName) == 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Nullable pointer cannot be assigned to a non-null pointer "
+              "without an `if (ptr)` non-null proof",
+              symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
+        }
         if (markUniqueMoveSource) {
           m_MovedUniqueSymbols.insert(SymbolStateKey(uniqueMoveSource));
           m_MovedUniqueSymbols.erase(SymbolStateKey(matchedSymbol));

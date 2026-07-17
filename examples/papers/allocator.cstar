@@ -7,6 +7,9 @@
 //
 // Decisions:
 // - Users do not implement `operator new/delete/shared_new/shared_delete`.
+// - Allocator capability is discovered by language item metadata, not by
+//   trait name. A trait named `Allocator` is not special unless it is marked
+//   `#[lang(allocator)]`.
 // - `new Type(args)` selects default allocator/runtime.
 // - `new(allocator) Type(args)` uses an explicit allocator value.
 // - `shared new Type(args)` creates a shared ownership handle.
@@ -17,7 +20,15 @@
 // - Infallible `new` never returns nil. Fallible allocation is explicit with
 //   `new?` and returns a nullable pointer.
 
+#[lang(allocator)]
 trait Allocator {
+    alloc(usize bytes, usize align) :: void*;
+    free(void* ptr, usize bytes, usize align) :: void;
+}
+
+// This is just a normal trait. It has allocator-shaped methods, but the
+// compiler must not treat it as allocation capability.
+trait LooksLikeAllocator {
     alloc(usize bytes, usize align) :: void*;
     free(void* ptr, usize bytes, usize align) :: void;
 }
@@ -33,6 +44,23 @@ struct ArenaAllocator with Allocator {
 
     free(void* ptr, usize bytes, usize align) :: void {
         // Arena free can be no-op by design.
+        ret;
+    }
+}
+
+// Heap-backed allocators must actually return memory to their backend in
+// `free`; otherwise the compiler did call the release hook, but the allocator
+// intentionally leaked.
+import malloc(usize bytes) :: void* from "std:crt";
+import free(void* ptr) :: void from "std:crt";
+
+struct HeapAllocator with Allocator {
+    alloc(usize bytes, usize align) :: void* {
+        ret malloc(bytes);
+    }
+
+    free(void* ptr, usize bytes, usize align) :: void {
+        free(ptr);
         ret;
     }
 }
@@ -117,16 +145,23 @@ try_create_primitive(ArenaAllocator& arena) :: int32^? {
 //
 // Desugars to:
 //
-//   SharedControlBlock* cb =
-//       runtime.shared_alloc(sizeof(Meter), alignof(Meter), ref arena);
-//   Meter& slot = cb.data_as<Meter>();
+//   void* raw = arena.alloc(sizeof(Meter), alignof(Meter));
+//   void* strong = arena.alloc(sizeof(i64), alignof(i64));
+//   store_atomic(strong, 1);
+//   Meter& slot = unsafe_cast<Meter&>(raw);
 //   slot.constructor(7);
-//   Meter* shared_meter = runtime.attach_shared<Meter>(cb);
+//   Meter* shared_meter = runtime.attach_shared<Meter>(raw, strong, ref arena);
 //
 // Ref-count reaches zero:
 //
 //   slot.destructor();
-//   arena.free(cb, cb.total_size, alignof(SharedControlBlock));
+//   arena.free(raw, sizeof(Meter), alignof(Meter));
+//   arena.free(strong, sizeof(i64), alignof(i64));
+//
+// The compiler owns the exact control-block layout. The standard contract is
+// that explicit allocator selection owns both payload storage and shared
+// metadata; an implementation may fuse them into one allocation later, but it
+// must not allocate half of the shared object from the default heap.
 
 // Failure policy:
 // Infallible `new` and `shared new` must not silently produce nil. If the

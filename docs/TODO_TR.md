@@ -918,23 +918,31 @@ Kalan tasarım kararı: pointer nullability.
   - `deref` non-null kanıtı olmayan nullable pointer'da reddedilmeli; `if (p)` veya protocol/flow proof sonrası scope içinde non-null narrow edilmeli.
   - `unsafe_cast<T*>(0)` gibi raw interop yolları ayrı unsafe escape hatch olarak kalmalı.
   - Moved-from pointer'ın iç temsilde null'a çekilmesi kullanıcı tarafından “nullable value” olarak görülmemeli; semantic state `moved` olarak kalmalı ve yeniden initialize edilmeden kullanım `CST2105` üretmeli.
-- Kısa vadeli MVP:
-  - Var olan non-null pointer davranışını koru.
-  - `T*?` / `T^?` syntax henüz uygulanana kadar kullanıcının `nil` assignment yapmasını controlled proposal diagnostic ile reddet. Tamamlandı:
-    - `nil` expression literal olarak parse edilir.
-    - Non-null `T*`, `T^` ve `T&` bağlamında `CST2100` diagnostic üretir.
-    - `examples/type_checker/pointers/036.cstar`
-    - `examples/type_checker/pointers/037.cstar`
-    - `examples/type_checker/pointers/038.cstar`
-  - Native interop ve allocator failure için null dönen raw pointer konusunu Aşama 8.5 allocation failure policy ve fallible `new?` ile birlikte çöz.
-- Test adayları:
-  - `int32* p = nil;` controlled diagnostic. Tamamlandı.
-  - `int32*? p = nil;` nullable syntax açılınca pass.
-  - `deref p` nullable pointer için check öncesi diagnostic.
-  - `if (p) { ret deref p; }` flow narrowing pass.
-  - `ret p ? 1 : 0;` gibi pointer condition mevcut zero/nil karşılaştırma davranışını korur.
+- Tamamlanan MVP:
+  - Var olan non-null pointer davranışı korundu.
+  - Nullable pointer syntax'ı `T*?` ve `T^?` olarak parser/AST/semantic hattına eklendi.
+  - `T&?` reddedilir; reference nullable olmaz.
+  - `nil` expression literal olarak parse edilir ve yalnız nullable pointer bağlamında kabul edilir.
+  - Non-null `T*`, `T^` ve `T&` bağlamında `nil` `CST2100` diagnostic üretir.
+  - Nullable pointer non-null pointer'a sessiz atanamaz; `if (p)` true branch'i içinde non-null narrowing yapılır.
+  - `deref p` nullable pointer için proof öncesi `CST2100` üretir.
+  - `new? Type(args)` sonucu `Type^?`, `shared new? Type(args)` sonucu `Type*?` kabul edilir.
+  - Shared nullable allocator smoke'u explicit allocator payload + strong-count metadata release hattını alloc/free sayaçlarıyla doğrular.
+  - Heap-backed allocator smoke'ları `free(ptr)` içinde CRT free çağırır; sayaçlar yalnız compiler hook çağrısını değil gerçek native heap release niyetini de doğrular.
+- Testler:
+  - `examples/type_checker/pointers/036.cstar`
+  - `examples/type_checker/pointers/037.cstar`
+  - `examples/type_checker/pointers/038.cstar`
+  - `examples/type_checker/pointers/040.cstar`
+  - `examples/type_checker/pointers/041.cstar`
+  - `examples/type_checker/pointers/042.cstar`
+  - `examples/smoke/pointers/nullable_pointer_nil.cstar`
+  - `examples/smoke/pointers/nullable_pointer_flow_deref.cstar`
+  - `examples/smoke/ownership/nullable_shared_allocator_release.cstar`
+  - `examples/smoke/ownership/unique_allocator_drop_releases.cstar`
+  - `examples/smoke/ownership/unique_allocator_scope_exit_releases.cstar`
 
-İleri aşama: Ownership transfer ve lifetime başlıkları Aşama 3.2 altında takip edilecek. Pointer nullability kararı allocator failure ve protocol/flow analysis ile birlikte sıkılaştırılacak.
+İleri aşama: flow proof motoru nested boolean expressions/protocol proofs ile genişletilecek; allocator failure runtime policy'si Aşama 8.5 altında görünür abort/effect/result modeliyle sıkılaştırılacak.
 
 ### 3.2 Ownership Pointer `^`
 
@@ -1466,7 +1474,7 @@ Durum:
   - User-defined operator overloading yalnız value operator'ları içindir.
   - Struct data inheritance yoktur; layout reuse composition ile yapılır.
 - Allocation customization artık canonical olarak `examples/papers/allocator.cstar` içindedir:
-  - Allocation customization yalnız `Allocator` trait ile yapılır.
+  - Allocation customization yalnız `#[lang(allocator)]` ile işaretlenmiş canonical allocator trait'i ile yapılır; trait adı tek başına özel değildir.
   - Compiler `new(allocator) Type(args)` lowering'ini allocator + constructor + ownership runtime ile synthesize eder.
 - Dynamic dispatch canonical olarak `examples/papers/trait.cstar` içindedir:
   - Dynamic dispatch yalnız açık `dynamic Trait` yüzeyiyle mümkündür.
@@ -1481,9 +1489,9 @@ Son kontrol ve ileri takip:
   - lifecycle/ownership operator'larının user overload olarak reddi diagnostic ile korunur.
   - `examples/type_checker/067.cstar`
 - `operator index` ve zengin overload resolution Aşama 8+ ileri operator tasarımına taşındı.
-- Allocator-backed shared control-block layout ileride tek runtime layout contract'ına taşınacak:
-  - Bugünkü MVP data allocation için explicit allocator'ı kullanır.
-  - Shared strong-count metadata default runtime allocation ile oluşturulur.
+- Allocator-backed shared control metadata contract'ı güncellendi:
+  - Bugünkü MVP explicit allocator'ı hem payload data hem strong-count metadata için kullanır.
+  - Strong-count metadata ayrı allocation'dır; compiler ileride aynı contract altında fused layout üretebilir.
   - Failure policy explicit signature/effect modeline bağlanacak.
 - `protocol` parser/flow tasarımı Aşama 8+ ileri proposal olarak kaldı:
   - `protocol FileState for FileHandle { ... }`
@@ -1640,7 +1648,7 @@ Tamamlanan:
 - Compile-time conformance check.
 - Allocator capability final struct proposal'a göre trait üzerinden yürür:
   - user-defined `operator new` yok.
-  - `Allocator` conformance `new(allocator) Type(args)` semantic kontrolü için zorunlu.
+  - Allocator conformance `new(allocator) Type(args)` semantic kontrolü için zorunlu; compiler bunu trait adına göre değil `#[lang(allocator)]` language item kaydına göre bulur.
   - `examples/smoke/trait_struct_conformance.cstar`
   - `examples/type_checker/068.cstar`
   - `examples/type_checker/069.cstar`
@@ -1889,33 +1897,31 @@ Kalan:
 
 Durum:
 
-- `new Type(args)`, `shared new Type(args)` ve `new(allocator) Type(args)` MVP yüzeyi çalışır.
-- `Allocator` trait conformance semantic kontrolünde kullanılır.
+- `new Type(args)`, `shared new Type(args)`, `new(allocator) Type(args)` ve `shared new(allocator) Type(args)` MVP yüzeyi çalışır.
+- `new? Type(args)` ve `shared new? Type(args)` nullable ownership handle sonucu üretir (`T^?` / `T*?`).
+- Allocator trait conformance semantic kontrolünde kullanılır; canonical allocator capability `#[lang(allocator)]` metadata'sı ile kayıtlı trait'tir.
 - `examples/papers/allocator.cstar` canonical proposal dosyasıdır.
 - `examples/papers/nullability.cstar` nullable pointer ve `nil` canonical proposal dosyasıdır.
-- Shared handle güçlü sayacı MVP olarak vardır; allocator-backed shared metadata contract'ı henüz tam değildir.
+- Shared handle güçlü sayacı MVP olarak vardır; explicit allocator kullanıldığında payload storage ve strong-count metadata aynı allocator domain'inden allocate/free edilir.
+- Heap-backed allocator örneklerinde `free` method'u gerçek CRT `free(ptr)` çağırır; arena allocator gibi region tabanlı allocator'larda no-op free ancak allocator'ın açık tasarım kararı olabilir.
 
 Kalan:
 
-- `Allocator` trait requirement'larını standartlaştır:
-  - `alloc(usize bytes, usize align) :: void*`
-  - `free(void* ptr, usize bytes, usize align) :: void`
 - `new(allocator) Type(args)` lowering'ini `--show-desugar` ile görünür yap:
   - `alloc(sizeof(Type), alignof(Type))`
   - placement constructor call
   - unique/shared handle attach
   - destructor + `free` cleanup edge
-- `shared new(allocator) Type(args)` için control-block layout contract'ı tasarla:
-  - strong count.
-  - data offset/alignment.
-  - allocator reference veya allocator vtable bilgisi.
-  - last release -> destructor -> allocator.free.
-- Bugünkü explicit allocator'ın yalnız data allocation mı yaptığı, yoksa shared control-block'u da mı yönettiği netleştirilmeli; hedef tek runtime layout contract'ı olmalı.
+- `shared new(allocator) Type(args)` control metadata contract'ı:
+  - explicit allocator payload storage ve strong-count metadata'yı birlikte sahiplenir.
+  - current MVP strong-count metadata'yı ayrı `alloc(sizeof(i64), alignof(i64))` ile alır.
+  - last release -> destructor -> allocator.free(payload) -> allocator.free(strong-count).
+  - compiler exact layout'u sahiplenir; ileride payload + metadata tek fused allocation'a indirilebilir, ama default heap'e yarım kaçış olmamalı.
 - Allocation failure policy:
   - gizli policy hook yok.
   - `new T(args)` ve `shared new T(args)` default olarak infallible/non-null kabul edilmeli; allocation failure ilk runtime MVP'de abort veya görünür compiler runtime error olabilir.
-  - Fallible allocation ayrı yüzey olmalı: önerilen form `new? T(args)` ve `shared new? T(args)`.
-  - `new? T(args)` sonucu `T^?`, `shared new? T(args)` sonucu `T*?` olmalı.
+  - Fallible allocation ayrı yüzeydir: `new? T(args)` ve `shared new? T(args)`.
+  - `new? T(args)` sonucu `T^?`, `shared new? T(args)` sonucu `T*?` olur.
   - `except`/`throw` veya explicit result-like return modeli olgunlaşınca fallible allocation bu effect/result modeliyle de ifade edilebilir.
   - null raw pointer dönen allocator, infallible `new` içinde sessiz null pointer üretmemeli; ya visible failure'a çevrilmeli ya da `new?` yoluyla nullable sonuç vermeli.
 - Primitive allocation policy:
@@ -1930,10 +1936,15 @@ Kalan:
   - allocator olmayan değerle `new(allocator)` diagnostic'i korunmalı.
   - allocator-backed unique allocation pass.
   - allocator-backed shared allocation pass.
+  - allocator language item custom trait-name smoke.
+  - allocator trait-name-without-lang diagnostic.
+  - allocator-backed shared control metadata allocation/free smoke.
+  - allocator-backed unique `drop` allocation/free smoke.
+  - allocator-backed unique scope-exit allocation/free smoke.
   - destructor + allocator.free çağrı sırası smoke.
   - `new int32(7)` smoke.
   - `shared new float64(1.0)` smoke.
-  - `new? int32(7)` fallible allocation proposal diagnostic veya future smoke.
+  - `new? int32(7)` primitive fallible allocation smoke.
 
 ### 8.6 Protocol / Typestate
 

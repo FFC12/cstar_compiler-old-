@@ -76,6 +76,7 @@ StructFieldInfo CStarParser::parseStructField(
     const bool currentPointerIsUnique =
         this->currentTokenKind() == TokenKind::XOR;
     field.indirectionLevel = advancePointerType(currentPointerIsUnique);
+    field.isNullable = m_LastPointerTypeNullable;
     if (currentPointerIsUnique) {
       field.isUnique = true;
     }
@@ -85,6 +86,10 @@ StructFieldInfo CStarParser::parseStructField(
     field.indirectionLevel = 1;
     field.isRef = true;
     this->advance();
+    if (is(TokenKind::QMARK)) {
+      ParserError("References cannot be nullable; use an explicit pointer type",
+                  currentTokenInfo());
+    }
   }
 
   expected(TokenKind::IDENT);

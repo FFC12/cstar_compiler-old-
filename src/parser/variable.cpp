@@ -30,6 +30,7 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
   size_t indirectionLevel = 0;
   bool isUnique = false;
   bool isRef = false;
+  bool isNullable = false;
   bool isMoveInit = false;
 
   //* | ^
@@ -38,6 +39,7 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
     const bool currentPointerIsUnique =
         this->currentTokenKind() == TokenKind::XOR;
     indirectionLevel = advancePointerType(currentPointerIsUnique);
+    isNullable = m_LastPointerTypeNullable;
 
     if (currentPointerIsUnique) isUnique = true;
     // std::cout << "Indirection level: " << indirection_level << "\n";
@@ -47,6 +49,10 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
     indirectionLevel = 1;
     this->advance();
     isRef = true;
+    if (is(TokenKind::QMARK)) {
+      ParserError("References cannot be nullable; use an explicit pointer type",
+                  currentTokenInfo());
+    }
   }
 
   // expect ident (name of the variable)
@@ -86,7 +92,7 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
         declarationModifiers.linkage, declarationModifiers.access,
         declarationModifiers.isStatic,
         indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
-        std::move(arrayDimensions), semLoc, isMoveInit);
+        std::move(arrayDimensions), semLoc, isMoveInit, isNullable);
 
     ast->setDeclKind(getDeclKind(declarationModifiers.linkage));
 
@@ -112,7 +118,7 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
         declarationModifiers.linkage, declarationModifiers.access,
         declarationModifiers.isStatic,
         indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
-        std::move(arrayDimensions), semLoc, isMoveInit);
+        std::move(arrayDimensions), semLoc, isMoveInit, isNullable);
 
     ast->setDeclKind(getDeclKind(declarationModifiers.linkage));
 
@@ -285,6 +291,7 @@ ASTNode CStarParser::initializerList() {
 
 size_t CStarParser::advancePointerType(bool isUniquePtr) {
   size_t level = 1;
+  m_LastPointerTypeNullable = false;
   TokenKind pointerType = TokenKind::STAR;
 
   if (isUniquePtr) {
@@ -329,6 +336,11 @@ size_t CStarParser::advancePointerType(bool isUniquePtr) {
         "Next pointer type [*] is not same as type of before "
         "level's [^]. This is not supported!",
         currentTokenInfo());
+  }
+
+  if (is(TokenKind::QMARK)) {
+    m_LastPointerTypeNullable = true;
+    this->advance();
   }
 
   return level;

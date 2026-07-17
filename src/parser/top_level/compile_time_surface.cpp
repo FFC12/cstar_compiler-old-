@@ -622,6 +622,12 @@ void CStarParser::preprocessCompileTimeSurface() {
         continue;
       }
       if (m_TokenStream[i].getTokenKind() == TokenKind::HASH) {
+        if (i + 1 < m_TokenStream.size() &&
+            m_TokenStream[i + 1].getTokenKind() == TokenKind::LSQPAR) {
+          output.push_back(m_TokenStream[i]);
+          i += 1;
+          continue;
+        }
         i = handleDirective(i, output);
         changed = true;
         continue;

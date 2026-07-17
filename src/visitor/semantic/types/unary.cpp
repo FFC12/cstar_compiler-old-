@@ -29,6 +29,13 @@ SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
           this->m_DereferenceLevel = 1;
         }
         symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
+        if (symbolInfo.isNullable &&
+            m_NonNullFlowSymbols.count(symbolInfo.symbolName) == 0) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Nullable pointer must be proven non-null before dereference; "
+              "guard it with `if (ptr)` first",
+              symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
+        }
         if (!wasDereferenced) {
           this->m_LastDereferenced = false;
           this->m_DereferenceLevel = 1;
@@ -41,6 +48,7 @@ SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
           symbolInfo.indirectionLevel -= 1;
           symbolInfo.isUnique = false;
           symbolInfo.isRef = false;
+          symbolInfo.isNullable = false;
           symbolInfo.isSubscriptable = false;
           symbolInfo.arrayDimensions.clear();
         } else if (symbolInfo.isRef) {

@@ -10,6 +10,7 @@ SymbolInfo Visitor::preVisit(NewAST &newAst) {
   symbolInfo.definedTypeName = newAst.m_TypeName;
   symbolInfo.indirectionLevel = 1;
   symbolInfo.isUnique = !newAst.m_IsShared;
+  symbolInfo.isNullable = newAst.m_IsFallible;
 
   if (!m_TypeChecking) {
     return symbolInfo;
@@ -47,26 +48,28 @@ SymbolInfo Visitor::preVisit(NewAST &newAst) {
           "`new(allocator)` expects a struct value implementing Allocator",
           symbolInfo);
     } else {
-      const auto allocName = allocatorInfo.definedTypeName + ".alloc";
-      const auto freeName = allocatorInfo.definedTypeName + ".free";
+      std::string allocatorTraitName;
+      for (const auto &entry : TraitTable) {
+        if (entry.second.languageItem == "allocator") {
+          allocatorTraitName = entry.first;
+          break;
+        }
+      }
+
       bool satisfiesAllocator = false;
       auto structIt = StructTable.find(allocatorInfo.definedTypeName);
-      if (TraitTable.count("Allocator") != 0 && structIt != StructTable.end()) {
+      if (!allocatorTraitName.empty() && structIt != StructTable.end()) {
         satisfiesAllocator =
             std::find(structIt->second.traits.begin(),
-                      structIt->second.traits.end(), "Allocator") !=
+                      structIt->second.traits.end(), allocatorTraitName) !=
             structIt->second.traits.end();
-      } else {
-        satisfiesAllocator =
-            FunctionTable.count(allocName) != 0 &&
-            FunctionTable.count(freeName) != 0;
       }
 
       if (!satisfiesAllocator) {
         this->m_TypeErrorMessages.emplace_back(
             "allocator type '" + allocatorInfo.definedTypeName +
-                "' must implement Allocator with alloc(bytes, align) and "
-                "free(ptr, bytes, align)",
+                "' must implement the #[lang(allocator)] trait with "
+                "alloc(bytes, align) and free(ptr, bytes, align)",
             symbolInfo);
       }
     }

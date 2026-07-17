@@ -52,6 +52,7 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   symbolInfo.isConstVal = varAst.m_TypeQualifier == Q_CONST;
   symbolInfo.isRef = varAst.m_IsRef;
   symbolInfo.isUnique = varAst.m_IsUniquePtr;
+  symbolInfo.isNullable = varAst.m_IsNullable;
   symbolInfo.isCastable = true;
   symbolInfo.isPublic = varAst.m_AccessSpec == ACCESS_PUBLIC;
   symbolInfo.isStatic = varAst.m_IsStatic ||
@@ -72,6 +73,13 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
         "Multi-level pointer qualifiers require explicit per-level qualifier "
         "syntax; this declaration would be ambiguous in the current MVP",
         symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
+  }
+
+  if (m_TypeChecking && symbolInfo.isNullable &&
+      (symbolInfo.indirectionLevel == 0 || symbolInfo.isRef)) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Nullable marker '?' is valid only for pointer types (`T*?` or `T^?`)",
+        symbolInfo, DiagnosticCode::SemanticInvalidQualifier);
   }
 
   symbolInfo.isNeededEval = true;
@@ -333,6 +341,14 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
       }
     } else {
       auto tempSymbolInfo = varAst.m_RHS->acceptBefore(*this);
+      if (tempSymbolInfo.isNullable && !symbolInfo.isNullable &&
+          tempSymbolInfo.indirectionLevel > 0 &&
+          m_NonNullFlowSymbols.count(tempSymbolInfo.symbolName) == 0) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Nullable pointer cannot initialize a non-null pointer without an "
+            "`if (ptr)` non-null proof",
+            symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
+      }
       symbolInfo.ptrAliases = std::move(tempSymbolInfo.ptrAliases);
       if (markUniqueMoveSource) {
         m_MovedUniqueSymbols.insert(SymbolStateKey(uniqueMoveSource));
@@ -345,6 +361,14 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
     if (varAst.m_RHS != nullptr) {
       this->m_LastSymbolInfo = symbolInfo;
       auto tempSmbolInfo = varAst.m_RHS->acceptBefore(*this);
+      if (tempSmbolInfo.isNullable && !symbolInfo.isNullable &&
+          tempSmbolInfo.indirectionLevel > 0 &&
+          m_NonNullFlowSymbols.count(tempSmbolInfo.symbolName) == 0) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Nullable pointer cannot initialize a non-null pointer without an "
+            "`if (ptr)` non-null proof",
+            symbolInfo, DiagnosticCode::SemanticQualifierMismatch);
+      }
       symbolInfo.ptrAliases = std::move(tempSmbolInfo.ptrAliases);
     }
   }

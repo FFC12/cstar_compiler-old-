@@ -8,15 +8,39 @@ SymbolInfo Visitor::preVisit(IfStmtAST &ifStmtAst) {
   for (auto &block : ifStmtAst.m_Cond) {
     // type checking for condition
     enterScope(false);
+    std::string narrowedNullableSymbol;
     if (m_TypeChecking) {
       this->m_LastCondExpr = true;
-      block.second.first->acceptBefore(*this);
+      SymbolInfo conditionInfo = block.second.first->acceptBefore(*this);
       this->m_LastCondExpr = false;
+      if (block.second.first->m_ExprKind == ExprKind::SymbolExpr) {
+        auto *conditionSymbol =
+            static_cast<SymbolAST *>(block.second.first.get());
+        SymbolInfo lookupInfo;
+        lookupInfo.symbolName = conditionSymbol->m_SymbolName;
+        lookupInfo.begin = conditionSymbol->m_SemLoc.begin;
+        lookupInfo.end = conditionSymbol->m_SemLoc.end;
+        lookupInfo.line = conditionSymbol->m_SemLoc.line;
+        SymbolInfo resolvedCondition;
+        auto conditionName = conditionSymbol->m_SymbolName;
+        if (symbolValidation(conditionName, lookupInfo, resolvedCondition,
+                             true)) {
+          conditionInfo = resolvedCondition;
+        }
+      }
+      if (conditionInfo.isNullable && conditionInfo.indirectionLevel > 0 &&
+          !conditionInfo.isRef && !conditionInfo.symbolName.empty()) {
+        narrowedNullableSymbol = conditionInfo.symbolName;
+        m_NonNullFlowSymbols.insert(narrowedNullableSymbol);
+      }
     }
 
     // there is only one node actually..
     for (auto &node : block.second.second) {
       scopeHandler(node, SymbolScope::IfSt);
+    }
+    if (!narrowedNullableSymbol.empty()) {
+      m_NonNullFlowSymbols.erase(narrowedNullableSymbol);
     }
     exitScope(false);
   }
@@ -25,16 +49,40 @@ SymbolInfo Visitor::preVisit(IfStmtAST &ifStmtAst) {
     for (auto &entry : ifStmtAst.m_ElseIfs) {
       // type checking for condition
       enterScope(false);
+      std::string narrowedNullableSymbol;
       if (m_TypeChecking) {
         this->m_LastCondExpr = true;
-        entry.second.first->acceptBefore(*this);
+        SymbolInfo conditionInfo = entry.second.first->acceptBefore(*this);
         this->m_LastCondExpr = false;
+        if (entry.second.first->m_ExprKind == ExprKind::SymbolExpr) {
+          auto *conditionSymbol =
+              static_cast<SymbolAST *>(entry.second.first.get());
+          SymbolInfo lookupInfo;
+          lookupInfo.symbolName = conditionSymbol->m_SymbolName;
+          lookupInfo.begin = conditionSymbol->m_SemLoc.begin;
+          lookupInfo.end = conditionSymbol->m_SemLoc.end;
+          lookupInfo.line = conditionSymbol->m_SemLoc.line;
+          SymbolInfo resolvedCondition;
+          auto conditionName = conditionSymbol->m_SymbolName;
+          if (symbolValidation(conditionName, lookupInfo, resolvedCondition,
+                               true)) {
+            conditionInfo = resolvedCondition;
+          }
+        }
+        if (conditionInfo.isNullable && conditionInfo.indirectionLevel > 0 &&
+            !conditionInfo.isRef && !conditionInfo.symbolName.empty()) {
+          narrowedNullableSymbol = conditionInfo.symbolName;
+          m_NonNullFlowSymbols.insert(narrowedNullableSymbol);
+        }
       }
       auto &elseIfBlock = entry.second;
       // manually increasing
       this->m_SymbolId++;
       for (auto &node : elseIfBlock.second) {
         scopeHandler(node, SymbolScope::IfSt);
+      }
+      if (!narrowedNullableSymbol.empty()) {
+        m_NonNullFlowSymbols.erase(narrowedNullableSymbol);
       }
       exitScope(false);
     }

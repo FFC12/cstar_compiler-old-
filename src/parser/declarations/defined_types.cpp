@@ -12,11 +12,13 @@ ASTNode CStarParser::advanceDefinedType() {
   bool isUniquePtr = false;
   size_t indirectionLevel = 0;
   bool isRef = false;
+  bool isNullable = false;
 
   while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
     const bool currentPointerIsUnique =
         this->currentTokenKind() == TokenKind::XOR;
     indirectionLevel = advancePointerType(currentPointerIsUnique);
+    isNullable = m_LastPointerTypeNullable;
     if (currentPointerIsUnique) {
       isUniquePtr = true;
     }
@@ -26,11 +28,15 @@ ASTNode CStarParser::advanceDefinedType() {
     indirectionLevel = 1;
     isRef = true;
     this->advance();
+    if (is(TokenKind::QMARK)) {
+      ParserError("References cannot be nullable; use an explicit pointer type",
+                  currentTokenInfo());
+    }
   }
 
   return std::make_unique<TypeAST>(TypeSpecifier::SPEC_DEFINED,
                                    std::move(symbol), isUniquePtr, true, isRef,
-                                   indirectionLevel, semLoc);
+                                   indirectionLevel, semLoc, isNullable);
 }
 
 std::string CStarParser::advanceDefinedTypeName() {

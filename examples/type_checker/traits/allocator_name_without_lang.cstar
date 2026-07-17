@@ -1,0 +1,37 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+trait Allocator {
+  alloc(usize bytes, usize align) :: void*;
+  free(void* ptr, usize bytes, usize align) :: void;
+}
+
+struct LooksLikeAllocator with Allocator {
+  constructor() {
+    ret;
+  }
+
+  alloc(usize bytes, usize align) :: void* {
+    ret unsafe_cast<void*>(0);
+  }
+
+  free(void* ptr, usize bytes, usize align) :: void {
+    ret;
+  }
+}
+
+struct Meter {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+    ret;
+  }
+}
+
+main() :: int32 {
+  LooksLikeAllocator arena = LooksLikeAllocator();
+  Meter^ meter = new(arena) Meter(3);
+  drop meter;
+  ret 0;
+}

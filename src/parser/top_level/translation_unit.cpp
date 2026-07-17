@@ -117,6 +117,11 @@ void CStarParser::translationUnit() {
     }
 
     if (is(TokenKind::HASH)) {
+      bool outOfSize = false;
+      if (nextTokenInfo(outOfSize).getTokenKind() == TokenKind::LSQPAR) {
+        parseLanguageItemAnnotation(true);
+        continue;
+      }
       parseDirective();
       continue;
     }
@@ -138,6 +143,13 @@ void CStarParser::translationUnit() {
           parseDeclarationModifiers(false);
 
       skipTopLevelTrivia();
+      if (!m_PendingLanguageItem.empty() && !is(TokenKind::TRAIT)) {
+        ParserError("language item annotation `lang(" +
+                        m_PendingLanguageItem +
+                        ")` can only be applied to a trait declaration",
+                    currentTokenInfo());
+      }
+
       if (is(TokenKind::ATTRIB)) {
         parseAttributeDecl(declarationModifiers);
         continue;

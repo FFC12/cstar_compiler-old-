@@ -7,6 +7,7 @@ ASTNode CStarParser::advanceType() {
     TokenInfo prevTokenInfo = this->currentTokenInfo();
     size_t indirectionLevel = 0;
     bool isUniquePtr = false;
+    bool isNullable = false;
 
     auto tokenPos = currentTokenInfo().getTokenPositionInfo();
     auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
@@ -18,12 +19,17 @@ ASTNode CStarParser::advanceType() {
       isRef = true;
       this->advance();
       semLoc.end += indirectionLevel;
+      if (is(TokenKind::QMARK)) {
+        ParserError("References cannot be nullable; use an explicit pointer type",
+                    currentTokenInfo());
+      }
     } else {
       //* | ^
       while (is(TokenKind::STAR) || is(TokenKind::XOR)) {
         isUniquePtr = this->currentTokenKind() == TokenKind::XOR;
 
         indirectionLevel = advancePointerType(isUniquePtr);
+        isNullable = m_LastPointerTypeNullable;
         semLoc.end += indirectionLevel;
         // std::cout << "Type Indirection level: " << indirectionLevel << "\n";
       }
@@ -31,7 +37,7 @@ ASTNode CStarParser::advanceType() {
 
     ASTNode typeAst = std::make_unique<TypeAST>(
         typeSpecifierOf(prevTokenInfo), nullptr, isUniquePtr, true, isRef,
-        indirectionLevel, semLoc);
+        indirectionLevel, semLoc, isNullable);
 
     // expected >
     // expected({TokenKind::GT, TokenKind::RPAREN});

@@ -11,15 +11,17 @@ class NewAST : public IAST {
   ASTNode m_Allocator;
   ASTNode m_Args;
   bool m_IsShared;
+  bool m_IsFallible;
 
  public:
   NewAST(std::string typeName, ASTNode allocator, ASTNode args, bool isShared,
-         SemanticLoc semLoc)
+         bool isFallible, SemanticLoc semLoc)
       : IAST(semLoc),
         m_TypeName(std::move(typeName)),
         m_Allocator(std::move(allocator)),
         m_Args(std::move(args)),
-        m_IsShared(isShared) {
+        m_IsShared(isShared),
+        m_IsFallible(isFallible) {
     this->m_ASTKind = ASTKind::Expr;
     this->m_ExprKind = ExprKind::NewExpr;
   }
@@ -27,6 +29,7 @@ class NewAST : public IAST {
   void debugNode() override {
     if (m_IsShared) std::cout << "shared ";
     std::cout << "new ";
+    if (m_IsFallible) std::cout << "? ";
     if (m_Allocator) {
       std::cout << "(";
       m_Allocator->debugNode();

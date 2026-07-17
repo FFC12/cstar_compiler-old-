@@ -23,7 +23,8 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
                                              allocationSize);
     auto *alignValue = llvm::ConstantInt::get(Builder->getInt64Ty(),
                                               allocationAlign);
-    auto freeHeapData = [&](llvm::Value *data) {
+    auto freeHeapAllocation = [&](llvm::Value *data, llvm::Value *size,
+                                  llvm::Value *align) {
       if (!heapInfo.allocatorSymbol.empty() && !heapInfo.allocatorTypeName.empty()) {
         auto *freeFunction = Module->getFunction(heapInfo.allocatorTypeName +
                                                  ".free");
@@ -40,11 +41,14 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
                                               ".allocator.free.ref");
           }
           Builder->CreateCall(freeFunction,
-                              {allocatorStorage, data, sizeValue, alignValue});
+                              {allocatorStorage, data, size, align});
           return;
         }
       }
       CreateDefaultHeapFree(data);
+    };
+    auto freeHeapData = [&](llvm::Value *data) {
+      freeHeapAllocation(data, sizeValue, alignValue);
     };
 
     auto *destructor = Module->getFunction(heapInfo.typeName + ".destructor");
@@ -84,7 +88,9 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
         Builder->CreateCall(destructor, {data});
       }
       freeHeapData(data);
-      CreateDefaultHeapFree(countAsI8);
+      auto *countSize = llvm::ConstantInt::get(Builder->getInt64Ty(), 8);
+      auto *countAlign = llvm::ConstantInt::get(Builder->getInt64Ty(), 8);
+      freeHeapAllocation(countAsI8, countSize, countAlign);
       Builder->CreateBr(afterReleaseBB);
 
       Builder->SetInsertPoint(afterReleaseBB);

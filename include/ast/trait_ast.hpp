@@ -11,13 +11,15 @@ class TraitAST : public IAST {
   friend Visitor;
   std::string m_Name;
   std::vector<TraitRequirementInfo> m_Requirements;
+  std::string m_LanguageItem;
 
  public:
   TraitAST(std::string name, std::vector<TraitRequirementInfo> requirements,
-           AccessSpecifier access, SemanticLoc semLoc)
+           AccessSpecifier access, std::string languageItem, SemanticLoc semLoc)
       : IAST(semLoc),
         m_Name(std::move(name)),
-        m_Requirements(std::move(requirements)) {
+        m_Requirements(std::move(requirements)),
+        m_LanguageItem(std::move(languageItem)) {
     this->m_ASTKind = ASTKind::Decl;
     this->m_DeclKind = DeclKind::TraitDecl;
     this->m_AccessSpecifier = access;
@@ -26,6 +28,9 @@ class TraitAST : public IAST {
   [[nodiscard]] const std::string& name() const { return m_Name; }
   [[nodiscard]] const std::vector<TraitRequirementInfo>& requirements() const {
     return m_Requirements;
+  }
+  [[nodiscard]] const std::string& languageItem() const {
+    return m_LanguageItem;
   }
 
   void debugNode() override {
