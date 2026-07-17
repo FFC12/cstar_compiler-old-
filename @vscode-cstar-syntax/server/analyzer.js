@@ -29,18 +29,20 @@ const primitiveTypes = [
 
 const qualifiers = [
   "const", "constptr", "constref", "readonly", "nomove", "public",
-  "private", "static", "dynamic", "shared", "allocator"
+  "private", "static", "dynamic", "shared", "allocator", "extern",
+  "native", "unsafe", "involved"
 ];
 
 const controlKeywords = [
-  "ret", "if", "elif", "else", "loop", "in", "break", "continue",
-  "option", "default", "throw", "defer", "drop"
+  "ret", "if", "elif", "else", "match", "case", "loop", "for", "in",
+  "break", "continue", "option", "default", "throw", "defer", "drop",
+  "scope_exit"
 ];
 
 const declarationKeywords = [
   "struct", "trait", "protocol", "enum", "flags", "tagged", "macro",
   "attribute", "constructor", "destructor", "operator", "import",
-  "export", "include", "from", "with"
+  "export", "include", "from", "with", "state", "prototype"
 ];
 
 const operatorKeywords = [
@@ -54,6 +56,11 @@ const builtinFunctions = [
   "core_print", "core_println", "core_print_char", "core_print_i32",
   "core_print_i64", "core_print_f64", "core_read_i32", "core_read_i64",
   "core_read_string", "printf", "scanf", "getchar"
+];
+
+const protocolStates = [
+  "opened", "closed", "idle", "sending", "failed", "retrying", "locked",
+  "unlocked", "valid", "invalid", "null"
 ];
 
 const topLevelSnippets = [
@@ -84,6 +91,34 @@ const topLevelSnippets = [
     detail: "C* import-from block",
     insertTextFormat: 2,
     insertText: "import from \"${1:std:crt}\" {\n    ${2:printf}(const char* fmt, ...) :: int32;\n}"
+  },
+  {
+    label: "protocol",
+    kind: CompletionItemKind.Snippet,
+    detail: "C* static typestate protocol",
+    insertTextFormat: 2,
+    insertText: "protocol ${1:State} for ${2:Type} {\n    state ${3:closed}, ${4:opened};\n    default ${3:closed};\n\n    ${3:closed} -> ${4:opened} :: ${5:open}();\n    ${4:opened} -> ${3:closed} :: ${6:close}();\n\n    scope_exit ${4:opened} -> ${3:closed} :: ${6:close}();\n}"
+  },
+  {
+    label: "fn except",
+    kind: CompletionItemKind.Snippet,
+    detail: "C* fallible function",
+    insertTextFormat: 2,
+    insertText: "${1:name}(${2}) except ${3:Error} :: ${4:int32} {\n    ${0:throw ${3}.${5:Failed};}\n}"
+  },
+  {
+    label: "defer",
+    kind: CompletionItemKind.Snippet,
+    detail: "C* cleanup block",
+    insertTextFormat: 2,
+    insertText: "defer {\n    ${0}\n}"
+  },
+  {
+    label: "flags enum",
+    kind: CompletionItemKind.Snippet,
+    detail: "C* flags enum",
+    insertTextFormat: 2,
+    insertText: "flags enum ${1:Mode} : ${2:uint32} {\n    ${3:None} = 0,\n    ${4:Read} = 1,\n    ${5:Write} = 2\n}"
   }
 ];
 
@@ -97,9 +132,9 @@ const reservedWords = new Set([
   ...controlKeywords,
   ...declarationKeywords,
   ...operatorKeywords,
+  ...protocolStates,
   "true", "false", "nil", "self", "async", "await", "except", "noexcept",
-  "onexcept", "state", "default", "scope_exit", "opened", "closed", "idle",
-  "sending", "failed"
+  "onexcept"
 ]);
 
 function analyzeText(text, uri = "file:///unknown.cstar") {
@@ -181,7 +216,11 @@ function addKeywordItems(items) {
   for (const label of primitiveTypes) {
     items.push({ label, kind: CompletionItemKind.Keyword, detail: "C* primitive type" });
   }
+  for (const label of protocolStates) {
+    items.push({ label, kind: CompletionItemKind.Keyword, detail: "C* common typestate label" });
+  }
   items.push({ label: "new?", kind: CompletionItemKind.Keyword, detail: "C* fallible allocation proposal" });
+  items.push({ label: "shared new?", kind: CompletionItemKind.Keyword, detail: "C* fallible shared allocation proposal" });
 }
 
 function addSymbolItems(items, symbols) {
@@ -411,7 +450,7 @@ function maskTrivia(text, addDiagnostic) {
 
 function tokenize(clean) {
   const tokens = [];
-  const pattern = /\.=|:=|::|->|=>|===|==|!=|<=|>=|\+\+|--|\.\.\.|[A-Za-z_][A-Za-z0-9_]*|\d+\.\d+|\d+|[{}()[\],;:.<>*^&=+\-/|!?~%]/g;
+  const pattern = /<<=|>>=|&=|\|=|\^=|\.=|:=|::|->|=>|===|==|!=|<=|>=|\+\+|--|\.\.\.|new\?|[A-Za-z_][A-Za-z0-9_]*|\d+\.\d+|\d+|[{}()[\],;:.<>*^&=+\-/|!?~%]/g;
   let match;
   while ((match = pattern.exec(clean)) !== null) {
     tokens.push({ text: match[0], offset: match.index });
@@ -770,10 +809,11 @@ function checkUnknownSimpleTypes(document, add) {
   for (let i = 0; i < tokens.length - 1; i += 1) {
     const token = tokens[i];
     if (!looksLikeTypeUsage(tokens, i)) continue;
+    if (isAnnotationIdentifier(document.clean, token.offset)) continue;
     const base = stripTypeDecorators(token.text);
     if (typeKeywords.has(base) || symbols.types.has(base) || base === "dynamic") continue;
     if (/^[A-Z]/.test(base)) {
-      add("CSTA1600", `Unknown type '${base}'.`, token.offset, token.text.length, WARNING);
+      add("CSTA1600", `Unknown type '${base}'.`, token.offset, token.text.length, INFORMATION);
     }
   }
 }
@@ -808,6 +848,10 @@ function checkOwnershipFlow(tokens, symbols, add) {
 
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i];
+    if (token.text === "}") {
+      moved.clear();
+      continue;
+    }
     if (token.text === ":=") {
       const lhs = previousIdentifier(tokens, i);
       const rhs = nextIdentifier(tokens, i);
@@ -826,7 +870,7 @@ function checkOwnershipFlow(tokens, symbols, add) {
       const previous = tokens[i + 1]?.text;
       const rhsIndex = rhs ? tokens.indexOf(rhs) : -1;
       const rhsIsCall = rhsIndex !== -1 && tokens[rhsIndex + 1]?.text === "(";
-      if (lhsType?.includes("^") && rhs && !rhsIsCall && previous !== "ref" && previous !== "new" && previous !== "move") {
+      if (lhsType?.includes("^") && rhs && !rhsIsCall && previous !== "ref" && previous !== "new" && previous !== "new?" && previous !== "move") {
         add("CSTA2202", "Unique `^` ownership cannot be copied with `=`; use `move`, `ref`, `new`, or `:=` as appropriate.", token.offset, token.text.length);
       }
       continue;
@@ -850,7 +894,7 @@ function checkOwnershipFlow(tokens, symbols, add) {
 function checkProtocolDynamicAssignment(tokens, add) {
   for (const token of tokens) {
     if (token.text === ".=") {
-      add("CSTA2300", "Dynamic protocol assignment `.=` is still a proposal surface.", token.offset, token.text.length);
+      add("CSTA2300", "Dynamic protocol assignment `.=` is a proposal surface; the compiler decides whether this file may lower it.", token.offset, token.text.length, INFORMATION);
     }
   }
 }
@@ -884,6 +928,15 @@ function looksLikeTypeUsage(tokens, i) {
   if (prev === "." || prev === "::") return false;
   if (next === "*" || next === "^" || next === "&") return true;
   if (isIdentifier(next) && !reservedWords.has(next)) return true;
+  return false;
+}
+
+function isAnnotationIdentifier(clean, offset) {
+  for (let i = offset - 1; i >= 0; i -= 1) {
+    const ch = clean[i];
+    if (ch === " " || ch === "\t") continue;
+    return ch === "@" || ch === "#";
+  }
   return false;
 }
 

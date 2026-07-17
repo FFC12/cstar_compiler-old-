@@ -10,17 +10,24 @@ temel editor ayarlari ve otomatik baslayan static analyzer destegi saglar.
 - ownership: `ref`, `deref`, `move`, `new`, `shared new`, `drop`, `strong_count`
 - lifecycle: `struct`, `constructor`, `destructor`, static ve instance erisimleri
 - sozlesmeler: `trait`, `with`, `protocol`, `attribute`, `macro`, `operator`
-- kontrol akisi: `if`, `elif`, `else`, `loop`, `for in`, `break`, `continue`, `ret`
+- protocol typestate: `protocol Name for Type`, `state`, `default`, `scope_exit`, `A -> B :: method()`
+- effect/cleanup: `except`, `throw`, `defer`, `scope_exit`
+- kontrol akisi: `if`, `elif`, `else`, `match`, `case`, `option`, `loop`, `for in`, `break`, `continue`, `ret`
 - native interop: C string/char escape'leri, `printf` placeholder'lari ve variadic `...`
 - operatorler: `::`, `.`, `:=`, `.=` ve sembolik aritmetik/karsilastirma/mantiksal operatorler
-- snippets: `main`, `fn`, `struct`, `trait`, `loopr`, `loopi`, `ife`, `importfrom`, `includeas`, `operator`
+- snippets: `main`, `fn`, `struct`, `trait`, `protocol`, `dynprotocol`, `fnexcept`, `defer`, `enum`, `flagenum`, `option`, `attribute`, `macroexpr`, `loopr`, `loopi`, `ife`, `importfrom`, `includeas`, `operator`
 - analyzer: acik dosyalarda diagnostics ve LSP completion
 - icon: extension icon ve `.cstar` file icon
 
-Sembolik operatorler bilerek C*'a ozel `meta.operator.*.cstar` scope'lariyla
-renklendirilir. Bu, temalarin operatorleri hata gibi kirmizi/pembe boyamasini
-engeller. Analyzer diagnostics ve completion calisir; highlight katmani sade
-TextMate grammar olarak kalir.
+`<` ve `>` editor bracket-pair olarak tanimli degildir. C* bu karakterleri hem
+karsilastirma operatoru hem de `cast<T>` / tip generic yuzeyi icin kullandigi
+icin bracket-pair renklendirmesi operatorleri hatali bicimde kirmizi gosterebiliyordu.
+TextMate grammar generic algisini yalniz `cast<T>`, `unsafe_cast<T>` ve PascalCase
+tip generic formuyla sinirlar; `a < b` ve `a > b` normal operator olarak kalir.
+
+Sembolik operatorler C*'a ozel `meta.operator.*.cstar` veya uygun punctuation
+scope'lariyla renklendirilir. Analyzer diagnostics ve completion calisir;
+highlight katmani sade TextMate grammar olarak kalir.
 
 ## Analyzer Ayarlari
 
@@ -34,7 +41,7 @@ Komut paletinde `C*: Restart Static Analyzer` komutu analyzer process'ini yenide
 ## Gelistirme Modunda Calistirma
 
 ```bash
-code vscode-cstar-syntax
+code @vscode-cstar-syntax
 ```
 
 Sonra `F5` ile Extension Development Host ac ve bir `.cstar` dosyasi yukle.
@@ -42,12 +49,12 @@ Sonra `F5` ile Extension Development Host ac ve bir `.cstar` dosyasi yukle.
 ## VSIX Paketleme
 
 ```bash
-cd vscode-cstar-syntax
-vsce.cmd package --allow-missing-repository --out cstar-syntax-0.4.0.vsix
+cd @vscode-cstar-syntax
+vsce.cmd package --allow-missing-repository --out cstar-syntax-0.5.0.vsix
 ```
 
 ## VSIX Kurulum
 
 ```bash
-code --install-extension cstar-syntax-0.4.0.vsix --force
+code --install-extension cstar-syntax-0.5.0.vsix --force
 ```

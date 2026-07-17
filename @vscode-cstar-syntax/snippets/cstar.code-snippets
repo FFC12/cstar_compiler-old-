@@ -94,5 +94,112 @@
       "}"
     ],
     "description": "C* value operator method"
+  },
+  "protocol typestate": {
+    "prefix": "protocol",
+    "body": [
+      "protocol ${1:State} for ${2:Type} {",
+      "    state ${3:closed}, ${4:opened};",
+      "    default ${3:closed};",
+      "",
+      "    ${3:closed} -> ${4:opened} :: ${5:open}();",
+      "    ${4:opened} -> ${3:closed} :: ${6:close}();",
+      "",
+      "    scope_exit ${4:opened} -> ${3:closed} :: ${6:close}();",
+      "}"
+    ],
+    "description": "C* static protocol typestate block"
+  },
+  "dynamic protocol": {
+    "prefix": "dynprotocol",
+    "body": [
+      "dynamic protocol ${1:State} for ${2:Type} {",
+      "    state ${3:idle}, ${4:active}, ${5:failed};",
+      "    default ${3:idle};",
+      "",
+      "    ${3:idle} -> ${4:active} :: ${6:start}();",
+      "    ${4:active} -> ${3:idle} :: ${7:stop}();",
+      "}"
+    ],
+    "description": "C* dynamic protocol proposal block"
+  },
+  "except function": {
+    "prefix": "fnexcept",
+    "body": [
+      "${1:name}(${2}) except ${3:Error} :: ${4:int32} {",
+      "    ${0:throw ${3}.${5:Failed};}",
+      "}"
+    ],
+    "description": "C* fallible function with except surface"
+  },
+  "defer cleanup": {
+    "prefix": "defer",
+    "body": [
+      "defer {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "C* defer cleanup block"
+  },
+  "enum": {
+    "prefix": "enum",
+    "body": [
+      "enum ${1:Name} : ${2:uint32} {",
+      "    ${3:First},",
+      "    ${4:Second}",
+      "}"
+    ],
+    "description": "C* scalar enum"
+  },
+  "flags enum": {
+    "prefix": "flagenum",
+    "body": [
+      "flags enum ${1:Mode} : ${2:uint32} {",
+      "    ${3:None} = 0,",
+      "    ${4:Read} = 1,",
+      "    ${5:Write} = 2",
+      "}"
+    ],
+    "description": "C* flags enum with explicit bit values"
+  },
+  "option enum": {
+    "prefix": "option",
+    "body": [
+      "option(${1:value}) {",
+      "    ${2:Type}.${3:Member} {",
+      "        ${4}",
+      "    }",
+      "    _ {",
+      "        ${0}",
+      "    }",
+      "}"
+    ],
+    "description": "C* option dispatch for enum values"
+  },
+  "attribute": {
+    "prefix": "attribute",
+    "body": [
+      "attribute ${1:Name} for ${2:struct} {",
+      "    ${0}",
+      "}"
+    ],
+    "description": "C* compile-time attribute declaration"
+  },
+  "macro expression": {
+    "prefix": "macroexpr",
+    "body": [
+      "macro ${1:name}(\\$${2:value}: expr) -> expr {",
+      "    (\\$${2:value})",
+      "    ${0}",
+      "}"
+    ],
+    "description": "C* expression macro"
+  },
+  "include std module": {
+    "prefix": "includestd",
+    "body": [
+      "include \"../../std/${1:print}.cstar\" as ${2:io}"
+    ],
+    "description": "C* stdlib include with alias"
   }
 }

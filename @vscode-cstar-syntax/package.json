@@ -2,7 +2,7 @@
   "name": "cstar-syntax",
   "displayName": "C* Language Support",
   "description": "Production-ready syntax highlighting, snippets, file icons, and editor defaults for C* (.cstar) source files.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "cstar-project",
   "license": "MIT",
   "icon": "images/cstar-icon.png",

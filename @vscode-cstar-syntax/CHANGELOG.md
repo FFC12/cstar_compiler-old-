@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- Removed `<` / `>` from VS Code bracket-pair configuration so comparison operators and generic/cast syntax are not shown as unmatched delimiters.
+- Narrowed generic highlighting to `cast<T>`, `unsafe_cast<T>`, and PascalCase type generic forms.
+- Added dedicated highlighting for protocol typestate blocks, `state` / `default` / `scope_exit`, `A -> B :: method()` transitions, enum reprs, tagged reprs, public macros, attributes, native import signatures, and effect signatures.
+- Expanded snippets for protocol, dynamic protocol, fallible functions, defer cleanup, enum/flags enum, option dispatch, attributes, macros, and stdlib includes.
+- Updated bundled analyzer completions and lightweight diagnostics for protocol states, effect keywords, fallible allocation tokens, and proposal-level `.=` informational diagnostics.
+
 ## 0.4.0
 
 - Reworked symbolic operator scopes to neutral `meta.operator.*.cstar` scopes so themes do not paint every operator as an error-like red token.

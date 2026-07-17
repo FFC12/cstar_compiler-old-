@@ -19,7 +19,7 @@ if (files.length === 0) {
     for (const diagnostic of diagnostics) {
       const line = diagnostic.range.start.line + 1;
       const column = diagnostic.range.start.character + 1;
-      const severity = diagnostic.severity === 1 ? "error" : "warning";
+      const severity = diagnostic.severity === 1 ? "error" : diagnostic.severity === 2 ? "warning" : "info";
       console.log(`${file}:${line}:${column}: ${severity} ${diagnostic.code}: ${diagnostic.message}`);
       if (diagnostic.severity === 1) hasErrors = true;
     }
