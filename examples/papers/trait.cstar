@@ -82,3 +82,12 @@ dynamic_example() :: int32 {
 // - `unsafe_cast` cannot create a trait object; vtable correctness is compiler
 //   responsibility.
 // - Public/export ABI must spell the generated data/vtable representation.
+//
+// Compiler status:
+// - `dynamic Trait&`, `dynamic Trait*`, `dynamic Trait^` type grammar is
+//   recognized and checked against trait declarations.
+// - `dynamic ref value as Trait` and `dynamic move value as Trait` are
+//   recognized for named values and checked against static trait conformance.
+// - ABI/vtable representation, trait-object construction and dispatch lowering
+//   are still pending, so valid dynamic trait object use produces a controlled
+//   diagnostic today.

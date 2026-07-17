@@ -1883,13 +1883,26 @@ Durum:
 - `trait` static conformance MVP çalışır.
 - `dyn` keyword'ü proposal diagnostic üretir; canonical yön kısa `dyn` değil `dynamic Trait`.
 - `with Trait` otomatik trait object üretmez.
+- `dynamic Trait&`, `dynamic Trait*`, `dynamic Trait^` ve nullable pointer formu `dynamic Trait*?` parser/AST/semantic metadata yüzeyine alındı.
+- Dynamic trait type hedefinin gerçek bir trait olması semantic olarak doğrulanır; struct/type hedefleri controlled diagnostic üretir.
+- `dynamic ref value as Trait` ve `dynamic move value as Trait` erase syntax'ı named-value MVP olarak parser/semantic yüzeyine alındı.
+- Erase syntax hedefinin trait olması ve kaynak struct'ın ilgili trait'i sağlaması semantic olarak doğrulanır.
+- ABI/vtable lowering henüz uygulanmadığı için valid dynamic trait type kullanımı `CST2001` diagnostic üretir.
+- Negative diagnostic:
+  - `examples/type_checker/proposals/086.cstar`
+  - `examples/type_checker/proposals/087.cstar`
+  - `examples/type_checker/proposals/088.cstar`
+  - `examples/type_checker/proposals/089.cstar`
+  - `examples/type_checker/proposals/090.cstar`
+  - `examples/type_checker/proposals/091.cstar`
+  - `examples/type_checker/proposals/092.cstar`
 
 Kalan:
 
-- `dynamic Trait&`, `dynamic Trait*`, `dynamic Trait^` grammar'ı.
 - Representation contract: `{ data: void*, vtable: constptr TraitVTable* }`.
-- `dynamic ref value as Trait` / `dynamic move value as Trait` erase syntax'ı; yalnız value type trait'i sağlıyorsa legal.
+- Erase syntax'ın complex expression kaynaklarını desteklemesi: `dynamic ref make_writer() as Writer` gibi formlar vtable lowering ile birlikte genişletilmeli.
 - `unsafe_cast` trait object üretememeli; vtable doğruluğu compiler sorumluluğu olmalı.
+- Dynamic trait object construction: erase expression `{ data, vtable }` değerini üretmeli.
 - Vtable method imzası üretimi ve dispatch lowering.
 - Dynamic trait method call:
   - `writer.write(data)` vtable dispatch'e inmeli.

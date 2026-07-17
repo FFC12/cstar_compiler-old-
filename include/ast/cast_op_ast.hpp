@@ -2,7 +2,7 @@
 #define CAST_OP_HPP
 #include <ast/ast.hpp>
 
-enum CastOpKind { C_UNSAFE_CAST, C_CAST, C_AS };
+enum CastOpKind { C_UNSAFE_CAST, C_CAST, C_AS, C_DYNAMIC_REF_AS, C_DYNAMIC_MOVE_AS };
 
 class CastOpAST : public IAST {
   friend Visitor;
@@ -33,6 +33,12 @@ class CastOpAST : public IAST {
         break;
       case C_AS:
         std::cout << "as";
+        break;
+      case C_DYNAMIC_REF_AS:
+        std::cout << "dynamic ref as";
+        break;
+      case C_DYNAMIC_MOVE_AS:
+        std::cout << "dynamic move as";
         break;
     }
 

@@ -243,7 +243,8 @@ void CStarParser::translationUnit() {
       // we check that is an IDENT or not since because isType for operators
       // which only contains primitives. IDENT means it's a symbol (which needed
       // to resolved in next phase - Semantic Analysis- )
-      if (this->isType(this->m_CurrToken) || is(TokenKind::IDENT)) {
+      if (this->isType(this->m_CurrToken) || is(TokenKind::IDENT) ||
+          is(TokenKind::DYNAMIC)) {
         if (is(TokenKind::IDENT) && nextToken != TokenKind::LPAREN) {
           varDecl(typeQualifier, declarationModifiers, is(TokenKind::IDENT),
                   false);

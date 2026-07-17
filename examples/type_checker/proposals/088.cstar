@@ -1,0 +1,11 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+trait Writer {
+  write(const char* data) :: void;
+}
+
+main() :: int32 {
+  dynamic Writer*? maybeWriter = nil;
+  ret 0;
+}

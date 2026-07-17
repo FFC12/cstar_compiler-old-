@@ -1,5 +1,11 @@
 #include <visitor/semantic/semantic_private.hpp>
 
+static bool StructImplementsTrait(const StructInfo &structInfo,
+                                  const std::string &traitName) {
+  return std::find(structInfo.traits.begin(), structInfo.traits.end(),
+                   traitName) != structInfo.traits.end();
+}
+
 SymbolInfo Visitor::preVisit(CastOpAST &castOpAst) {
   SymbolInfo symbolInfo;
 
@@ -29,6 +35,80 @@ SymbolInfo Visitor::preVisit(CastOpAST &castOpAst) {
   if (targetType == nullptr) {
     this->m_TypeErrorMessages.emplace_back(
         "Cast target must be a concrete type", symbolInfo);
+    return symbolInfo;
+  }
+
+  const bool isDynamicTraitErase =
+      castOpAst.m_CastOpKind == CastOpKind::C_DYNAMIC_REF_AS ||
+      castOpAst.m_CastOpKind == CastOpKind::C_DYNAMIC_MOVE_AS;
+
+  if (isDynamicTraitErase) {
+    symbolInfo.type = TypeSpecifier::SPEC_DEFINED;
+    symbolInfo.definedTypeName =
+        targetType->m_Symbol != nullptr
+            ? static_cast<SymbolAST *>(targetType->m_Symbol.get())
+                  ->m_SymbolName
+            : "";
+    symbolInfo.indirectionLevel = targetType->m_IndirectLevel;
+    symbolInfo.isRef = targetType->m_IsRef;
+    symbolInfo.isUnique = targetType->m_IsUniquePtr;
+    symbolInfo.isDynamicTraitObject = true;
+
+    if (TraitTable.count(symbolInfo.definedTypeName) == 0) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Dynamic trait erasure target '" + symbolInfo.definedTypeName +
+              "' must name a trait",
+          symbolInfo);
+      return symbolInfo;
+    }
+
+    if (castOpAst.m_Node == nullptr) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Dynamic trait erasure requires a source value", symbolInfo);
+      return symbolInfo;
+    }
+
+    SymbolInfo sourceInfo;
+    if (castOpAst.m_Node->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *sourceSymbol = static_cast<SymbolAST *>(castOpAst.m_Node.get());
+      SymbolInfo lookupInfo;
+      lookupInfo.symbolName = sourceSymbol->m_SymbolName;
+      lookupInfo.begin = sourceSymbol->m_SemLoc.begin;
+      lookupInfo.end = sourceSymbol->m_SemLoc.end;
+      lookupInfo.line = sourceSymbol->m_SemLoc.line;
+      symbolValidation(sourceSymbol->m_SymbolName, lookupInfo, sourceInfo);
+    } else {
+      sourceInfo = castOpAst.m_Node->acceptBefore(*this);
+    }
+
+    const auto structIt = StructTable.find(sourceInfo.definedTypeName);
+    if (structIt == StructTable.end()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Dynamic trait erasure source must be a struct value", symbolInfo);
+      return symbolInfo;
+    }
+
+    if (!StructImplementsTrait(structIt->second, symbolInfo.definedTypeName)) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Struct '" + sourceInfo.definedTypeName +
+              "' does not satisfy dynamic trait target '" +
+              symbolInfo.definedTypeName + "'",
+          symbolInfo);
+      return symbolInfo;
+    }
+
+    if (castOpAst.m_CastOpKind == CastOpKind::C_DYNAMIC_REF_AS &&
+        sourceInfo.isUnique) {
+      this->m_TypeErrorMessages.emplace_back(
+          "`dynamic ref` cannot borrow a unique handle directly; dereference "
+          "or move it explicitly",
+          symbolInfo);
+      return symbolInfo;
+    }
+
+    this->m_TypeErrorMessages.emplace_back(
+        "dynamic trait object ABI/vtable lowering is not implemented yet",
+        symbolInfo);
     return symbolInfo;
   }
 

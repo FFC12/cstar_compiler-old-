@@ -1,0 +1,22 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+trait Writer {
+  write(const char* data) :: void;
+}
+
+struct ConsoleWriter with Writer {
+  constructor() {
+    ret;
+  }
+
+  write(const char* data) :: void {
+    ret;
+  }
+}
+
+main() :: int32 {
+  ConsoleWriter writer = ConsoleWriter();
+  dynamic Writer^ erased = dynamic move writer as Writer;
+  ret 0;
+}

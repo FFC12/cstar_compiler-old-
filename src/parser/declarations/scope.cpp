@@ -36,6 +36,7 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
     }
 
     if (isType(currentTokenInfo()) || is(TokenKind::IDENT) ||
+        is(TokenKind::DYNAMIC) ||
         is(TokenKind::SELF) ||
         is(TokenKind::STAR) || is(TokenKind::DEREF) ||
         is(TokenKind::PLUSPLUS) || is(TokenKind::MINUSMINUS)) {
@@ -99,6 +100,7 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
       }
 
       if (isType(currentTokenInfo()) ||
+          is(TokenKind::DYNAMIC) ||
           qualifiedTypeDeclaration ||
           (!(is(TokenKind::PLUSPLUS) || is(TokenKind::MINUSMINUS)) &&
            (nextToken == TokenKind::IDENT || nextToken == TokenKind::STAR ||

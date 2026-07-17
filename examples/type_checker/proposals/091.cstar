@@ -1,0 +1,21 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+struct WriterLike {
+  int32 id;
+}
+
+struct ConsoleWriter {
+  int32 id;
+
+  constructor() {
+    self.id = 0;
+    ret;
+  }
+}
+
+main() :: int32 {
+  ConsoleWriter writer = ConsoleWriter();
+  dynamic WriterLike& erased = dynamic ref writer as WriterLike;
+  ret 0;
+}

@@ -92,6 +92,13 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       continue;
     }
 
+    if (is(TokenKind::DYNAMIC)) {
+      auto node = advanceDynamicTraitEraseExpression();
+      exprBucket.push_back(std::move(node));
+      i += 1;
+      continue;
+    }
+
     if (is(TokenKind::NEW) || is(TokenKind::SHARED)) {
       auto node = advanceNewExpression(is(TokenKind::SHARED));
       exprBucket.push_back(std::move(node));

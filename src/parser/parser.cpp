@@ -14,7 +14,6 @@
 
 static bool IsProposalOnlyTopLevel(TokenKind kind) {
   switch (kind) {
-    case DYNAMIC:
     case PROTOCOL:
     case STATE:
     case DYN:
@@ -130,4 +129,3 @@ void CStarParser::parse() {
 
   this->parserStats();
 }
-

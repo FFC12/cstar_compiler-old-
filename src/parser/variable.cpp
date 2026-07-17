@@ -6,9 +6,32 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
                           std::vector<ASTNode>* scope) {
   TypeSpecifier type = TypeSpecifier::SPEC_I8;
   ASTNode definedTypeSymbol;
+  bool isDynamicTraitObject = false;
+  ASTNode rhs = nullptr, arrayRhs;
+  size_t indirectionLevel = 0;
+  bool isUnique = false;
+  bool isRef = false;
+  bool isNullable = false;
+  bool isMoveInit = false;
 
   auto begin = currentTokenInfo().getTokenPositionInfo().begin;
-  if (isDefinedType) {
+  if (is(TokenKind::DYNAMIC)) {
+    auto dynamicType = advanceDynamicTraitType();
+    auto *typeAst = static_cast<TypeAST *>(dynamicType.get());
+    type = TypeSpecifier::SPEC_DEFINED;
+    isDynamicTraitObject = true;
+    indirectionLevel = typeAst->indirectLevel();
+    isUnique = typeAst->isUniquePtr();
+    isRef = typeAst->isRef();
+    isNullable = typeAst->isNullable();
+    if (typeAst->symbol() != nullptr &&
+        typeAst->symbol()->getExprKind() == ExprKind::SymbolExpr) {
+      auto *typeSymbol = static_cast<SymbolAST *>(typeAst->symbol().get());
+      auto semLoc = typeSymbol->getSemLoc();
+      definedTypeSymbol =
+          std::make_unique<SymbolAST>(typeSymbol->name(), semLoc);
+    }
+  } else if (isDefinedType) {
     // will be passed to the VarDeclAST;
     auto tokenPos = currentTokenInfo().getTokenPositionInfo();
     auto semLoc = SemanticLoc(tokenPos.begin, tokenPos.end, tokenPos.line);
@@ -26,12 +49,6 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
 
 
   not_needed_type:
-  ASTNode rhs = nullptr, arrayRhs;
-  size_t indirectionLevel = 0;
-  bool isUnique = false;
-  bool isRef = false;
-  bool isNullable = false;
-  bool isMoveInit = false;
 
   //* | ^
   // TODO: while -> if
@@ -92,7 +109,8 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
         declarationModifiers.linkage, declarationModifiers.access,
         declarationModifiers.isStatic,
         indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
-        std::move(arrayDimensions), semLoc, isMoveInit, isNullable);
+        std::move(arrayDimensions), semLoc, isMoveInit, isNullable,
+        isDynamicTraitObject);
 
     ast->setDeclKind(getDeclKind(declarationModifiers.linkage));
 
@@ -118,7 +136,8 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
         declarationModifiers.linkage, declarationModifiers.access,
         declarationModifiers.isStatic,
         indirectionLevel, isRef, isUnique, isLocal, arrayFlag,
-        std::move(arrayDimensions), semLoc, isMoveInit, isNullable);
+        std::move(arrayDimensions), semLoc, isMoveInit, isNullable,
+        isDynamicTraitObject);
 
     ast->setDeclKind(getDeclKind(declarationModifiers.linkage));
 

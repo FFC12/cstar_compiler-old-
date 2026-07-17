@@ -342,6 +342,8 @@ class CStarParser {
   ASTNode advanceConstantOrLiteral();
   ASTNode advanceNewExpression(bool isShared);
   ASTNode advanceType();
+  ASTNode advanceDynamicTraitType();
+  ASTNode advanceDynamicTraitEraseExpression();
   ASTNode advanceSymbol();
 
   TypeSpecifier typeResolver(TokenInfo token);

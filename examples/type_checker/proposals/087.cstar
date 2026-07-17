@@ -1,0 +1,14 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+struct WriterLike {
+  int32 id;
+}
+
+log(dynamic WriterLike& writer) :: void {
+  ret;
+}
+
+main() :: int32 {
+  ret 0;
+}

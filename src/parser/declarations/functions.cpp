@@ -138,7 +138,9 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
       this->advance();
     }
 
-    if (isType(currentTokenInfo())) {
+    if (is(TokenKind::DYNAMIC)) {
+      returnType = this->advanceDynamicTraitType();
+    } else if (isType(currentTokenInfo())) {
       returnType = this->advanceType();
     } else if (is(TokenKind::IDENT)) {
       returnType = this->advanceDefinedType();

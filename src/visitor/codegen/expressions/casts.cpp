@@ -1,6 +1,12 @@
 #include <visitor/codegen/codegen_private.hpp>
 
 ValuePtr Visitor::visit(CastOpAST &castOpAst) {
+  if (castOpAst.m_CastOpKind == CastOpKind::C_DYNAMIC_REF_AS ||
+      castOpAst.m_CastOpKind == CastOpKind::C_DYNAMIC_MOVE_AS) {
+    assert(false &&
+           "Dynamic trait object ABI/vtable lowering is not implemented yet.");
+  }
+
   if (!castOpAst.m_HasTypeAttrib || castOpAst.m_TypeNode == nullptr) {
     assert(false && "Cast expression requires an explicit target type.");
   }

@@ -53,6 +53,7 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   symbolInfo.isRef = varAst.m_IsRef;
   symbolInfo.isUnique = varAst.m_IsUniquePtr;
   symbolInfo.isNullable = varAst.m_IsNullable;
+  symbolInfo.isDynamicTraitObject = varAst.m_IsDynamicTraitObject;
   symbolInfo.isCastable = true;
   symbolInfo.isPublic = varAst.m_AccessSpec == ACCESS_PUBLIC;
   symbolInfo.isStatic = varAst.m_IsStatic ||
@@ -82,6 +83,19 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
         symbolInfo, DiagnosticCode::SemanticInvalidQualifier);
   }
 
+  if (m_TypeChecking && symbolInfo.isDynamicTraitObject) {
+    if (TraitTable.count(symbolInfo.definedTypeName) == 0) {
+      this->m_TypeErrorMessages.emplace_back(
+          "dynamic trait object target '" + symbolInfo.definedTypeName +
+              "' must name a trait",
+          symbolInfo);
+    } else {
+      this->m_TypeErrorMessages.emplace_back(
+          "dynamic trait object ABI/vtable lowering is not implemented yet",
+          symbolInfo);
+    }
+  }
+
   symbolInfo.isNeededEval = true;
 
   if (!varAst.m_RHS) {
@@ -96,7 +110,8 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
         dynamic_cast<SymbolAST *>(varAst.m_Typename.get())->m_SymbolName;
     this->m_DefinedTypeName = typeName;
     this->m_DefinedTypeFlag = true;
-    if (m_TypeChecking && this->m_TypeTable.count(typeName) == 0) {
+    if (m_TypeChecking && !symbolInfo.isDynamicTraitObject &&
+        this->m_TypeTable.count(typeName) == 0) {
       this->m_TypeErrorMessages.emplace_back(
           "Unknown type '" + typeName + "'", symbolInfo);
     }

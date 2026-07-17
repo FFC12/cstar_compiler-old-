@@ -47,6 +47,7 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
     symbolInfo.isUnique = typeInfo->m_IsUniquePtr;
     symbolInfo.indirectionLevel = typeInfo->m_IndirectLevel;
     symbolInfo.isNullable = typeInfo->m_IsNullable;
+    symbolInfo.isDynamicTraitObject = typeInfo->m_IsDynamicTraitObject;
   }
   symbolInfo.qualifierLevels =
       BuildQualifierLevels(paramAst.m_TypeQualifier, symbolInfo.indirectionLevel,
@@ -109,6 +110,19 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
       this->m_TypeErrorMessages.emplace_back(
           "Invalid qualifier/type combination",
           symbolInfo, DiagnosticCode::SemanticInvalidQualifier);
+    }
+
+    if (symbolInfo.isDynamicTraitObject) {
+      if (TraitTable.count(symbolInfo.definedTypeName) == 0) {
+        this->m_TypeErrorMessages.emplace_back(
+            "dynamic trait object target '" + symbolInfo.definedTypeName +
+                "' must name a trait",
+            symbolInfo);
+      } else {
+        this->m_TypeErrorMessages.emplace_back(
+            "dynamic trait object ABI/vtable lowering is not implemented yet",
+            symbolInfo);
+      }
     }
   }
 

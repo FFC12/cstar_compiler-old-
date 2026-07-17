@@ -1,0 +1,21 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+trait Writer {
+  write(const char* data) :: void;
+}
+
+struct SilentWriter {
+  int32 id;
+
+  constructor() {
+    self.id = 0;
+    ret;
+  }
+}
+
+main() :: int32 {
+  SilentWriter writer = SilentWriter();
+  dynamic Writer& erased = dynamic ref writer as Writer;
+  ret 0;
+}

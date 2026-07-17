@@ -21,6 +21,7 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
     symbolInfo.isRef = retType->m_IsRef;
     symbolInfo.isUnique = retType->m_IsUniquePtr;
     symbolInfo.isNullable = retType->m_IsNullable;
+    symbolInfo.isDynamicTraitObject = retType->m_IsDynamicTraitObject;
     symbolInfo.qualifierLevels = BuildQualifierLevels(
         funcAst.m_RetTypeQualifier, symbolInfo.indirectionLevel,
         symbolInfo.isRef);
@@ -42,6 +43,19 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
         "Variadic parameter marker '...' is currently supported only for "
         "native import/export declarations",
         symbolInfo);
+  }
+
+  if (symbolInfo.isDynamicTraitObject) {
+    if (TraitTable.count(symbolInfo.definedTypeName) == 0) {
+      this->m_TypeErrorMessages.emplace_back(
+          "dynamic trait object return target '" + symbolInfo.definedTypeName +
+              "' must name a trait",
+          symbolInfo);
+    } else {
+      this->m_TypeErrorMessages.emplace_back(
+          "dynamic trait object ABI/vtable lowering is not implemented yet",
+          symbolInfo);
+    }
   }
 
   std::string methodOwner;
