@@ -26,7 +26,7 @@ void CStarParser::parseTraitDecl(DeclarationModifiers declarationModifiers) {
                 currentTokenInfo());
   }
 
-  expected(TokenKind::LBRACK);
+  expectBlockStart();
   this->advance();
 
   std::vector<TraitRequirementInfo> requirements;
@@ -148,7 +148,7 @@ void CStarParser::parseEnumDecl(DeclarationModifiers declarationModifiers,
   const auto maxValue = EnumUnderlyingMax(underlyingType);
   this->advance();
 
-  expected(TokenKind::LBRACK);
+  expectBlockStart();
   this->advance();
 
   uint64_t nextValue = 0;
@@ -295,7 +295,7 @@ void CStarParser::parseStructDecl(DeclarationModifiers declarationModifiers) {
     } while (!is(TokenKind::_EOF));
   }
 
-  expected(TokenKind::LBRACK);
+  expectBlockStart();
   this->advance();
 
   std::vector<StructFieldInfo> fields;

@@ -345,7 +345,7 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         size_t line = posInfo.line;
         this->advance();
 
-        expected(TokenKind::LBRACK);
+        expectBlockStart();
         std::vector<ASTNode> deferScope;
         this->advanceScope(deferScope);
 

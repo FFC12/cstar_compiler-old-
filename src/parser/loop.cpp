@@ -117,11 +117,7 @@ not_conditional:
   size_t end = currentTokenInfo().getTokenPositionInfo().end;
   SemanticLoc semanticLoc = SemanticLoc(begin, end, line);
 
-  while (is(TokenKind::LINEFEED) || is(TokenKind::COMMENT)) {
-    this->advance();
-  }
-
-  expected(TokenKind::LBRACK);
+  expectBlockStart();
 
   std::vector<ASTNode> loopBody{};
 

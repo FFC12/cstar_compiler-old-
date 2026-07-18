@@ -14,11 +14,12 @@ void CStarParser::advanceIfStmt(std::vector<ASTNode> &scope) {
 
   auto cond = this->expression(true, 1);
 
-  expected(TokenKind::LBRACK);
+  expectBlockStart();
 
   std::vector<ASTNode> condBody{};
 
   this->advanceScope(condBody);
+  skipTopLevelTrivia();
 
   ConditionBlock conditionBlock{}, elseIfsBlock{};
   Scope elseScope{};
@@ -34,10 +35,11 @@ void CStarParser::advanceIfStmt(std::vector<ASTNode> &scope) {
 
     cond = this->expression(true, 1);
 
-    expected(TokenKind::LBRACK);
+    expectBlockStart();
 
     std::vector<ASTNode> elseIfBody{};
     this->advanceScope(elseIfBody);
+    skipTopLevelTrivia();
     elseIfsBlock.insert({"elif", std::pair<ASTNode, Scope>(
                                      std::move(cond), std::move(elseIfBody))});
   }
@@ -48,10 +50,11 @@ void CStarParser::advanceIfStmt(std::vector<ASTNode> &scope) {
 
     hasElse = true;
 
-    expected(TokenKind::LBRACK);
+    expectBlockStart();
 
     std::vector<ASTNode> elseBody{};
     this->advanceScope(elseBody);
+    skipTopLevelTrivia();
     elseScope = std::move(elseBody);
   }
 
@@ -86,7 +89,7 @@ void CStarParser::advanceOptionStmt(std::vector<ASTNode> &scope) {
   expected(TokenKind::LPAREN);
   auto value = this->expression(true, 1);
 
-  expected(TokenKind::LBRACK);
+  expectBlockStart();
   this->advance();
 
   std::vector<OptionCase> cases;
@@ -128,7 +131,7 @@ void CStarParser::advanceOptionStmt(std::vector<ASTNode> &scope) {
 
     expected(TokenKind::COLON);
     this->advance();
-    expected(TokenKind::LBRACK);
+    expectBlockStart();
 
     Scope caseScope;
     this->advanceScope(caseScope);

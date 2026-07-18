@@ -1,0 +1,52 @@
+// expected: pass
+// expected-exit: 10
+
+struct Box
+// block opener may live on the next physical line
+{
+  int32 value;
+
+  constructor(int32 initial)
+  {
+    self.value = initial;
+    ret;
+  }
+}
+
+read(Box box) :: int32
+// function bodies follow the same block rule
+{
+  ret box.value;
+}
+
+main() :: int32
+{
+  Box box = Box(1);
+  int32 total = read(box);
+
+  if (total)
+  // trivia between condition and block is legal
+  {
+    total += 2;
+  }
+  elif (0)
+  {
+    total += 100;
+  }
+  else
+  {
+    total += 200;
+  }
+
+  loop (total < 10)
+  {
+    total += 1;
+  }
+
+  defer
+  {
+    total += 0;
+  }
+
+  ret total;
+}

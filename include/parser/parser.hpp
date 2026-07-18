@@ -274,6 +274,7 @@ class CStarParser {
   std::string parseLinkSource();
   void registerNativeLinkLibrary(const std::string& library);
   void skipTopLevelTrivia();
+  void expectBlockStart();
   void skipBalanced(TokenKind open, TokenKind close);
   void preprocessCompileTimeSurface();
   size_t collectMacroDefinition(size_t index,

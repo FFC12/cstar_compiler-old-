@@ -187,7 +187,7 @@ void CStarParser::funcDecl(DeclarationModifiers declarationModifiers,
   std::vector<ASTNode> scope{};
 
   if (!isForwardDecl) {
-    expected(TokenKind::LBRACK);
+    expectBlockStart();
 
     // func body as scope
     this->advanceScope(scope);

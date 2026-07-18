@@ -71,7 +71,7 @@ void CStarParser::parseProtocolDecl(DeclarationModifiers declarationModifiers,
   auto targetTypeName = advanceDefinedTypeName();
   skipTopLevelTrivia();
 
-  expected(TokenKind::LBRACK);
+  expectBlockStart();
   advance();
 
   std::vector<std::string> states;

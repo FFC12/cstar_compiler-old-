@@ -155,6 +155,11 @@ void CStarParser::skipTopLevelTrivia() {
   }
 }
 
+void CStarParser::expectBlockStart() {
+  skipTopLevelTrivia();
+  expected(TokenKind::LBRACK);
+}
+
 size_t CStarParser::skipBalancedInTokenStream(size_t index, TokenKind open,
                                               TokenKind close) const {
   size_t depth = 0;

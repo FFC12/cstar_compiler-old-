@@ -37,6 +37,10 @@ struct Meter {
 main() :: int32 {
   CAllocator arena = CAllocator();
   Meter^ meter = new(arena) Meter(11);
+  if(meter)
+  {
+    print("Done");
+  }
   int32 value = meter.value;
   drop meter;
   ret value;

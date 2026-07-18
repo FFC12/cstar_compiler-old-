@@ -1,0 +1,29 @@
+// expected: pass
+// expected-exit: 4
+
+trait Readable
+{
+  read() :: int32;
+}
+
+struct Counter with Readable
+{
+  int32 value;
+
+  constructor(int32 initial)
+  {
+    self.value = initial;
+    ret;
+  }
+
+  read() :: int32
+  {
+    ret self.value;
+  }
+}
+
+main() :: int32
+{
+  Counter counter = Counter(4);
+  ret counter.read();
+}

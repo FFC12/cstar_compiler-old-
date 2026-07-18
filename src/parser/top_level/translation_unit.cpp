@@ -10,7 +10,7 @@ void CStarParser::parseIncludeDirective() {
   if (is(TokenKind::INVOLVED)) {
     this->advance();
     skipTopLevelTrivia();
-    expected(TokenKind::LBRACK);
+    expectBlockStart();
     this->advance();
     while (!is(TokenKind::RBRACK)) {
       skipTopLevelTrivia();

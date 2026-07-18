@@ -22,7 +22,7 @@ void CStarParser::parseLinkageBlock(
     skipTopLevelTrivia();
   }
 
-  expected(TokenKind::LBRACK);
+  expectBlockStart();
   this->advance();
 
   while (!is(TokenKind::RBRACK)) {

@@ -74,7 +74,7 @@ void CStarParser::parseAttributeDecl(
   this->advance();
   skipTopLevelTrivia();
 
-  expected(TokenKind::LBRACK);
+  expectBlockStart();
   skipBalanced(TokenKind::LBRACK, TokenKind::RBRACK);
   posInfo = prevTokenInfo().getTokenPositionInfo();
   SemanticLoc semLoc(begin, posInfo.end, line);
@@ -289,7 +289,7 @@ void CStarParser::parseMacroDecl(
   const auto returnKind = parseMacroReturnKind();
   skipTopLevelTrivia();
 
-  expected(TokenKind::LBRACK);
+  expectBlockStart();
   skipBalanced(TokenKind::LBRACK, TokenKind::RBRACK);
   posInfo = prevTokenInfo().getTokenPositionInfo();
   SemanticLoc semLoc(begin, posInfo.end, line);
