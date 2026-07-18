@@ -208,8 +208,8 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
           fieldInfo.isUnique = field.isUnique;
           fieldInfo.isRef = field.isRef;
           fieldInfo.isNullable = field.isNullable;
-          fieldInfo.isSubscriptable = false;
-          fieldInfo.arrayDimensions.clear();
+          fieldInfo.arrayDimensions = field.arrayDimensions;
+          fieldInfo.isSubscriptable = !field.arrayDimensions.empty();
 
           return {fieldAddress, GetStructFieldLLVMType(field), fieldInfo,
                   fieldName};

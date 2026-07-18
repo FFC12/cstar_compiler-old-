@@ -38,6 +38,16 @@ SymbolInfo Visitor::preVisit(StructAST &structAst) {
       }
     }
 
+    if (!field.arrayDimensions.empty() &&
+        ProductOfDimensions(field.arrayDimensions) == 0) {
+      SymbolInfo fieldSymbol = symbolInfo;
+      fieldSymbol.symbolName = field.name;
+      this->m_TypeErrorMessages.emplace_back(
+          "Struct field array dimensions overflow the addressable element "
+          "count",
+          fieldSymbol);
+    }
+
     info.fieldIndexes[field.name] = info.fields.size();
     info.fields.push_back(field);
   }

@@ -115,8 +115,8 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
       fieldInfo.indirectionLevel = field.indirectionLevel;
       fieldInfo.isUnique = field.isUnique;
       fieldInfo.isRef = field.isRef;
-      fieldInfo.isSubscriptable = false;
-      fieldInfo.arrayDimensions.clear();
+      fieldInfo.arrayDimensions = field.arrayDimensions;
+      fieldInfo.isSubscriptable = !field.arrayDimensions.empty();
       return {fieldAddress, GetStructFieldLLVMType(field), fieldInfo,
               fieldName};
     };
@@ -164,7 +164,10 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
       goto subscript_target_ready;
     }
 
-    llvm::Type *arrayType = GetPointeeType(target.address);
+    llvm::Type *arrayType = target.valueType != nullptr &&
+                                    target.valueType->isArrayTy()
+                                ? target.valueType
+                                : GetPointeeType(target.address);
     auto arrayParamType = m_ArrayParamValueTypes.find(targetName);
     if (arrayParamType != m_ArrayParamValueTypes.end()) {
       auto *slotType = GetPointeeType(target.address);

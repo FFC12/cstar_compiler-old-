@@ -138,8 +138,8 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
           resolved.isUnique = field.isUnique;
           resolved.isRef = field.isRef;
           resolved.isNullable = field.isNullable;
-          resolved.isSubscriptable = false;
-          resolved.arrayDimensions.clear();
+          resolved.arrayDimensions = field.arrayDimensions;
+          resolved.isSubscriptable = !field.arrayDimensions.empty();
           resolved.isConstVal = false;
           resolved.isConstPtr = false;
           resolved.isConstRef = false;

@@ -24,8 +24,8 @@
 // - Struct unique/shared `new`, explicit allocator `new(allocator)`, nullable
 //   `new?`, and primitive sized allocation such as `new int32(7)` are working.
 // - Remaining proposal/hardening areas are visible desugar output, allocation
-//   failure policy, array allocation, and optional fused shared control-block
-//   layout.
+//   failure policy, array allocation/reallocation, and optional fused shared
+//   control-block layout.
 
 #[lang(allocator)]
 trait Allocator {
@@ -113,6 +113,36 @@ try_create_meter(ArenaAllocator& arena) :: Meter^? {
 try_create_primitive(ArenaAllocator& arena) :: int32^? {
     int32^? owned_value = new?(arena) int32(7);
     ret owned_value;
+}
+
+create_heap_array(ArenaAllocator& arena, usize capacity) :: int32^? {
+    // Proposal:
+    //
+    // int32^? values = new?(arena) int32[capacity];
+    // ret values;
+    //
+    // Required semantics:
+    // - payload bytes = sizeof(int32) * capacity with overflow diagnostic;
+    // - zero-init primitive elements unless an explicit uninitialized surface is
+    //   introduced for unsafe/system modules;
+    // - `drop values;` frees the allocation exactly once;
+    // - `span values[0..capacity]` creates a runtime-sized view without copy.
+    ret nil;
+}
+
+resize_heap_array(ArenaAllocator& arena, int32^ old_values,
+                  usize old_count, usize new_capacity) :: int32^? {
+    // Proposal:
+    //
+    // int32^? next = realloc?(arena, move old_values, old_count, new_capacity);
+    //
+    // Required semantics:
+    // - move/copy initialized elements according to `T` ownership rules;
+    // - destroy elements that do not move;
+    // - free old storage only after successful move or under a visible failure
+    //   policy;
+    // - never leak allocator provenance.
+    ret nil;
 }
 
 // Unique lowering sketch:

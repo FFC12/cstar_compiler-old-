@@ -1,0 +1,20 @@
+// expected: pass
+// expected-exit: 8
+
+struct Buffer {
+  int32 data[4];
+
+  constructor() {
+    self.data[0] = 1;
+    self.data[1] = 2;
+    self.data[2] = 3;
+    self.data[3] = 4;
+  }
+}
+
+main() :: int32 {
+  Buffer buffer = Buffer();
+  buffer.data[2] += 5;
+  ret buffer.data[2];
+}
+

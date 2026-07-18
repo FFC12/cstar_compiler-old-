@@ -388,8 +388,8 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
       fieldInfo.indirectionLevel = field.indirectionLevel;
       fieldInfo.isUnique = field.isUnique;
       fieldInfo.isRef = field.isRef;
-      fieldInfo.isSubscriptable = false;
-      fieldInfo.arrayDimensions.clear();
+      fieldInfo.arrayDimensions = field.arrayDimensions;
+      fieldInfo.isSubscriptable = !field.arrayDimensions.empty();
       return {fieldAddress, GetStructFieldLLVMType(field), fieldInfo,
               fieldName};
     };
@@ -450,7 +450,11 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
 
   if (binaryOpAst.m_BinOpKind == B_ARRS) {
     m_LastArrayIndex = true;
-    lhs = binaryOpAst.m_LHS->accept(*this);
+    if (binaryOpAst.m_LHS->m_ExprKind == ExprKind::BinOp) {
+      lhs = nullptr;
+    } else {
+      lhs = binaryOpAst.m_LHS->accept(*this);
+    }
 
     auto *previousType = m_LastType;
     bool previousSigned = m_LastSigned;
@@ -616,10 +620,114 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
         }
       }
 
-      auto symbol = lhs;
+      struct FieldAddress {
+        llvm::Value *address = nullptr;
+        llvm::Type *valueType = nullptr;
+        SymbolInfo symbolInfo;
+        std::string name;
+      };
+
+      auto resolveFieldAddress =
+          [&](auto &self, IAST *node) -> FieldAddress {
+        if (node == nullptr) {
+          assert(false && "Array field access requires symbol.field.");
+        }
+
+        if (node->m_ExprKind == ExprKind::SymbolExpr) {
+          auto *symbolAst = static_cast<SymbolAST *>(node);
+          auto info = getSymbolInfo(symbolAst->m_SymbolName);
+          auto *storage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                      symbolAst->m_SymbolName);
+          if (storage == nullptr) {
+            assert(false && "Array field base storage was not found.");
+          }
+          if (info.isRef &&
+              m_ReferenceParamValueTypes.count(symbolAst->m_SymbolName) > 0) {
+            auto *slotType = GetPointeeType(storage);
+            storage = CreateLoad(storage, slotType,
+                                 symbolAst->m_SymbolName + ".ref.array.field");
+          }
+          if (info.type == TypeSpecifier::SPEC_DEFINED && !info.isRef &&
+              info.indirectionLevel > 0) {
+            if (IsSharedPointerSymbol(info)) {
+              auto *handle = Builder->CreateLoad(GetSharedPointerTy(), storage,
+                                                 symbolAst->m_SymbolName + ".sp");
+              storage = ExtractSharedPointerData(handle);
+            } else {
+              auto *pointerType = GetType(info.type, info.indirectionLevel);
+              storage = Builder->CreateLoad(
+                  pointerType, storage, symbolAst->m_SymbolName + ".ptr");
+            }
+            info.indirectionLevel = 0;
+            info.isUnique = false;
+            info.isRef = false;
+          }
+          return {storage, GetSymbolLLVMType(info), info,
+                  symbolAst->m_SymbolName};
+        }
+
+        if (node->m_ExprKind != ExprKind::BinOp) {
+          assert(false && "Array field access requires symbol.field.");
+        }
+
+        auto *fieldAccess = static_cast<BinaryOpAST *>(node);
+        if (fieldAccess->m_BinOpKind != B_DOT ||
+            fieldAccess->m_RHS == nullptr ||
+            fieldAccess->m_RHS->m_ExprKind != ExprKind::SymbolExpr) {
+          assert(false && "Array field access requires symbol.field.");
+        }
+
+        auto base = self(self, fieldAccess->m_LHS.get());
+        auto *fieldSymbol = static_cast<SymbolAST *>(fieldAccess->m_RHS.get());
+        auto structIt = StructTable.find(base.symbolInfo.definedTypeName);
+        if (structIt == StructTable.end()) {
+          assert(false && "Struct type was not registered.");
+        }
+        auto fieldIt =
+            structIt->second.fieldIndexes.find(fieldSymbol->m_SymbolName);
+        if (fieldIt == structIt->second.fieldIndexes.end()) {
+          assert(false && "Struct field was not registered.");
+        }
+
+        auto *structType = GetDefinedStructTy(base.symbolInfo.definedTypeName);
+        const auto fieldIndex = fieldIt->second;
+        const auto &field = structIt->second.fields[fieldIndex];
+        auto fieldName = base.name + "." + field.name;
+        auto *fieldAddress = Builder->CreateStructGEP(
+            structType, base.address, static_cast<unsigned>(fieldIndex),
+            fieldName);
+        auto fieldInfo = base.symbolInfo;
+        fieldInfo.symbolName = fieldName;
+        fieldInfo.type = field.type;
+        fieldInfo.definedTypeName = field.definedTypeName;
+        fieldInfo.indirectionLevel = field.indirectionLevel;
+        fieldInfo.isUnique = field.isUnique;
+        fieldInfo.isRef = field.isRef;
+        fieldInfo.isNullable = field.isNullable;
+        fieldInfo.arrayDimensions = field.arrayDimensions;
+        fieldInfo.isSubscriptable = !field.arrayDimensions.empty();
+        return {fieldAddress, GetStructFieldLLVMType(field), fieldInfo,
+                fieldName};
+      };
+
+      llvm::Value *symbol = lhs;
       std::vector<llvm::Value *> indexes;
-      auto symbolName = ((SymbolAST *)binaryOpAst.m_LHS.get())->m_SymbolName;
-      auto symbolInfo = getSymbolInfo(symbolName);
+      std::string symbolName;
+      SymbolInfo symbolInfo;
+      llvm::Type *symbolType = nullptr;
+      if (binaryOpAst.m_LHS->m_ExprKind == ExprKind::BinOp) {
+        auto field = resolveFieldAddress(resolveFieldAddress,
+                                         binaryOpAst.m_LHS.get());
+        symbol = field.address;
+        symbolName = field.name;
+        symbolInfo = field.symbolInfo;
+        symbolType = field.valueType;
+      } else {
+        auto *arraySymbol = static_cast<SymbolAST *>(binaryOpAst.m_LHS.get());
+        symbolName = arraySymbol->m_SymbolName;
+        symbolInfo = getSymbolInfo(symbolName);
+        symbolType = GetPointeeType(symbol);
+      }
       if (rhs != nullptr) {
         indexes.push_back(CastArrayIndex(rhs));
       } else {
@@ -628,7 +736,6 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
         m_IndicesAsStr.clear();
       }
 
-      auto symbolType = GetPointeeType(symbol);
       if (symbolInfo.isRuntimeSizedArray) {
         auto *spanValue = Builder->CreateLoad(GetSpanTy(), symbol,
                                               symbolName + ".span");

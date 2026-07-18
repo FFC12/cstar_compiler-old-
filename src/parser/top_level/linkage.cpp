@@ -96,6 +96,47 @@ StructFieldInfo CStarParser::parseStructField(
   field.name = currentTokenStr();
   this->advance();
 
+  if (is(TokenKind::LSQPAR)) {
+    this->advance();
+    if (is(TokenKind::RSQPAR)) {
+      ParserError("struct fields require fixed-size array dimensions; use an "
+                  "owned pointer or span in method parameters for dynamic "
+                  "views",
+                  currentTokenInfo());
+    }
+
+    while (!is(TokenKind::RSQPAR) && !is(TokenKind::_EOF)) {
+      expected(SCALARI);
+      const auto dimensionText = currentTokenStr();
+      const auto dimensionInfo = currentTokenInfo();
+      uint64_t dimension = 0;
+      try {
+        dimension = std::stoull(dimensionText);
+      } catch (...) {
+        ParserError("struct field array dimensions must be compile-time "
+                    "integer literals",
+                    dimensionInfo);
+      }
+      if (dimension == 0) {
+        ParserError("struct field array dimensions must be greater than zero",
+                    dimensionInfo);
+      }
+      field.arrayDimensions.push_back(static_cast<size_t>(dimension));
+      this->advance();
+
+      if (is(TokenKind::COLON)) {
+        this->advance();
+        continue;
+      }
+
+      expected(TokenKind::RSQPAR);
+      break;
+    }
+
+    expected(TokenKind::RSQPAR);
+    this->advance();
+  }
+
   if (is(TokenKind::EQUAL) || is(TokenKind::TYPEINF)) {
     ParserError("struct field initializers are not implemented yet",
                 currentTokenInfo());

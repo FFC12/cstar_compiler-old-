@@ -1,0 +1,39 @@
+// expected: pass
+// expected-exit: 6
+
+swap_at(int32[] values, int32 left, int32 right) :: void {
+  int32 tmp = values[left];
+  values[left] = values[right];
+  values[right] = tmp;
+}
+
+sift_up(int32[] values, int32 index) :: void {
+  int32 child = index;
+  loop (child > 0) {
+    int32 parent = (child - 1) / 2;
+    if (values[parent] <= values[child]) {
+      ret;
+    }
+
+    swap_at(values, parent, child);
+    child = parent;
+  }
+}
+
+heap_push(int32[] values, int32 count, int32 value) :: int32 {
+  values[count] = value;
+  sift_up(values, count);
+  ret count + 1;
+}
+
+main() :: int32 {
+  int32 heap[8] = (0, 0, 0, 0, 0, 0, 0, 0);
+  int32 count = 0;
+
+  count = heap_push(span heap, count, 9);
+  count = heap_push(span heap, count, 4);
+  count = heap_push(span heap, count, 7);
+  count = heap_push(span heap, count, 2);
+
+  ret heap[0] + count;
+}

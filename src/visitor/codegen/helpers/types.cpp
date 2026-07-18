@@ -357,8 +357,14 @@ llvm::Type *GetStorageType(TypeSpecifier typeSpecifier,
 }
 
 llvm::Type *GetStructFieldLLVMType(const StructFieldInfo &field) {
-  return GetStorageType(field.type, field.indirectionLevel, field.isUnique,
-                        field.isRef, field.definedTypeName);
+  auto *elementType =
+      GetStorageType(field.type, field.indirectionLevel, field.isUnique,
+                     field.isRef, field.definedTypeName);
+  if (!field.arrayDimensions.empty()) {
+    return llvm::ArrayType::get(elementType,
+                                FlatArrayLength(field.arrayDimensions));
+  }
+  return elementType;
 }
 
 llvm::Type *GetSymbolLLVMType(const SymbolInfo &symbolInfo) {

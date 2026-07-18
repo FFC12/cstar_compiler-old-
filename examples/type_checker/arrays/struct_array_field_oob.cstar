@@ -1,0 +1,12 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+struct Buffer {
+  int32 data[4];
+}
+
+main() :: int32 {
+  Buffer buffer;
+  ret buffer.data[4];
+}
+

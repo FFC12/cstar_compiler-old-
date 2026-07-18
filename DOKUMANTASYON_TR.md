@@ -533,7 +533,26 @@ matrix[1:1] = 9;
 ret matrix[1:2];
 ```
 
-Çok boyutlu initializer kaynakta katmanlı yazılır; codegen bunu C benzeri row-major flat belleğe indirir. `[rows:cols]` için lineer index `row * cols + col`; daha yüksek boyutta soldan sağa `linear = linear * next_dim + index` kuralı uygulanır. Her eksende negatif sabit index boyut içinde kaldığı sürece sondan indeksleme olarak normalize edilir: `arr[-1]` son elemana, `matrix[-1:-1]` son satır son kolona iner. Initializer eleman sayısı `product(dimensions)` ile eşleşmek zorundadır; eksik/fazla initializer controlled diagnostic üretir. Sabit index pozitif veya negatif tarafta array sınırını aşarsa compile-time error üretir; dinamik index için runtime bounds check henüz üretilmez. MVP'de array dimension'ları compile-time positive integer literal olmalıdır. Local primitive/pointer array storage 1 MiB üstünü aşarsa stack overflow riskine karşı diagnostic üretilir; büyük buffer için ileride heap/allocator-backed array/slice modeli kullanılmalıdır.
+Struct field içinde fixed array storage da aynı modelle çalışır:
+
+```cstar
+struct Buffer {
+    int32 data[4];
+
+    constructor() {
+        self.data[0] = 1;
+        self.data[1] = 2;
+    }
+}
+
+main() :: int32 {
+    Buffer buffer = Buffer();
+    buffer.data[1] += 6;
+    ret buffer.data[1];
+}
+```
+
+Çok boyutlu initializer kaynakta katmanlı yazılır; codegen bunu C benzeri row-major flat belleğe indirir. `[rows:cols]` için lineer index `row * cols + col`; daha yüksek boyutta soldan sağa `linear = linear * next_dim + index` kuralı uygulanır. Struct field array'leri de aynı flat storage ve bounds metadata kuralını izler. Her eksende negatif sabit index boyut içinde kaldığı sürece sondan indeksleme olarak normalize edilir: `arr[-1]` son elemana, `matrix[-1:-1]` son satır son kolona iner. Initializer eleman sayısı `product(dimensions)` ile eşleşmek zorundadır; eksik/fazla initializer controlled diagnostic üretir. Sabit index pozitif veya negatif tarafta array sınırını aşarsa compile-time error üretir; dinamik index için runtime bounds check henüz üretilmez. MVP'de array dimension'ları compile-time positive integer literal olmalıdır. Local primitive/pointer array storage 1 MiB üstünü aşarsa stack overflow riskine karşı diagnostic üretilir; büyük buffer için ileride heap/allocator-backed array/slice modeli kullanılmalıdır.
 
 Expression parser delimiter içinde veya operator/comma sonrasında gelen satır sonlarını expression devamı kabul eder. Bu yüzden çok boyutlu initializer, function argümanları, binary expression ve subscript indexleri okunabilir biçimde alt satıra taşınabilir.
 

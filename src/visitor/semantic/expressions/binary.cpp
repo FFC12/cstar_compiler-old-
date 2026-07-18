@@ -160,8 +160,8 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
         resolved.isUnique = field.isUnique;
         resolved.isRef = field.isRef;
         resolved.isNullable = field.isNullable;
-        resolved.isSubscriptable = false;
-        resolved.arrayDimensions.clear();
+        resolved.arrayDimensions = field.arrayDimensions;
+        resolved.isSubscriptable = !field.arrayDimensions.empty();
         resolved.begin = fieldSymbol->m_SemLoc.begin;
         resolved.end = fieldSymbol->m_SemLoc.end;
         resolved.line = fieldSymbol->m_SemLoc.line;
@@ -642,13 +642,27 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
       // Array index op...
       if (this->m_LastBinOp && binaryOpAst.m_BinOpKind == B_ARRS) {
         SymbolInfo matchedSymbol;
-        auto symbolName = ((SymbolAST *)binaryOpAst.m_LHS.get())->m_SymbolName;
+        std::string symbolName;
+        if (binaryOpAst.m_LHS->m_ExprKind == ExprKind::SymbolExpr) {
+          symbolName =
+              static_cast<SymbolAST *>(binaryOpAst.m_LHS.get())->m_SymbolName;
+        }
 
         size_t arraySize = m_LastVarDecl
                                ? matchedSymbol.arrayDimensions.size()
                                : getIndexesOfArray(*binaryOpAst.m_RHS.get());
 
-        if (symbolValidation(symbolName, rhsSymbol, matchedSymbol)) {
+        bool symbolResolved = false;
+        if (binaryOpAst.m_LHS->m_ExprKind == ExprKind::SymbolExpr) {
+          symbolResolved = symbolValidation(symbolName, rhsSymbol, matchedSymbol);
+        } else if (binaryOpAst.m_LHS->m_ExprKind == ExprKind::BinOp) {
+          matchedSymbol = binaryOpAst.m_LHS->acceptBefore(*this);
+          symbolResolved =
+              matchedSymbol.isSubscriptable || matchedSymbol.isRuntimeSizedArray;
+        }
+
+        if (symbolResolved) {
+          arraySize = matchedSymbol.arrayDimensions.size();
           if (matchedSymbol.isRuntimeSizedArray) {
             if (indexCount != 1) {
               this->m_TypeErrorMessages.emplace_back(

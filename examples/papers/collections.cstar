@@ -1,0 +1,187 @@
+// expected: diagnostic (proposal)
+//
+// C* COLLECTIONS / DATA STRUCTURE CONTRACT PROPOSAL
+// -------------------------------------------------
+// This paper owns generic containers, heap-backed dynamic storage, iterator
+// protocols and safe runtime-sized views. Struct layout, allocation lowering,
+// traits and concurrency are documented in their own paper files.
+//
+// Decisions:
+// - Fixed arrays `T[N]` are value storage with compile-time dimensions.
+// - Runtime views `T[]` are spans and must be created explicitly with
+//   `span value`, `span value[begin..end]` or `unsafe_span(ptr, len)`.
+// - Dynamic containers are library types backed by allocator-aware heap arrays.
+// - Array arguments do not silently copy; explicit copy remains visible.
+// - Generic containers require generic struct/function and trait bounds.
+// - Iterator/range support is trait-based, not a hidden compiler hook.
+
+// ---------------------------------------------------------------------
+// 1. Heap array allocation
+// ---------------------------------------------------------------------
+// Fixed stack storage is not enough for production containers. The allocation
+// contract must support sized runtime element counts and allocator-backed
+// reallocation.
+
+create_buffer(usize capacity, Allocator& allocator) :: int32[] {
+    // Proposed canonical surface:
+    //
+    // int32^ buffer = new(allocator) int32[capacity];
+    // ret span buffer[0..capacity];
+    //
+    // Notes:
+    // - `new T[N]` creates owned heap storage for N elements.
+    // - `new? T[N]` returns nullable owned heap storage on allocation failure.
+    // - Element initialization policy must be explicit: zero-init by default
+    //   for primitives, constructor loop for structs, or future uninit surface
+    //   only in unsafe/system contexts.
+    ret unsafe_span(nil, 0);
+}
+
+// ---------------------------------------------------------------------
+// 2. Vector<T>
+// ---------------------------------------------------------------------
+// Vector is the first required dynamic container. It needs generic structs,
+// allocator ownership, capacity growth and destructor-aware element cleanup.
+
+struct Vector<T> {
+    T^ data;
+    usize length;
+    usize capacity;
+    Allocator* allocator;
+
+    constructor(Allocator& allocator) {
+        self.data = nil;
+        self.length = 0;
+        self.capacity = 0;
+        self.allocator = ref allocator;
+    }
+
+    push(T value) :: void {
+        if (self.length == self.capacity) {
+            self.reserve(self.capacity == 0 ? 8 : self.capacity * 2);
+        }
+        self.data[self.length] = move value;
+        self.length += 1;
+    }
+
+    pop() :: T? {
+        if (self.length == 0) {
+            ret nil;
+        }
+        self.length -= 1;
+        ret move self.data[self.length];
+    }
+
+    as_span() :: T[] {
+        ret span self.data[0..self.length];
+    }
+
+    destructor() {
+        // Drop initialized elements in reverse order, then free storage through
+        // the allocator that created the buffer.
+    }
+}
+
+// Required compiler work:
+// - generic struct/function parser and monomorphization;
+// - `T` as a type parameter in fields, params, returns and `new`;
+// - move/drop loop synthesis for initialized generic elements;
+// - `T?` result/nullable value story for non-pointer payloads, or a standard
+//   `Option<T>` tagged enum before `pop() :: T?` can be concrete;
+// - bounds-check policy for `self.data[index]`.
+
+// ---------------------------------------------------------------------
+// 3. HashMap<K, V>
+// ---------------------------------------------------------------------
+// HashMap should be a library type built on Vector/raw heap arrays, not a
+// builtin syntax form.
+
+trait Hash {
+    hash() :: uint64;
+}
+
+trait Equals<T> {
+    equals(T& rhs) :: bool;
+}
+
+struct HashEntry<K, V> {
+    K key;
+    V value;
+    bool occupied;
+    bool tombstone;
+}
+
+struct HashMap<K with Hash, V> {
+    HashEntry<K, V>^ entries;
+    usize length;
+    usize capacity;
+    Allocator* allocator;
+
+    insert(K key, V value) :: void {
+        // Probe, grow and move elements under allocator ownership.
+    }
+
+    get(K& key) :: V*? {
+        // Nullable shared/borrowed view must be explicit.
+        ret nil;
+    }
+}
+
+// Required compiler/std work:
+// - generic trait bounds and conformance lookup;
+// - user-defined equality/hash traits;
+// - allocator-backed array of generic structs;
+// - tombstone/drop correctness when keys or values own resources;
+// - optional runtime bounds/assert policy for probing.
+
+// ---------------------------------------------------------------------
+// 4. Iterable / Sequence protocol
+// ---------------------------------------------------------------------
+// `loop(value in container)` should not be array-only forever. It should lower
+// through a static iterator trait when the source is not a fixed array/span.
+
+trait Iterator<T> {
+    next() :: T?;
+}
+
+trait Iterable<T> {
+    iter() :: Iterator<T>;
+}
+
+sum_all<T with Addable>(T[] values) :: T {
+    // Span remains the cheapest view type for contiguous data.
+}
+
+use_iterable<T, C with Iterable<T>>(C& container) :: int32 {
+    int32 count = 0;
+    loop (item in container) {
+        count += 1;
+    }
+    ret count;
+}
+
+// Required compiler work:
+// - trait-based loop lowering after array/span fast paths;
+// - lifetime rule for iterator object storage;
+// - diagnostic when iteration would copy non-copyable values implicitly.
+
+// ---------------------------------------------------------------------
+// 5. Safe/unsafe views
+// ---------------------------------------------------------------------
+// `span` is safe when source bounds are known. `unsafe_span` is the C interop
+// escape hatch and must remain explicit.
+
+take_middle(int32[128] data) :: int32[] {
+    ret span data[16..64];
+}
+
+take_raw(int32* ptr, usize len) :: int32[] {
+    ret unsafe_span(ptr, len);
+}
+
+// Required compiler/runtime work:
+// - runtime bounds checks for `T[]` indexing in safety mode;
+// - optimizer-visible unchecked path for system modules;
+// - diagnostics for span ranges outside fixed compile-time dimensions;
+// - no hidden `*`/`^` conversion into span.
+

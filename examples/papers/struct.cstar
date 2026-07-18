@@ -155,6 +155,20 @@ struct Point {
     float32 y;
 }
 
+// Fixed array fields are value storage owned by the struct. They use the same
+// row-major flattening and dimension checks as local fixed arrays.
+struct RingBuffer {
+    int32 data[8];
+    int32 head;
+    int32 tail;
+
+    constructor() {
+        self.head = 0;
+        self.tail = 0;
+        self.data[0] = 0;
+    }
+}
+
 struct ColoredPoint {
     Point point;
     uint32 color;
@@ -168,3 +182,29 @@ struct ColoredPoint {
 
 // If polymorphism is needed, use static `trait` conformance or explicit
 // `dynamic Trait`. Do not make data inheritance part of struct layout.
+
+// ---------------------------------------------------------------------
+// 7. Generic container structs need a separate monomorphization phase
+// ---------------------------------------------------------------------
+// Fixed array fields are implemented for concrete element types. Production
+// containers require generic fields and allocator-backed heap arrays.
+
+struct Box<T> {
+    T value;
+
+    constructor(T value) {
+        self.value = move value;
+    }
+}
+
+struct InlineArray<T, const usize N> {
+    T data[N];
+    usize length;
+}
+
+// Required compiler work:
+// - generic type parameter parser for struct/function/method declarations;
+// - generic field layout after monomorphization;
+// - const generic dimensions for inline arrays;
+// - destructor synthesis over initialized generic fields/elements;
+// - diagnostics for recursive generic layout without pointer indirection.

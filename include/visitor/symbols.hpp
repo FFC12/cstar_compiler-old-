@@ -27,6 +27,7 @@ struct StructFieldInfo {
   bool isRef = false;
   bool isNullable = false;
   bool isPublic = false;
+  std::vector<size_t> arrayDimensions;
 };
 
 struct StructInfo {

@@ -38,7 +38,7 @@ SymbolInfo Visitor::preVisit(IfStmtAST &ifStmtAst) {
     // there is only one node actually..
     for (auto &node : block.second.second) {
       if (m_TypeChecking) {
-        typeCheckerScopeHandler(node);
+        typeCheckerScopeHandler(node, SymbolScope::IfSt);
       } else {
         scopeHandler(node, SymbolScope::IfSt);
       }
@@ -84,7 +84,7 @@ SymbolInfo Visitor::preVisit(IfStmtAST &ifStmtAst) {
       this->m_SymbolId++;
       for (auto &node : elseIfBlock.second) {
         if (m_TypeChecking) {
-          typeCheckerScopeHandler(node);
+          typeCheckerScopeHandler(node, SymbolScope::IfSt);
         } else {
           scopeHandler(node, SymbolScope::IfSt);
         }
@@ -103,7 +103,7 @@ SymbolInfo Visitor::preVisit(IfStmtAST &ifStmtAst) {
     this->m_SymbolId++;
     for (auto &node : ifStmtAst.m_Else) {
       if (m_TypeChecking) {
-        typeCheckerScopeHandler(node);
+        typeCheckerScopeHandler(node, SymbolScope::IfSt);
       } else {
         scopeHandler(node, SymbolScope::IfSt);
       }
@@ -278,7 +278,7 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
 
   for (auto &node : loopStmtAst.m_Scope) {
     if (m_TypeChecking) {
-      typeCheckerScopeHandler(node);
+      typeCheckerScopeHandler(node, SymbolScope::LoopSt);
     } else {
       scopeHandler(node, SymbolScope::LoopSt);
     }
@@ -396,7 +396,7 @@ SymbolInfo Visitor::preVisit(OptionStmtAST &optionStmtAst) {
     this->m_SymbolId++;
     for (auto &node : optionCase.scope) {
       if (m_TypeChecking) {
-        typeCheckerScopeHandler(node);
+        typeCheckerScopeHandler(node, SymbolScope::IfSt);
       } else {
         scopeHandler(node, SymbolScope::IfSt);
       }
@@ -499,7 +499,7 @@ SymbolInfo Visitor::preVisit(DeferStmtAST &deferStmtAst) {
   m_InsideCleanupBlock = true;
   enterScope(false);
   for (auto& node : deferStmtAst.m_Scope) {
-    typeCheckerScopeHandler(node);
+    typeCheckerScopeHandler(node, SymbolScope::IfSt);
   }
   exitScope(false);
   m_InsideCleanupBlock = previousInsideCleanup;

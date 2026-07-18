@@ -45,11 +45,14 @@ void Visitor::scopeHandler(std::unique_ptr<IAST> &node,
   }
 }
 
-void Visitor::typeCheckerScopeHandler(std::unique_ptr<IAST> &node) {
+void Visitor::typeCheckerScopeHandler(std::unique_ptr<IAST> &node,
+                                      SymbolScope symbolScope) {
   if (node->m_ASTKind == ASTKind::Decl) {
     if (node->m_DeclKind == DeclKind::VarDecl) {
       auto temp = node->acceptBefore(*this);
+      temp.symbolScope = symbolScope;
       this->m_LastScopeSymbols.emplace_back(temp.symbolName, temp);
+      this->m_SymbolInfos.push_back(temp);
     }
   } else if (node->m_ASTKind == ASTKind::Stmt) {
     if (node->m_StmtKind == StmtKind::LoopStmt) {

@@ -17,6 +17,41 @@
 trait Send {}
 trait Sync {}
 
+enum MemoryOrder : uint8 {
+    Relaxed,
+    Acquire,
+    Release,
+    AcqRel,
+    SeqCst,
+}
+
+struct Atomic<T> {
+    // Compiler/runtime-owned opaque storage. `T` must be a supported atomic
+    // scalar, pointer-sized handle, or future explicitly lock-free type.
+}
+
+atomic_counter_example(Atomic<int64>& counter) :: int64 {
+    int64 previous = counter.fetch_add(1, MemoryOrder.AcqRel);
+    ret previous + 1;
+}
+
+lock_free_stack_sketch(dynamic Node* head, Node* node) :: bool {
+    // Proposal:
+    //
+    // Node* observed = head.load(MemoryOrder.Acquire);
+    // node.next = observed;
+    // ret head.compare_exchange(ref observed, node,
+    //                           MemoryOrder.AcqRel,
+    //                           MemoryOrder.Acquire);
+    //
+    // Required semantics:
+    // - CAS updates expected value on failure;
+    // - nullable/non-null flow must understand atomic load results;
+    // - ABA/hazard pointer/epoch reclamation is stdlib/runtime policy, not a
+    //   hidden shared-pointer side effect.
+    ret false;
+}
+
 consume_on_worker(int32^ owned) async :: int32 {
     ret deref owned;
 }
@@ -61,6 +96,17 @@ thread_boundary_example() :: int32 {
 //   used.
 // - `Send` controls movement to another task/thread.
 // - `Sync` controls shared reference from another task/thread.
+// - User-visible atomic data structures need explicit std/runtime primitives:
+//   `Atomic<T>`, compare-exchange, fetch-add/sub, memory order values and a
+//   mutex/task runtime surface. Shared pointer refcount atomicity is necessary
+//   but not enough to implement arbitrary lock-free containers.
+//
+// Implementation order:
+// 1. Atomic scalar/pointer type parser and semantic capability checks.
+// 2. LLVM atomic load/store/rmw/cmpxchg lowering.
+// 3. Memory-order enum validation.
+// 4. Thread/task runtime import surface.
+// 5. Safe reclamation library for lock-free node containers.
 
 task_group_example(readonly int32* shared_value) async :: int32 {
     // Proposal sketch:

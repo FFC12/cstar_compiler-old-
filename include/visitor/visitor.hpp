@@ -242,7 +242,8 @@ class Visitor {
   void scopeHandler(std::unique_ptr<IAST>& node, SymbolScope symbolScope,
                     size_t scopeLevel, size_t scopeId);
 
-  void typeCheckerScopeHandler(std::unique_ptr<IAST>& node);
+  void typeCheckerScopeHandler(std::unique_ptr<IAST>& node,
+                               SymbolScope symbolScope = SymbolScope::Func);
   SymbolAST* symbolFromMoveSource(IAST* node) const;
   bool tryGetConstantIntegerLiteral(IAST* node, int64_t& value) const;
   IAST* methodCallReceiver(IAST* node) const;

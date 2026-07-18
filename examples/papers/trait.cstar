@@ -20,6 +20,22 @@ trait Area {
     area() :: float32;
 }
 
+trait Iterator<T> {
+    next() :: T?;
+}
+
+trait Iterable<T> {
+    iter() :: Iterator<T>;
+}
+
+trait Hash {
+    hash() :: uint64;
+}
+
+trait Equals<T> {
+    equals(T& rhs) :: bool;
+}
+
 struct Circle with Drawable, Area {
     float32 radius;
 
@@ -37,6 +53,21 @@ render_static<T with Drawable>(T& item, Canvas& canvas) :: void {
     item.draw(ref canvas); // monomorphized/static dispatch
     ret;
 }
+
+count_items<T, C with Iterable<T>>(C& container) :: int32 {
+    int32 count = 0;
+    loop (item in container) {
+        count += 1;
+    }
+    ret count;
+}
+
+// Generic trait-bound requirements:
+// - `T with Trait` must work in function params, returns and local variables.
+// - Multiple bounds need deterministic lookup and diagnostics.
+// - Generic methods must monomorphize or use an explicit ABI model.
+// - `loop(item in container)` lowers through `Iterable<T>` only when the
+//   container is not already a fixed array/span fast path.
 
 // ---------------------------------------------------------------------
 // Dynamic trait object

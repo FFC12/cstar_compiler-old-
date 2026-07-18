@@ -1109,6 +1109,13 @@ Tamamlanan:
   - `examples/smoke/multidim_array_assignment.cstar`
   - `examples/smoke/multidim_array_shortcut_assignment.cstar`
   - `examples/smoke/multidim_array_dynamic_index.cstar`
+- Struct field fixed array storage tamamlandı:
+  - `struct Buffer { int32 data[4]; }`
+  - `value.data[index]` read/write ve `self.data[index]` method/constructor içi read/write çalışır.
+  - Field storage local array gibi flat LLVM array'e iner; `arrayDimensions` metadata'sı field access boyunca korunur.
+  - Regression:
+    - `examples/smoke/structs/struct_array_field.cstar`
+    - `examples/type_checker/arrays/struct_array_field_oob.cstar`
 - Çok boyutlu array parametre read/write smoke:
   - `examples/smoke/multidim_array_param_read.cstar`
   - `examples/smoke/multidim_array_param_write.cstar`
@@ -1141,6 +1148,189 @@ Tamamlanan:
   - `((1, 2, 3),\n (4, 5, 6))`, `1 +\n2`, `func(a,\nb)` ve `arr[1:\n2]` smoke ile korunur.
 
 İleri aşama: Bu aşamada açık MVP maddesi kalmadı. Slice/range indexing ve runtime bounds check ayrı ileri aşamaya taşındı.
+
+Data structure reality check:
+
+- `examples/ds/` altında compiler'ı gerçek veri yapılarıyla zorlayan örnekler eklendi:
+  - `fixed_ring_queue.cstar`: struct içi fixed array, method, wrap-around push/pop.
+  - `span_binary_heap.cstar`: `T[]` span parametresiyle min-heap sift-up.
+  - `shared_linked_stack.cstar`: heap allocated shared node, nullable next field, pointer traversal.
+  - `adjacency_matrix_graph.cstar`: struct içi çok boyutlu array field ve row-major graph matrix.
+- Bu çalışma sırasında kapatılan compiler açıkları:
+  - struct fixed array field parse/semantic/codegen.
+  - `obj.field[index]` assignment target parser desteği.
+  - field-array read/write için array metadata propagation.
+  - `a[x.y]` gibi index expression'ların yanlışlıkla multi-index sayılması.
+  - loop gövdesinde local declaration'ın sonraki statement initializer/expression tarafından görülememesi.
+- State-of-art container/concurrency için kalan büyük boşluklar:
+  - generic struct/function ve trait bound modeli.
+  - heap array allocation/reallocation: `new T[capacity]`, allocator-backed resize.
+  - `Vector<T>`, `HashMap<K,V>`, iterator/range protocol stdlib kontratı.
+  - kullanıcı yüzeyinde atomic primitive'ler: `Atomic<T>`, CAS, memory order, mutex/task runtime.
+  - runtime bounds-check policy ve optimizer'a görünür safe/unsafe slice contract'ı.
+
+Kalanlar ve uygulanacak sıra:
+
+1. Array/span safety hardening:
+   - `span data[begin..end]` için compile-time range OOB diagnostic:
+     - `begin <= end`
+     - `end <= fixed_dimension`
+     - negatif range kararının netleştirilmesi.
+   - `T[]` runtime span indexing için safety-mode bounds check:
+     - varsayılan debug/safe modda check.
+     - system/unsafe modülde açık unchecked path.
+   - `unsafe_span(ptr, len)` yalnız beklenen `T[]` bağlamında kalmalı; local variable initializer ve return kullanımında type inference/expected-type netleşmeli.
+   - Diagnostic dosyaları:
+     - span range out-of-bounds.
+     - span range begin > end.
+     - unsafe_span pointer/length type mismatch.
+
+2. Heap array allocation:
+   - Proposal source: `examples/papers/allocator.cstar`, `examples/papers/collections.cstar`.
+   - Syntax hedefleri:
+     - `int32^ values = new int32[capacity];`
+     - `int32^? values = new? int32[capacity];`
+     - `Point^ points = new(arena) Point[capacity];`
+   - Semantic:
+     - element type sized/storable olmalı.
+     - `sizeof(T) * capacity` overflow guard.
+     - primitive element zero-init.
+     - struct element initialization policy netleşmeli:
+       - default constructor varsa constructor loop.
+       - default constructor yoksa controlled diagnostic.
+       - unsafe uninitialized storage ayrı yüzey olmadan açılmamalı.
+     - array ownership pointer drop:
+       - primitive array: allocator free.
+       - struct array: initialized element destructors reverse order + allocator free.
+   - Codegen:
+     - payload byte size hesabı.
+     - allocator/default heap call.
+     - array length metadata için karar:
+       - unique array handle'a length metadata mı eklenecek,
+       - yoksa `span values[0..capacity]` çağrısında length ayrı mı tutulacak.
+     - nullable `new?` failure branch.
+   - Smoke:
+     - primitive heap array allocate/write/read/drop.
+     - allocator-backed primitive heap array free count.
+     - struct heap array default constructor/destructor count.
+   - Type checker:
+     - unsized/void element reddi.
+     - capacity non-integer reddi.
+     - non-default-constructible struct array reddi.
+     - stack alias array drop reddi.
+
+3. Reallocation/growth contract:
+   - Proposal source: `examples/papers/allocator.cstar`, `examples/papers/collections.cstar`.
+   - Hedef yüzey:
+     - `realloc?(allocator, move data, old_count, new_capacity)` veya stdlib internal helper.
+   - Semantic:
+     - success/failure ownership state açık olmalı.
+     - failure durumunda old storage kimin elinde kalıyor netleşmeli.
+     - initialized element count ayrı metadata olarak korunmalı.
+   - Codegen:
+     - primitive memcpy/memmove fast path.
+     - struct move loop + destructor cleanup path.
+   - Tests:
+     - grow primitive buffer.
+     - grow struct buffer with destructor count.
+     - allocation failure nullable path.
+
+4. Generic struct/function/method MVP:
+   - Proposal source: `examples/papers/struct.cstar`, `examples/papers/trait.cstar`, `examples/papers/collections.cstar`.
+   - Syntax:
+     - `struct Box<T> { T value; }`
+     - `identity<T>(T value) :: T`
+     - `struct Vector<T> { T^ data; usize length; }`
+   - Parser:
+     - generic parameter list.
+     - generic type usage in fields/params/returns/local declarations.
+     - nested generic type spelling: `HashMap<int32, Vec2i>`.
+   - Semantic:
+     - type parameter table per declaration.
+     - monomorphization key: `Vector<int32>`, `Box<Point>`.
+     - recursive generic layout guard.
+     - move/copy/drop capability checks per `T`.
+   - Codegen:
+     - instantiate concrete LLVM struct/function per type argument set.
+     - deterministic symbol mangling.
+   - Tests:
+     - `Box<int32>`.
+     - `Box<Point>`.
+     - generic identity.
+     - generic method on `Vector<int32>`.
+
+5. Generic trait bounds:
+   - Proposal source: `examples/papers/trait.cstar`.
+   - Syntax:
+     - `render<T with Drawable>(T& item)`.
+     - `HashMap<K with Hash, V>`.
+     - multiple bounds: `T with Hash, Equals<T>`.
+   - Semantic:
+     - compile-time conformance lookup for concrete instantiations.
+     - missing requirement diagnostic should name concrete type, trait and method.
+     - bound methods callable inside generic body.
+   - Codegen:
+     - static dispatch after monomorphization.
+   - Tests:
+     - positive static bound call.
+     - missing bound diagnostic.
+     - wrong method signature diagnostic.
+
+6. Iterator/range protocol:
+   - Proposal source: `examples/papers/trait.cstar`, `examples/papers/collections.cstar`.
+   - Array/span fast path korunacak.
+   - Array/span dışında `loop(item in container)` `Iterable<T>` üzerinden lowered edilmeli.
+   - Iterator return modeli `Option<T>` veya nullable/value result tasarımı ister.
+   - Kopyasız iteration için karar:
+     - `loop(item in container)` copy/value mı,
+     - `loop(item& in container)` reference mı,
+     - ownership taşıyan `T^` için implicit copy reddi.
+   - Tests:
+     - custom range struct.
+     - vector iteration.
+     - non-iterable diagnostic.
+
+7. Stdlib containers:
+   - Proposal source: `examples/papers/collections.cstar`.
+   - `std/collections.cstar` eklenecek:
+     - `Vector<T>`
+     - `HashMap<K,V>`
+     - `Stack<T>`
+     - `Queue<T>`
+   - Her container allocator-aware olacak.
+   - Resource-owning `T` ile destructor/drop correctness testleri yazılacak.
+   - `examples/ds/` örnekleri stdlib container kullanan ve hand-written DS kullanan iki hatta ayrılacak.
+
+8. Atomic/concurrency primitive'leri:
+   - Proposal source: `examples/papers/concurrency.cstar`.
+   - Syntax/API:
+     - `Atomic<int64>`
+     - `load(order)`, `store(value, order)`, `fetch_add`, `fetch_sub`, `compare_exchange`.
+     - `MemoryOrder` enum.
+   - Semantic:
+     - atomiklenebilir type seti.
+     - pointer/shared handle atomic kullanım sınırları.
+     - nullable atomic load sonrası flow proof.
+   - Codegen:
+     - LLVM atomic load/store/rmw/cmpxchg.
+     - target memory order mapping.
+   - Tests:
+     - atomic counter.
+     - CAS loop.
+     - invalid atomic struct diagnostic.
+   - Not: Shared pointer refcount atomicliği tek başına lock-free data structure desteği sayılmaz.
+
+9. Memory reclamation ve thread-safe DS:
+   - Atomic primitive tamamlandıktan sonra ele alınacak.
+   - Hazard pointer, epoch reclamation veya reference-counted node policy std/runtime seviyesinde netleşmeli.
+   - Lock-free stack/queue örnekleri ancak bu politika olmadan production kabul edilmeyecek.
+
+10. Performance/ergonomi takipleri:
+    - Large buffer kopyası hiçbir function call'da gizli olmamalı.
+    - `T[N]` parametre kopyasız kalmalı.
+    - `copy data` explicit copy path performans benchmark'a eklenmeli.
+    - Span indexing check'leri optimize edilebilir olmalı.
+    - Generic monomorphization compile-time ve binary-size benchmark'a eklenecek.
 
 ## Aşama 5 - Kontrol Akışı
 

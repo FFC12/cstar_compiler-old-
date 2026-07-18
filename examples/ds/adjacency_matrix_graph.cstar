@@ -1,0 +1,41 @@
+// expected: pass
+// expected-exit: 3
+
+struct SmallGraph {
+  int32 edges[4:4];
+
+  constructor() {
+    int32 row = 0;
+    loop (row < 4) {
+      int32 col = 0;
+      loop (col < 4) {
+        self.edges[row:col] = 0;
+        col += 1;
+      }
+      row += 1;
+    }
+  }
+
+  connect(int32 src, int32 dst) :: void {
+    self.edges[src:dst] = 1;
+  }
+
+  out_degree(int32 node) :: int32 {
+    int32 degree = 0;
+    int32 col = 0;
+    loop (col < 4) {
+      degree += self.edges[node:col];
+      col += 1;
+    }
+    ret degree;
+  }
+}
+
+main() :: int32 {
+  SmallGraph graph = SmallGraph();
+  graph.connect(0, 1);
+  graph.connect(0, 2);
+  graph.connect(0, 3);
+  graph.connect(2, 3);
+  ret graph.out_degree(0);
+}

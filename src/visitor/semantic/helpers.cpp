@@ -613,6 +613,10 @@ size_t Visitor::getIndexesOfArray(IAST &expr) {
 
   if (expr.m_ExprKind == BinOp) {
     binaryExpr = (BinaryOpAST *)&expr;
+    if (binaryExpr->m_BinOpKind != B_MARRS) {
+      return 1;
+    }
+
     i = 2;
 
     auto rhs = binaryExpr->m_RHS.get();

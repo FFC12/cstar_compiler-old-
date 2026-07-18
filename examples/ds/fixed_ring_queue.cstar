@@ -1,0 +1,57 @@
+// expected: pass
+// expected-exit: 8
+
+struct RingQueue {
+  int32 data[8];
+  int32 head;
+  int32 tail;
+  int32 count;
+
+  constructor() {
+    self.head = 0;
+    self.tail = 0;
+    self.count = 0;
+  }
+
+  push(int32 value) :: bool {
+    if (self.count == 8) {
+      ret false;
+    }
+
+    self.data[self.tail] = value;
+    self.tail += 1;
+    if (self.tail == 8) {
+      self.tail = 0;
+    }
+    self.count += 1;
+    ret true;
+  }
+
+  pop() :: int32 {
+    if (self.count == 0) {
+      ret 0;
+    }
+
+    int32 value = self.data[self.head];
+    self.head += 1;
+    if (self.head == 8) {
+      self.head = 0;
+    }
+    self.count -= 1;
+    ret value;
+  }
+}
+
+main() :: int32 {
+  RingQueue queue = RingQueue();
+  queue.push(3);
+  queue.push(5);
+  queue.push(7);
+
+  int32 first = queue.pop();
+  int32 second = queue.pop();
+  queue.push(11);
+
+  ret first + second;
+}
+

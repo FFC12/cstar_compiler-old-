@@ -59,8 +59,7 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
               afterTypeToken == TokenKind::IDENT ||
               afterTypeToken == TokenKind::STAR ||
               afterTypeToken == TokenKind::XOR ||
-              afterTypeToken == TokenKind::AND ||
-              afterTypeToken == TokenKind::LSQPAR;
+              afterTypeToken == TokenKind::AND;
         }
       }
 
@@ -141,6 +140,60 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
               "'.=' policy/member-safe assignment is part of the C* proposal "
               "and requires the policy runtime semantics first",
               currentTokenInfo());
+        }
+
+        if (is(TokenKind::LSQPAR)) {
+          std::vector<ASTNode> indexes{};
+          auto collectSubscriptIndexes = [&](auto &self, ASTNode expr) -> void {
+            if (expr == nullptr) {
+              return;
+            }
+
+            if (expr->getExprKind() == ExprKind::BinOp) {
+              auto *binary = static_cast<BinaryOpAST *>(expr.get());
+              if (binary->binOpKind() == BinOpKind::B_MARRS) {
+                self(self, binary->takeLeft());
+                self(self, binary->takeRight());
+                return;
+              }
+            }
+
+            indexes.emplace_back(std::move(expr));
+          };
+
+          auto indexExpr = this->expression(true, 3);
+          collectSubscriptIndexes(collectSubscriptIndexes,
+                                  std::move(indexExpr));
+
+          if (is(TokenKind::POLICY_ASSIGN)) {
+            ParserError(
+                "'.=' policy/member-safe assignment is part of the C* "
+                "proposal and requires the policy runtime semantics first",
+                currentTokenInfo());
+          }
+
+          if (!isShortcutOp(currentTokenInfo())) {
+            ParserError("Unexpected token for assignment expression.",
+                        currentTokenInfo());
+          }
+
+          auto shortcutOp = typeOfShortcutOp(currentTokenInfo());
+          auto shortcutOpStr = currentTokenStr();
+          auto expr =
+              std::move(this->expression(false, 0, false, false, true));
+
+          expected(TokenKind::SEMICOLON);
+          this->advance();
+
+          size_t end = currentTokenInfo().getTokenPositionInfo().end;
+          SemanticLoc semanticLoc = SemanticLoc(begin, end, line);
+
+          auto assignmentExpr = std::make_unique<AssignmentAST>(
+              std::move(fieldAccess), std::move(expr), false, 0,
+              std::move(indexes), shortcutOp, shortcutOpStr, semanticLoc);
+
+          scope.emplace_back(std::move(assignmentExpr));
+          continue;
         }
 
         if (!isShortcutOp(currentTokenInfo())) {

@@ -1,0 +1,54 @@
+// expected: pass
+// expected-exit: 9
+
+struct StackNode {
+  int32 value;
+  StackNode*? next;
+
+  constructor(int32 value) {
+    self.value = value;
+    self.next = nil;
+  }
+}
+
+struct LinkedStack {
+  StackNode*? head;
+  int32 count;
+
+  constructor() {
+    self.head = nil;
+    self.count = 0;
+  }
+
+  push(StackNode* node) :: void {
+    node.next = self.head;
+    self.head = node;
+    self.count += 1;
+  }
+
+  sum() :: int32 {
+    int32 total = 0;
+    StackNode*? cursor = self.head;
+
+    loop (cursor) {
+      total += cursor.value;
+      cursor = cursor.next;
+    }
+
+    ret total;
+  }
+}
+
+main() :: int32 {
+  LinkedStack stack = LinkedStack();
+  StackNode* a = shared new StackNode(2);
+  StackNode* b = shared new StackNode(3);
+  StackNode* c = shared new StackNode(4);
+
+  stack.push(a);
+  stack.push(b);
+  stack.push(c);
+
+  ret stack.sum();
+}
+

@@ -128,6 +128,19 @@ use_ranges() :: void {
     draw_fixed(copy data);
 }
 
+// Dynamic collections are library types over allocator-backed heap arrays.
+// This syntax is proposal-level until generic containers and heap array
+// allocation are implemented.
+include "std:collections" as collections
+
+use_vector(Allocator& allocator) :: int32 {
+    collections.Vector<int32> values = collections.Vector<int32>(ref allocator);
+    values.push(10);
+    values.push(20);
+    int32[] view = values.as_span();
+    ret view[0] + view[1];
+}
+
 example1(constref int32& by_ref) :: void {
 
 }
