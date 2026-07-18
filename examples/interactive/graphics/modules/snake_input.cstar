@@ -1,0 +1,35 @@
+include "glfw.cstar" as glfw
+include "snake_types.cstar" as snake
+
+public read_direction(void* window, int32 fallback) :: int32 {
+  if (glfwGetKey(window, glfw_key_w()) == glfw_press() || glfwGetKey(window, glfw_key_up()) == glfw_press()) {
+    ret snake.direction_up();
+  }
+  if (glfwGetKey(window, glfw_key_d()) == glfw_press() || glfwGetKey(window, glfw_key_right()) == glfw_press()) {
+    ret snake.direction_right();
+  }
+  if (glfwGetKey(window, glfw_key_s()) == glfw_press() || glfwGetKey(window, glfw_key_down()) == glfw_press()) {
+    ret snake.direction_down();
+  }
+  if (glfwGetKey(window, glfw_key_a()) == glfw_press() || glfwGetKey(window, glfw_key_left()) == glfw_press()) {
+    ret snake.direction_left();
+  }
+  ret fallback;
+}
+
+public read_restart(void* window) :: bool {
+  if (glfwGetKey(window, glfw_key_r()) == glfw_press()) {
+    ret true;
+  }
+  if (glfwGetKey(window, glfw_key_space()) == glfw_press()) {
+    ret true;
+  }
+  ret false;
+}
+
+public read_quit(void* window) :: bool {
+  if (glfwGetKey(window, glfw_key_escape()) == glfw_press()) {
+    ret true;
+  }
+  ret false;
+}

@@ -1146,6 +1146,81 @@ main() :: int32 {
     <p class="tr"><code>nomove</code>, unique parametrenin fonksiyon gövdesinden dışarı taşınmasını yasaklayan bir <em>ownership-flow modifier</em>'dır — bir protocol state değildir. "Bu fonksiyon kaynağına bakar ama onu asla kaçırmaz" sözleşmesini imzaya yazar.</p>
     <p class="en">The <code>nomove</code> qualifier is an <em>ownership-flow modifier</em> that forbids the unique parameter from being moved out of the function body — it is not a protocol state. It writes the contract "this function inspects the resource but never abducts it" into the signature.</p>
 
+    <h3><span class="h3-no">12.4</span><span class="tr">Nullability: Non-Null Varsayılan</span><span class="en">Nullability: Non-Null by Default</span></h3>
+    <p class="tr">C* pointer'ları varsayılan olarak null değildir. Nullable olmak tipin parçasıdır: <code>T*?</code> nullable shared pointer, <code>T^?</code> nullable unique pointer demektir. <code>T&amp;?</code> ise yoktur; referans, var olan bir nesneye bağlanır ve null olamaz. <code>nil</code> yalnızca nullable pointer bağlamında geçerlidir.</p>
+    <p class="en">C* pointers are non-null by default. Nullability is part of the type: <code>T*?</code> is a nullable shared pointer, <code>T^?</code> is a nullable unique pointer. <code>T&amp;?</code> does not exist; a reference binds to an existing object and cannot be null. <code>nil</code> is valid only in nullable pointer contexts.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">nullable-pointer.cstar</span><span class="grow"></span><span class="tag ok">✓ pass · exit 7</span></div><pre><code class="lang-cstar">main() :: int32 {
+  int32 value = 7;
+  int32*? maybe = ref value;
+
+  if (maybe) {
+    ret deref maybe;   // if guard nullable pointer'ı daraltır / narrows it
+  }
+
+  ret 0;
+}</code></pre></div>
+    <div class="code"><div class="code-bar"><span class="code-name">nullable-diagnostics.cstar</span><span class="grow"></span><span class="tag err">✗ diagnostic</span></div><pre><code class="lang-cstar">main() :: int32 {
+  int32* shared = nil;   // diagnostic: T* non-null
+  int32^ owned = nil;    // diagnostic: T^ non-null
+  int32&amp;? ref_value;     // diagnostic: nullable reference yok / no nullable ref
+  ret 0;
+}</code></pre></div>
+    <p class="tr"><code>deref maybe</code> guard olmadan diagnostic üretir; <code>if (maybe)</code> true branch'i içinde pointer non-null kabul edilir. Böylece C'deki "kontrol etmeyi unutursan segfault" modeli yerine, kanıtlanmamış dereference derleme hatası olur.</p>
+    <p class="en"><code>deref maybe</code> without a guard produces a diagnostic; inside the true branch of <code>if (maybe)</code>, the pointer is considered non-null. Instead of C's "forget the check and segfault" model, an unproven dereference is a compile error.</p>
+
+    <h3><span class="h3-no">12.5</span><span class="tr">Allocator Destekli <code>new</code>, <code>shared new</code> ve <code>new?</code></span><span class="en">Allocator-Backed <code>new</code>, <code>shared new</code>, and <code>new?</code></span></h3>
+    <p class="tr"><code>new Type(args)</code> unique ownership üretir; <code>shared new Type(args)</code> shared ownership üretir. Explicit allocator biçimleri <code>new(allocator) Type(args)</code> ve <code>shared new(allocator) Type(args)</code> çalışır: allocator'ın adı değil, conform ettiği <code>#[lang(allocator)]</code> trait'i contract'tır. Nullable allocation yüzeyi <code>new?</code> ve <code>shared new?</code> ile ifade edilir.</p>
+    <p class="en"><code>new Type(args)</code> produces unique ownership; <code>shared new Type(args)</code> produces shared ownership. Explicit allocator forms <code>new(allocator) Type(args)</code> and <code>shared new(allocator) Type(args)</code> work today: the contract is not the allocator's name, but the <code>#[lang(allocator)]</code> trait it conforms to. Nullable allocation is expressed with <code>new?</code> and <code>shared new?</code>.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">allocator-backed-new.cstar</span><span class="grow"></span><span class="tag ok">✓ pass</span></div><pre><code class="lang-cstar">import malloc(usize bytes) :: void* from "std:crt";
+import free(void* ptr) :: void from "std:crt";
+
+#[lang(allocator)]
+trait HeapDomain {
+  alloc(usize bytes, usize align) :: void*;
+  free(void* ptr, usize bytes, usize align) :: void;
+}
+
+struct Meter {
+  int32 value;
+
+  constructor(int32 initial) {
+    self.value = initial;
+    ret;
+  }
+}
+
+struct CountingAllocator with HeapDomain {
+  constructor() {
+    ret;
+  }
+
+  alloc(usize bytes, usize align) :: void* {
+    ret malloc(bytes);
+  }
+
+  free(void* ptr, usize bytes, usize align) :: void {
+    free(ptr);
+    ret;
+  }
+}
+
+main() :: int32 {
+  CountingAllocator arena = CountingAllocator();
+  Meter^ owned = new(arena) Meter(5);
+  Meter* shared = shared new(arena) Meter(7);
+  Meter^? maybe = new? Meter(9);
+
+  if (maybe) {
+    drop maybe;
+  }
+
+  drop owned;
+  drop shared;
+  ret 0;
+}</code></pre></div>
+    <p class="tr">Allocator-backed shared pointer, payload ile strong-count metadata'sını aynı allocator domain'inde yönetir; son release hem nesne destructor hattını hem allocator release hattını tetikler. Kalan tasarım alanı allocation failure policy ve shared control-block layout'unun daha görünür raporlanmasıdır (§22.2).</p>
+    <p class="en">An allocator-backed shared pointer manages both payload and strong-count metadata in the same allocator domain; the final release triggers both the object destructor path and the allocator release path. The remaining design work is allocation failure policy and more visible reporting of shared control-block layout (§22.2).</p>
+
     <div class="diag why">
       <div class="diag-head">note[DESIGN]: <span class="tr">iki pointer'lı bir dünya neden daha iyi?</span><span class="en">why is a two-pointer world better?</span></div>
       <div class="diag-body">
@@ -1310,8 +1385,8 @@ main() :: int32 {
   drop meter;
   ret value;
 }</code></pre></div>
-    <p class="tr"><code>new</code> derleyiciye ayrılmış allocation operatörüdür: kullanıcı <code>operator new</code> yazamaz, <code>new()</code> adında method tanımlayamaz. Unique ve shared struct pointer'ları üzerinden alan/method erişimi doğrudan <code>.</code> ile yapılır — ayrı bir <code>-&gt;</code> operatörü yoktur. Explicit allocator biçimi <code>new(arena) Meter(7)</code> proposal yüzeyindedir (§22.2).</p>
-    <p class="en"><code>new</code> is the compiler-reserved allocation operator: users cannot write <code>operator new</code> or define a method named <code>new()</code>. Field/method access through unique and shared struct pointers uses <code>.</code> directly — there is no separate <code>-&gt;</code> operator. The explicit allocator form <code>new(arena) Meter(7)</code> lives on the proposal surface (§22.2).</p>
+    <p class="tr"><code>new</code> derleyiciye ayrılmış allocation operatörüdür: kullanıcı <code>operator new</code> yazamaz, <code>new()</code> adında method tanımlayamaz. Unique ve shared struct pointer'ları üzerinden alan/method erişimi doğrudan <code>.</code> ile yapılır — ayrı bir <code>-&gt;</code> operatörü yoktur. Explicit allocator biçimi <code>new(arena) Meter(7)</code> çalışan yüzeydedir; <code>arena</code>'nın <code>#[lang(allocator)]</code> trait'ine conform etmesi gerekir. <code>new?</code> / <code>shared new?</code> nullable ownership sonucu üretir; allocator failure policy ve fused shared control-block layout'u §22'de sertleştirilecek kısımdır.</p>
+    <p class="en"><code>new</code> is the compiler-reserved allocation operator: users cannot write <code>operator new</code> or define a method named <code>new()</code>. Field/method access through unique and shared struct pointers uses <code>.</code> directly — there is no separate <code>-&gt;</code> operator. The explicit allocator form <code>new(arena) Meter(7)</code> is part of the working surface; <code>arena</code> must conform to the <code>#[lang(allocator)]</code> trait. <code>new?</code> / <code>shared new?</code> produce nullable ownership results; allocator failure policy and fused shared control-block layout are the hardening work left in §22.</p>
 
     <h3><span class="h3-no">14.6</span><span class="tr">Alan Görünürlüğü: <code>public</code> ve Instance Kuralı</span><span class="en">Field Visibility: <code>public</code> and the Instance Rule</span></h3>
     <div class="code"><div class="code-bar"><span class="code-name">static-access.cstar</span><span class="grow"></span><span class="tag err">✗ diagnostic</span></div><pre><code class="lang-cstar">struct Point {
@@ -1696,7 +1771,7 @@ use_file() :: void {
   file.open();
   ret; // compiler emits file.close() on this exit edge
 }</code></pre></div>
-    <p class="tr"><code>scope_exit A -&gt; B :: method();</code> artÄ±k yalnÄ±zca metadata deÄŸildir; codegen cleanup hattÄ±na iner. Method instance method olmalÄ±, user argÃ¼manÄ± almamalÄ± ve fallible olmamalÄ±dÄ±r. Explicit <code>file.close()</code> sonrasÄ± state <code>closed</code> olduÄŸu iÃ§in otomatik ikinci close Ã¼retilmez.</p>
+    <p class="tr"><code>scope_exit A -&gt; B :: method();</code> artık yalnızca metadata değildir; codegen cleanup hattına iner. Method instance method olmalı, user argümanı almamalı ve fallible olmamalıdır. Explicit <code>file.close()</code> sonrası state <code>closed</code> olduğu için otomatik ikinci close üretilmez.</p>
     <p class="en"><code>scope_exit A -&gt; B :: method();</code> is no longer just metadata; it lowers into the codegen cleanup path. The method must be an instance method, accept no user arguments, and be non-fallible. After an explicit <code>file.close()</code>, the state is <code>closed</code>, so no second automatic close is emitted.</p>
 
     <h3><span class="h3-no">16.5.2</span><span class="tr"><code>except</code>, <code>throw</code> ve Fallible Call</span><span class="en"><code>except</code>, <code>throw</code>, and Fallible Calls</span></h3>
@@ -2354,26 +2429,26 @@ main() :: int32 {
     <div class="ch-head"><span class="ch-no">§22</span>
       <h2><span class="tr">Proposal Haritası</span><span class="en">The Proposal Map</span></h2>
     </div>
-    <p class="ch-intro tr">Bu bölüm geleceğin tasarımını özetler. Buradaki kodlar <code>examples/papers/*.cstar</code> altında tutulur ve bugünkü derleyicide <strong>kontrollü diagnostic</strong> üretir — sessiz kabul asla. Her başlık, çalışan dilin hangi boşluğunu kapatacağını deklare eder.</p>
-    <p class="ch-intro en">This chapter summarizes the future design. Its code lives under <code>examples/papers/*.cstar</code> and produces <strong>controlled diagnostics</strong> in today's compiler — never silent acceptance. Each heading declares which gap in the working language it will close.</p>
+    <p class="ch-intro tr">Bu bölüm artık yalnızca kalan ileri tasarımı ve hardening işlerini özetler. Çalışan yüzeye mezun olan parçalar kendi ana bölümlerinde anlatılır: nullability ve allocator-backed <code>new</code> §12'de, dynamic trait object'ler §16.2'de, protocol/effects §16.5'te. Buradaki kodlar proposal veya sertleştirme hedefidir; sessiz kabul yerine kontrollü diagnostic ya da açık TODO beklenir.</p>
+    <p class="ch-intro en">This chapter now summarizes only the remaining forward design and hardening work. Features that graduated into the working surface are documented in their main chapters: nullability and allocator-backed <code>new</code> in §12, dynamic trait objects in §16.2, and protocols/effects in §16.5. Code here is proposal or hardening target material; it should produce controlled diagnostics or explicit TODOs rather than silent acceptance.</p>
 
-    <h3><span class="h3-no">22.1</span><span class="tr">Nullability: Non-Null Varsayılan</span><span class="en">Nullability: Non-Null by Default</span></h3>
-    <p class="tr">Plan kesindir: <code>T*</code>, <code>T^</code>, <code>T&amp;</code> varsayılan olarak non-null olur. Nullable pointer açık <code>?</code> ister (<code>T*?</code>, <code>T^?</code>); <code>T&amp;</code> asla nullable olmaz. <code>nil</code> yalnızca nullable bağlamda legal olur ve <code>if (p)</code> koşulu true dalında pointer'ı non-null'a daraltır (flow narrowing):</p>
-    <p class="en">The plan is exact: <code>T*</code>, <code>T^</code>, <code>T&amp;</code> become non-null by default. A nullable pointer requires an explicit <code>?</code> (<code>T*?</code>, <code>T^?</code>); <code>T&amp;</code> is never nullable. <code>nil</code> becomes legal only in nullable context, and an <code>if (p)</code> condition narrows the pointer to non-null in the true branch (flow narrowing):</p>
-    <div class="code"><div class="code-bar"><span class="code-name">nullability.cstar</span><span class="grow"></span><span class="tag prop">◆ proposal</span></div><pre><code class="lang-cstar">read_nullable(int32*? maybe) :: int32 {
-  if (maybe) {
-    ret deref maybe;   // burada maybe: int32* (non-null'a daraltıldı / narrowed)
+    <h3><span class="h3-no">22.1</span><span class="tr">Nullability Hardening</span><span class="en">Nullability Hardening</span></h3>
+    <p class="tr">Temel nullability yüzeyi çalışır (§12.4): <code>T*?</code>, <code>T^?</code>, <code>nil</code> ve basit <code>if (p)</code> flow narrowing derleyici tarafından anlaşılır. Kalan çalışma, daha karmaşık boolean ifadelerde, protocol state ile birleşen guard'larda ve fallible allocation sonuçlarında kanıtın aynı kesinlikle taşınmasıdır.</p>
+    <p class="en">The basic nullability surface works (§12.4): <code>T*?</code>, <code>T^?</code>, <code>nil</code>, and simple <code>if (p)</code> flow narrowing are understood by the compiler. The remaining work is carrying that proof through more complex boolean expressions, guards combined with protocol state, and fallible allocation results.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">nullability-hardening.cstar</span><span class="grow"></span><span class="tag prop">◆ hardening</span></div><pre><code class="lang-cstar">read_after_guard(int32*? maybe, bool ready) :: int32 {
+  if (ready &amp;&amp; maybe) {
+    ret deref maybe;   // nested boolean proof target
   }
 
   ret 0;
 }</code></pre></div>
 
-    <h3><span class="h3-no">22.2</span><span class="tr">Allocator ve <code>new?</code></span><span class="en">Allocators and <code>new?</code></span></h3>
-    <p class="tr">Allocation yüzeyi dört forma ayrılır: <code>new Type(args)</code> varsayılan allocator; <code>new(allocator) Type(args)</code> açık allocator; <code>shared new</code> paylaşımlı sahiplik; <code>new?</code> başarısız olabilen (fallible) allocation. Infallible <code>new</code> asla <code>nil</code> döndürmez — başarısızlık ihtimali varsa bu, tipte <code>?</code> olarak görünmek zorundadır. Primitive allocation da legal kabul edilir:</p>
-    <p class="en">The allocation surface splits into four forms: <code>new Type(args)</code> with the default allocator; <code>new(allocator) Type(args)</code> with an explicit one; <code>shared new</code> for shared ownership; <code>new?</code> for fallible allocation. Infallible <code>new</code> never returns <code>nil</code> — if failure is possible, it must appear as <code>?</code> in the type. Primitive allocation is also legal:</p>
-    <div class="code"><div class="code-bar"><span class="code-name">allocator.cstar</span><span class="grow"></span><span class="tag prop">◆ proposal</span></div><pre><code class="lang-cstar">Meter^ owned = new(arena) Meter(7);
-Meter^? maybe = new?(arena) Meter(7);
-int32^ owned_value = new(arena) int32(7);</code></pre></div>
+    <h3><span class="h3-no">22.2</span><span class="tr">Allocator Hardening ve Failure Policy</span><span class="en">Allocator Hardening and Failure Policy</span></h3>
+    <p class="tr">Allocator-backed allocation artık çalışan yüzeydedir (§12.5): <code>new(arena)</code>, <code>shared new(arena)</code>, <code>new?</code> ve <code>shared new?</code> parse/typecheck/codegen hattından geçer. Kalan tasarım işi, allocator'ın null döndürmesi veya sistem allocation failure üretmesi halinde izlenecek policy'nin tipte ve effects sisteminde görünür hale gelmesidir. Ayrıca shared pointer control-block layout'u ve desugar çıktısı daha denetlenebilir yapılacaktır.</p>
+    <p class="en">Allocator-backed allocation is now part of the working surface (§12.5): <code>new(arena)</code>, <code>shared new(arena)</code>, <code>new?</code>, and <code>shared new?</code> go through parse/typecheck/codegen. The remaining design work is making the policy for allocator null returns or system allocation failure visible in the type and effects system. Shared pointer control-block layout and desugaring output will also become more inspectable.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">allocation-policy.cstar</span><span class="grow"></span><span class="tag prop">◆ hardening</span></div><pre><code class="lang-cstar">allocate_meter(HeapDomain&amp; arena) except AllocationError :: Meter^ {
+  ret new(arena) Meter(7);   // failure policy becomes explicit here
+}</code></pre></div>
 
     <h3><span class="h3-no">22.3</span><span class="tr">Dynamic Protocol</span><span class="en">Dynamic Protocols</span></h3>
     <p class="tr">Static/provable protocol ve <code>scope_exit</code> cleanup edge'leri artık çalışan yüzeydedir (§16.5). Proposal alanında kalan parça, runtime state tag isteyen <code>dynamic protocol</code> ve <code>.=</code> dynamic/provability-gap transition lowering'idir. Bu lowering gizli hook table veya hashmap kullanmayacak; <code>--show-desugar</code> ile görülebilir switch/check çağrılarına inecektir:</p>

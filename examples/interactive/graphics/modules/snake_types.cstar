@@ -1,7 +1,5 @@
-include "glfw.cstar" as glfw
-
-// Board ve pencere sabitleri. Ağır state bu dosyada tutulmaz; böylece modül
-// sınırı primitive/config yüzeyi olarak kalır.
+// Domain sabitleri ve küçük value type'lar. Bu modül platform API bilmez;
+// GLFW/OpenGL bağımlılıkları input/render katmanlarında kalır.
 
 public screen_width() :: int32 { ret 960; }
 public screen_height() :: int32 { ret 720; }
@@ -19,35 +17,76 @@ public direction_right() :: int32 { ret 1; }
 public direction_down() :: int32 { ret 2; }
 public direction_left() :: int32 { ret 3; }
 
-public read_requested_direction(void* window, int32 fallback) :: int32 {
-  if (glfwGetKey(window, glfw_key_w()) == glfw_press() || glfwGetKey(window, glfw_key_up()) == glfw_press()) {
-    ret direction_up();
-  }
-  if (glfwGetKey(window, glfw_key_d()) == glfw_press() || glfwGetKey(window, glfw_key_right()) == glfw_press()) {
-    ret direction_right();
-  }
-  if (glfwGetKey(window, glfw_key_s()) == glfw_press() || glfwGetKey(window, glfw_key_down()) == glfw_press()) {
-    ret direction_down();
-  }
-  if (glfwGetKey(window, glfw_key_a()) == glfw_press() || glfwGetKey(window, glfw_key_left()) == glfw_press()) {
-    ret direction_left();
-  }
-  ret fallback;
+public trait GameRead {
+  score() :: int32;
+  alive() :: bool;
+  length() :: int32;
 }
 
-public restart_requested(void* window) :: bool {
-  if (glfwGetKey(window, glfw_key_r()) == glfw_press()) {
-    ret true;
+public struct GridPoint {
+  public int32 x;
+  public int32 y;
+
+  public constructor(int32 x_value, int32 y_value) {
+    self.x = x_value;
+    self.y = y_value;
   }
-  if (glfwGetKey(window, glfw_key_space()) == glfw_press()) {
-    ret true;
+
+  public operator ==(GridPoint rhs) :: bool {
+    ret self.x == rhs.x && self.y == rhs.y;
   }
-  ret false;
+
+  public operator !=(GridPoint rhs) :: bool {
+    ret !(self == rhs);
+  }
 }
 
-public quit_requested(void* window) :: bool {
-  if (glfwGetKey(window, glfw_key_escape()) == glfw_press()) {
-    ret true;
+public struct SnakeGame with GameRead {
+  public int32 score_value;
+  public int32 frame;
+  public int32 step_period;
+  public int32 body_length;
+  public int32 direction;
+  public int32 queued_direction;
+  public int32 food_x;
+  public int32 food_y;
+  public bool is_alive;
+
+  public constructor() {
+    self.score_value = 0;
+    self.frame = 0;
+    self.step_period = 7;
+    self.body_length = 4;
+    self.direction = direction_right();
+    self.queued_direction = direction_right();
+    self.food_x = 16;
+    self.food_y = 8;
+    self.is_alive = true;
   }
-  ret false;
+
+  public destructor() {
+    self.is_alive = false;
+    self.body_length = 0;
+  }
+
+  public score() :: int32 {
+    ret self.score_value;
+  }
+
+  public alive() :: bool {
+    ret self.is_alive;
+  }
+
+  public length() :: int32 {
+    ret self.body_length;
+  }
+}
+
+public grid_point(int32 x, int32 y) :: GridPoint {
+  GridPoint point = GridPoint(x, y);
+  ret point;
+}
+
+public read_score(dynamic GameRead& view) :: int32 {
+  ret view.score();
 }

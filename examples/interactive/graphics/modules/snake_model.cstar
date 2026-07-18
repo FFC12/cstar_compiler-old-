@@ -1,0 +1,152 @@
+include "snake_types.cstar" as snake
+
+public reset_game(SnakeGame* model, int32[144] xs, int32[144] ys) :: void {
+  model.score_value = 0;
+  model.frame = 0;
+  model.step_period = 7;
+  model.body_length = 4;
+  model.direction = snake.direction_right();
+  model.queued_direction = snake.direction_right();
+  model.food_x = 16;
+  model.food_y = 8;
+  model.is_alive = true;
+
+  xs[0] = 12; ys[0] = 9;
+  xs[1] = 11; ys[1] = 9;
+  xs[2] = 10; ys[2] = 9;
+  xs[3] = 9;  ys[3] = 9;
+}
+
+public queue_turn(SnakeGame* model, int32 requested) :: void {
+  if (opposite(model.direction, requested)) {
+    ret;
+  }
+  model.queued_direction = requested;
+}
+
+public step_game(SnakeGame* model, int32[144] xs, int32[144] ys) :: void {
+  if (!model.is_alive) {
+    ret;
+  }
+
+  model.frame += 1;
+  if ((model.frame % model.step_period) != 0) {
+    ret;
+  }
+
+  model.direction = model.queued_direction;
+  GridPoint delta = direction_delta(model.direction);
+  int32 nextX = xs[0] + delta.x;
+  int32 nextY = ys[0] + delta.y;
+
+  if (nextX < 0 || nextY < 0 || nextX >= snake.board_cols() || nextY >= snake.board_rows()) {
+    model.is_alive = false;
+    ret;
+  }
+
+  int32 bodyIndex = 1;
+  loop (bodyIndex < model.body_length) {
+    if (xs[bodyIndex] == nextX && ys[bodyIndex] == nextY) {
+      model.is_alive = false;
+      ret;
+    }
+    bodyIndex += 1;
+  }
+
+  GridPoint head = snake.grid_point(nextX, nextY);
+  GridPoint food = snake.grid_point(model.food_x, model.food_y);
+  bool eating = head == food;
+  if (eating) {
+    model.score_value += 1;
+    if (model.body_length < snake.max_snake_cells()) {
+      model.body_length += 1;
+    }
+    tune_speed(model);
+  }
+
+  int32 shift = model.body_length - 1;
+  loop (shift > 0) {
+    xs[shift] = xs[shift - 1];
+    ys[shift] = ys[shift - 1];
+    shift -= 1;
+  }
+
+  xs[0] = nextX;
+  ys[0] = nextY;
+
+  if (eating) {
+    spawn_food(model, xs, ys);
+  }
+}
+
+contains_cell(SnakeGame* model, int32[144] xs, int32[144] ys, int32 x, int32 y) :: bool {
+  int32 index = 0;
+  loop (index < model.body_length) {
+    if (xs[index] == x && ys[index] == y) {
+      ret true;
+    }
+    index += 1;
+  }
+  ret false;
+}
+
+spawn_food(SnakeGame* model, int32[144] xs, int32[144] ys) :: void {
+  int32 attempt = 0;
+  loop (attempt < 24) {
+    int32 nextX = positive_mod((model.frame * 7) + (model.score_value * 11) + (attempt * 5) + 3, snake.board_cols());
+    int32 nextY = positive_mod((model.frame * 5) + (model.score_value * 13) + (attempt * 7) + 2, snake.board_rows());
+    if (!contains_cell(model, xs, ys, nextX, nextY)) {
+      model.food_x = nextX;
+      model.food_y = nextY;
+      ret;
+    }
+    attempt += 1;
+  }
+
+  model.food_x = 1;
+  model.food_y = 1;
+}
+
+tune_speed(SnakeGame* model) :: void {
+  if (model.score_value == 6) {
+    model.step_period = 6;
+  }
+  if (model.score_value == 14) {
+    model.step_period = 5;
+  }
+  if (model.score_value == 24) {
+    model.step_period = 4;
+  }
+}
+
+positive_mod(int32 value, int32 divisor) :: int32 {
+  int32 result = value % divisor;
+  if (result < 0) {
+    result += divisor;
+  }
+  ret result;
+}
+
+opposite(int32 left, int32 right) :: bool {
+  if (left == snake.direction_up() && right == snake.direction_down()) { ret true; }
+  if (left == snake.direction_down() && right == snake.direction_up()) { ret true; }
+  if (left == snake.direction_left() && right == snake.direction_right()) { ret true; }
+  if (left == snake.direction_right() && right == snake.direction_left()) { ret true; }
+  ret false;
+}
+
+direction_delta(int32 direction) :: GridPoint {
+  if (direction == snake.direction_up()) {
+    ret snake.grid_point(0, -1);
+  }
+  if (direction == snake.direction_right()) {
+    ret snake.grid_point(1, 0);
+  }
+  if (direction == snake.direction_down()) {
+    ret snake.grid_point(0, 1);
+  }
+  if (direction == snake.direction_left()) {
+    ret snake.grid_point(-1, 0);
+  }
+  ret snake.grid_point(0, 0);
+}
