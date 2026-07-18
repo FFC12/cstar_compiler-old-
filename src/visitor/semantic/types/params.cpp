@@ -29,10 +29,10 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
 
   auto typeInfo = dynamic_cast<TypeAST *>(paramAst.m_TypeNode.get());
 
-  this->m_LastSymbolInfo.symbolId = m_SymbolId;
+  symbolInfo.symbolId = m_SymbolId;
   this->m_SymbolId += 1;
-  this->m_LastSymbolInfo.scopeId = m_ScopeId;
-  this->m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
+  symbolInfo.scopeId = m_ScopeId;
+  symbolInfo.scopeLevel = m_ScopeLevel;
 
   symbolInfo.isSubscriptable = paramAst.m_IsSubscriptable;
   symbolInfo.isConstRef = paramAst.m_TypeQualifier == Q_CONSTREF;

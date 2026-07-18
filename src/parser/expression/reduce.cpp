@@ -5,7 +5,7 @@ using namespace cstar::parser_private;
 ASTNode CStarParser::reduceExpression(std::deque<ASTNode>& exprBucket,
                                       OpPrecBucket& opPrecBucket) {
   auto popAtom = [&](const PrecedenceEntry& pe, size_t pos) -> ASTNode {
-    if (pos > exprBucket.size())
+    if (pos >= exprBucket.size())
       ParserError("Unexpected token", pe.entryTokenInfo());
 
     auto atom = std::move(exprBucket[pos]);

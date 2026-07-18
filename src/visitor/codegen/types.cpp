@@ -110,6 +110,114 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
         m_LastSigned = IsSigned(symbolInfo.type);
         return value;
       }
+
+      if (binary->m_BinOpKind == B_DOT) {
+        struct FieldAddress {
+          llvm::Value *address = nullptr;
+          llvm::Type *valueType = nullptr;
+          SymbolInfo symbolInfo;
+          std::string name;
+        };
+
+        auto resolveFieldAddress =
+            [&](auto &self, IAST *node) -> FieldAddress {
+          if (node == nullptr) {
+            assert(false && "'ref' field operand was empty.");
+          }
+
+          if (node->m_ExprKind == ExprKind::SymbolExpr) {
+            auto *symbol = static_cast<SymbolAST *>(node);
+            auto info = getSymbolInfo(symbol->m_SymbolName);
+            auto *symbolStorage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                                              symbol->m_SymbolName);
+            if (symbolStorage == nullptr) {
+              assert(false && "'ref' field base storage was not found.");
+            }
+
+            if (info.isRef &&
+                m_ReferenceParamValueTypes.count(symbol->m_SymbolName) > 0) {
+              auto *slotType = GetPointeeType(symbolStorage);
+              symbolStorage = CreateLoad(symbolStorage, slotType,
+                                         symbol->m_SymbolName + ".ref.field");
+            }
+
+            if (info.type == TypeSpecifier::SPEC_DEFINED && !info.isRef &&
+                info.indirectionLevel > 0) {
+              if (IsSharedPointerSymbol(info)) {
+                auto *handle = Builder->CreateLoad(
+                    GetSharedPointerTy(), symbolStorage,
+                    symbol->m_SymbolName + ".sp.field");
+                symbolStorage = ExtractSharedPointerData(handle);
+              } else {
+                auto *pointerType =
+                    GetType(info.type, info.indirectionLevel);
+                symbolStorage = Builder->CreateLoad(
+                    pointerType, symbolStorage,
+                    symbol->m_SymbolName + ".ptr.field");
+              }
+              info.indirectionLevel = 0;
+              info.isUnique = false;
+              info.isRef = false;
+            }
+
+            return {symbolStorage, GetSymbolLLVMType(info), info,
+                    symbol->m_SymbolName};
+          }
+
+          if (node->m_ExprKind != ExprKind::BinOp) {
+            assert(false && "'ref' field operand must be symbol.field.");
+          }
+
+          auto *fieldAccess = static_cast<BinaryOpAST *>(node);
+          if (fieldAccess->m_BinOpKind != B_DOT ||
+              fieldAccess->m_RHS == nullptr ||
+              fieldAccess->m_RHS->m_ExprKind != ExprKind::SymbolExpr) {
+            assert(false && "'ref' field operand must be symbol.field.");
+          }
+
+          auto base = self(self, fieldAccess->m_LHS.get());
+          auto *fieldSymbol = static_cast<SymbolAST *>(fieldAccess->m_RHS.get());
+          auto structIt = StructTable.find(base.symbolInfo.definedTypeName);
+          if (structIt == StructTable.end()) {
+            assert(false && "'ref' field base struct type was not registered.");
+          }
+
+          auto fieldIt =
+              structIt->second.fieldIndexes.find(fieldSymbol->m_SymbolName);
+          if (fieldIt == structIt->second.fieldIndexes.end()) {
+            assert(false && "'ref' target struct field was not registered.");
+          }
+
+          auto *structType = GetDefinedStructTy(base.symbolInfo.definedTypeName);
+          const auto fieldIndex = fieldIt->second;
+          const auto &field = structIt->second.fields[fieldIndex];
+          auto fieldName = base.name + "." + field.name;
+          auto *fieldAddress = Builder->CreateStructGEP(
+              structType, base.address, static_cast<unsigned>(fieldIndex),
+              fieldName + ".ref");
+
+          auto fieldInfo = base.symbolInfo;
+          fieldInfo.symbolName = fieldName;
+          fieldInfo.type = field.type;
+          fieldInfo.definedTypeName = field.definedTypeName;
+          fieldInfo.indirectionLevel = field.indirectionLevel;
+          fieldInfo.isUnique = field.isUnique;
+          fieldInfo.isRef = field.isRef;
+          fieldInfo.isNullable = field.isNullable;
+          fieldInfo.isSubscriptable = false;
+          fieldInfo.arrayDimensions.clear();
+
+          return {fieldAddress, GetStructFieldLLVMType(field), fieldInfo,
+                  fieldName};
+        };
+
+        auto field = resolveFieldAddress(resolveFieldAddress,
+                                         unaryOpAst.m_Node.get());
+        m_LastType = field.address->getType();
+        m_LastSigned = IsSigned(GetEffectiveStorageType(
+            field.symbolInfo.type, field.symbolInfo.definedTypeName));
+        return field.address;
+      }
     }
 
     if (unaryOpAst.m_Node == nullptr ||

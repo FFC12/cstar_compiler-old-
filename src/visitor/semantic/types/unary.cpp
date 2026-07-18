@@ -14,8 +14,13 @@ SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
   if (m_TypeChecking) {
     switch (unaryOpAst.m_UnaryOpKind) {
       case U_REF: {
-        // ok
-        this->m_LastReferenced = true;
+        // `ref x` means "take an address" for pointer parameters, but
+        // "borrow this storage" for reference parameters. References do not
+        // add an extra pointer level in the type system.
+        const bool referenceBorrow =
+            this->m_LastSymbolInfo.isRef &&
+            !this->m_LastSymbolInfo.isDynamicTraitObject;
+        this->m_LastReferenced = !referenceBorrow;
         symbolInfo = unaryOpAst.m_Node->acceptBefore(*this);
         this->m_LastReferenced = false;
         break;

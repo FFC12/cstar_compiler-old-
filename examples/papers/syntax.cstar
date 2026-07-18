@@ -100,6 +100,34 @@ example(int32& by_ref) :: void {
 
 }
 
+// Fixed array parameters are C/C++-style array parameters with C* size
+// semantics: no element copy is made, the ABI can pass an address, but the
+// compiler keeps `T[N]` as the semantic type and checks dimensions at call sites.
+draw_fixed(int32[144] xs) :: void {
+    xs[0] = 1;
+}
+
+// Runtime-sized ranges use span operators, not `*` or `^`.
+// `*` and `^` remain ownership pointer markers.
+draw_range(int32[] xs) :: void {
+    int32 first = xs[0];
+}
+
+use_ranges() :: void {
+    int32 data[144] = (0);
+    draw_fixed(data);
+    draw_range(span data);
+    draw_range(span data[4..32]); // half-open range [4, 32)
+
+    // Raw pointer interop must be explicit and unsafe.
+    int32* ptr = ref data[0];
+    draw_range(unsafe_span(ptr, 144));
+
+    // Explicit array copy is a separate operation; large copies must never be
+    // hidden behind plain function argument passing.
+    draw_fixed(copy data);
+}
+
 example1(constref int32& by_ref) :: void {
 
 }

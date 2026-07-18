@@ -37,7 +37,11 @@ SymbolInfo Visitor::preVisit(IfStmtAST &ifStmtAst) {
 
     // there is only one node actually..
     for (auto &node : block.second.second) {
-      scopeHandler(node, SymbolScope::IfSt);
+      if (m_TypeChecking) {
+        typeCheckerScopeHandler(node);
+      } else {
+        scopeHandler(node, SymbolScope::IfSt);
+      }
     }
     if (!narrowedNullableSymbol.empty()) {
       m_NonNullFlowSymbols.erase(narrowedNullableSymbol);
@@ -79,7 +83,11 @@ SymbolInfo Visitor::preVisit(IfStmtAST &ifStmtAst) {
       // manually increasing
       this->m_SymbolId++;
       for (auto &node : elseIfBlock.second) {
-        scopeHandler(node, SymbolScope::IfSt);
+        if (m_TypeChecking) {
+          typeCheckerScopeHandler(node);
+        } else {
+          scopeHandler(node, SymbolScope::IfSt);
+        }
       }
       if (!narrowedNullableSymbol.empty()) {
         m_NonNullFlowSymbols.erase(narrowedNullableSymbol);
@@ -94,7 +102,11 @@ SymbolInfo Visitor::preVisit(IfStmtAST &ifStmtAst) {
     // manually increasing
     this->m_SymbolId++;
     for (auto &node : ifStmtAst.m_Else) {
-      scopeHandler(node, SymbolScope::IfSt);
+      if (m_TypeChecking) {
+        typeCheckerScopeHandler(node);
+      } else {
+        scopeHandler(node, SymbolScope::IfSt);
+      }
     }
   }
 
@@ -265,7 +277,11 @@ SymbolInfo Visitor::preVisit(LoopStmtAST &loopStmtAst) {
   }
 
   for (auto &node : loopStmtAst.m_Scope) {
-    scopeHandler(node, SymbolScope::LoopSt);
+    if (m_TypeChecking) {
+      typeCheckerScopeHandler(node);
+    } else {
+      scopeHandler(node, SymbolScope::LoopSt);
+    }
   }
 
   if (!syntheticLoopSymbols.empty()) {
@@ -379,7 +395,11 @@ SymbolInfo Visitor::preVisit(OptionStmtAST &optionStmtAst) {
     enterScope(false);
     this->m_SymbolId++;
     for (auto &node : optionCase.scope) {
-      scopeHandler(node, SymbolScope::IfSt);
+      if (m_TypeChecking) {
+        typeCheckerScopeHandler(node);
+      } else {
+        scopeHandler(node, SymbolScope::IfSt);
+      }
     }
     exitScope(false);
   }

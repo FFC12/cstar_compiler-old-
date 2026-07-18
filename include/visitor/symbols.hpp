@@ -138,6 +138,7 @@ struct FunctionSignature {
   std::vector<SymbolInfo> params;
   bool isVariadic = false;
   bool canThrow = false;
+  bool isFromIncludedSource = false;
   std::string errorTypeName;
 };
 

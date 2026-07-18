@@ -1,10 +1,90 @@
 #include <visitor/codegen/codegen_private.hpp>
 
+namespace {
+bool IsNullIntegerConstant(llvm::Value *value) {
+  auto *constant = llvm::dyn_cast_or_null<llvm::ConstantInt>(value);
+  return constant != nullptr && constant->isZero();
+}
+
+llvm::Type *SelectIntegerComparisonType(llvm::Value *lhs, llvm::Value *rhs,
+                                        llvm::Type *preferredType) {
+  if (preferredType != nullptr && preferredType->isIntegerTy() &&
+      !preferredType->isIntegerTy(1)) {
+    return preferredType;
+  }
+
+  auto *lhsType = llvm::cast<llvm::IntegerType>(lhs->getType());
+  auto *rhsType = llvm::cast<llvm::IntegerType>(rhs->getType());
+  return lhsType->getBitWidth() >= rhsType->getBitWidth() ? lhsType : rhsType;
+}
+
+void NormalizeComparisonOperands(llvm::Value *&lhs, llvm::Value *&rhs,
+                                 llvm::Type *preferredType, bool isSigned) {
+  auto *lhsType = lhs->getType();
+  auto *rhsType = rhs->getType();
+  if (lhsType == rhsType) {
+    return;
+  }
+
+  if (lhsType->isPointerTy() || rhsType->isPointerTy()) {
+    if (lhsType->isPointerTy() && rhsType->isIntegerTy()) {
+      if (IsNullIntegerConstant(rhs)) {
+        rhs = llvm::ConstantPointerNull::get(
+            llvm::cast<llvm::PointerType>(lhsType));
+      } else {
+        rhs = Visitor::Builder->CreateIntToPtr(rhs, lhsType);
+      }
+      return;
+    }
+
+    if (rhsType->isPointerTy() && lhsType->isIntegerTy()) {
+      if (IsNullIntegerConstant(lhs)) {
+        lhs = llvm::ConstantPointerNull::get(
+            llvm::cast<llvm::PointerType>(rhsType));
+      } else {
+        lhs = Visitor::Builder->CreateIntToPtr(lhs, rhsType);
+      }
+      return;
+    }
+
+    if (lhsType->isPointerTy() && rhsType->isPointerTy()) {
+      rhs = Visitor::Builder->CreatePointerCast(rhs, lhsType);
+    }
+    return;
+  }
+
+  if (lhsType->isFloatingPointTy() || rhsType->isFloatingPointTy()) {
+    auto *targetType =
+        preferredType != nullptr && preferredType->isFloatingPointTy()
+            ? preferredType
+            : (lhsType->isDoubleTy() || rhsType->isDoubleTy()
+                   ? llvm::Type::getDoubleTy(Visitor::Builder->getContext())
+                   : llvm::Type::getFloatTy(Visitor::Builder->getContext()));
+    lhs = CastValueToType(lhs, targetType, isSigned);
+    rhs = CastValueToType(rhs, targetType, isSigned);
+    return;
+  }
+
+  if (lhsType->isIntegerTy() && rhsType->isIntegerTy()) {
+    auto *targetType = SelectIntegerComparisonType(lhs, rhs, preferredType);
+    lhs = CastValueToType(lhs, targetType, isSigned);
+    rhs = CastValueToType(rhs, targetType, isSigned);
+  }
+}
+}  // namespace
+
 llvm::Value *CreateIntegerOrPointerCompare(
     llvm::CmpInst::Predicate signedPredicate,
     llvm::CmpInst::Predicate unsignedPredicate, llvm::Value *lhs,
     llvm::Value *rhs, bool isSigned, const llvm::Twine &name) {
   auto predicate = isSigned ? signedPredicate : unsignedPredicate;
+  return CreateNormalizedICmp(predicate, lhs, rhs, name, isSigned);
+}
+
+llvm::Value *CreateNormalizedICmp(llvm::CmpInst::Predicate predicate,
+                                  llvm::Value *lhs, llvm::Value *rhs,
+                                  const llvm::Twine &name, bool isSigned) {
+  NormalizeComparisonOperands(lhs, rhs, nullptr, isSigned);
   return Visitor::Builder->CreateICmp(predicate, lhs, rhs, name);
 }
 
@@ -14,10 +94,9 @@ llvm::Value *CreateOrderedCompare(llvm::CmpInst::Predicate floatPredicate,
                                          llvm::Value *lhs, llvm::Value *rhs,
                                          llvm::Type *valueType, bool isSigned,
                                          const llvm::Twine &name) {
-  lhs = CastValueToType(lhs, valueType, isSigned);
-  rhs = CastValueToType(rhs, valueType, isSigned);
+  NormalizeComparisonOperands(lhs, rhs, valueType, isSigned);
 
-  if (valueType->isFloatTy() || valueType->isDoubleTy()) {
+  if (lhs->getType()->isFloatTy() || lhs->getType()->isDoubleTy()) {
     return Visitor::Builder->CreateFCmp(floatPredicate, lhs, rhs, name);
   }
 
@@ -29,18 +108,17 @@ llvm::Value *CreateEqualityCompare(bool equals, llvm::Value *lhs,
                                           llvm::Value *rhs,
                                           llvm::Type *valueType,
                                           const llvm::Twine &name) {
-  lhs = CastValueToType(lhs, valueType, true);
-  rhs = CastValueToType(rhs, valueType, true);
+  NormalizeComparisonOperands(lhs, rhs, valueType, true);
 
-  if (valueType->isFloatTy() || valueType->isDoubleTy()) {
+  if (lhs->getType()->isFloatTy() || lhs->getType()->isDoubleTy()) {
     return Visitor::Builder->CreateFCmp(
         equals ? llvm::CmpInst::FCMP_OEQ : llvm::CmpInst::FCMP_ONE, lhs, rhs,
         name);
   }
 
-  return Visitor::Builder->CreateICmp(equals ? llvm::CmpInst::ICMP_EQ
-                                             : llvm::CmpInst::ICMP_NE,
-                                      lhs, rhs, name);
+  return CreateNormalizedICmp(equals ? llvm::CmpInst::ICMP_EQ
+                                     : llvm::CmpInst::ICMP_NE,
+                              lhs, rhs, name, true);
 }
 
 bool IsFloatingPointType(llvm::Type *type) {

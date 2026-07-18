@@ -352,9 +352,9 @@ llvm::Value *CreateSharedPointerCounter(const std::string &name,
 
 void AtomicBumpSharedPointer(llvm::Value *handle, int64_t delta) {
   auto *countAsI8 = ExtractSharedPointerCount(handle);
-  auto *isLive = Visitor::Builder->CreateICmpNE(
-      countAsI8, llvm::ConstantPointerNull::get(GetI8PtrTy()),
-      "sp.count.live");
+  auto *isLive = CreateNormalizedICmp(
+      llvm::CmpInst::ICMP_NE, countAsI8,
+      llvm::ConstantPointerNull::get(GetI8PtrTy()), "sp.count.live");
   auto *function = Visitor::Builder->GetInsertBlock()->getParent();
   auto *bumpBB = llvm::BasicBlock::Create(Visitor::Builder->getContext(),
                                           "sp.bump", function);
@@ -386,9 +386,9 @@ void ReleaseSharedPointer(llvm::Value *handle) {
 
 llvm::Value *LoadSharedPointerStrongCount(llvm::Value *handle) {
   auto *countAsI8 = ExtractSharedPointerCount(handle);
-  auto *isLive = Visitor::Builder->CreateICmpNE(
-      countAsI8, llvm::ConstantPointerNull::get(GetI8PtrTy()),
-      "sp.count.live");
+  auto *isLive = CreateNormalizedICmp(
+      llvm::CmpInst::ICMP_NE, countAsI8,
+      llvm::ConstantPointerNull::get(GetI8PtrTy()), "sp.count.live");
   auto *function = Visitor::Builder->GetInsertBlock()->getParent();
   auto *loadBB = llvm::BasicBlock::Create(Visitor::Builder->getContext(),
                                           "sp.count.load", function);

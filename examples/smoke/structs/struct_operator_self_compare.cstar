@@ -1,0 +1,31 @@
+struct Point {
+  int32 x;
+  int32 y;
+
+  operator ==(Point rhs) :: bool {
+    ret self.x == rhs.x && self.y == rhs.y;
+  }
+
+  operator !=(Point rhs) :: bool {
+    ret !(self == rhs);
+  }
+}
+
+make_point(int32 x, int32 y) :: Point {
+  Point point;
+  point.x = x;
+  point.y = y;
+  ret point;
+}
+
+main() :: int32 {
+  Point a = make_point(3, 5);
+  Point b = make_point(3, 5);
+  Point c = make_point(4, 5);
+
+  if (a == b && a != c) {
+    ret 1;
+  }
+
+  ret 0;
+}

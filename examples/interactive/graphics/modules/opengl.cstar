@@ -26,6 +26,8 @@ import from "OpenGL" {
   glEnableVertexAttribArray(uint32 index) :: void;
   glVertexAttribPointer(uint32 index, int32 size, uint32 type, bool normalized, int32 stride, void* offset) :: void;
   glDrawArrays(uint32 mode, int32 first, int32 count) :: void;
+  glDeleteBuffers(int32 count, uint32* buffers) :: void;
+  glDeleteVertexArrays(int32 count, uint32* arrays) :: void;
 }
 
 public gl_color_buffer_bit() :: uint32 { ret 16384; }
@@ -35,6 +37,7 @@ public gl_compile_status() :: uint32 { ret 35713; }
 public gl_link_status() :: uint32 { ret 35714; }
 public gl_array_buffer() :: uint32 { ret 34962; }
 public gl_static_draw() :: uint32 { ret 35044; }
+public gl_dynamic_draw() :: uint32 { ret 35048; }
 public gl_float() :: uint32 { ret 5126; }
 public gl_triangles() :: uint32 { ret 4; }
 

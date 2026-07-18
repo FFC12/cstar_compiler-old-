@@ -25,7 +25,6 @@ ASTNode CStarParser::advanceDefinedType() {
   }
 
   if (is(TokenKind::AND)) {
-    indirectionLevel = 1;
     isRef = true;
     this->advance();
     if (is(TokenKind::QMARK)) {

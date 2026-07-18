@@ -120,11 +120,16 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
                   m_LastSymbolInfo.isRef && m_LastReferenced &&
                   !this->m_LastBinOp) {
               } else {
+                const bool bindingExplicitReference =
+                    m_LastReferenced && m_LastSymbolInfo.isRef &&
+                    matchedSymbol.indirectionLevel ==
+                        m_LastSymbolInfo.indirectionLevel;
                 if (matchedSymbol.indirectionLevel +
                             (this->m_LastReferenced ? 1 : 0) -
                             (this->m_LastDereferenced ? this->m_DereferenceLevel
                                                       : 0) !=
                         this->m_LastSymbolInfo.indirectionLevel &&
+                    !bindingExplicitReference &&
                     this->m_LastBinOp) {
                   symbolInfo.typeCheckerInfo.isCompatiblePtr = false;
                 } else if (matchedSymbol.indirectionLevel +
@@ -133,6 +138,7 @@ SymbolInfo Visitor::preVisit(SymbolAST &symbolAst) {
                                         ? this->m_DereferenceLevel
                                         : 0) !=
                                this->m_LastSymbolInfo.indirectionLevel &&
+                           !bindingExplicitReference &&
                            !this->m_LastBinOp) {
                   accumulateIncompatiblePtrErrMesg(symbolInfo);
                 }

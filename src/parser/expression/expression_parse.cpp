@@ -4,6 +4,8 @@ using namespace cstar::parser_private;
 
 ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
                                 bool typeFlag, bool isAssignment) {
+  m_LastExpressionEndedByParen = false;
+
   // advance EQUAL or last expr before it came here if subexpr
   this->advance();
 
@@ -71,6 +73,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
   auto isExpressionOperandStart = [&](const TokenInfo &token) {
     const auto kind = token.getTokenKind();
     return kind == TokenKind::IDENT || kind == TokenKind::SELF ||
+           kind == TokenKind::STATE ||
            kind == TokenKind::NEW || kind == TokenKind::SHARED ||
            kind == TokenKind::SCALARD ||
            kind == TokenKind::SCALARI || kind == TokenKind::LITERAL ||
@@ -149,6 +152,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
     // included to the expression itself as seen in this example: if( [expr )]
     if (is(TokenKind::SEMICOLON) || is(TokenKind::RPAREN) ||
         (is(TokenKind::COMMA) && !isSubExpr) || is(TokenKind::RSQPAR) ||
+        (is(TokenKind::COMMA) && isSubExpr && opFor == 1) ||
         is(TokenKind::COLON) || (is(TokenKind::GT) && typeOpFlag) ||
         is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) {
     jump_ternary:
@@ -201,7 +205,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       if (outOfSize) {
       }
 
-      auto args = this->expression(true, 1);
+      auto args = this->advanceArgumentList();
       // empty parenthesis block like ()
       if (args == nullptr && nextToken != RPAREN)
         ParserError("Unexpected token '" +
@@ -441,8 +445,10 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
 
       auto typeAst = this->advanceType();
       exprBucket.push_back(std::move(typeAst));
+      const size_t typeAtomIndex = exprBucket.size() - 1;
       opBucket.push_back(PrecedenceEntry(prevCurrToken, opType, precInfo,
-                                         i, i, false, false, true));
+                                         typeAtomIndex, i, false, false,
+                                         true));
     } else if (isOperator(this->currentTokenInfo())) {
     jump_operator:
       PrecedenceInfo precInfo;
@@ -604,6 +610,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
   // expression
   if (is(TokenKind::SEMICOLON) ||
       (is(TokenKind::COMMA) && !isSubExpr)) {  // initialization
+    m_LastExpressionEndedByParen = false;
     if (closedTernary % 2 != 0) {
       // assert(false && ") mismatch");
       if (!ternaryPos.empty()) {
@@ -628,8 +635,23 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
     // build top-level AST here..
     auto expr = this->reduceExpression(exprBucket, opBucket);
     return std::move(expr);
+  } else if (is(TokenKind::COMMA) && isSubExpr && opFor == 1) {
+    m_LastExpressionEndedByParen = false;
+    if (closedPar % 2 != 1) {
+      ParserError("')' mismatched function argument expression.",
+                  currentTokenInfo());
+    }
+
+    if (opBucket.empty() && exprBucket.size() == 1) {
+      auto atom = std::move(exprBucket.front());
+      exprBucket.pop_front();
+      return std::move(atom);
+    }
+
+    return this->reduceExpression(exprBucket, opBucket);
   } else if (is(TokenKind::RPAREN)) {
     this->advance();
+    m_LastExpressionEndedByParen = true;
 
     // this is for statements
     if (!parenthesesPos.empty()) {
@@ -661,6 +683,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       //{ return nullptr; }
     }
   } else if (is(TokenKind::GT)) {
+    m_LastExpressionEndedByParen = false;
     // must be only 1 ast node as TypeAST
     if ((exprBucket.size() > 1 || exprBucket.empty()))
       ParserError("There must be only type. Invalid type attribute.\n",
@@ -676,6 +699,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
 
     return std::move(atom);
   } else if (is(TokenKind::RSQPAR)) {
+    m_LastExpressionEndedByParen = false;
     this->advance();
 
     // this is for statements
@@ -708,6 +732,7 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       //{ return nullptr; }
     }
   } else if (is(TokenKind::COLON)) {
+    m_LastExpressionEndedByParen = false;
     this->advance();
 
     // this is for statements

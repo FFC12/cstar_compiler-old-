@@ -126,6 +126,7 @@ class Visitor {
   SymbolInfo m_LastFuncRetTypeInfo;
   bool m_CurrentFunctionIsStatic = false;
   bool m_CurrentFunctionCanThrow = false;
+  bool m_CurrentFunctionFromIncludedSource = false;
   std::string m_CurrentFunctionErrorTypeName;
   bool m_InsideCleanupBlock = false;
   std::string m_CurrentStructMethodOwner;

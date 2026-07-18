@@ -112,12 +112,14 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
   if (m_TypeChecking) {
     const bool previousStaticFunction = m_CurrentFunctionIsStatic;
     const bool previousCanThrow = m_CurrentFunctionCanThrow;
+    const bool previousFromIncludedSource = m_CurrentFunctionFromIncludedSource;
     const auto previousErrorTypeName = m_CurrentFunctionErrorTypeName;
     const auto previousStructMethodOwner = m_CurrentStructMethodOwner;
     m_DroppedSemanticSymbols.clear();
     m_LocalProtocolStates.clear();
     m_CurrentFunctionIsStatic = funcAst.m_IsStatic;
     m_CurrentFunctionCanThrow = funcAst.m_CanThrow;
+    m_CurrentFunctionFromIncludedSource = funcAst.isFromIncludedSource();
     m_CurrentFunctionErrorTypeName = funcAst.m_ErrorTypeName;
     if (m_CurrentFunctionCanThrow && m_CurrentFunctionErrorTypeName.empty()) {
       this->m_TypeErrorMessages.emplace_back(
@@ -139,10 +141,11 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
     } else {
       m_CurrentStructMethodOwner.clear();
     }
-    this->m_LastScopeSymbols = LocalSymbolTable[funcAst.m_FuncName];
+    this->m_LastScopeSymbols.clear();
     for (auto &param : funcAst.m_Params) {
       auto symbol = param->acceptBefore(*this);
-      //      typeCheckerScopeHandler(param);
+      symbol.symbolScope = SymbolScope::Func;
+      this->m_LastScopeSymbols.emplace_back(symbol.symbolName, symbol);
     }
 
     enterScope(false);
@@ -151,6 +154,7 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
     }
     m_CurrentFunctionIsStatic = previousStaticFunction;
     m_CurrentFunctionCanThrow = previousCanThrow;
+    m_CurrentFunctionFromIncludedSource = previousFromIncludedSource;
     m_CurrentFunctionErrorTypeName = previousErrorTypeName;
     m_CurrentStructMethodOwner = previousStructMethodOwner;
   } else {

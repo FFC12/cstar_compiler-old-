@@ -1,0 +1,10 @@
+main() :: int32 {
+  int32 total = 0;
+  int32 index = 0;
+  loop (index < 4) {
+    int32 doubled = index * 2;
+    total += doubled;
+    index += 1;
+  }
+  ret total;
+}

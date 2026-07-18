@@ -69,7 +69,6 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
   }
 
   if (is(TokenKind::AND)) {
-    indirectionLevel = 1;
     this->advance();
     isRef = true;
     if (is(TokenKind::QMARK)) {
@@ -78,8 +77,11 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
     }
   }
 
-  // expect ident (name of the variable)
-  expected(TokenKind::IDENT);
+  // expect ident (name of the variable). `state` is a contextual keyword and
+  // remains a valid declarator name outside protocol-state syntax.
+  if (!is(TokenKind::IDENT) && !is(TokenKind::STATE)) {
+    expected(TokenKind::IDENT);
+  }
 
   // get name of the variable
   std::string name = currentTokenStr();

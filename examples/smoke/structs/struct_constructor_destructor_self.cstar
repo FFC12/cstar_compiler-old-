@@ -1,0 +1,18 @@
+struct Resource {
+  uint32 id;
+
+  constructor(uint32 value) {
+    self.id = value;
+  }
+
+  destructor() {
+    if (self.id != 0) {
+      self.id = 0;
+    }
+  }
+}
+
+main() :: int32 {
+  Resource resource = Resource(5);
+  ret 0;
+}

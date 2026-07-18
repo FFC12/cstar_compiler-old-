@@ -121,21 +121,7 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         auto fieldAccess = advanceFieldAccessChain(begin, line);
 
         if (is(TokenKind::LPAREN)) {
-          ASTNode args = nullptr;
-          bool callOutOfSize = false;
-          auto tokenAfterOpen =
-              this->nextTokenInfo(callOutOfSize).getTokenKind();
-          if (callOutOfSize) {
-            ParserError("Incomplete function call expression",
-                        currentTokenInfo());
-          }
-
-          if (tokenAfterOpen == TokenKind::RPAREN) {
-            this->advance();
-            this->advance();
-          } else {
-            args = std::move(this->expression(true, 1));
-          }
+          ASTNode args = std::move(this->advanceArgumentList());
 
           size_t end = currentTokenInfo().getTokenPositionInfo().end;
           SemanticLoc semanticLoc = SemanticLoc(begin, end, line);
@@ -250,20 +236,7 @@ void CStarParser::advanceScope(std::vector<ASTNode>& scope) {
         auto funcSymbol = std::move(this->advanceSymbol());
 
         expected(TokenKind::LPAREN);
-        ASTNode args = nullptr;
-        bool callOutOfSize = false;
-        auto tokenAfterOpen = this->nextTokenInfo(callOutOfSize).getTokenKind();
-        if (callOutOfSize) {
-          ParserError("Incomplete function call expression",
-                      currentTokenInfo());
-        }
-
-        if (tokenAfterOpen == TokenKind::RPAREN) {
-          this->advance();
-          this->advance();
-        } else {
-          args = std::move(this->expression(true, 1));
-        }
+        ASTNode args = std::move(this->advanceArgumentList());
 
         size_t end = currentTokenInfo().getTokenPositionInfo().end;
         SemanticLoc semanticLoc = SemanticLoc(begin, end, line);

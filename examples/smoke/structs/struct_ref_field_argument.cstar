@@ -1,0 +1,18 @@
+set_value(uint32& value) :: void {
+  value = 11;
+  ret;
+}
+
+struct Renderer {
+  uint32 program;
+
+  constructor() {
+    self.program = 0;
+    set_value(ref self.program);
+  }
+}
+
+main() :: int32 {
+  Renderer renderer = Renderer();
+  ret renderer.program as int32;
+}

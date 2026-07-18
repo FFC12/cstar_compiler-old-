@@ -46,6 +46,11 @@ bool Visitor::symbolValidation(std::string &symbolName, SymbolInfo &symbolInfo,
 
   for (auto &it : this->m_LastScopeSymbols) {
     if (it.symbolName == symbolName) {
+      if (it.symbolInfo.symbolScope == SymbolScope::Func &&
+          it.symbolInfo.scopeLevel <= scopeLevel) {
+        goto done;
+      }
+
       if (it.symbolInfo.symbolScope == SymbolScope::LoopSt &&
           it.symbolInfo.scopeLevel <= scopeLevel) {
         goto done;

@@ -135,9 +135,15 @@ ValuePtr Visitor::visit(VarAST &varAst) {
         auto *zero = llvm::ConstantAggregateZero::get(arrayType);
         Builder->CreateStore(zero, storage);
 
-        for (size_t i = 0; i < elements.size(); ++i) {
+        const bool scalarFill =
+            elements.size() == 1 && FlatArrayLength(m_LastArrayDims) > 1;
+        const size_t storeCount =
+            scalarFill ? FlatArrayLength(m_LastArrayDims) : elements.size();
+        for (size_t i = 0; i < storeCount; ++i) {
           auto *elementValue =
-              CreateInitializerValue(*this, elements[i], m_LastType);
+              CreateInitializerValue(*this,
+                                     scalarFill ? elements[0] : elements[i],
+                                     m_LastType);
           elementValue = CastValueToType(elementValue, type, m_LastSigned);
           auto *slot = CreateArrayElementAddress(arrayType, storage, i);
           Builder->CreateStore(elementValue, slot);
@@ -153,7 +159,12 @@ ValuePtr Visitor::visit(VarAST &varAst) {
 
       std::vector<llvm::Constant *> values;
       bool constantInitializer = true;
-      for (auto &el : elements) {
+      const bool scalarFill =
+          elements.size() == 1 && FlatArrayLength(m_LastArrayDims) > 1;
+      const size_t initCount =
+          scalarFill ? FlatArrayLength(m_LastArrayDims) : elements.size();
+      for (size_t i = 0; i < initCount; ++i) {
+        auto &el = scalarFill ? elements[0] : elements[i];
         if (el.isSymbol || el.isBinOp) {
           constantInitializer = false;
           break;
@@ -177,9 +188,13 @@ ValuePtr Visitor::visit(VarAST &varAst) {
         auto *globInitFunc = CreateGlobalVarInitFunc();
         m_GlobaInitVarFunc.push_back(globInitFunc->getName());
         Builder->SetInsertPoint(&globInitFunc->getEntryBlock());
-        for (size_t i = 0; i < elements.size(); ++i) {
+        const size_t storeCount =
+            scalarFill ? FlatArrayLength(m_LastArrayDims) : elements.size();
+        for (size_t i = 0; i < storeCount; ++i) {
           auto *elementValue =
-              CreateInitializerValue(*this, elements[i], m_LastType);
+              CreateInitializerValue(*this,
+                                     scalarFill ? elements[0] : elements[i],
+                                     m_LastType);
           elementValue = CastValueToType(elementValue, type, m_LastSigned);
           auto *slot = CreateArrayElementAddress(arrayType, globVar, i);
           Builder->CreateStore(elementValue, slot);

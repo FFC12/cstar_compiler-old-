@@ -59,8 +59,9 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
                                          symbolName + ".drop.dyn");
       auto *data = Builder->CreateExtractValue(object, {0},
                                                symbolName + ".drop.dyn.data");
-      auto *isLive = Builder->CreateICmpNE(
-          data, llvm::ConstantPointerNull::get(GetI8PtrTy()),
+      auto *isLive = CreateNormalizedICmp(
+          llvm::CmpInst::ICMP_NE, data,
+          llvm::ConstantPointerNull::get(GetI8PtrTy()),
           symbolName + ".drop.dyn.live");
       auto *destroyBB = llvm::BasicBlock::Create(
           Builder->getContext(), "heap.dynamic.destroy", function);
@@ -91,8 +92,9 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
       auto *handle = Builder->CreateLoad(GetSharedPointerTy(), storage,
                                          symbolName + ".drop.heap.sp");
       auto *countAsI8 = ExtractSharedPointerCount(handle);
-      auto *isLive = Builder->CreateICmpNE(
-          countAsI8, llvm::ConstantPointerNull::get(GetI8PtrTy()),
+      auto *isLive = CreateNormalizedICmp(
+          llvm::CmpInst::ICMP_NE, countAsI8,
+          llvm::ConstantPointerNull::get(GetI8PtrTy()),
           symbolName + ".drop.heap.live");
       auto *releaseBB = llvm::BasicBlock::Create(
           Builder->getContext(), "heap.shared.release", function);
@@ -107,8 +109,9 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
       auto *oldCount = Builder->CreateAtomicRMW(
           llvm::AtomicRMWInst::Sub, count, one, llvm::MaybeAlign(),
           llvm::AtomicOrdering::AcquireRelease);
-      auto *isLast = Builder->CreateICmpEQ(oldCount, one,
-                                           symbolName + ".drop.heap.last");
+      auto *isLast = CreateNormalizedICmp(llvm::CmpInst::ICMP_EQ, oldCount,
+                                          one,
+                                          symbolName + ".drop.heap.last");
       auto *destroyBB = llvm::BasicBlock::Create(
           Builder->getContext(), "heap.shared.destroy", function);
       auto *afterReleaseBB = llvm::BasicBlock::Create(
@@ -142,9 +145,10 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
     auto *pointerType = GetType(symbolInfo.type, symbolInfo.indirectionLevel);
     auto *data = Builder->CreateLoad(pointerType, storage,
                                      symbolName + ".drop.heap.ptr");
-    auto *isLive = Builder->CreateICmpNE(
-        data, llvm::ConstantPointerNull::get(
-                  llvm::cast<llvm::PointerType>(data->getType())),
+    auto *isLive = CreateNormalizedICmp(
+        llvm::CmpInst::ICMP_NE, data,
+        llvm::ConstantPointerNull::get(
+            llvm::cast<llvm::PointerType>(data->getType())),
         symbolName + ".drop.heap.live");
     auto *destroyBB = llvm::BasicBlock::Create(
         Builder->getContext(), "heap.unique.destroy", function);
@@ -450,8 +454,12 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
         binaryOpAst.m_LHS->m_ExprKind == ExprKind::SymbolExpr) {
       auto *lhsSymbol = static_cast<SymbolAST *>(binaryOpAst.m_LHS.get());
       auto lhsInfo = getSymbolInfo(lhsSymbol->m_SymbolName);
+      const auto effectiveIndirection =
+          lhsInfo.isRef && lhsInfo.indirectionLevel > 0
+              ? lhsInfo.indirectionLevel - 1
+              : lhsInfo.indirectionLevel;
       if (lhsInfo.type == TypeSpecifier::SPEC_DEFINED &&
-          lhsInfo.indirectionLevel == 0) {
+          effectiveIndirection == 0) {
         auto *function =
             Module->getFunction(lhsInfo.definedTypeName + "." + overloadMethod);
         auto *lhsStorage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
@@ -464,8 +472,15 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
                                     lhsSymbol->m_SymbolName + ".op.ref");
           }
           auto *paramType = function->getFunctionType()->getParamType(1);
+          auto *previousLastType = m_LastType;
+          const bool previousLastSigned = m_LastSigned;
+          m_LastType = paramType;
           rhs = binaryOpAst.m_RHS->accept(*this);
-          rhs = CastValueToType(rhs, paramType, m_LastSigned);
+          m_LastType = previousLastType;
+          m_LastSigned = previousLastSigned;
+          if (rhs != nullptr && !rhs->getType()->isStructTy()) {
+            rhs = CastValueToType(rhs, paramType, m_LastSigned);
+          }
           value = Builder->CreateCall(function, {lhsStorage, rhs},
                                       "operator.call");
           m_LastType = function->getReturnType();

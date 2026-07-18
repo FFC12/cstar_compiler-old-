@@ -1,0 +1,53 @@
+include "glfw.cstar" as glfw
+
+// Board ve pencere sabitleri. Ağır state bu dosyada tutulmaz; böylece modül
+// sınırı primitive/config yüzeyi olarak kalır.
+
+public screen_width() :: int32 { ret 960; }
+public screen_height() :: int32 { ret 720; }
+public board_cols() :: int32 { ret 24; }
+public board_rows() :: int32 { ret 18; }
+public cell_size() :: int32 { ret 28; }
+public max_snake_cells() :: int32 { ret 144; }
+public board_left() :: int32 { ret 144; }
+public board_top() :: int32 { ret 108; }
+public board_width_px() :: int32 { ret board_cols() * cell_size(); }
+public board_height_px() :: int32 { ret board_rows() * cell_size(); }
+
+public direction_up() :: int32 { ret 0; }
+public direction_right() :: int32 { ret 1; }
+public direction_down() :: int32 { ret 2; }
+public direction_left() :: int32 { ret 3; }
+
+public read_requested_direction(void* window, int32 fallback) :: int32 {
+  if (glfwGetKey(window, glfw_key_w()) == glfw_press() || glfwGetKey(window, glfw_key_up()) == glfw_press()) {
+    ret direction_up();
+  }
+  if (glfwGetKey(window, glfw_key_d()) == glfw_press() || glfwGetKey(window, glfw_key_right()) == glfw_press()) {
+    ret direction_right();
+  }
+  if (glfwGetKey(window, glfw_key_s()) == glfw_press() || glfwGetKey(window, glfw_key_down()) == glfw_press()) {
+    ret direction_down();
+  }
+  if (glfwGetKey(window, glfw_key_a()) == glfw_press() || glfwGetKey(window, glfw_key_left()) == glfw_press()) {
+    ret direction_left();
+  }
+  ret fallback;
+}
+
+public restart_requested(void* window) :: bool {
+  if (glfwGetKey(window, glfw_key_r()) == glfw_press()) {
+    ret true;
+  }
+  if (glfwGetKey(window, glfw_key_space()) == glfw_press()) {
+    ret true;
+  }
+  ret false;
+}
+
+public quit_requested(void* window) :: bool {
+  if (glfwGetKey(window, glfw_key_escape()) == glfw_press()) {
+    ret true;
+  }
+  ret false;
+}

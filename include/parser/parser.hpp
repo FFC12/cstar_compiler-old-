@@ -67,6 +67,7 @@ class CStarParser {
   bool m_LocalScopeFlag;
   bool m_StatsEnabled;
   bool m_LastPointerTypeNullable = false;
+  bool m_LastExpressionEndedByParen = false;
 
   const char* tokenToStr(TokenKind kind) noexcept {
     return m_Lexer.tokenAsStr(kind);
@@ -343,6 +344,7 @@ class CStarParser {
   bool isCastOp();
   ASTNode reduceExpression(std::deque<ASTNode>& exprBucket,
                            OpPrecBucket& opPrecBucket);
+  ASTNode advanceArgumentList();
   ASTNode expression(bool isSubExpr, int opFor = 0, bool isRet = false,
                      bool typeFlag = false, bool isAssignment = false);
   ASTNode advanceConstantOrLiteral();

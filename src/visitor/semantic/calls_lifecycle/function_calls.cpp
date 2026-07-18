@@ -37,6 +37,19 @@ static const FunctionSignature *FindDynamicDispatchSignature(
   return nullptr;
 }
 
+static std::string UnqualifiedDefinedTypeName(const std::string &name) {
+  const auto dot = name.rfind('.');
+  return dot == std::string::npos ? name : name.substr(dot + 1);
+}
+
+static bool SameDefinedTypeName(const std::string &actual,
+                                const std::string &expected) {
+  return actual == expected ||
+         (!actual.empty() && !expected.empty() &&
+          UnqualifiedDefinedTypeName(actual) ==
+              UnqualifiedDefinedTypeName(expected));
+}
+
 SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
   SymbolInfo symbolInfo;
 
@@ -229,8 +242,10 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
       m_LastSymbolInfo.symbolId = m_SymbolId;
       m_LastSymbolInfo.scopeId = m_ScopeId;
       m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
-      if (m_LastSymbolInfo.isRef && !m_LastSymbolInfo.isDynamicTraitObject) {
-        m_LastSymbolInfo.indirectionLevel += 1;
+      if (m_LastSymbolInfo.isRef &&
+          !m_LastSymbolInfo.isDynamicTraitObject &&
+          m_LastSymbolInfo.indirectionLevel > 0) {
+        m_LastSymbolInfo.indirectionLevel -= 1;
       }
       m_ExpectedType = signature->params[i].type;
       m_DefinedTypeFlag =
@@ -253,6 +268,15 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
   }
 
   const auto &signature = signatureIt->second;
+  if (signature.isFromIncludedSource && !signature.returnType.isPublic &&
+      !signature.returnType.isImported &&
+      !m_CurrentFunctionFromIncludedSource) {
+    this->m_TypeErrorMessages.emplace_back(
+        "Function '" + funcName +
+            "' is private to its included module and cannot be called here",
+        symbolInfo);
+    return signature.returnType;
+  }
   if (signature.canThrow && !m_CurrentFunctionCanThrow) {
     this->m_TypeErrorMessages.emplace_back(
         "fallible function '" + funcName +
@@ -304,6 +328,7 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
 
   for (size_t i = 0; i < argNodes.size(); ++i) {
     const bool isVariadicArg = i >= signature.params.size();
+    bool argumentAlreadyChecked = false;
     if (hasImplicitMethodReceiver && i == 0 && signature.params[i].isRef) {
       continue;
     }
@@ -323,9 +348,6 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     }
 
     m_LastSymbolInfo = signature.params[i];
-    if (m_LastSymbolInfo.isRef && !m_LastSymbolInfo.isDynamicTraitObject) {
-      m_LastSymbolInfo.indirectionLevel += 1;
-    }
     m_LastSymbolInfo.symbolId = m_SymbolId;
     m_LastSymbolInfo.scopeId = m_ScopeId;
     m_LastSymbolInfo.scopeLevel = m_ScopeLevel;
@@ -403,6 +425,26 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
 
       const auto expectedType = signature.params[i].type;
       const auto actualType = matchedSymbol.type;
+      if (signature.params[i].isRef &&
+          !signature.params[i].isDynamicTraitObject) {
+        const bool definedMismatch =
+            expectedType == TypeSpecifier::SPEC_DEFINED &&
+            !SameDefinedTypeName(matchedSymbol.definedTypeName,
+                                 signature.params[i].definedTypeName);
+        const bool refLevelCompatible =
+            matchedSymbol.indirectionLevel ==
+            signature.params[i].indirectionLevel;
+
+        if (actualType != expectedType || definedMismatch ||
+            !refLevelCompatible) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Function argument " + std::to_string(i + 1) +
+                  " is incompatible with reference parameter",
+              argInfo);
+        }
+        argumentAlreadyChecked = true;
+      }
+
       if (signature.params[i].indirectionLevel > 0 &&
           !signature.params[i].isRef && signature.params[i].isUnique &&
           matchedSymbol.indirectionLevel > 0 && matchedSymbol.isUnique) {
@@ -448,6 +490,8 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
               argInfo);
           continue;
         }
+
+        argumentAlreadyChecked = true;
       }
 
       const bool boolMismatch =
@@ -464,7 +508,8 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
       }
     }
 
-    if (!(hasImplicitMethodReceiver && i == 0 && signature.params[i].isRef)) {
+    if (!argumentAlreadyChecked &&
+        !(hasImplicitMethodReceiver && i == 0 && signature.params[i].isRef)) {
       argNodes[i]->acceptBefore(*this);
     }
     if (markMovedCallSource) {

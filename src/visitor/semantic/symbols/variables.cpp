@@ -217,13 +217,8 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
             "Array initializer must be an initilizer list", symbolInfo);
       } else {
         if (constant) {
-          auto scalar =
-              dynamic_cast<ScalarOrLiteralAST *>(varAst.m_ArrDim[0].get());
-          if (scalar->m_Value != "1") {
-            this->m_TypeErrorMessages.emplace_back(
-                "Array initializer does not meet with size of array",
-                symbolInfo);
-          }
+          // `(value)` is scalar-fill syntax for fixed-size arrays.
+          // It initializes every element to the same scalar/symbol value.
         } else {
           std::vector<BinOpOrVal> vec;
           getElementsOfArray(*varAst.m_RHS, vec);

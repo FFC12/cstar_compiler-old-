@@ -47,7 +47,7 @@ ASTNode CStarParser::advanceNewExpression(bool isShared) {
     this->advance();
     this->advance();
   } else {
-    args = expression(true, 1);
+    args = advanceArgumentList();
   }
 
   auto endPos = prevTokenInfo().getTokenPositionInfo();

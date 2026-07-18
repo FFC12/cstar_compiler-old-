@@ -1,0 +1,9 @@
+struct Agent {
+  uint32 id;
+}
+
+main() :: int32 {
+  Agent value;
+  value.id = 7;
+  ret value.id as int32;
+}

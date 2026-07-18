@@ -243,8 +243,14 @@ void CStarCodegen::appendIncludedSource(
     }
 
     const auto declKind = node->getDeclKind();
-    if (node->isPublicDecl() || declKind == DeclKind::ImportFuncDecl ||
-        declKind == DeclKind::ImportVarDecl) {
+    if (declKind == DeclKind::FuncDecl ||
+        declKind == DeclKind::ImportFuncDecl ||
+        declKind == DeclKind::ExportFuncDecl ||
+        declKind == DeclKind::VarDecl ||
+        declKind == DeclKind::ImportVarDecl ||
+        declKind == DeclKind::ExportVarDecl ||
+        declKind == DeclKind::GlobVarDecl ||
+        node->isPublicDecl()) {
       node->markFromIncludedSource();
       m_AST.push_back(std::move(node));
     }

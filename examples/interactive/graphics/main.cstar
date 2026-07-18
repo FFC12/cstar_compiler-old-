@@ -3,8 +3,229 @@
 include "modules/glfw.cstar" as glfw
 include "modules/opengl.cstar" as gl
 include "modules/shader.cstar" as shader
+include "modules/snake_types.cstar" as snake
+include "modules/snake_render.cstar" as render
 include "../../../std/print.cstar" as io
 include "../../../std/fs.cstar" as fs
+
+trait GameRead {
+  score() :: int32;
+  alive() :: bool;
+  length() :: int32;
+}
+
+struct GridPoint {
+  int32 x;
+  int32 y;
+
+  operator ==(GridPoint rhs) :: bool {
+    ret self.x == rhs.x && self.y == rhs.y;
+  }
+
+  operator !=(GridPoint rhs) :: bool {
+    ret !(self == rhs);
+  }
+}
+
+struct SnakeGame with GameRead {
+  int32 score_value;
+  int32 frame;
+  int32 step_period;
+  int32 body_length;
+  int32 direction;
+  int32 queued_direction;
+  int32 food_x;
+  int32 food_y;
+  bool is_alive;
+
+  constructor() {
+    self.score_value = 0;
+    self.frame = 0;
+    self.step_period = 7;
+    self.body_length = 4;
+    self.direction = snake.direction_right();
+    self.queued_direction = snake.direction_right();
+    self.food_x = 16;
+    self.food_y = 8;
+    self.is_alive = true;
+  }
+
+  destructor() {
+    self.is_alive = false;
+    self.body_length = 0;
+    ret;
+  }
+
+  score() :: int32 {
+    ret self.score_value;
+  }
+
+  alive() :: bool {
+    ret self.is_alive;
+  }
+
+  length() :: int32 {
+    ret self.body_length;
+  }
+}
+
+reset_game(SnakeGame* model, int32[144] xs, int32[144] ys) :: void {
+  model.score_value = 0;
+  model.frame = 0;
+  model.step_period = 7;
+  model.body_length = 4;
+  model.direction = snake.direction_right();
+  model.queued_direction = snake.direction_right();
+  model.food_x = 16;
+  model.food_y = 8;
+  model.is_alive = true;
+
+  xs[0] = 12; ys[0] = 9;
+  xs[1] = 11; ys[1] = 9;
+  xs[2] = 10; ys[2] = 9;
+  xs[3] = 9;  ys[3] = 9;
+}
+
+queue_turn(SnakeGame* model, int32 requested) :: void {
+  if (opposite(model.direction, requested)) {
+    ret;
+  }
+  model.queued_direction = requested;
+}
+
+contains_cell(SnakeGame* model, int32[144] xs, int32[144] ys, int32 x, int32 y) :: bool {
+  int32 index = 0;
+  loop (index < model.body_length) {
+    if (xs[index] == x && ys[index] == y) {
+      ret true;
+    }
+    index += 1;
+  }
+  ret false;
+}
+
+spawn_food(SnakeGame* model, int32[144] xs, int32[144] ys) :: void {
+  int32 attempt = 0;
+  loop (attempt < 24) {
+    int32 nextX = positive_mod((model.frame * 7) + (model.score_value * 11) + (attempt * 5) + 3, snake.board_cols());
+    int32 nextY = positive_mod((model.frame * 5) + (model.score_value * 13) + (attempt * 7) + 2, snake.board_rows());
+    if (!contains_cell(model, xs, ys, nextX, nextY)) {
+      model.food_x = nextX;
+      model.food_y = nextY;
+      ret;
+    }
+    attempt += 1;
+  }
+
+  model.food_x = 1;
+  model.food_y = 1;
+}
+
+step_game(SnakeGame* model, int32[144] xs, int32[144] ys) :: void {
+  if (!model.alive()) {
+    ret;
+  }
+
+  model.frame += 1;
+  if ((model.frame % model.step_period) != 0) {
+    ret;
+  }
+
+  model.direction = model.queued_direction;
+  GridPoint delta = direction_delta(model.direction);
+  int32 nextX = xs[0] + delta.x;
+  int32 nextY = ys[0] + delta.y;
+
+  if (nextX < 0 || nextY < 0 || nextX >= snake.board_cols() || nextY >= snake.board_rows()) {
+    model.is_alive = false;
+    ret;
+  }
+
+  int32 bodyIndex = 1;
+  loop (bodyIndex < model.body_length) {
+    if (xs[bodyIndex] == nextX && ys[bodyIndex] == nextY) {
+      model.is_alive = false;
+      ret;
+    }
+    bodyIndex += 1;
+  }
+
+  GridPoint head = grid_point(nextX, nextY);
+  GridPoint food = grid_point(model.food_x, model.food_y);
+  bool eating = head == food;
+  if (eating) {
+    model.score_value += 1;
+    if (model.body_length < snake.max_snake_cells()) {
+      model.body_length += 1;
+    }
+    if (model.score_value == 6) {
+      model.step_period = 6;
+    }
+    if (model.score_value == 14) {
+      model.step_period = 5;
+    }
+    if (model.score_value == 24) {
+      model.step_period = 4;
+    }
+  }
+
+  int32 shift = model.body_length - 1;
+  loop (shift > 0) {
+    xs[shift] = xs[shift - 1];
+    ys[shift] = ys[shift - 1];
+    shift -= 1;
+  }
+
+  xs[0] = nextX;
+  ys[0] = nextY;
+
+  if (eating) {
+    spawn_food(model, xs, ys);
+  }
+}
+
+grid_point(int32 x, int32 y) :: GridPoint {
+  GridPoint point;
+  point.x = x;
+  point.y = y;
+  ret point;
+}
+
+positive_mod(int32 value, int32 divisor) :: int32 {
+  int32 result = value % divisor;
+  if (result < 0) {
+    result += divisor;
+  }
+  ret result;
+}
+
+opposite(int32 left, int32 right) :: bool {
+  if (left == snake.direction_up() && right == snake.direction_down()) { ret true; }
+  if (left == snake.direction_down() && right == snake.direction_up()) { ret true; }
+  if (left == snake.direction_left() && right == snake.direction_right()) { ret true; }
+  if (left == snake.direction_right() && right == snake.direction_left()) { ret true; }
+  ret false;
+}
+
+direction_delta(int32 direction) :: GridPoint {
+  if (direction == snake.direction_up()) {
+    ret grid_point(0, -1);
+  }
+  if (direction == snake.direction_right()) {
+    ret grid_point(1, 0);
+  }
+  if (direction == snake.direction_down()) {
+    ret grid_point(0, 1);
+  }
+  if (direction == snake.direction_left()) {
+    ret grid_point(-1, 0);
+  }
+  ret grid_point(0, 0);
+}
+
+read_score(dynamic GameRead& view) :: int32 {
+  ret view.score();
+}
 
 main() :: int32 {
   if (glfwInit() == 0) {
@@ -13,7 +234,7 @@ main() :: int32 {
   }
 
   configure_modern_context();
-  void* window = glfwCreateWindow(860, 560, "C* OpenGL Pastel Triangle", unsafe_cast<void*>(0), unsafe_cast<void*>(0));
+  void* window = glfwCreateWindow(snake.screen_width(), snake.screen_height(), "C* OpenGL Snake", unsafe_cast<void*>(0), unsafe_cast<void*>(0));
   if (!window) {
     io.writeln("Window creation failed");
     char* glfwErrorText = unsafe_cast<char*>(0);
@@ -30,30 +251,29 @@ main() :: int32 {
   }
 
   glfwMakeContextCurrent(window);
-  pastel_background();
+  defer {
+    glfwDestroyWindow(window);
+    glfwTerminate();
+  }
 
   char vertexSource[4096];
   char fragmentSource[4096];
   char logBuffer[4096];
 
   fs.FileReadResult vertexFile = fs.read_text_4096(
-      "shaders/triangle.vert",
+      "shaders/snake.vert",
       vertexSource);
   fs.FileReadResult fragmentFile = fs.read_text_4096(
-      "shaders/triangle.frag",
+      "shaders/snake.frag",
       fragmentSource);
 
   if (!vertexFile.success()) {
-    io.writeln("Vertex shader file read failed");
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    io.writeln("Snake vertex shader file read failed");
     ret 3;
   }
 
   if (!fragmentFile.success()) {
-    io.writeln("Fragment shader file read failed");
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    io.writeln("Snake fragment shader file read failed");
     ret 4;
   }
 
@@ -70,79 +290,51 @@ main() :: int32 {
       logBuffer);
 
   uint32 program = shader.link_program(vertex, fragment, logBuffer);
+  glDeleteShader(vertex.id);
+  glDeleteShader(fragment.id);
   if (program == 0) {
-    io.writeln("Shader compilation/link failed");
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    io.writeln("Snake shader compilation/link failed");
     ret 5;
   }
 
-  float32 vertices[15] = (
-      0.0, 0.0, 0.0, 0.0, 0.0,
-      0.0, 0.0, 0.0, 0.0, 0.0,
-      0.0, 0.0, 0.0, 0.0, 0.0);
-  vertices[0] = 0.0;
-  vertices[1] = 0.62;
-  vertices[2] = 0.98;
-  vertices[3] = 0.66;
-  vertices[4] = 0.70;
-  vertices[5] = 0.0 - 0.66;
-  vertices[6] = 0.0 - 0.48;
-  vertices[7] = 0.70;
-  vertices[8] = 0.86;
-  vertices[9] = 0.98;
-  vertices[10] = 0.66;
-  vertices[11] = 0.0 - 0.48;
-  vertices[12] = 0.98;
-  vertices[13] = 0.82;
-  vertices[14] = 0.58;
-
-  uint32 vao = 0;
-  uint32 vbo = 0;
-  glGenVertexArrays(1, ref vao);
-  glBindVertexArray(vao);
-  glGenBuffers(1, ref vbo);
-  glBindBuffer(gl_array_buffer(), vbo);
-  glBufferData(gl_array_buffer(), 60, ref vertices[0], gl_static_draw());
-
-  int32 posLocation = glGetAttribLocation(program, "a_pos");
-  int32 colorLocation = glGetAttribLocation(program, "a_color");
-  if (posLocation < 0 || colorLocation < 0) {
-    io.writeln("Shader attribute binding failed");
-    glfwDestroyWindow(window);
-    glfwTerminate();
-    ret 6;
+  defer {
+    glDeleteProgram(program);
   }
-  void* positionOffset = unsafe_cast<void*>(0);
-  void* colorOffset = unsafe_cast<void*>(8);
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 2, gl_float(), false, 20, positionOffset);
-  glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 3, gl_float(), false, 20, colorOffset);
+
+  render.SnakeRenderer renderer = SnakeRenderer(program);
+
+  int32 snakeX[144] = (0);
+  int32 snakeY[144] = (0);
+  SnakeGame game = SnakeGame();
+  SnakeGame* model = ref game;
+  reset_game(model, snakeX, snakeY);
+  dynamic GameRead& view = dynamic ref game as GameRead;
 
   loop (glfwWindowShouldClose(window) == 0) {
-    if (glfwGetKey(window, glfw_key_escape()) == glfw_press()) {
+    if (snake.quit_requested(window)) {
       glfwSetWindowShouldClose(window, 1);
     }
+
+    if (snake.restart_requested(window) && !game.alive()) {
+      reset_game(model, snakeX, snakeY);
+    }
+
+    int32 requested = snake.read_requested_direction(window, game.queued_direction);
+    queue_turn(model, requested);
+    step_game(model, snakeX, snakeY);
 
     int32 width = 0;
     int32 height = 0;
     glfwGetFramebufferSize(window, ref width, ref height);
     glViewport(0, 0, width, height);
-
+    glClearColor(0.055, 0.066, 0.090, 1.0);
     glClear(gl_color_buffer_bit());
-    glUseProgram(program);
-    glBindVertexArray(vao);
-    glDrawArrays(gl_triangles(), 0, 3);
+
+    render.draw_game(renderer, snakeX, snakeY, game.food_x, game.food_y, read_score(view), view.length(), view.alive());
 
     glfwSwapBuffers(window);
     glfwPollEvents();
   }
 
-  glDeleteShader(vertex.id);
-  glDeleteShader(fragment.id);
-  glDeleteProgram(program);
-  glfwDestroyWindow(window);
-  glfwTerminate();
-  ret 0;
+  ret game.score();
 }

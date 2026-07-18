@@ -1,0 +1,7 @@
+sum8(int32 a, int32 b, int32 c, int32 d, int32 e, int32 f, int32 g, int32 h) :: int32 {
+  ret a + b + c + d + e + f + g + h;
+}
+
+main() :: int32 {
+  ret sum8(1, 2, 3, 4, 5, 6, 7, 8);
+}

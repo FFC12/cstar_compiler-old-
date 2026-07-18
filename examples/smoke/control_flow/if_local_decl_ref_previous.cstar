@@ -1,0 +1,16 @@
+// expected: pass
+// expected-exit: 1
+
+set_ptr(char*& value) :: int32 {
+  ret 1;
+}
+
+main() :: int32 {
+  bool ok = false;
+  if (!ok) {
+    char* text = unsafe_cast<char*>(0);
+    int32 code = set_ptr(ref text);
+    ret code;
+  }
+  ret 0;
+}

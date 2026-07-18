@@ -21,7 +21,18 @@ public glfw_opengl_core_profile() :: int32 { ret 204801; }
 public glfw_opengl_forward_compat() :: int32 { ret 139270; }
 public glfw_true() :: int32 { ret 1; }
 public glfw_key_escape() :: int32 { ret 256; }
+public glfw_key_space() :: int32 { ret 32; }
+public glfw_key_r() :: int32 { ret 82; }
+public glfw_key_w() :: int32 { ret 87; }
+public glfw_key_a() :: int32 { ret 65; }
+public glfw_key_s() :: int32 { ret 83; }
+public glfw_key_d() :: int32 { ret 68; }
 public glfw_press() :: int32 { ret 1; }
+public glfw_release() :: int32 { ret 0; }
+public glfw_key_right() :: int32 { ret 262; }
+public glfw_key_left() :: int32 { ret 263; }
+public glfw_key_down() :: int32 { ret 264; }
+public glfw_key_up() :: int32 { ret 265; }
 
 public configure_modern_context() :: void {
   glfwWindowHint(glfw_context_version_major(), 3);

@@ -159,6 +159,10 @@ llvm::Value* CreateIntegerOrPointerCompare(
     llvm::CmpInst::Predicate signedPredicate,
     llvm::CmpInst::Predicate unsignedPredicate, llvm::Value* lhs,
     llvm::Value* rhs, bool isSigned, const llvm::Twine& name);
+llvm::Value* CreateNormalizedICmp(llvm::CmpInst::Predicate predicate,
+                                  llvm::Value* lhs, llvm::Value* rhs,
+                                  const llvm::Twine& name,
+                                  bool isSigned = true);
 llvm::Value* CreateOrderedCompare(llvm::CmpInst::Predicate floatPredicate,
                                   llvm::CmpInst::Predicate signedPredicate,
                                   llvm::CmpInst::Predicate unsignedPredicate,

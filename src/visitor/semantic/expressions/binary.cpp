@@ -701,6 +701,24 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
                     indexInfo);
               }
             }
+
+            auto elementInfo = matchedSymbol;
+            elementInfo.begin = binaryOpAst.m_SemLoc.begin;
+            elementInfo.end = binaryOpAst.m_SemLoc.end;
+            elementInfo.line = binaryOpAst.m_SemLoc.line;
+            elementInfo.indirectionLevel = 0;
+            elementInfo.isSubscriptable = false;
+            elementInfo.arrayDimensions.clear();
+            if (indexCount < matchedSymbol.arrayDimensions.size()) {
+              elementInfo.isSubscriptable = true;
+              elementInfo.arrayDimensions.assign(
+                  matchedSymbol.arrayDimensions.begin() + indexCount,
+                  matchedSymbol.arrayDimensions.end());
+              elementInfo.indirectionLevel = elementInfo.arrayDimensions.size();
+            }
+            m_LastArrayIndexCount = 0;
+            m_LastSubscriptable = false;
+            return elementInfo;
           } else {
             if (indexCount > matchedSymbol.arrayDimensions.size()) {
               if (m_LastVarDecl) {

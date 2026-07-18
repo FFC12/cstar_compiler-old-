@@ -235,8 +235,8 @@ ValuePtr Visitor::visit(OptionStmtAST &optionStmtAst) {
     auto *memberValue = llvm::ConstantInt::get(
         matchedValue->getType(), member->value,
         IsSigned(enumIt->second.underlyingType));
-    auto *condition = Builder->CreateICmpEQ(matchedValue, memberValue,
-                                            "option.match");
+    auto *condition = CreateNormalizedICmp(
+        llvm::CmpInst::ICMP_EQ, matchedValue, memberValue, "option.match");
     Builder->CreateCondBr(condition, caseBB, nextBB);
 
     Builder->SetInsertPoint(caseBB);
@@ -388,7 +388,8 @@ ValuePtr Visitor::visit(LoopStmtAST &loopStmtAst) {
   CreateBranchIfNeeded(conditionBB);
   Builder->SetInsertPoint(conditionBB);
   auto *currentIndex = Builder->CreateLoad(indexType, indexSlot, "loop.i");
-  auto *condition = Builder->CreateICmpSLT(currentIndex, endValue, "loop.cond");
+  auto *condition = CreateNormalizedICmp(
+      llvm::CmpInst::ICMP_SLT, currentIndex, endValue, "loop.cond");
   Builder->CreateCondBr(condition, bodyBB, afterBB);
 
   Builder->SetInsertPoint(bodyBB);

@@ -90,6 +90,7 @@ void CStarCodegen::pass0() {
         signature.isVariadic =
             static_cast<FuncAST *>(ast.get())->isVariadic();
         signature.canThrow = static_cast<FuncAST *>(ast.get())->canThrow();
+        signature.isFromIncludedSource = ast->isFromIncludedSource();
         signature.errorTypeName =
             static_cast<FuncAST *>(ast.get())->errorTypeName();
         for (auto& symbolInfo : preVisitor.getSymbolInfoList()) {

@@ -1,0 +1,14 @@
+struct SnakeGame {
+  int32 score;
+}
+
+score_of(SnakeGame* state) :: int32 {
+  ret state.score;
+}
+
+main() :: int32 {
+  SnakeGame game;
+  game.score = 9;
+  SnakeGame* state = ref game;
+  ret score_of(state);
+}

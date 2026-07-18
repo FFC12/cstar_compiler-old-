@@ -3,7 +3,7 @@
 using namespace cstar::parser_private;
 
 ASTNode CStarParser::advanceSymbol() {
-  if (is(TokenKind::IDENT) || is(TokenKind::SELF)) {
+  if (is(TokenKind::IDENT) || is(TokenKind::SELF) || is(TokenKind::STATE)) {
     auto symbolName = this->currentTokenStr();
 
     auto tokenPos = currentTokenInfo().getTokenPositionInfo();

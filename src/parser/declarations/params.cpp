@@ -51,9 +51,9 @@ param_again:
     bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
 
     if (!isForwardDecl) {
-      expected(TokenKind::IDENT);
+      expected({TokenKind::IDENT, TokenKind::STATE});
       symbol0 = this->advanceSymbol();
-    } else if (is(TokenKind::IDENT)) {
+    } else if (is(TokenKind::IDENT) || is(TokenKind::STATE)) {
       symbol0 = this->advanceSymbol();
     }
 
@@ -83,11 +83,11 @@ param_again:
 
     if (!isForwardDecl) {
       // expected param name
-      expected(TokenKind::IDENT);
+      expected({TokenKind::IDENT, TokenKind::STATE});
 
       // get the param name
       symbol0 = this->advanceSymbol();
-    } else if (is(TokenKind::IDENT)) {
+    } else if (is(TokenKind::IDENT) || is(TokenKind::STATE)) {
       symbol0 = this->advanceSymbol();
     }
 
@@ -126,10 +126,10 @@ param_again:
       }
 
       if (!isForwardDecl) {
-        expected(TokenKind::IDENT);
+        expected({TokenKind::IDENT, TokenKind::STATE});
         // get the param name
         symbol0 = std::move(this->advanceSymbol());
-      } else if (is(TokenKind::IDENT)) {
+      } else if (is(TokenKind::IDENT) || is(TokenKind::STATE)) {
         symbol0 = std::move(this->advanceSymbol());
       }
 
@@ -150,9 +150,9 @@ param_again:
       if (isType(nextTokenInfo)) {  // cast not allowed
         // get the param name
         if (!isForwardDecl) {
-          expected(TokenKind::IDENT);
+          expected({TokenKind::IDENT, TokenKind::STATE});
           symbol0 = this->advanceSymbol();
-        } else if (is(TokenKind::IDENT)) {
+        } else if (is(TokenKind::IDENT) || is(TokenKind::STATE)) {
           symbol0 = this->advanceSymbol();
         }
 
@@ -195,7 +195,7 @@ param_again:
             symbol0 = std::move(this->advanceSymbol());
           }
 
-          expected(TokenKind::IDENT);
+          expected({TokenKind::IDENT, TokenKind::STATE});
           // get the defined type
           auto type = std::move(this->advanceSymbol());
           std::vector<ASTNode> arrayDimensions;
@@ -219,9 +219,9 @@ param_again:
           applyStateQualifiers(type, stateQualifiers);
 
           if (!isForwardDecl) {
-            expected(TokenKind::IDENT);
+            expected({TokenKind::IDENT, TokenKind::STATE});
             symbol0 = this->advanceSymbol();
-          } else if (is(TokenKind::IDENT)) {
+          } else if (is(TokenKind::IDENT) || is(TokenKind::STATE)) {
             symbol0 = this->advanceSymbol();
           }
 

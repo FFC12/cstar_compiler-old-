@@ -84,8 +84,9 @@ llvm::Value *NormalizeArrayIndex(llvm::Value *index, size_t dimension) {
   }
 
   auto *zero = llvm::ConstantInt::get(indexType, 0);
-  auto *isNegative = Visitor::Builder->CreateICmpSLT(index, zero,
-                                                     "array.index.neg");
+  auto *isNegative =
+      CreateNormalizedICmp(llvm::CmpInst::ICMP_SLT, index, zero,
+                           "array.index.neg");
   auto *fromEnd =
       Visitor::Builder->CreateAdd(index, dimensionValue, "array.index.fromend");
   return Visitor::Builder->CreateSelect(isNegative, fromEnd, index,
@@ -268,7 +269,8 @@ llvm::Value *CastValueToBranchCondition(llvm::Value *value,
 
   if (value->getType()->isIntegerTy()) {
     auto *zero = llvm::ConstantInt::get(value->getType(), 0);
-    return Visitor::Builder->CreateICmpNE(value, zero, "ifcond");
+    return CreateNormalizedICmp(llvm::CmpInst::ICMP_NE, value, zero,
+                                "ifcond", isSigned);
   }
 
   if (value->getType()->isFloatingPointTy()) {
@@ -279,13 +281,15 @@ llvm::Value *CastValueToBranchCondition(llvm::Value *value,
   if (value->getType()->isPointerTy()) {
     auto *nullPtr = llvm::ConstantPointerNull::get(
         llvm::cast<llvm::PointerType>(value->getType()));
-    return Visitor::Builder->CreateICmpNE(value, nullPtr, "ifcond");
+    return CreateNormalizedICmp(llvm::CmpInst::ICMP_NE, value, nullPtr,
+                                "ifcond");
   }
 
   if (IsSharedPointerTy(value->getType())) {
     auto *data = ExtractSharedPointerData(value);
     auto *nullPtr = llvm::ConstantPointerNull::get(GetI8PtrTy());
-    return Visitor::Builder->CreateICmpNE(data, nullPtr, "ifcond");
+    return CreateNormalizedICmp(llvm::CmpInst::ICMP_NE, data, nullPtr,
+                                "ifcond");
   }
 
   return value;

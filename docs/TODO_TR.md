@@ -2132,6 +2132,67 @@ Kalan:
   - `DOKUMANTASYON_TR.md` ve bu TODO dosyasında “proposal”dan “MVP/çalışıyor” durumuna taşınmalı.
 - `policy.cstar` concept map olarak kalmalı; yeni runtime hook syntax'ı eklemek için kullanılmamalı.
 
+### 8.10 Büyük Interactive Örneklerden Çıkan Compiler Bug/Ergonomi Borçları
+
+Kaynak:
+
+- `examples/interactive/graphics/` OpenGL Snake dönüşümü sırasında aynı dosyada ve include edilen modüllerde birden fazla gerçek compiler pürüzü yakalandı.
+- Bu maddeler “örneği küçültüp geç” diye kapatılmamalı; her biri için minimum reproducer, type-checker/smoke diagnostic ve gerekiyorsa performance regression testi eklenmeli.
+
+Bulunan problemler:
+
+- [x] Reserved/contextual keyword diagnostic:
+  - `state` artık protocol grammar'ında özel anlam taşıyor; parametre adı olarak kullanıldığında parser “Unexpected token” üretiyor.
+  - Beklenen davranış: `state` gerçekten reserved ise açık `CST1xxx reserved keyword cannot be used as identifier` diagnostic'i; context-sensitive keyword ise parametre/local isim olarak legal olmalı.
+  - Reproducer: `reset_game(SnakeGame* state, ...)`.
+- [x] User-defined pointer parametre parse ergonomisi:
+  - `Agent* agent` smoke içinde çalışırken bazı ad/bağlam kombinasyonlarında `SnakeGame* state` / `S* state` parser tarafından type declarator yerine yanlış okunabiliyor.
+  - Public fonksiyonlarda user-defined pointer parametreleri ayrıca kırılgan: `public write_s(S* value) :: void` benzeri imzalar parse/type lookup sınırında bozulabiliyor.
+  - Beklenen davranış: primitive pointer, struct pointer, included-module struct pointer ve public/private fonksiyon imzaları aynı declarator kuralını paylaşmalı.
+- Imported/qualified user-defined type imzaları:
+  - `snake.SnakeGame value` veya `snake.SnakeGame* value` bazı function/method parametrelerinde parse edilemiyor.
+  - Bugün örneklerde `types.ModulePoint` kısmen çalışıyor; aynı kural tüm function, method, dynamic trait ve pointer/ref kombinasyonlarında tutarlı olmalı.
+  - Test matrisi: top-level function, public function, struct method, imported alias, pointer/ref/value parametre.
+- [x] Method/function parametre scope/type validation:
+  - Struct method içinde `InputFrame input`, `int32[144] xs` gibi parametreler bazı kombinasyonlarda “not in a valid place”, “declared in wrong place” cascade diagnostic'leri üretiyor.
+  - Beklenen davranış: method parametreleri semantic scope'a function parametreleriyle aynı yoldan girmeli; array parametreleri method içinde okunup yazılabilmeli.
+- [x] If/loop block local declaration scope:
+  - `if`/`loop` block içinde `char* a = ...; int32 b = f(ref a);` gibi ardışık declaration'larda ilk local initializer bittikten hemen sonra current semantic scope'a girer.
+  - Bu “declaration register after initializer” kuralı `examples/smoke/control_flow/if_local_decl_ref_previous.cstar` ile doğrulanır.
+- Büyük fixed array codegen/performance darboğazı:
+  - `float32 vertices[9000] = (0.0);` ve büyük array'i çok sayıda helper fonksiyona parametre geçme denemeleri compiler'ı çok yavaşlatıyor veya sessiz uzun codegen sürecine sokuyor.
+  - Tek eleman initializer büyük array için store store açılmamalı; LLVM `zeroinitializer`, `memset` veya aggregate init kullanılmalı.
+  - [x] Array parametre passing kuralı net: `T[N] name` fonksiyon parametresinde C/C++ array parameter gibi kopyasız, caller-owned, size'lı writable view'dur. ABI pointer kullanabilir ama semantic type `T[N]` olarak kalır ve call-site dimension check korunur.
+  - Kopya istendiğinde ileride explicit `copy expr` operatorü kullanılmalıdır; implicit büyük array copy yoktur.
+  - Performance regression: 6k/9k float local buffer + helper call workload'u `tests/performance` altına eklenmeli.
+- Array ergonomisi:
+  - Struct field olarak `int32 values[3];` şu an parse edilmiyor. Snake gibi gerçek state modellerinde array field gerekir.
+  - Kalan iş: struct field array grammar, layout, constructor zero-init, field access, method access, param/return kısıtları.
+  - Runtime aralık/view için `span` type değil operator olmalıdır:
+    - `span data` tüm fixed array'i `T[]` runtime-sized view'e çevirir.
+    - `span data[4..32]` half-open aralık view üretir; `:` multidim syntax'ına ayrılmış kalır.
+    - `unsafe_span(ptr, len)` raw pointer + length'ten view üretir ve unsafe interop yüzeyidir.
+    - `T[]` parametre ABI'da `{ptr, len}` taşıyan size'lı view'dur; `T*`/`T^` ownership pointer semantiğiyle karışmaz.
+- Boolean expression precedence/cascade diagnostic:
+  - `ret glfwGetKey(...) == glfw_press() || ...` biçiminde bool dönüşler “int32 returns but bool expected” cascade hatalarına düşebiliyor.
+  - Beklenen davranış: comparison önce, logical `||` sonra bağlanmalı; diagnostic gerçek type mismatch varsa tek ve yerinde olmalı.
+- Interactive graphics compile-time observability:
+  - Compiler uzun codegen/link aşamasında sessiz kalıyor; büyük örneklerde hangi aşamada zaman harcandığı görünmüyor.
+  - Kalan iş: `--time-passes` veya en azından lex/parse/pass0/pass1/codegen/link sürelerini opsiyonel raporlayan debug flag.
+
+OpenGL Snake örneği için mevcut tasarım:
+
+- Renderer küçük 30-float quad buffer'ı stream eder; büyük fixed vertex buffer workload'u ayrı performance regression testi olarak ele alınır.
+- Oyun gövdesi caller-owned `int32[144]` dizilerle tutulur; `T[N]` parametre kuralı sayesinde public helper sınırında kopyasız çalışır.
+- User-defined ref/pointer parametre, struct operator receiver, include edilen private helper ve if-local scope yolları compiler seviyesinde kapatılmıştır; örnek artık bu kurallara göre compile olur.
+
+Doğrulama hedefleri:
+
+- Her madde için minimum type_checker veya smoke dosyası.
+- Fuzz generator'a imported user-defined pointer/ref parametre kombinasyonları.
+- Performance benchmark'a büyük fixed array init/pass workload'u.
+- Interactive graphics örneği compile/run ederken compiler crash, timeout veya 30s+ sessiz codegen üretmemeli.
+
 ## Bir Sonraki En İyi Adım
 
 Tamamlanan son adım:
