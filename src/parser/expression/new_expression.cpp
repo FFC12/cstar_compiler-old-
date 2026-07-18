@@ -33,8 +33,19 @@ ASTNode CStarParser::advanceNewExpression(bool isShared) {
     allocator = expression(true, 1);
   }
 
-  expected(TokenKind::IDENT);
-  auto typeName = advanceDefinedTypeName();
+  TypeSpecifier typeSpec = TypeSpecifier::SPEC_DEFINED;
+  std::string typeName;
+  if (isType(currentTokenInfo())) {
+    typeSpec = typeSpecifierOf(currentTokenInfo());
+    if (typeSpec == TypeSpecifier::SPEC_VOID) {
+      ParserError("`new` cannot allocate void", currentTokenInfo());
+    }
+    typeName = currentTokenStr();
+    this->advance();
+  } else {
+    expected(TokenKind::IDENT);
+    typeName = advanceDefinedTypeName();
+  }
 
   expected(TokenKind::LPAREN);
   ASTNode args = nullptr;
@@ -52,7 +63,7 @@ ASTNode CStarParser::advanceNewExpression(bool isShared) {
 
   auto endPos = prevTokenInfo().getTokenPositionInfo();
   SemanticLoc semLoc(startPos.begin, endPos.end, startPos.line);
-  return std::make_unique<NewAST>(typeName, std::move(allocator),
+  return std::make_unique<NewAST>(typeSpec, typeName, std::move(allocator),
                                   std::move(args), isShared, isFallible,
                                   semLoc);
 }

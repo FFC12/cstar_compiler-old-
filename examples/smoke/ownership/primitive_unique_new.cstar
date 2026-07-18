@@ -1,0 +1,9 @@
+// expected: pass
+// expected-exit: 7
+
+main() :: int32 {
+  int32^ owned = new int32(7);
+  int32 value = deref owned;
+  drop owned;
+  ret value;
+}

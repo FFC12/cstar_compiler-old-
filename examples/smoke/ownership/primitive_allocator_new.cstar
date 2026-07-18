@@ -1,0 +1,39 @@
+// expected: pass
+// expected-exit: 8
+
+import malloc(usize bytes) :: void* from "std:crt";
+import free(void* ptr) :: void from "std:crt";
+
+usize allocated_bytes = 0;
+usize freed_bytes = 0;
+
+#[lang(allocator)]
+trait HeapDomain {
+  alloc(usize bytes, usize align) :: void*;
+  free(void* ptr, usize bytes, usize align) :: void;
+}
+
+struct CountingAllocator with HeapDomain {
+  constructor() {
+    ret;
+  }
+
+  alloc(usize bytes, usize align) :: void* {
+    allocated_bytes += bytes;
+    ret malloc(bytes);
+  }
+
+  free(void* ptr, usize bytes, usize align) :: void {
+    freed_bytes += bytes;
+    free(ptr);
+    ret;
+  }
+}
+
+main() :: int32 {
+  CountingAllocator arena = CountingAllocator();
+  int32^ owned = new(arena) int32(7);
+  int32 value = deref owned;
+  drop owned;
+  ret cast<int32>(allocated_bytes + freed_bytes + cast<usize>(value - 7));
+}

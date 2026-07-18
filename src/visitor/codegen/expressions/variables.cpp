@@ -370,6 +370,7 @@ ValuePtr Visitor::visit(VarAST &varAst) {
       varAst.m_RHS->m_ExprKind == ExprKind::NewExpr) {
     auto *newAst = static_cast<NewAST *>(varAst.m_RHS.get());
     HeapAllocationInfo allocationInfo;
+    allocationInfo.type = newAst->m_TypeSpec;
     allocationInfo.typeName = newAst->m_TypeName;
     allocationInfo.isShared = newAst->m_IsShared;
     if (newAst->m_Allocator != nullptr &&

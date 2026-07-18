@@ -1,0 +1,9 @@
+// expected: diagnostic
+// expected-code: CST2105
+
+main() :: int32 {
+  int32 value = 7;
+  int32^ alias = ref value;
+  drop alias;
+  ret 0;
+}

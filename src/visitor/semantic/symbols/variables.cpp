@@ -394,6 +394,9 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
       }
     } else {
       auto tempSymbolInfo = varAst.m_RHS->acceptBefore(*this);
+      if (varAst.m_RHS->m_ExprKind == ExprKind::NewExpr) {
+        m_SemanticHeapAllocations.insert(SymbolStateKey(symbolInfo));
+      }
       if (tempSymbolInfo.isNullable && !symbolInfo.isNullable &&
           tempSymbolInfo.indirectionLevel > 0 &&
           m_NonNullFlowSymbols.count(tempSymbolInfo.symbolName) == 0) {
@@ -418,10 +421,17 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
         if (symbolValidation(sourceName, lookup, source, true)) {
           m_MovedUniqueSymbols.insert(SymbolStateKey(source));
           m_MovedUniqueSymbols.erase(SymbolStateKey(symbolInfo));
+          if (m_SemanticHeapAllocations.erase(SymbolStateKey(source)) > 0) {
+            m_SemanticHeapAllocations.insert(SymbolStateKey(symbolInfo));
+          }
         }
       } else if (markUniqueMoveSource) {
         m_MovedUniqueSymbols.insert(SymbolStateKey(uniqueMoveSource));
         m_MovedUniqueSymbols.erase(SymbolStateKey(symbolInfo));
+        if (m_SemanticHeapAllocations.erase(SymbolStateKey(uniqueMoveSource)) >
+            0) {
+          m_SemanticHeapAllocations.insert(SymbolStateKey(symbolInfo));
+        }
       } else if (symbolInfo.indirectionLevel > 0) {
         m_MovedUniqueSymbols.erase(SymbolStateKey(symbolInfo));
       }
@@ -430,6 +440,9 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
     if (varAst.m_RHS != nullptr) {
       this->m_LastSymbolInfo = symbolInfo;
       auto tempSmbolInfo = varAst.m_RHS->acceptBefore(*this);
+      if (varAst.m_RHS->m_ExprKind == ExprKind::NewExpr) {
+        m_SemanticHeapAllocations.insert(SymbolStateKey(symbolInfo));
+      }
       if (tempSmbolInfo.isNullable && !symbolInfo.isNullable &&
           tempSmbolInfo.indirectionLevel > 0 &&
           m_NonNullFlowSymbols.count(tempSmbolInfo.symbolName) == 0) {

@@ -1169,8 +1169,8 @@ main() :: int32 {
     <p class="en"><code>deref maybe</code> without a guard produces a diagnostic; inside the true branch of <code>if (maybe)</code>, the pointer is considered non-null. Instead of C's "forget the check and segfault" model, an unproven dereference is a compile error.</p>
 
     <h3><span class="h3-no">12.5</span><span class="tr">Allocator Destekli <code>new</code>, <code>shared new</code> ve <code>new?</code></span><span class="en">Allocator-Backed <code>new</code>, <code>shared new</code>, and <code>new?</code></span></h3>
-    <p class="tr"><code>new Type(args)</code> unique ownership üretir; <code>shared new Type(args)</code> shared ownership üretir. Explicit allocator biçimleri <code>new(allocator) Type(args)</code> ve <code>shared new(allocator) Type(args)</code> çalışır: allocator'ın adı değil, conform ettiği <code>#[lang(allocator)]</code> trait'i contract'tır. Nullable allocation yüzeyi <code>new?</code> ve <code>shared new?</code> ile ifade edilir.</p>
-    <p class="en"><code>new Type(args)</code> produces unique ownership; <code>shared new Type(args)</code> produces shared ownership. Explicit allocator forms <code>new(allocator) Type(args)</code> and <code>shared new(allocator) Type(args)</code> work today: the contract is not the allocator's name, but the <code>#[lang(allocator)]</code> trait it conforms to. Nullable allocation is expressed with <code>new?</code> and <code>shared new?</code>.</p>
+    <p class="tr"><code>new Type(args)</code> unique ownership üretir; <code>shared new Type(args)</code> shared ownership üretir. Explicit allocator biçimleri <code>new(allocator) Type(args)</code> ve <code>shared new(allocator) Type(args)</code> çalışır: allocator'ın adı değil, conform ettiği <code>#[lang(allocator)]</code> trait'i contract'tır. Nullable allocation yüzeyi <code>new?</code> ve <code>shared new?</code> ile ifade edilir. Hedef yalnız struct değildir; sized primitive storage da legal ve heap-backed'tir: <code>int32^ n = new int32(7);</code>, <code>float64* f = shared new float64(3.5);</code>.</p>
+    <p class="en"><code>new Type(args)</code> produces unique ownership; <code>shared new Type(args)</code> produces shared ownership. Explicit allocator forms <code>new(allocator) Type(args)</code> and <code>shared new(allocator) Type(args)</code> work today: the contract is not the allocator's name, but the <code>#[lang(allocator)]</code> trait it conforms to. Nullable allocation is expressed with <code>new?</code> and <code>shared new?</code>. The target is not limited to structs; sized primitive storage is also legal and heap-backed: <code>int32^ n = new int32(7);</code>, <code>float64* f = shared new float64(3.5);</code>.</p>
     <div class="code"><div class="code-bar"><span class="code-name">allocator-backed-new.cstar</span><span class="grow"></span><span class="tag ok">✓ pass</span></div><pre><code class="lang-cstar">import malloc(usize bytes) :: void* from "std:crt";
 import free(void* ptr) :: void from "std:crt";
 
@@ -1209,11 +1209,13 @@ main() :: int32 {
   Meter^ owned = new(arena) Meter(5);
   Meter* shared = shared new(arena) Meter(7);
   Meter^? maybe = new? Meter(9);
+  int32^ number = new(arena) int32(11);
 
   if (maybe) {
     drop maybe;
   }
 
+  drop number;
   drop owned;
   drop shared;
   ret 0;

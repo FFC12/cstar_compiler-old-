@@ -1,0 +1,8 @@
+// expected: diagnostic
+// expected-code: CST2100
+
+main() :: int32 {
+  int32^ owned = new? int32(7);
+  drop owned;
+  ret 0;
+}

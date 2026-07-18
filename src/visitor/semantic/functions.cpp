@@ -116,6 +116,7 @@ SymbolInfo Visitor::preVisit(FuncAST &funcAst) {
     const auto previousErrorTypeName = m_CurrentFunctionErrorTypeName;
     const auto previousStructMethodOwner = m_CurrentStructMethodOwner;
     m_DroppedSemanticSymbols.clear();
+    m_SemanticHeapAllocations.clear();
     m_LocalProtocolStates.clear();
     m_CurrentFunctionIsStatic = funcAst.m_IsStatic;
     m_CurrentFunctionCanThrow = funcAst.m_CanThrow;

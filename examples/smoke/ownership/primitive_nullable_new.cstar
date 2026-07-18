@@ -1,0 +1,14 @@
+// expected: pass
+// expected-exit: 9
+
+main() :: int32 {
+  int32^? maybe = new? int32(9);
+
+  if (maybe) {
+    int32 value = deref maybe;
+    drop maybe;
+    ret value;
+  }
+
+  ret 0;
+}

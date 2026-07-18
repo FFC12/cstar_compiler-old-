@@ -156,6 +156,7 @@ class Visitor {
   std::set<std::string> m_NonNullFlowSymbols;
   std::set<std::string> m_MovedUniqueSymbols;
   std::set<std::string> m_DroppedSemanticSymbols;
+  std::set<std::string> m_SemanticHeapAllocations;
   std::vector<size_t> m_LastArrayDims;
   size_t m_BinOpTermCount = 0;
 
@@ -188,6 +189,7 @@ class Visitor {
   bool m_EmittingProtocolScopeExit = false;
   std::set<std::string> m_CodegenDroppedSymbols;
   struct HeapAllocationInfo {
+    TypeSpecifier type = TypeSpecifier::SPEC_DEFINED;
     std::string typeName;
     std::string allocatorSymbol;
     std::string allocatorTypeName;

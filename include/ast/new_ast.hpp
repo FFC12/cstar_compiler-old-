@@ -2,11 +2,13 @@
 #define NEW_AST_HPP
 
 #include <ast/ast.hpp>
+#include <parser/type_specifiers.hpp>
 #include <string>
 #include <utility>
 
 class NewAST : public IAST {
   friend Visitor;
+  TypeSpecifier m_TypeSpec;
   std::string m_TypeName;
   ASTNode m_Allocator;
   ASTNode m_Args;
@@ -14,9 +16,10 @@ class NewAST : public IAST {
   bool m_IsFallible;
 
  public:
-  NewAST(std::string typeName, ASTNode allocator, ASTNode args, bool isShared,
-         bool isFallible, SemanticLoc semLoc)
+  NewAST(TypeSpecifier typeSpec, std::string typeName, ASTNode allocator,
+         ASTNode args, bool isShared, bool isFallible, SemanticLoc semLoc)
       : IAST(semLoc),
+        m_TypeSpec(typeSpec),
         m_TypeName(std::move(typeName)),
         m_Allocator(std::move(allocator)),
         m_Args(std::move(args)),

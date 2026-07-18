@@ -19,6 +19,13 @@
 // - Destructor runs before storage is returned to the allocator.
 // - Infallible `new` never returns nil. Fallible allocation is explicit with
 //   `new?` and returns a nullable pointer.
+//
+// Implemented MVP note:
+// - Struct unique/shared `new`, explicit allocator `new(allocator)`, nullable
+//   `new?`, and primitive sized allocation such as `new int32(7)` are working.
+// - Remaining proposal/hardening areas are visible desugar output, allocation
+//   failure policy, array allocation, and optional fused shared control-block
+//   layout.
 
 #[lang(allocator)]
 trait Allocator {

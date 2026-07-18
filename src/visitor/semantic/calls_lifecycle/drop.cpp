@@ -21,9 +21,14 @@ SymbolInfo Visitor::preVisit(DropStmtAST &dropStmtAst) {
     return symbolInfo;
   }
 
-  if (matchedSymbol.type != TypeSpecifier::SPEC_DEFINED) {
+  const bool isHeapAllocation =
+      m_SemanticHeapAllocations.count(SymbolStateKey(matchedSymbol)) > 0;
+  if (matchedSymbol.type != TypeSpecifier::SPEC_DEFINED &&
+      !(isHeapAllocation && matchedSymbol.indirectionLevel > 0 &&
+        !matchedSymbol.isRef)) {
     this->m_TypeErrorMessages.emplace_back(
-        "`drop` expects a struct value or struct ownership pointer",
+        "`drop` expects a struct value, struct ownership pointer, or "
+        "`new`-allocated ownership pointer",
         symbolInfo, DiagnosticCode::SemanticOwnership);
     return symbolInfo;
   }

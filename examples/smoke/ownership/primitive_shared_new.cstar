@@ -1,0 +1,9 @@
+// expected: pass
+// expected-exit: 3
+
+main() :: int32 {
+  float64* shared_value = shared new float64(3.5);
+  int32 value = cast<int32>(deref shared_value);
+  drop shared_value;
+  ret value;
+}

@@ -8,16 +8,21 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
   }
 
   auto symbolInfo = getSymbolInfo(symbolName);
-  if (symbolInfo.type != TypeSpecifier::SPEC_DEFINED) {
-    return nullptr;
-  }
 
   auto heapIt = m_HeapAllocations.find(symbolName);
   if (heapIt != m_HeapAllocations.end()) {
     const auto &heapInfo = heapIt->second;
-    auto *structType = GetDefinedStructTy(heapInfo.typeName);
-    auto allocationSize = Module->getDataLayout().getTypeAllocSize(structType);
-    auto allocationAlign = Module->getDataLayout().getPrefTypeAlign(structType)
+    llvm::Type *payloadType = nullptr;
+    if (heapInfo.type == TypeSpecifier::SPEC_DEFINED) {
+      payloadType = GetDefinedStructTy(heapInfo.typeName);
+    } else {
+      payloadType = GetType(heapInfo.type, 0);
+    }
+    if (payloadType == nullptr || payloadType->isVoidTy()) {
+      assert(false && "Heap allocation payload type was not found.");
+    }
+    auto allocationSize = Module->getDataLayout().getTypeAllocSize(payloadType);
+    auto allocationAlign = Module->getDataLayout().getPrefTypeAlign(payloadType)
                                .value();
     auto *sizeValue = llvm::ConstantInt::get(Builder->getInt64Ty(),
                                              allocationSize);
@@ -51,7 +56,10 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
       freeHeapAllocation(data, sizeValue, alignValue);
     };
 
-    auto *destructor = Module->getFunction(heapInfo.typeName + ".destructor");
+    auto *destructor =
+        heapInfo.type == TypeSpecifier::SPEC_DEFINED
+            ? Module->getFunction(heapInfo.typeName + ".destructor")
+            : nullptr;
     llvm::Function *function = Builder->GetInsertBlock()->getParent();
 
     if (symbolInfo.isDynamicTraitObject) {
@@ -171,6 +179,10 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
       m_CodegenDroppedSymbols.insert(symbolName);
     }
     return data;
+  }
+
+  if (symbolInfo.type != TypeSpecifier::SPEC_DEFINED) {
+    return nullptr;
   }
 
   llvm::Value *self = storage;

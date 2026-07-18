@@ -1943,6 +1943,13 @@ Durum:
 - `examples/papers/nullability.cstar` nullable pointer ve `nil` canonical proposal dosyasıdır.
 - Shared handle güçlü sayacı MVP olarak vardır; explicit allocator kullanıldığında payload storage ve strong-count metadata aynı allocator domain'inden allocate/free edilir.
 - Heap-backed allocator örneklerinde `free` method'u gerçek CRT `free(ptr)` çağırır; arena allocator gibi region tabanlı allocator'larda no-op free ancak allocator'ın açık tasarım kararı olabilir.
+- Primitive heap allocation tamamlandı:
+  - `new int32(7)` unique primitive heap pointer üretir; initializer payload storage'a yazılır.
+  - `shared new float64(3.5)` compiler-owned shared handle + atomic strong-count metadata üretir.
+  - `new(allocator) int32(7)` explicit allocator domain'inden payload storage alır ve `drop` ile aynı allocator'a geri verir.
+  - `new? int32(7)` nullable `int32^?` sonucu üretir; non-null pointer'a proof olmadan atanması `CST2100` üretir.
+  - Primitive `new` constructor/destructor çağırmaz; release hattı yalnız storage free eder.
+  - `drop` yalnız struct value/pointer veya `new` kaynaklı heap ownership pointer için geçerlidir; stack alias primitive pointer'ı serbest bırakmaya açılmaz.
 
 Kalan:
 
@@ -1963,10 +1970,7 @@ Kalan:
   - `new? T(args)` sonucu `T^?`, `shared new? T(args)` sonucu `T*?` olur.
   - `except`/`throw` veya explicit result-like return modeli olgunlaşınca fallible allocation bu effect/result modeliyle de ifade edilebilir.
   - null raw pointer dönen allocator, infallible `new` içinde sessiz null pointer üretmemeli; ya visible failure'a çevrilmeli ya da `new?` yoluyla nullable sonuç vermeli.
-- Primitive allocation policy:
-  - `new` yalnız constructor'lı struct/resource type'lara hapsedilmemeli; C* için allocation operator'ı sized concrete storage üretir.
-  - `new int32(7)`, `new float64(1.0)`, `shared new bool(true)` gibi primitive heap allocation formları legal olmalı.
-  - Primitive `new` lowering'i: allocate `sizeof(T)`, initializer store, `T^` veya `T*` handle döndür; destructor yok, drop/release yalnız storage free eder.
+- Primitive/array allocation policy:
   - Struct `new` lowering'i: allocate storage, zero/init, constructor call, destructor + free cleanup edge.
   - Array gibi sized concrete type'lar için ileride `new int32[4]((1, 2, 3, 4))` değerlendirilebilir.
   - Illegal target'lar: `void`, unsized/representation'ı belirsiz type, concrete type bilinmeyen dynamic trait object.
@@ -1981,9 +1985,14 @@ Kalan:
   - allocator-backed unique `drop` allocation/free smoke.
   - allocator-backed unique scope-exit allocation/free smoke.
   - destructor + allocator.free çağrı sırası smoke.
-  - `new int32(7)` smoke.
-  - `shared new float64(1.0)` smoke.
-  - `new? int32(7)` primitive fallible allocation smoke.
+  - primitive `new` regressions:
+    - `examples/smoke/ownership/primitive_unique_new.cstar`
+    - `examples/smoke/ownership/primitive_shared_new.cstar`
+    - `examples/smoke/ownership/primitive_allocator_new.cstar`
+    - `examples/smoke/ownership/primitive_nullable_new.cstar`
+    - `examples/type_checker/ownership/primitive_drop_stack_alias.cstar`
+    - `examples/type_checker/ownership/primitive_new_missing_initializer.cstar`
+    - `examples/type_checker/ownership/primitive_new_nullable_to_nonnull.cstar`
 
 ### 8.6 Protocol / Typestate
 

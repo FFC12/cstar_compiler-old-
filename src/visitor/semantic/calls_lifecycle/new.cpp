@@ -6,8 +6,10 @@ SymbolInfo Visitor::preVisit(NewAST &newAst) {
   symbolInfo.end = newAst.m_SemLoc.end;
   symbolInfo.line = newAst.m_SemLoc.line;
   symbolInfo.symbolName = "new " + newAst.m_TypeName;
-  symbolInfo.type = TypeSpecifier::SPEC_DEFINED;
-  symbolInfo.definedTypeName = newAst.m_TypeName;
+  symbolInfo.type = newAst.m_TypeSpec;
+  if (newAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED) {
+    symbolInfo.definedTypeName = newAst.m_TypeName;
+  }
   symbolInfo.indirectionLevel = 1;
   symbolInfo.isUnique = !newAst.m_IsShared;
   symbolInfo.isNullable = newAst.m_IsFallible;
@@ -16,10 +18,24 @@ SymbolInfo Visitor::preVisit(NewAST &newAst) {
     return symbolInfo;
   }
 
-  if (m_TypeTable.count(newAst.m_TypeName) == 0 ||
-      StructTable.count(newAst.m_TypeName) == 0) {
+  const bool targetIsDefined = newAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED;
+  const bool targetIsStruct =
+      targetIsDefined && StructTable.count(newAst.m_TypeName) != 0;
+  const bool targetIsPrimitive =
+      !targetIsDefined && newAst.m_TypeSpec != TypeSpecifier::SPEC_VOID &&
+      newAst.m_TypeSpec != TypeSpecifier::SPEC_NIL;
+
+  if (targetIsDefined &&
+      (m_TypeTable.count(newAst.m_TypeName) == 0 || !targetIsStruct)) {
     this->m_TypeErrorMessages.emplace_back(
-        "`new` expects a known struct type", symbolInfo);
+        "`new` expects a known struct type or sized primitive type",
+        symbolInfo);
+    return symbolInfo;
+  }
+
+  if (!targetIsDefined && !targetIsPrimitive) {
+    this->m_TypeErrorMessages.emplace_back(
+        "`new` expects a sized primitive or struct type", symbolInfo);
     return symbolInfo;
   }
 
@@ -91,6 +107,25 @@ SymbolInfo Visitor::preVisit(NewAST &newAst) {
     argNodes.push_back(node);
   };
   collectArgs(collectArgs, newAst.m_Args.get());
+
+  if (targetIsPrimitive) {
+    if (argNodes.size() != 1) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Primitive `new` expects exactly one initializer expression",
+          symbolInfo);
+      return symbolInfo;
+    }
+
+    m_LastSymbolInfo = symbolInfo;
+    m_LastSymbolInfo.indirectionLevel = 0;
+    m_LastSymbolInfo.isUnique = false;
+    m_LastSymbolInfo.isNullable = false;
+    m_ExpectedType = newAst.m_TypeSpec;
+    m_DefinedTypeFlag = false;
+    m_DefinedTypeName.clear();
+    argNodes[0]->acceptBefore(*this);
+    return symbolInfo;
+  }
 
   const auto constructorName = newAst.m_TypeName + ".constructor";
   auto signatureIt = FunctionTable.find(constructorName);

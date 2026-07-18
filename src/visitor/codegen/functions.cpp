@@ -584,16 +584,42 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
 }
 
 ValuePtr Visitor::visit(NewAST &newAst) {
-  auto *structType = GetDefinedStructTy(newAst.m_TypeName);
-  if (structType == nullptr) {
-    assert(false && "`new` target struct type must exist.");
+  const bool targetIsDefined = newAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED;
+  llvm::Type *payloadType = nullptr;
+  if (targetIsDefined) {
+    payloadType = GetDefinedStructTy(newAst.m_TypeName);
+    if (payloadType == nullptr) {
+      assert(false && "`new` target struct type must exist.");
+    }
+  } else {
+    payloadType = GetType(newAst.m_TypeSpec, 0);
+    if (payloadType == nullptr || payloadType->isVoidTy()) {
+      assert(false && "`new` target primitive type must be sized.");
+    }
   }
+
+  std::vector<IAST *> argNodes;
+  auto collectArgs = [&](auto &self, IAST *node) -> void {
+    if (node == nullptr) {
+      return;
+    }
+    if (node->m_ExprKind == ExprKind::BinOp) {
+      auto *binOp = static_cast<BinaryOpAST *>(node);
+      if (binOp->m_BinOpKind == BinOpKind::B_COMM) {
+        self(self, binOp->m_LHS.get());
+        self(self, binOp->m_RHS.get());
+        return;
+      }
+    }
+    argNodes.push_back(node);
+  };
+  collectArgs(collectArgs, newAst.m_Args.get());
 
   llvm::Value *storage = nullptr;
   const auto allocationSize = Module->getDataLayout().getTypeAllocSize(
-      structType);
+      payloadType);
   const auto allocationAlign = Module->getDataLayout().getPrefTypeAlign(
-      structType).value();
+      payloadType).value();
   auto *sizeValue = llvm::ConstantInt::get(Builder->getInt64Ty(),
                                            allocationSize);
   auto *alignValue = llvm::ConstantInt::get(Builder->getInt64Ty(),
@@ -623,30 +649,19 @@ ValuePtr Visitor::visit(NewAST &newAst) {
   }
 
   if (storage == nullptr) {
-    storage = CreateDefaultHeapAlloc(structType, "new.malloc");
+    storage = CreateDefaultHeapAlloc(payloadType, "new.malloc");
   }
 
-  storage = Builder->CreatePointerCast(storage, GetType(TypeSpecifier::SPEC_DEFINED, 1));
+  auto *payloadPointerType =
+      targetIsDefined ? GetType(TypeSpecifier::SPEC_DEFINED, 1)
+                      : GetType(newAst.m_TypeSpec, 1);
+  storage = Builder->CreatePointerCast(storage, payloadPointerType);
 
-  auto *constructor = Module->getFunction(newAst.m_TypeName + ".constructor");
+  auto *constructor = targetIsDefined
+                          ? Module->getFunction(newAst.m_TypeName +
+                                                ".constructor")
+                          : nullptr;
   if (constructor != nullptr) {
-    std::vector<IAST *> argNodes;
-    auto collectArgs = [&](auto &self, IAST *node) -> void {
-      if (node == nullptr) {
-        return;
-      }
-      if (node->m_ExprKind == ExprKind::BinOp) {
-        auto *binOp = static_cast<BinaryOpAST *>(node);
-        if (binOp->m_BinOpKind == BinOpKind::B_COMM) {
-          self(self, binOp->m_LHS.get());
-          self(self, binOp->m_RHS.get());
-          return;
-        }
-      }
-      argNodes.push_back(node);
-    };
-    collectArgs(collectArgs, newAst.m_Args.get());
-
     std::vector<llvm::Value *> args;
     args.push_back(storage);
     auto signatureIt = FunctionTable.find(newAst.m_TypeName + ".constructor");
@@ -692,6 +707,20 @@ ValuePtr Visitor::visit(NewAST &newAst) {
     m_LastType = previousType;
     m_LastSigned = previousSigned;
     Builder->CreateCall(constructor, args);
+  } else if (!targetIsDefined) {
+    llvm::Type *previousType = m_LastType;
+    bool previousSigned = m_LastSigned;
+
+    if (!argNodes.empty()) {
+      m_LastType = payloadType;
+      m_LastSigned = IsSigned(newAst.m_TypeSpec);
+      auto *initializer = argNodes[0]->accept(*this);
+      initializer = CastValueToType(initializer, payloadType, m_LastSigned);
+      Builder->CreateStore(initializer, storage);
+    }
+
+    m_LastType = previousType;
+    m_LastSigned = previousSigned;
   }
 
   if (newAst.m_IsShared) {
@@ -736,7 +765,7 @@ ValuePtr Visitor::visit(NewAST &newAst) {
     return handle;
   }
 
-  m_LastType = GetType(TypeSpecifier::SPEC_DEFINED, 1);
+  m_LastType = payloadPointerType;
   m_LastSigned = false;
   return storage;
 }
