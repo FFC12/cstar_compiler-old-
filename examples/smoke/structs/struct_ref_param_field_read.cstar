@@ -9,5 +9,5 @@ read_program(Renderer& renderer) :: int32 {
 main() :: int32 {
   Renderer renderer;
   renderer.program = 3;
-  ret read_program(renderer);
+  ret read_program(ref renderer);
 }

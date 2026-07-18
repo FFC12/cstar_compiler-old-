@@ -537,6 +537,37 @@ ret matrix[1:2];
 
 Expression parser delimiter içinde veya operator/comma sonrasında gelen satır sonlarını expression devamı kabul eder. Bu yüzden çok boyutlu initializer, function argümanları, binary expression ve subscript indexleri okunabilir biçimde alt satıra taşınabilir.
 
+Array parametreleri C/C++ ergonomisine yakın ama C* size güvenliğiyle çalışır. `T[N]` parametre semantik olarak sabit boyutlu array tipidir; çağrı yerinde boyut denetlenir, fakat element kopyası yapılmaz. ABI bu parametreyi adres olarak taşıyabilir ve callee içindeki `values[i] = ...` caller array'ini değiştirir. Büyük array'lerin yanlışlıkla kopyalanmaması dil kuralıdır.
+
+Runtime boyutlu aralık/view için pointer marker kullanılmaz. `T[]` yalnızca parametre tipi olarak geçerli olan span/view tipidir ve ABI'da `{ptr, len}` taşır. Çağrı yerinde bu view açıkça üretilmelidir:
+
+```cstar
+fill_first(int32[4] values) :: void {
+    values[0] = 9;        // caller array'ine yazar; copy değildir
+}
+
+sum_view(int32[] values) :: int32 {
+    ret values[0] + values[1];
+}
+
+main() :: int32 {
+    int32 data[4] = (1, 2, 3, 4);
+
+    fill_first(data);      // kopyasız fixed array parametre
+    fill_first(copy data); // açık ve bilinçli kopya; caller değişmez
+
+    int32 all = sum_view(span data);
+    int32 middle = sum_view(span data[1..3]); // half-open [1, 3)
+
+    int32* ptr = ref data[0];
+    int32 raw = sum_view(unsafe_span(ptr, 4));
+
+    ret all + middle + raw;
+}
+```
+
+`span data` tüm fixed array'i `T[]` view'e çevirir. `span data[begin..end]` half-open aralık üretir; `:` çok boyutlu array notasyonuna ayrılmıştır. `unsafe_span(ptr, len)` raw pointer interop yüzeyidir ve yalnız `T[]` beklenen bağlamda anlamlıdır. `T[]` local storage deklarasyonu değildir; `int32 values[];` controlled diagnostic üretir.
+
 ## 8. Fonksiyonlar
 
 ### 8.1 Temel syntax

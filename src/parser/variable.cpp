@@ -158,12 +158,24 @@ void CStarParser::varDecl(TypeQualifier typeQualifier,
   }
 }
 
-bool CStarParser::advanceTypeSubscript(std::vector<ASTNode>& arrayDimensions) {
+bool CStarParser::advanceTypeSubscript(std::vector<ASTNode>& arrayDimensions,
+                                       bool* isRuntimeSizedArray) {
   bool arrayFlag = false;
+  if (isRuntimeSizedArray != nullptr) {
+    *isRuntimeSizedArray = false;
+  }
 
   if (is(TokenKind::LSQPAR)) {
     // [
     this->advance();
+
+    if (is(TokenKind::RSQPAR)) {
+      if (isRuntimeSizedArray != nullptr) {
+        *isRuntimeSizedArray = true;
+      }
+      this->advance();
+      return true;
+    }
 
     auto cond = is(SCALARI) || is(IDENT);
     if (!cond) {

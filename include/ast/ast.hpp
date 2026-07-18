@@ -22,6 +22,7 @@ enum ExprKind {
   RetExpr,
   FuncCallExpr,
   NewExpr,
+  SpanExpr,
   CastExpr,
   SymbolExpr,
   FixExpr,

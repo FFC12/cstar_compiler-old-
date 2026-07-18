@@ -20,6 +20,7 @@
 #include <ast/scalar_ast.hpp>
 #include <ast/struct_ast.hpp>
 #include <ast/symbol_ast.hpp>
+#include <ast/span_ast.hpp>
 #include <ast/trait_ast.hpp>
 #include <ast/type_ast.hpp>
 #include <ast/unary_op_ast.hpp>
@@ -315,7 +316,9 @@ class CStarParser {
   ASTNode initializer(bool isArrayInitializer = false);
   ASTNode advanceArrayInitializerElement();
   ASTNode advanceArrayInitializerList();
-  bool advanceTypeSubscript(std::vector<ASTNode>&);
+  bool advanceTypeSubscript(std::vector<ASTNode>&,
+                            bool* isRuntimeSizedArray = nullptr);
+  ASTNode advanceSpanExpression();
   ASTNode initializerList();
   size_t advancePointerType(bool isUniquePtr);
   TypeSpecifier typeSpecifierOf(const TokenInfo& tokenInfo);

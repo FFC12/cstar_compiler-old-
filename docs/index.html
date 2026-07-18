@@ -977,14 +977,51 @@ main() :: int32 {
   int32 local[2] = (4, 9);
   ret read_second(local);
 }</code></pre></div>
-    <p class="tr">Parametredeki dizi boyutu <strong>imzanın parçasıdır</strong>: farklı boyutlu dizi geçirmek diagnostic üretir. C'nin "dizi parametresi aslında pointer'dır" sessiz decay kuralı C*'ta yoktur. Ayrıca büyük local diziler stack taşmasına karşı derlemede reddedilir:</p>
-    <p class="en">The array size in a parameter is <strong>part of the signature</strong>: passing an array of a different size produces a diagnostic. C's silent "array parameters are really pointers" decay rule does not exist in C*. Large local arrays are also rejected at compile time to prevent stack overflow:</p>
+    <p class="tr">Parametredeki dizi boyutu <strong>imzanın parçasıdır</strong>: farklı boyutlu dizi geçirmek diagnostic üretir. <code>T[N]</code> parametre element kopyası yapmaz; ABI adres taşıyabilir, callee içindeki yazma caller array'ine iner. C'nin "dizi parametresi aslında pointer'dır" sessiz decay kuralı C*'ta yoktur: boyut semantic tipte kalır ve çağrı yerinde denetlenir. Ayrıca büyük local diziler stack taşmasına karşı derlemede reddedilir:</p>
+    <p class="en">The array size in a parameter is <strong>part of the signature</strong>: passing an array of a different size produces a diagnostic. A <code>T[N]</code> parameter does not copy elements; the ABI may carry an address, and writes in the callee reach the caller's array. C's silent "array parameters are really pointers" decay rule does not exist in C*: the size remains in the semantic type and is checked at the call site. Large local arrays are also rejected at compile time to prevent stack overflow:</p>
     <div class="code"><div class="code-bar"><span class="code-name">stack-guard.cstar</span><span class="grow"></span><span class="tag err">✗ diagnostic</span></div><pre><code class="lang-cstar">main() :: int32 {
   int64 big[200000] = (0);   // diagnostic: stack guard
   ret 0;
 }</code></pre></div>
     <p class="tr">Bu sınır, gelecekteki allocator destekli buffer modeliyle (§22.2) heap'e taşınabilir hale gelecektir; bugünün kuralı kesindir: <em>stack'i sessizce patlatan kod derlenmez</em>.</p>
     <p class="en">This boundary will become heap-movable with the future allocator-backed buffer model (§22.2); today's rule is firm: <em>code that silently blows the stack does not compile</em>.</p>
+
+    <h3><span class="h3-no">10.5</span><span class="tr">Span View: <code>T[]</code>, <code>span</code>, <code>unsafe_span</code> ve <code>copy</code></span><span class="en">Span Views: <code>T[]</code>, <code>span</code>, <code>unsafe_span</code>, and <code>copy</code></span></h3>
+    <p class="tr">Runtime boyutlu aralıklar pointer değildir. <code>T*</code> ve <code>T^</code> ownership/interop marker'ı olarak kalır; bir array aralığını fonksiyona vermek için <code>T[]</code> parametre ve açık span operatörü kullanılır.</p>
+    <p class="en">Runtime-sized ranges are not pointers. <code>T*</code> and <code>T^</code> remain ownership/interop markers; passing an array range to a function uses a <code>T[]</code> parameter and an explicit span operator.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">span-view.cstar</span><span class="grow"></span><span class="tag ok">✓ pass</span></div><pre><code class="lang-cstar">sum_view(int32[] values) :: int32 {
+  ret values[0] + values[1];
+}
+
+write_fixed(int32[4] values) :: void {
+  values[0] = 9;              // kopyasız: caller array değişir / no copy
+  ret;
+}
+
+main() :: int32 {
+  int32 data[4] = (1, 2, 3, 4);
+
+  int32 all = sum_view(span data);
+  int32 mid = sum_view(span data[1..3]);   // half-open [1, 3)
+
+  write_fixed(copy data);      // açık kopya; caller array değişmez / explicit copy
+  write_fixed(data);           // kopyasız fixed-array parametre / no-copy parameter
+
+  int32* ptr = ref data[0];
+  int32 raw = sum_view(unsafe_span(ptr, 4));
+
+  ret all + mid + raw;
+}</code></pre></div>
+    <ul>
+      <li class="tr"><code>span data</code> sabit boyutlu array'in tamamını <code>T[]</code> view'e çevirir.</li>
+      <li class="en"><code>span data</code> converts the whole fixed array into a <code>T[]</code> view.</li>
+      <li class="tr"><code>span data[begin..end]</code> half-open aralıktır; <code>:</code> çok boyutlu array notasyonu için ayrılmıştır.</li>
+      <li class="en"><code>span data[begin..end]</code> is half-open; <code>:</code> is reserved for multi-dimensional array notation.</li>
+      <li class="tr"><code>unsafe_span(ptr, len)</code> raw pointer + length interop yüzeyidir ve yalnız <code>T[]</code> beklenen bağlamda geçerlidir.</li>
+      <li class="en"><code>unsafe_span(ptr, len)</code> is the raw pointer + length interop surface and is valid only where <code>T[]</code> is expected.</li>
+      <li class="tr"><code>copy data</code> yalnız açık yazıldığında array kopyası üretir; normal argüman geçişi büyük buffer'ı gizlice kopyalamaz.</li>
+      <li class="en"><code>copy data</code> produces an array copy only when spelled explicitly; ordinary argument passing never hides a large buffer copy.</li>
+    </ul>
   </section>
   <!-- ============ 11 POINTER ============ -->
   <section class="ch" id="pointer">
@@ -2419,8 +2456,8 @@ main_task() async :: int32 {
 /* ---------- C* syntax highlighter (typed tokenizer, not regex soup) ---------- */
 var KW = new Set(("ret in as if elif else option loop default include involved from import export public private static "+
   "cast unsafe_cast sizeof typeof async await dynamic protocol state with struct trait macro allocator except throw defer is "+
-  "const constptr constref readonly nomove attribute prototype enum flags for break continue tagged scope_exit function").split(" "));
-var LIFE = new Set("ref deref move drop new shared constructor destructor operator self".split(" "));
+  "const constptr constref readonly nomove attribute prototype enum flags for break continue tagged scope_exit function span unsafe_span copy").split(" "));
+	var LIFE = new Set("ref deref move drop new shared constructor destructor operator self span unsafe_span copy".split(" "));
 var TYPES = new Set(("int8 int16 int32 int64 int uint8 uint16 uint32 uint64 uint128 uint isize usize "+
   "float float32 float64 char uchar bool void any vec2 vec3 vec4 expr stmt item type ident").split(" "));
 var LITS = new Set("nil true false".split(" "));

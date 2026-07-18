@@ -64,6 +64,7 @@ SymbolInfo Visitor::preVisit(UnaryOpAST &unaryOpAst) {
       case U_SIZEOF:
       case U_PREFIX:
       case U_POSTFIX:
+      case U_COPY:
         unaryOpAst.m_Node->acceptBefore(*this);
         break;
       case U_POSITIVE:

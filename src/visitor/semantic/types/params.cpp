@@ -35,12 +35,15 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
   symbolInfo.scopeLevel = m_ScopeLevel;
 
   symbolInfo.isSubscriptable = paramAst.m_IsSubscriptable;
+  symbolInfo.isRuntimeSizedArray = paramAst.m_IsRuntimeSizedArray;
   symbolInfo.isConstRef = paramAst.m_TypeQualifier == Q_CONSTREF;
   symbolInfo.isConstPtr = paramAst.m_TypeQualifier == Q_CONSTPTR;
   symbolInfo.isReadOnly = paramAst.m_TypeQualifier == Q_READONLY;
   symbolInfo.isConstVal = paramAst.m_TypeQualifier == Q_CONST;
-  symbolInfo.isCastable = paramAst.m_IsCastable;
-  symbolInfo.isNoMove = paramAst.m_IsNoMove;
+	  symbolInfo.isCastable = paramAst.m_IsCastable;
+	  symbolInfo.isNoMove = paramAst.m_IsNoMove;
+	  symbolInfo.requiresExplicitRefArgument =
+	      paramAst.m_RequiresExplicitRefArgument;
 
   if (typeInfo != nullptr) {
     symbolInfo.isRef = typeInfo->m_IsRef;
@@ -54,7 +57,7 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
       BuildQualifierLevels(paramAst.m_TypeQualifier, symbolInfo.indirectionLevel,
                            symbolInfo.isRef);
 
-  if (paramAst.m_IsSubscriptable) {
+  if (paramAst.m_IsSubscriptable && !paramAst.m_IsRuntimeSizedArray) {
     for (auto &dimensionNode : paramAst.m_ArrDim) {
       uint64_t dimension = 0;
       if (!TryGetNonNegativeIntegerLiteral(dimensionNode.get(), dimension)) {
@@ -116,6 +119,13 @@ SymbolInfo Visitor::preVisit(ParamAST &paramAst) {
       this->m_TypeErrorMessages.emplace_back(
           "'nomove' requires a by-value pointer parameter", symbolInfo,
           DiagnosticCode::SemanticOwnership);
+    }
+
+    if (symbolInfo.isRuntimeSizedArray && symbolInfo.isRef) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Runtime-sized array view `T[]` parameters are already view values; "
+          "do not combine them with '&'",
+          symbolInfo, DiagnosticCode::SemanticInvalidQualifier);
     }
 
     if (((symbolInfo.isConstPtr && !symbolInfo.isSubscriptable) &&

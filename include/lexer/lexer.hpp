@@ -146,6 +146,10 @@ class CStarLexer {
 
     while (isdigit(_c) || _c == '.') {
       if (_c == '.') {
+        if (m_Index < m_BufferView.size() && m_BufferView[m_Index] == '.') {
+          break;
+        }
+
         if (_is_float) {
           break;
         }

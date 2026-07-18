@@ -47,6 +47,30 @@ llvm::StructType *GetSharedPointerTy() {
   return llvm::StructType::get(ctx, {GetI8PtrTy(), GetI8PtrTy()});
 }
 
+llvm::StructType *GetSpanTy() {
+  auto &ctx = Visitor::Builder->getContext();
+  return llvm::StructType::get(ctx, {GetI8PtrTy(), Visitor::Builder->getInt64Ty()});
+}
+
+llvm::Value *CreateSpanValue(llvm::Value *data, llvm::Value *length) {
+  llvm::Value *span = llvm::UndefValue::get(GetSpanTy());
+  if (IsSharedPointerTy(data->getType())) {
+    data = ExtractSharedPointerData(data);
+  }
+  data = UnsafeCastValueToType(data, GetI8PtrTy(), false);
+  length = CastValueToType(length, Visitor::Builder->getInt64Ty(), false);
+  span = Visitor::Builder->CreateInsertValue(span, data, {0}, "span.data");
+  return Visitor::Builder->CreateInsertValue(span, length, {1}, "span.len");
+}
+
+llvm::Value *ExtractSpanData(llvm::Value *span) {
+  return Visitor::Builder->CreateExtractValue(span, {0}, "span.data");
+}
+
+llvm::Value *ExtractSpanLength(llvm::Value *span) {
+  return Visitor::Builder->CreateExtractValue(span, {1}, "span.len");
+}
+
 llvm::StructType *GetDynamicTraitObjectTy() {
   auto &ctx = Visitor::Builder->getContext();
   return llvm::StructType::get(ctx, {GetI8PtrTy(), GetI8PtrTy()});
@@ -340,6 +364,10 @@ llvm::Type *GetStructFieldLLVMType(const StructFieldInfo &field) {
 llvm::Type *GetSymbolLLVMType(const SymbolInfo &symbolInfo) {
   if (symbolInfo.isDynamicTraitObject) {
     return GetDynamicTraitObjectTy();
+  }
+
+  if (symbolInfo.isRuntimeSizedArray) {
+    return GetSpanTy();
   }
 
   return GetStorageType(symbolInfo.type, symbolInfo.indirectionLevel,

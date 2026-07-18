@@ -48,7 +48,9 @@ param_again:
     applyStateQualifiers(type, stateQualifiers);
 
     std::vector<ASTNode> arrayDimensions;
-    bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
+    bool runtimeSizedArray = false;
+    bool arrayFlag =
+        this->advanceTypeSubscript(arrayDimensions, &runtimeSizedArray);
 
     if (!isForwardDecl) {
       expected({TokenKind::IDENT, TokenKind::STATE});
@@ -67,19 +69,26 @@ param_again:
         std::make_unique<ParamAST>(std::move(symbol0), nullptr, std::move(type),
                                    std::move(arrayDimensions), arrayFlag, true,
                                    false, false, false, typeQualifier, semLoc,
-                                   isNoMove);
+                                   isNoMove, runtimeSizedArray);
     params.emplace_back(std::move(param));
-  } else if (isType(currentTokenInfo())) {  // cast allowed
-    auto type = this->advanceType();
-    applyStateQualifiers(type, stateQualifiers);
+	  } else if (isType(currentTokenInfo())) {  // cast allowed
+	    auto type = this->advanceType();
+	    applyStateQualifiers(type, stateQualifiers);
+	    bool requiresExplicitRefArgument = false;
+	    if (auto typeAst = dynamic_cast<TypeAST*>(type.get())) {
+	      requiresExplicitRefArgument = typeAst->isRef();
+	    }
 
-    std::vector<ASTNode> arrayDimensions;
-    bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
-    if (is(TokenKind::AND)) {
-      this->advance();
-      auto typeAst = dynamic_cast<TypeAST*>(type.get());
-      typeAst->setIsRef(true);
-    }
+	    std::vector<ASTNode> arrayDimensions;
+	    bool runtimeSizedArray = false;
+	    bool arrayFlag =
+	        this->advanceTypeSubscript(arrayDimensions, &runtimeSizedArray);
+	    if (is(TokenKind::AND)) {
+	      this->advance();
+	      auto typeAst = dynamic_cast<TypeAST*>(type.get());
+	      typeAst->setIsRef(true);
+	      requiresExplicitRefArgument = true;
+	    }
 
     if (!isForwardDecl) {
       // expected param name
@@ -97,11 +106,12 @@ param_again:
       symbol0 = std::make_unique<SymbolAST>(
           "__cstar_param" + std::to_string(params.size()), semLoc);
     }
-    auto param =
-        std::make_unique<ParamAST>(std::move(symbol0), nullptr, std::move(type),
-                                   std::move(arrayDimensions), arrayFlag, true,
-                                   false, false, true, typeQualifier, semLoc,
-                                   isNoMove);
+	    auto param =
+	        std::make_unique<ParamAST>(std::move(symbol0), nullptr, std::move(type),
+	                                   std::move(arrayDimensions), arrayFlag, true,
+	                                   false, false, true, typeQualifier, semLoc,
+	                                   isNoMove, runtimeSizedArray,
+	                                   requiresExplicitRefArgument);
     params.emplace_back(std::move(param));
   } else if (is(TokenKind::IDENT)) {
     bool outOfSize = false;
@@ -114,16 +124,23 @@ param_again:
     if (nextToken == TokenKind::STAR || nextToken == TokenKind::XOR ||
         nextToken == TokenKind::LSQPAR) {  // cast allowed
       // %100 defined type
-      auto type = this->advanceDefinedType();
-      applyStateQualifiers(type, stateQualifiers);
+	      auto type = this->advanceDefinedType();
+	      applyStateQualifiers(type, stateQualifiers);
+	      bool requiresExplicitRefArgument = false;
+	      if (auto typeAst = dynamic_cast<TypeAST*>(type.get())) {
+	        requiresExplicitRefArgument = typeAst->isRef();
+	      }
 
-      std::vector<ASTNode> arrayDimensions;
-      bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
-      if (is(TokenKind::AND)) {
-        this->advance();
-        auto typeAst = dynamic_cast<TypeAST*>(type.get());
-        typeAst->setIsRef(true);
-      }
+	      std::vector<ASTNode> arrayDimensions;
+	      bool runtimeSizedArray = false;
+	      bool arrayFlag =
+	          this->advanceTypeSubscript(arrayDimensions, &runtimeSizedArray);
+	      if (is(TokenKind::AND)) {
+	        this->advance();
+	        auto typeAst = dynamic_cast<TypeAST*>(type.get());
+	        typeAst->setIsRef(true);
+	        requiresExplicitRefArgument = true;
+	      }
 
       if (!isForwardDecl) {
         expected({TokenKind::IDENT, TokenKind::STATE});
@@ -140,10 +157,11 @@ param_again:
             "__cstar_param" + std::to_string(params.size()), semLoc);
       }
 
-      auto param = std::make_unique<ParamAST>(
-          std::move(symbol0), nullptr, std::move(type),
-          std::move(arrayDimensions), arrayFlag, true, false, false, false,
-          typeQualifier, semLoc, isNoMove);
+	      auto param = std::make_unique<ParamAST>(
+	          std::move(symbol0), nullptr, std::move(type),
+	          std::move(arrayDimensions), arrayFlag, true, false, false, false,
+	          typeQualifier, semLoc, isNoMove, runtimeSizedArray,
+	          requiresExplicitRefArgument);
       params.emplace_back(std::move(param));
     } else {
       // if the next token is primitive type...
@@ -156,16 +174,23 @@ param_again:
           symbol0 = this->advanceSymbol();
         }
 
-        auto type = this->advanceType();
-        applyStateQualifiers(type, stateQualifiers);
+	        auto type = this->advanceType();
+	        applyStateQualifiers(type, stateQualifiers);
+	        bool requiresExplicitRefArgument = false;
+	        if (auto typeAst = dynamic_cast<TypeAST*>(type.get())) {
+	          requiresExplicitRefArgument = typeAst->isRef();
+	        }
 
-        std::vector<ASTNode> arrayDimensions;
-        bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
-        if (is(TokenKind::AND)) {
-          this->advance();
-          auto typeAst = dynamic_cast<TypeAST*>(type.get());
-          typeAst->setIsRef(true);
-        }
+	        std::vector<ASTNode> arrayDimensions;
+	        bool runtimeSizedArray = false;
+	        bool arrayFlag =
+	            this->advanceTypeSubscript(arrayDimensions, &runtimeSizedArray);
+	        if (is(TokenKind::AND)) {
+	          this->advance();
+	          auto typeAst = dynamic_cast<TypeAST*>(type.get());
+	          typeAst->setIsRef(true);
+	          requiresExplicitRefArgument = true;
+	        }
 
         size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
         auto semLoc = SemanticLoc(beginLoc, endLoc, line);
@@ -174,10 +199,11 @@ param_again:
               "__cstar_param" + std::to_string(params.size()), semLoc);
         }
 
-        auto param = std::make_unique<ParamAST>(
-            std::move(symbol0), nullptr, std::move(type),
-            std::move(arrayDimensions), arrayFlag, false, false, false, true,
-            typeQualifier, semLoc, isNoMove);
+	        auto param = std::make_unique<ParamAST>(
+	            std::move(symbol0), nullptr, std::move(type),
+	            std::move(arrayDimensions), arrayFlag, false, false, false, true,
+	            typeQualifier, semLoc, isNoMove, runtimeSizedArray,
+	            requiresExplicitRefArgument);
         params.emplace_back(std::move(param));
       } else {
         auto prevNextTokenInfo = nextTokenInfo;
@@ -197,26 +223,37 @@ param_again:
 
           expected({TokenKind::IDENT, TokenKind::STATE});
           // get the defined type
-          auto type = std::move(this->advanceSymbol());
-          std::vector<ASTNode> arrayDimensions;
-          bool arrayFlag = this->advanceTypeSubscript(arrayDimensions);
-          if (is(TokenKind::AND)) {
-            this->advance();
-            auto typeAst = dynamic_cast<TypeAST*>(type.get());
-            typeAst->setIsRef(true);
-          }
+	          auto type = std::move(this->advanceSymbol());
+	          bool requiresExplicitRefArgument = false;
+	          std::vector<ASTNode> arrayDimensions;
+	          bool runtimeSizedArray = false;
+	          bool arrayFlag =
+	              this->advanceTypeSubscript(arrayDimensions, &runtimeSizedArray);
+	          if (is(TokenKind::AND)) {
+	            this->advance();
+	            auto typeAst = dynamic_cast<TypeAST*>(type.get());
+	            if (typeAst != nullptr) {
+	              typeAst->setIsRef(true);
+	            }
+	            requiresExplicitRefArgument = true;
+	          }
 
           size_t endLoc = currentTokenInfo().getTokenPositionInfo().end;
           auto semLoc = SemanticLoc(beginLoc, endLoc, line);
 
-          auto param = std::make_unique<ParamAST>(
-              std::move(symbol0), nullptr, std::move(type),
-              std::move(arrayDimensions), arrayFlag, false, false, true, false,
-              typeQualifier, semLoc, isNoMove);
+	          auto param = std::make_unique<ParamAST>(
+	              std::move(symbol0), nullptr, std::move(type),
+	              std::move(arrayDimensions), arrayFlag, false, false, true, false,
+	              typeQualifier, semLoc, isNoMove, runtimeSizedArray,
+	              requiresExplicitRefArgument);
           params.emplace_back(std::move(param));
         } else {
-          auto type = this->advanceDefinedType();
-          applyStateQualifiers(type, stateQualifiers);
+	          auto type = this->advanceDefinedType();
+	          applyStateQualifiers(type, stateQualifiers);
+	          bool requiresExplicitRefArgument = false;
+	          if (auto typeAst = dynamic_cast<TypeAST*>(type.get())) {
+	            requiresExplicitRefArgument = typeAst->isRef();
+	          }
 
           if (!isForwardDecl) {
             expected({TokenKind::IDENT, TokenKind::STATE});
@@ -232,10 +269,11 @@ param_again:
                 "__cstar_param" + std::to_string(params.size()), semLoc);
           }
 
-          auto param = std::make_unique<ParamAST>(
-              std::move(symbol0), nullptr, std::move(type),
-              std::vector<ASTNode>(), false, false, false, false, false,
-              typeQualifier, semLoc, isNoMove);
+	          auto param = std::make_unique<ParamAST>(
+	              std::move(symbol0), nullptr, std::move(type),
+	              std::vector<ASTNode>(), false, false, false, false, false,
+	              typeQualifier, semLoc, isNoMove, false,
+	              requiresExplicitRefArgument);
           params.emplace_back(std::move(param));
         }
       }

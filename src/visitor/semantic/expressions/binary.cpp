@@ -649,6 +649,25 @@ SymbolInfo Visitor::preVisit(BinaryOpAST &binaryOpAst) {
                                : getIndexesOfArray(*binaryOpAst.m_RHS.get());
 
         if (symbolValidation(symbolName, rhsSymbol, matchedSymbol)) {
+          if (matchedSymbol.isRuntimeSizedArray) {
+            if (indexCount != 1) {
+              this->m_TypeErrorMessages.emplace_back(
+                  "Runtime-sized array view `T[]` expects exactly one index",
+                  rhsSymbol);
+            }
+
+            auto elementInfo = matchedSymbol;
+            elementInfo.begin = binaryOpAst.m_SemLoc.begin;
+            elementInfo.end = binaryOpAst.m_SemLoc.end;
+            elementInfo.line = binaryOpAst.m_SemLoc.line;
+            elementInfo.isSubscriptable = false;
+            elementInfo.isRuntimeSizedArray = false;
+            elementInfo.arrayDimensions.clear();
+            m_LastArrayIndexCount = 0;
+            m_LastSubscriptable = false;
+            return elementInfo;
+          }
+
           if (matchedSymbol.isSubscriptable && indexCount <= arraySize) {
             m_LastArrayIndexCount = indexCount;
             m_LastSubscriptable = true;

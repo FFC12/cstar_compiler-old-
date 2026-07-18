@@ -110,6 +110,8 @@ struct SymbolInfo {
   bool isImported = false;
   bool isNullable = false;
   bool isDynamicTraitObject = false;
+  bool requiresExplicitRefArgument = false;
+  bool isRuntimeSizedArray = false;
 
   std::string value;
   std::vector<size_t> arrayDimensions;

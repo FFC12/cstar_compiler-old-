@@ -330,7 +330,7 @@ main() :: int32 {
     glClearColor(0.055, 0.066, 0.090, 1.0);
     glClear(gl_color_buffer_bit());
 
-    render.draw_game(renderer, snakeX, snakeY, game.food_x, game.food_y, read_score(view), view.length(), view.alive());
+    render.draw_game(ref renderer, span snakeX, span snakeY, game.food_x, game.food_y, read_score(view), view.length(), view.alive());
 
     glfwSwapBuffers(window);
     glfwPollEvents();

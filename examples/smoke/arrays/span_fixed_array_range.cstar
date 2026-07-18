@@ -1,0 +1,8 @@
+sum_span(int32[] values) :: int32 {
+  ret values[0] + values[1] + values[2];
+}
+
+main() :: int32 {
+  int32 data[8] = (1, 2, 3, 4, 5, 6, 7, 8);
+  ret sum_span(span data[2..5]);
+}

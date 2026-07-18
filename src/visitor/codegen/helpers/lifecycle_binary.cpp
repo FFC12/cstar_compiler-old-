@@ -617,6 +617,31 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
       }
 
       auto symbolType = GetPointeeType(symbol);
+      if (symbolInfo.isRuntimeSizedArray) {
+        auto *spanValue = Builder->CreateLoad(GetSpanTy(), symbol,
+                                              symbolName + ".span");
+        auto *data = ExtractSpanData(spanValue);
+        auto *elementType = GetStorageType(symbolInfo.type,
+                                           symbolInfo.indirectionLevel,
+                                           symbolInfo.isUnique,
+                                           false,
+                                           symbolInfo.definedTypeName);
+        auto *typedData =
+            Builder->CreatePointerCast(data, llvm::PointerType::get(
+                                                Builder->getContext(), 0));
+        auto *linearIndex = indexes.empty()
+                                ? llvm::ConstantInt::get(Builder->getInt64Ty(), 0)
+                                : CastArrayIndex(indexes.front());
+        auto *gep = Builder->CreateInBoundsGEP(elementType, typedData,
+                                               linearIndex,
+                                               symbolName + ".span.element");
+        value = Builder->CreateLoad(elementType, gep);
+        m_LastType = elementType;
+        m_LastSigned = IsSigned(GetEffectiveStorageType(symbolInfo.type,
+                                                        symbolInfo.definedTypeName));
+        break;
+      }
+
       if (!symbolType->isArrayTy() &&
           binaryOpAst.m_LHS->m_ExprKind == ExprKind::SymbolExpr) {
         auto *arraySymbol = static_cast<SymbolAST *>(binaryOpAst.m_LHS.get());

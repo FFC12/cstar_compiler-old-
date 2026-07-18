@@ -63,6 +63,10 @@ const FunctionSignature* FindDynamicTraitMethodSignature(
 llvm::Type* GetType(TypeSpecifier typeSpecifier, size_t indirectLevel,
                     bool isRef = false);
 llvm::StructType* GetSharedPointerTy();
+llvm::StructType* GetSpanTy();
+llvm::Value* CreateSpanValue(llvm::Value* data, llvm::Value* length);
+llvm::Value* ExtractSpanData(llvm::Value* span);
+llvm::Value* ExtractSpanLength(llvm::Value* span);
 std::string DefinedTypeNameFromTypeAst(TypeAST* typeAst);
 std::string DefinedTypeNameFromVarAst(VarAST& varAst);
 std::string ValueOperatorMethodName(BinOpKind kind);

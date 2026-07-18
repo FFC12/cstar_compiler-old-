@@ -2161,18 +2161,19 @@ Bulunan problemler:
   - Bu “declaration register after initializer” kuralı `examples/smoke/control_flow/if_local_decl_ref_previous.cstar` ile doğrulanır.
 - Büyük fixed array codegen/performance darboğazı:
   - `float32 vertices[9000] = (0.0);` ve büyük array'i çok sayıda helper fonksiyona parametre geçme denemeleri compiler'ı çok yavaşlatıyor veya sessiz uzun codegen sürecine sokuyor.
-  - Tek eleman initializer büyük array için store store açılmamalı; LLVM `zeroinitializer`, `memset` veya aggregate init kullanılmalı.
-  - [x] Array parametre passing kuralı net: `T[N] name` fonksiyon parametresinde C/C++ array parameter gibi kopyasız, caller-owned, size'lı writable view'dur. ABI pointer kullanabilir ama semantic type `T[N]` olarak kalır ve call-site dimension check korunur.
-  - Kopya istendiğinde ileride explicit `copy expr` operatorü kullanılmalıdır; implicit büyük array copy yoktur.
-  - Performance regression: 6k/9k float local buffer + helper call workload'u `tests/performance` altına eklenmeli.
-- Array ergonomisi:
-  - Struct field olarak `int32 values[3];` şu an parse edilmiyor. Snake gibi gerçek state modellerinde array field gerekir.
-  - Kalan iş: struct field array grammar, layout, constructor zero-init, field access, method access, param/return kısıtları.
-  - Runtime aralık/view için `span` type değil operator olmalıdır:
-    - `span data` tüm fixed array'i `T[]` runtime-sized view'e çevirir.
-    - `span data[4..32]` half-open aralık view üretir; `:` multidim syntax'ına ayrılmış kalır.
-    - `unsafe_span(ptr, len)` raw pointer + length'ten view üretir ve unsafe interop yüzeyidir.
-    - `T[]` parametre ABI'da `{ptr, len}` taşıyan size'lı view'dur; `T*`/`T^` ownership pointer semantiğiyle karışmaz.
+	  - Tek eleman initializer büyük array için store store açılmamalı; LLVM `zeroinitializer`, `memset` veya aggregate init kullanılmalı.
+	  - [x] Array parametre passing kuralı net: `T[N] name` fonksiyon parametresinde C/C++ array parameter gibi kopyasız, caller-owned, size'lı writable view'dur. ABI pointer kullanabilir ama semantic type `T[N]` olarak kalır ve call-site dimension check korunur.
+	  - [x] Kopya istendiğinde explicit `copy expr` operatorü kullanılır; implicit büyük array copy yoktur. `examples/smoke/arrays/array_copy_argument.cstar` caller array'inin değişmediğini doğrular.
+	  - Performance regression: 6k/9k float local buffer + helper call workload'u `tests/performance` altına eklenmeli.
+	- Array ergonomisi:
+	  - Struct field olarak `int32 values[3];` şu an parse edilmiyor. Snake gibi gerçek state modellerinde array field gerekir.
+	  - Kalan iş: struct field array grammar, layout, constructor zero-init, field access, method access, param/return kısıtları.
+	  - [x] Runtime aralık/view için `span` type değil operator olarak çalışır:
+	    - `span data` tüm fixed array'i `T[]` runtime-sized view'e çevirir.
+	    - `span data[4..32]` half-open aralık view üretir; `:` multidim syntax'ına ayrılmış kalır.
+	    - `unsafe_span(ptr, len)` raw pointer + length'ten view üretir ve unsafe interop yüzeyidir.
+	    - `T[]` parametre ABI'da `{ptr, len}` taşıyan size'lı view'dur; `T*`/`T^` ownership pointer semantiğiyle karışmaz.
+	    - Diagnostic coverage: plain array'in `T[]` parametreye örtük geçişi, out-of-bounds span range ve `T[]` local storage deklarasyonu reddedilir.
 - Boolean expression precedence/cascade diagnostic:
   - `ret glfwGetKey(...) == glfw_press() || ...` biçiminde bool dönüşler “int32 returns but bool expected” cascade hatalarına düşebiliyor.
   - Beklenen davranış: comparison önce, logical `||` sonra bağlanmalı; diagnostic gerçek type mismatch varsa tek ve yerinde olmalı.

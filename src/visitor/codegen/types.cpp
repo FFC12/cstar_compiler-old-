@@ -53,6 +53,10 @@ ValuePtr Visitor::visit(UnaryOpAST &unaryOpAst) {
     return unaryOpAst.m_Node->accept(*this);
   }
 
+  if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_COPY) {
+    return unaryOpAst.m_Node->accept(*this);
+  }
+
   if (unaryOpAst.m_UnaryOpKind == UnaryOpKind::U_BINNEG) {
     value = unaryOpAst.m_Node->accept(*this);
     if (value == nullptr) {

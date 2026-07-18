@@ -87,6 +87,7 @@ class EnumAST;
 class ParamAST;
 class RetAST;
 class ScalarOrLiteralAST;
+class SpanAST;
 class SymbolAST;
 class StructAST;
 class TraitAST;
@@ -174,6 +175,7 @@ class Visitor {
   std::map<std::string, llvm::AllocaInst*> m_LocalVarsOnScope;
   std::map<std::string, llvm::Type*> m_ReferenceParamValueTypes;
   std::map<std::string, llvm::Type*> m_ArrayParamValueTypes;
+  std::map<std::string, llvm::Type*> m_SpanParamElementTypes;
   std::map<std::string, llvm::GlobalVariable*> m_GlobalVars;
   std::map<std::string, llvm::Value*> m_SharedPointerRefCounts;
   std::vector<SymbolInfo> m_ScopeDestructors;
@@ -202,9 +204,11 @@ class Visitor {
   struct FunctionParamLayout {
     std::vector<llvm::Type*> irTypes;
     std::vector<llvm::Type*> valueTypes;
+    std::vector<llvm::Type*> elementTypes;
     std::vector<std::string> names;
     std::vector<bool> isReference;
     std::vector<bool> isArray;
+    std::vector<bool> isSpan;
 
     bool hasParams() const { return !irTypes.empty(); }
   };
@@ -293,6 +297,7 @@ class Visitor {
   ValuePtr visit(LoopStmtAST& loopStmtAst);
   ValuePtr visit(OptionStmtAST& optionStmtAst);
   ValuePtr visit(NewAST& newAst);
+  ValuePtr visit(SpanAST& spanAst);
   ValuePtr visit(BreakStmtAST& breakStmtAst);
   ValuePtr visit(ContinueStmtAST& continueStmtAst);
   ValuePtr visit(DropStmtAST& dropStmtAst);
@@ -324,6 +329,7 @@ class Visitor {
   SymbolInfo preVisit(LoopStmtAST& loopStmtAst);
   SymbolInfo preVisit(OptionStmtAST& optionStmtAst);
   SymbolInfo preVisit(NewAST& newAst);
+  SymbolInfo preVisit(SpanAST& spanAst);
   SymbolInfo preVisit(BreakStmtAST& breakStmtAst);
   SymbolInfo preVisit(ContinueStmtAST& continueStmtAst);
   SymbolInfo preVisit(DropStmtAST& dropStmtAst);

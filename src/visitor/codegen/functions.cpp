@@ -49,6 +49,7 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
     m_LocalVarsOnScope.clear();
     m_ReferenceParamValueTypes.clear();
     m_ArrayParamValueTypes.clear();
+    m_SpanParamElementTypes.clear();
     m_ScopeDestructors.clear();
     m_ScopeSharedPointerReleases.clear();
     m_CodegenDroppedSymbols.clear();
@@ -93,6 +94,9 @@ ValuePtr Visitor::visit(FuncAST &funcAst) {
         }
         if (paramLayout.isArray[paramNo]) {
           m_ArrayParamValueTypes[paramName] = valueType;
+        }
+        if (paramLayout.isSpan[paramNo]) {
+          m_SpanParamElementTypes[paramName] = paramLayout.elementTypes[paramNo];
         }
         m_LocalVarsOnScope[paramName] = llvm::dyn_cast<llvm::AllocaInst>(
             CreateAlloca(paramName, paramType));
@@ -259,6 +263,31 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     return value;
   }
 
+  if (funcName == "unsafe_span") {
+    if (argNodes.size() != 2) {
+      assert(false && "Builtin 'unsafe_span' expects pointer and length.");
+    }
+
+    llvm::Type *previousType = m_LastType;
+    bool previousSigned = m_LastSigned;
+
+    m_LastType = nullptr;
+    m_LastSigned = false;
+    auto *ptr = argNodes[0]->accept(*this);
+
+    m_LastType = Builder->getInt64Ty();
+    m_LastSigned = false;
+    auto *length = argNodes[1]->accept(*this);
+    length = CastValueToType(length, Builder->getInt64Ty(), false);
+
+    m_LastType = previousType;
+    m_LastSigned = previousSigned;
+    auto *span = CreateSpanValue(ptr, length);
+    m_LastType = GetSpanTy();
+    m_LastSigned = false;
+    return span;
+  }
+
   std::string dynamicTraitName;
   std::string dynamicMethodName;
   if (ParseDynamicTraitDispatchName(funcName, dynamicTraitName,
@@ -379,13 +408,42 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
     const bool expectsArray =
         signatureIt != FunctionTable.end() &&
         i < signatureIt->second.params.size() &&
-        signatureIt->second.params[i].isSubscriptable;
+        signatureIt->second.params[i].isSubscriptable &&
+        !signatureIt->second.params[i].isRuntimeSizedArray;
+    const bool expectsSpan =
+        signatureIt != FunctionTable.end() &&
+        i < signatureIt->second.params.size() &&
+        signatureIt->second.params[i].isRuntimeSizedArray;
+    if (expectsSpan) {
+      m_LastType = paramType;
+      m_LastSigned = false;
+      args.push_back(argNodes[i]->accept(*this));
+      continue;
+    }
+
     if (expectsArray) {
-      if (argNodes[i]->m_ExprKind != ExprKind::SymbolExpr) {
+      auto copySource = [](IAST *node) -> SymbolAST * {
+        if (node == nullptr || node->m_ExprKind != ExprKind::UnaryOp) {
+          return nullptr;
+        }
+        auto *unary = static_cast<UnaryOpAST *>(node);
+        if (unary->m_UnaryOpKind != U_COPY ||
+            unary->m_Node->m_ExprKind != ExprKind::SymbolExpr) {
+          return nullptr;
+        }
+        return static_cast<SymbolAST *>(unary->m_Node.get());
+      };
+
+      auto *argSymbol = copySource(argNodes[i]);
+      const bool explicitCopy = argSymbol != nullptr;
+      if (argSymbol == nullptr && argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
+        argSymbol = static_cast<SymbolAST *>(argNodes[i]);
+      }
+
+      if (argSymbol == nullptr) {
         assert(false && "Array parameter arguments must be symbols.");
       }
 
-      auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
       auto *storage = FindStorage(m_LocalVarsOnScope, m_GlobalVars,
                                   argSymbol->m_SymbolName);
       if (storage == nullptr) {
@@ -396,6 +454,28 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
         auto *slotType = GetPointeeType(storage);
         storage = CreateLoad(storage, slotType,
                              argSymbol->m_SymbolName + ".array.arg");
+      }
+
+      if (explicitCopy) {
+        auto *arrayType = GetPointeeType(storage);
+        if (!arrayType->isArrayTy()) {
+          auto sourceArrayType =
+              m_ArrayParamValueTypes.find(argSymbol->m_SymbolName);
+          if (sourceArrayType != m_ArrayParamValueTypes.end()) {
+            arrayType = sourceArrayType->second;
+          }
+        }
+        auto *copyStorage = llvm::dyn_cast<llvm::AllocaInst>(
+            CreateAlloca(argSymbol->m_SymbolName + ".copy", arrayType));
+        auto copySize = Module->getDataLayout().getTypeAllocSize(arrayType);
+        Builder->CreateMemCpy(
+            Builder->CreateBitCast(copyStorage, GetI8PtrTy()),
+            copyStorage->getAlign(),
+            Builder->CreateBitCast(storage, GetI8PtrTy()),
+            llvm::MaybeAlign(
+                Module->getDataLayout().getPrefTypeAlign(arrayType).value()),
+            copySize);
+        storage = copyStorage;
       }
 
       args.push_back(storage);

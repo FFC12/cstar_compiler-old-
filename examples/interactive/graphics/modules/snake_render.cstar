@@ -86,47 +86,47 @@ public draw_cell(SnakeRenderer& renderer, int32 col, int32 row, float32 r, float
   int32 x = snake.board_left() + (col * snake.cell_size()) + gap;
   int32 y = snake.board_top() + (row * snake.cell_size()) + gap;
   int32 size = snake.cell_size() - (gap * 2);
-  draw_rect_px(renderer, x, y, size, size, r, g, b);
+  draw_rect_px(ref renderer, x, y, size, size, r, g, b);
 }
 
 public draw_grid(SnakeRenderer& renderer) :: void {
   int32 col = 0;
   loop (col <= snake.board_cols()) {
     int32 x = snake.board_left() + (col * snake.cell_size());
-    draw_rect_px(renderer, x, snake.board_top(), 1, snake.board_height_px(), 0.115, 0.135, 0.165);
+    draw_rect_px(ref renderer, x, snake.board_top(), 1, snake.board_height_px(), 0.115, 0.135, 0.165);
     col += 1;
   }
 
   int32 row = 0;
   loop (row <= snake.board_rows()) {
     int32 y = snake.board_top() + (row * snake.cell_size());
-    draw_rect_px(renderer, snake.board_left(), y, snake.board_width_px(), 1, 0.115, 0.135, 0.165);
+    draw_rect_px(ref renderer, snake.board_left(), y, snake.board_width_px(), 1, 0.115, 0.135, 0.165);
     row += 1;
   }
 }
 
 public draw_food(SnakeRenderer& renderer, int32 foodX, int32 foodY) :: void {
-  draw_cell(renderer, foodX, foodY, 0.980, 0.340, 0.410);
+  draw_cell(ref renderer, foodX, foodY, 0.980, 0.340, 0.410);
   int32 inset = 7;
   int32 x = snake.board_left() + (foodX * snake.cell_size()) + inset;
   int32 y = snake.board_top() + (foodY * snake.cell_size()) + inset;
   int32 size = snake.cell_size() - (inset * 2);
-  draw_rect_px(renderer, x, y, size, size, 1.000, 0.725, 0.720);
+  draw_rect_px(ref renderer, x, y, size, size, 1.000, 0.725, 0.720);
 }
 
-public draw_snake(SnakeRenderer& renderer, int32[144] xs, int32[144] ys, int32 length) :: void {
+public draw_snake(SnakeRenderer& renderer, int32[] xs, int32[] ys, int32 length) :: void {
   int32 index = length - 1;
   loop (index >= 0) {
     if (index == 0) {
-      draw_cell(renderer, xs[index], ys[index], 0.545, 0.925, 0.705);
+      draw_cell(ref renderer, xs[index], ys[index], 0.545, 0.925, 0.705);
     } else {
       int32 shade = index % 3;
       if (shade == 0) {
-        draw_cell(renderer, xs[index], ys[index], 0.245, 0.760, 0.555);
+        draw_cell(ref renderer, xs[index], ys[index], 0.245, 0.760, 0.555);
       } elif (shade == 1) {
-        draw_cell(renderer, xs[index], ys[index], 0.305, 0.825, 0.620);
+        draw_cell(ref renderer, xs[index], ys[index], 0.305, 0.825, 0.620);
       } else {
-        draw_cell(renderer, xs[index], ys[index], 0.195, 0.675, 0.515);
+        draw_cell(ref renderer, xs[index], ys[index], 0.195, 0.675, 0.515);
       }
     }
     index -= 1;
@@ -139,11 +139,11 @@ public draw_score_meter(SnakeRenderer& renderer, int32 score, int32 length) :: v
     capped = 24;
   }
 
-  draw_rect_px(renderer, snake.board_left(), 44, snake.board_width_px(), 34, 0.090, 0.108, 0.138);
+  draw_rect_px(ref renderer, snake.board_left(), 44, snake.board_width_px(), 34, 0.090, 0.108, 0.138);
   int32 index = 0;
   loop (index < capped) {
     int32 x = snake.board_left() + 10 + (index * 26);
-    draw_rect_px(renderer, x, 53, 18, 16, 0.925, 0.735, 0.360);
+    draw_rect_px(ref renderer, x, 53, 18, 16, 0.925, 0.735, 0.360);
     index += 1;
   }
 
@@ -151,21 +151,21 @@ public draw_score_meter(SnakeRenderer& renderer, int32 score, int32 length) :: v
   if (lengthWidth > snake.board_width_px()) {
     lengthWidth = snake.board_width_px();
   }
-  draw_rect_px(renderer, snake.board_left(), snake.board_top() + snake.board_height_px() + 18, lengthWidth, 10, 0.545, 0.925, 0.705);
+  draw_rect_px(ref renderer, snake.board_left(), snake.board_top() + snake.board_height_px() + 18, lengthWidth, 10, 0.545, 0.925, 0.705);
 }
 
-public draw_game(SnakeRenderer& renderer, int32[144] xs, int32[144] ys, int32 foodX, int32 foodY, int32 score, int32 length, bool alive) :: void {
-  draw_rect_px(renderer, 0, 0, snake.screen_width(), snake.screen_height(), 0.055, 0.066, 0.090);
-  draw_rect_px(renderer, snake.board_left() - 12, snake.board_top() - 12, snake.board_width_px() + 24, snake.board_height_px() + 24, 0.120, 0.145, 0.180);
-  draw_rect_px(renderer, snake.board_left(), snake.board_top(), snake.board_width_px(), snake.board_height_px(), 0.075, 0.090, 0.115);
+public draw_game(SnakeRenderer& renderer, int32[] xs, int32[] ys, int32 foodX, int32 foodY, int32 score, int32 length, bool alive) :: void {
+  draw_rect_px(ref renderer, 0, 0, snake.screen_width(), snake.screen_height(), 0.055, 0.066, 0.090);
+  draw_rect_px(ref renderer, snake.board_left() - 12, snake.board_top() - 12, snake.board_width_px() + 24, snake.board_height_px() + 24, 0.120, 0.145, 0.180);
+  draw_rect_px(ref renderer, snake.board_left(), snake.board_top(), snake.board_width_px(), snake.board_height_px(), 0.075, 0.090, 0.115);
 
-  draw_grid(renderer);
-  draw_food(renderer, foodX, foodY);
-  draw_snake(renderer, xs, ys, length);
-  draw_score_meter(renderer, score, length);
+  draw_grid(ref renderer);
+  draw_food(ref renderer, foodX, foodY);
+  draw_snake(ref renderer, xs, ys, length);
+  draw_score_meter(ref renderer, score, length);
 
   if (!alive) {
-    draw_rect_px(renderer, snake.board_left() + 126, snake.board_top() + 168, 420, 168, 0.620, 0.140, 0.185);
-    draw_rect_px(renderer, snake.board_left() + 154, snake.board_top() + 196, 364, 112, 0.105, 0.045, 0.060);
+    draw_rect_px(ref renderer, snake.board_left() + 126, snake.board_top() + 168, 420, 168, 0.620, 0.140, 0.185);
+    draw_rect_px(ref renderer, snake.board_left() + 154, snake.board_top() + 196, 364, 112, 0.105, 0.045, 0.060);
   }
 }

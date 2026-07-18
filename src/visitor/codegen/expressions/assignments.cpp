@@ -136,6 +136,34 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
   bool previousVarDecl = m_LastVarDecl;
 
   if (assignmentAst.m_Subscriptable) {
+    if (symbolInfo.isRuntimeSizedArray) {
+      auto *spanValue = Builder->CreateLoad(GetSpanTy(), target.address,
+                                            targetName + ".span");
+      auto *data = ExtractSpanData(spanValue);
+      auto *elementType = GetStorageType(symbolInfo.type,
+                                         symbolInfo.indirectionLevel,
+                                         symbolInfo.isUnique,
+                                         false,
+                                         symbolInfo.definedTypeName);
+
+      m_LastType = Builder->getInt64Ty();
+      m_LastSigned = true;
+      m_LastVarDecl = false;
+
+      auto *index = assignmentAst.m_SubscriptIndexes.empty()
+                        ? llvm::ConstantInt::get(Builder->getInt64Ty(), 0)
+                        : assignmentAst.m_SubscriptIndexes.front()->accept(*this);
+      index = CastArrayIndex(index);
+
+      auto *typedData =
+          Builder->CreatePointerCast(data, llvm::PointerType::get(
+                                              Builder->getContext(), 0));
+      target.address = Builder->CreateInBoundsGEP(
+          elementType, typedData, index, targetName + ".span.element");
+      target.valueType = elementType;
+      goto subscript_target_ready;
+    }
+
     llvm::Type *arrayType = GetPointeeType(target.address);
     auto arrayParamType = m_ArrayParamValueTypes.find(targetName);
     if (arrayParamType != m_ArrayParamValueTypes.end()) {
@@ -168,6 +196,7 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
     target.valueType = arrayType->getArrayElementType();
   }
 
+subscript_target_ready:
   m_LastType = target.valueType;
   m_LastSigned = IsSigned(symbolInfo.type);
   m_LastVarDecl = false;

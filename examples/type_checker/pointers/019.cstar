@@ -1,4 +1,6 @@
 // expected: diagnostic
+// expected-code: CST2001
+
 read_ref(int32& x) :: int32 {
     ret x;
 }

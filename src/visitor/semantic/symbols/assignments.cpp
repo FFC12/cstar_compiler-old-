@@ -191,7 +191,13 @@ SymbolInfo Visitor::preVisit(AssignmentAST &assignmentAst) {
         }
 
         if (assignmentAst.m_Subscriptable) {
-          if (assignmentAst.m_SubscriptIndexes.size() !=
+          if (matchedSymbol.isRuntimeSizedArray) {
+            if (assignmentAst.m_SubscriptIndexes.size() != 1) {
+              m_TypeErrorMessages.emplace_back(
+                  "Runtime-sized array view `T[]` expects exactly one index",
+                  symbolInfo);
+            }
+          } else if (assignmentAst.m_SubscriptIndexes.size() !=
               matchedSymbol.arrayDimensions.size()) {
             m_TypeErrorMessages.emplace_back(
                 "Array type with index(es) is not assignable", symbolInfo);

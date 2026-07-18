@@ -102,6 +102,35 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       continue;
     }
 
+    if (is(TokenKind::IDENT) && currentTokenStr() == "copy") {
+      auto begin = currentTokenInfo().getTokenPositionInfo().begin;
+      auto line = currentTokenInfo().getTokenPositionInfo().line;
+      this->advance();
+      while (is(TokenKind::COMMENT) || is(TokenKind::LINEFEED)) {
+        this->advance();
+      }
+      if (!is(TokenKind::IDENT) && !is(TokenKind::STATE) &&
+          !is(TokenKind::SELF)) {
+        ParserError("`copy` expects a value operand", currentTokenInfo());
+      }
+      auto operand = this->advanceSymbol();
+      auto end = prevTokenInfo().getTokenPositionInfo().end;
+      auto semLoc = SemanticLoc(begin, end, line);
+      auto node = std::make_unique<UnaryOpAST>(
+          std::move(operand), UnaryOpKind::U_COPY, UnaryNotationSign::S_POS,
+          semLoc);
+      exprBucket.push_back(std::move(node));
+      i += 1;
+      continue;
+    }
+
+    if (is(TokenKind::IDENT) && currentTokenStr() == "span") {
+      auto node = advanceSpanExpression();
+      exprBucket.push_back(std::move(node));
+      i += 1;
+      continue;
+    }
+
     if (is(TokenKind::NEW) || is(TokenKind::SHARED)) {
       auto node = advanceNewExpression(is(TokenKind::SHARED));
       exprBucket.push_back(std::move(node));
@@ -153,7 +182,8 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
     if (is(TokenKind::SEMICOLON) || is(TokenKind::RPAREN) ||
         (is(TokenKind::COMMA) && !isSubExpr) || is(TokenKind::RSQPAR) ||
         (is(TokenKind::COMMA) && isSubExpr && opFor == 1) ||
-        is(TokenKind::COLON) || (is(TokenKind::GT) && typeOpFlag) ||
+        is(TokenKind::COLON) || (is(TokenKind::RANGE) && isSubExpr && opFor == 4) ||
+        (is(TokenKind::GT) && typeOpFlag) ||
         is(TokenKind::_EOF) || is(TokenKind::LINEFEED)) {
     jump_ternary:
       // well we're out of token and not consumed semicolon

@@ -1,0 +1,7 @@
+// expected: diagnostic
+// expected-code: CST2101
+
+main() :: int32 {
+  int32 values[];
+  ret 0;
+}

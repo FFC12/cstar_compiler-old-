@@ -142,6 +142,14 @@ SymbolInfo Visitor::preVisit(VarAST &varAst) {
   }
 
   if (symbolInfo.isSubscriptable) {
+    if (varAst.m_ArrDim.empty()) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Runtime-sized array view `T[]` is valid for parameters only; use a "
+          "fixed array `T[N]` for storage or pass `span value` to a `T[]` "
+          "parameter",
+          symbolInfo, DiagnosticCode::SemanticInvalidQualifier);
+    }
+
     for (auto &v : varAst.m_ArrDim) {
       uint64_t dimension = 0;
       if (!TryGetNonNegativeIntegerLiteral(v.get(), dimension)) {

@@ -441,9 +441,11 @@ Visitor::FunctionParamLayout Visitor::buildFunctionParamLayout(FuncAST &funcAst,
   FunctionParamLayout layout;
   layout.irTypes.reserve(funcAst.m_Params.size());
   layout.valueTypes.reserve(funcAst.m_Params.size());
+  layout.elementTypes.reserve(funcAst.m_Params.size());
   layout.names.reserve(funcAst.m_Params.size());
   layout.isReference.reserve(funcAst.m_Params.size());
   layout.isArray.reserve(funcAst.m_Params.size());
+  layout.isSpan.reserve(funcAst.m_Params.size());
 
   for (auto &param : funcAst.m_Params) {
     auto *paramAst = static_cast<ParamAST *>(param.get());
@@ -468,16 +470,24 @@ Visitor::FunctionParamLayout Visitor::buildFunctionParamLayout(FuncAST &funcAst,
             ? llvm::PointerType::get(Visitor::Builder->getContext(), 0)
             : valueType;
 
-    if (paramAst->m_IsSubscriptable) {
+    auto *elementType = valueType;
+
+    if (paramAst->m_IsRuntimeSizedArray) {
+      valueType = GetSpanTy();
+      irType = valueType;
+    } else if (paramAst->m_IsSubscriptable) {
       valueType = GetArrayType(valueType, paramAst->m_ArrDim);
       irType = llvm::PointerType::get(Visitor::Builder->getContext(), 0);
     }
 
     layout.valueTypes.push_back(valueType);
+    layout.elementTypes.push_back(elementType);
     layout.irTypes.push_back(irType);
     layout.isReference.push_back(typeAst->m_IsRef &&
                                  !typeAst->m_IsDynamicTraitObject);
-    layout.isArray.push_back(paramAst->m_IsSubscriptable);
+    layout.isArray.push_back(paramAst->m_IsSubscriptable &&
+                             !paramAst->m_IsRuntimeSizedArray);
+    layout.isSpan.push_back(paramAst->m_IsRuntimeSizedArray);
 
     if (paramAst->m_Symbol0 != nullptr) {
       auto *symbolAst = static_cast<SymbolAST *>(paramAst->m_Symbol0.get());

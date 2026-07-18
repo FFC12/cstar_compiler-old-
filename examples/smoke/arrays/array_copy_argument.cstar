@@ -1,0 +1,9 @@
+set_first(int32[3] values, int32 value) :: void {
+  values[0] = value;
+}
+
+main() :: int32 {
+  int32 data[3] = (1, 2, 3);
+  set_first(copy data, 9);
+  ret data[0];
+}

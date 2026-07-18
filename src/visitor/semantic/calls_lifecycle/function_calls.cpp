@@ -175,6 +175,80 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return symbolInfo;
   }
 
+  if (funcName == "unsafe_span") {
+    if (!m_LastSymbolInfo.isRuntimeSizedArray) {
+      this->m_TypeErrorMessages.emplace_back(
+          "`unsafe_span(ptr, len)` can only be used where a `T[]` span "
+          "parameter is expected",
+          symbolInfo, DiagnosticCode::SemanticInvalidQualifier);
+      return symbolInfo;
+    }
+
+    if (argNodes.size() != 2) {
+      this->m_TypeErrorMessages.emplace_back(
+          "`unsafe_span` expects exactly 2 arguments: pointer and length",
+          symbolInfo);
+      return symbolInfo;
+    }
+
+    SymbolInfo pointerInfo;
+    if (argNodes[0]->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *pointerSymbol = static_cast<SymbolAST *>(argNodes[0]);
+      SymbolInfo lookup;
+      auto pointerName = pointerSymbol->m_SymbolName;
+      if (!symbolValidation(pointerName, lookup, pointerInfo)) {
+        return symbolInfo;
+      }
+    } else {
+      auto previousLastSymbol = m_LastSymbolInfo;
+      m_LastSymbolInfo = {};
+      pointerInfo = argNodes[0]->acceptBefore(*this);
+      m_LastSymbolInfo = previousLastSymbol;
+    }
+
+    if (pointerInfo.indirectionLevel == 0 || pointerInfo.isRef) {
+      this->m_TypeErrorMessages.emplace_back(
+          "`unsafe_span` first argument must be a pointer", pointerInfo);
+    }
+
+    const auto expectedType = m_LastSymbolInfo.type;
+    const auto expectedDefinedType = m_LastSymbolInfo.definedTypeName;
+    const bool definedMismatch =
+        expectedType == TypeSpecifier::SPEC_DEFINED &&
+        !SameDefinedTypeName(pointerInfo.definedTypeName, expectedDefinedType);
+    if (pointerInfo.type != expectedType || definedMismatch) {
+      this->m_TypeErrorMessages.emplace_back(
+          "`unsafe_span` pointer element type is incompatible with expected "
+          "`T[]` parameter",
+          pointerInfo);
+    }
+
+    auto previousLastSymbol = m_LastSymbolInfo;
+    auto previousExpectedType = m_ExpectedType;
+    m_LastSymbolInfo = {};
+    m_LastSymbolInfo.type = TypeSpecifier::SPEC_I64;
+    m_ExpectedType = TypeSpecifier::SPEC_I64;
+    SymbolInfo lengthInfo;
+    if (argNodes[1]->m_ExprKind == ExprKind::ScalarExpr) {
+      lengthInfo =
+          InferScalarLiteralType(static_cast<ScalarOrLiteralAST *>(argNodes[1]));
+    } else {
+      lengthInfo = argNodes[1]->acceptBefore(*this);
+    }
+    m_LastSymbolInfo = previousLastSymbol;
+    m_ExpectedType = previousExpectedType;
+    if (!IsIntegerType(lengthInfo.type) || lengthInfo.indirectionLevel > 0) {
+      this->m_TypeErrorMessages.emplace_back(
+          "`unsafe_span` length must be an integer value", lengthInfo);
+    }
+
+    symbolInfo = m_LastSymbolInfo;
+    symbolInfo.isSubscriptable = true;
+    symbolInfo.isRuntimeSizedArray = true;
+    symbolInfo.arrayDimensions.clear();
+    return symbolInfo;
+  }
+
   if (funcName == "strong_count") {
     if (argNodes.size() != 1) {
       this->m_TypeErrorMessages.emplace_back(
@@ -326,6 +400,20 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
     return static_cast<SymbolAST *>(unary->m_Node.get());
   };
 
+  auto copySourceSymbol = [](IAST *node) -> SymbolAST * {
+    if (node == nullptr || node->m_ExprKind != ExprKind::UnaryOp) {
+      return nullptr;
+    }
+
+    auto *unary = static_cast<UnaryOpAST *>(node);
+    if (unary->m_UnaryOpKind != U_COPY ||
+        unary->m_Node->m_ExprKind != ExprKind::SymbolExpr) {
+      return nullptr;
+    }
+
+    return static_cast<SymbolAST *>(unary->m_Node.get());
+  };
+
   for (size_t i = 0; i < argNodes.size(); ++i) {
     const bool isVariadicArg = i >= signature.params.size();
     bool argumentAlreadyChecked = false;
@@ -391,8 +479,81 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
       }
     }
 
-    if (argNodes[i]->m_ExprKind == ExprKind::ScalarExpr) {
-      auto *scalar = static_cast<ScalarOrLiteralAST *>(argNodes[i]);
+	    if (signature.params[i].isRuntimeSizedArray) {
+	      bool isExistingSpanValue = false;
+	      SymbolInfo existingSpanInfo;
+      if (argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
+        auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
+        SymbolInfo lookup;
+        auto argName = argSymbol->m_SymbolName;
+        isExistingSpanValue =
+            symbolValidation(argName, lookup, existingSpanInfo, true) &&
+            existingSpanInfo.isRuntimeSizedArray;
+      }
+
+      const bool isUnsafeSpanCall =
+          argNodes[i]->m_ExprKind == ExprKind::FuncCallExpr &&
+          static_cast<FuncCallAST *>(argNodes[i])->m_FuncSymbol != nullptr &&
+          static_cast<FuncCallAST *>(argNodes[i])
+                  ->m_FuncSymbol->m_ExprKind == ExprKind::SymbolExpr &&
+          static_cast<SymbolAST *>(
+              static_cast<FuncCallAST *>(argNodes[i])->m_FuncSymbol.get())
+                  ->m_SymbolName == "unsafe_span";
+
+      if (!isExistingSpanValue &&
+          argNodes[i]->m_ExprKind != ExprKind::SpanExpr &&
+          !isUnsafeSpanCall) {
+        SymbolInfo argInfo;
+        argInfo.begin = argNodes[i]->getSemLoc().begin;
+        argInfo.end = argNodes[i]->getSemLoc().end;
+        argInfo.line = argNodes[i]->getSemLoc().line;
+        this->m_TypeErrorMessages.emplace_back(
+            "Function argument " + std::to_string(i + 1) +
+                " must use `span value`, `span value[begin..end]`, or "
+                "`unsafe_span(ptr, len)` for `T[]` parameters",
+            argInfo);
+        continue;
+      }
+
+      auto spanInfo = isExistingSpanValue ? existingSpanInfo
+                                          : argNodes[i]->acceptBefore(*this);
+      const bool definedMismatch =
+          signature.params[i].type == TypeSpecifier::SPEC_DEFINED &&
+          !SameDefinedTypeName(spanInfo.definedTypeName,
+                               signature.params[i].definedTypeName);
+      if (!spanInfo.isRuntimeSizedArray || spanInfo.type != signature.params[i].type ||
+          definedMismatch ||
+          spanInfo.indirectionLevel != signature.params[i].indirectionLevel) {
+        this->m_TypeErrorMessages.emplace_back(
+            "Function argument " + std::to_string(i + 1) +
+                " is incompatible with runtime-sized array parameter",
+            spanInfo);
+      }
+      argumentAlreadyChecked = true;
+	      continue;
+	    }
+
+	    if (signature.params[i].requiresExplicitRefArgument &&
+	        !signature.params[i].isDynamicTraitObject) {
+	      const bool isExplicitRefArgument =
+	          argNodes[i]->m_ExprKind == ExprKind::UnaryOp &&
+	          static_cast<UnaryOpAST *>(argNodes[i])->m_UnaryOpKind == U_REF;
+	      if (!isExplicitRefArgument) {
+	        SymbolInfo argInfo;
+	        argInfo.begin = argNodes[i]->getSemLoc().begin;
+	        argInfo.end = argNodes[i]->getSemLoc().end;
+	        argInfo.line = argNodes[i]->getSemLoc().line;
+	        this->m_TypeErrorMessages.emplace_back(
+	            "Function '" + funcName + "' argument " +
+	                std::to_string(i + 1) +
+	                " must use `ref value` for reference parameters",
+	            argInfo);
+	        continue;
+	      }
+	    }
+
+	    if (argNodes[i]->m_ExprKind == ExprKind::ScalarExpr) {
+	      auto *scalar = static_cast<ScalarOrLiteralAST *>(argNodes[i]);
       const auto expectedType = signature.params[i].type;
       const bool expectedInteger = IsIntegerType(expectedType);
 
@@ -409,8 +570,11 @@ SymbolInfo Visitor::preVisit(FuncCallAST &funcCallAst) {
             argInfo);
         continue;
       }
-    } else if (argNodes[i]->m_ExprKind == ExprKind::SymbolExpr) {
-      auto *argSymbol = static_cast<SymbolAST *>(argNodes[i]);
+    } else if (argNodes[i]->m_ExprKind == ExprKind::SymbolExpr ||
+               copySourceSymbol(argNodes[i]) != nullptr) {
+      auto *argSymbol = copySourceSymbol(argNodes[i]) != nullptr
+                            ? copySourceSymbol(argNodes[i])
+                            : static_cast<SymbolAST *>(argNodes[i]);
       SymbolInfo argInfo;
       SymbolInfo matchedSymbol;
       argInfo.symbolName = argSymbol->m_SymbolName;

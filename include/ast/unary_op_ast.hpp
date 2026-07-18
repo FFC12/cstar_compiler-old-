@@ -14,6 +14,7 @@ enum UnaryOpKind {
   U_DEREF,
   U_REF,
   U_BINNEG,
+  U_COPY,
 };
 
 // This is for sign of prefix
@@ -51,6 +52,9 @@ class UnaryOpAST : public IAST {
         break;
       case U_MOVE:
         std::cout << "move";
+        break;
+      case U_COPY:
+        std::cout << "copy";
         break;
       case U_PREFIX:
       case U_POSTFIX:
