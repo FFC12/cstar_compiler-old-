@@ -552,7 +552,7 @@ main() :: int32 {
 }
 ```
 
-Çok boyutlu initializer kaynakta katmanlı yazılır; codegen bunu C benzeri row-major flat belleğe indirir. `[rows:cols]` için lineer index `row * cols + col`; daha yüksek boyutta soldan sağa `linear = linear * next_dim + index` kuralı uygulanır. Struct field array'leri de aynı flat storage ve bounds metadata kuralını izler. Her eksende negatif sabit index boyut içinde kaldığı sürece sondan indeksleme olarak normalize edilir: `arr[-1]` son elemana, `matrix[-1:-1]` son satır son kolona iner. Initializer eleman sayısı `product(dimensions)` ile eşleşmek zorundadır; eksik/fazla initializer controlled diagnostic üretir. Sabit index pozitif veya negatif tarafta array sınırını aşarsa compile-time error üretir; dinamik index için runtime bounds check henüz üretilmez. MVP'de array dimension'ları compile-time positive integer literal olmalıdır. Local primitive/pointer array storage 1 MiB üstünü aşarsa stack overflow riskine karşı diagnostic üretilir; büyük buffer için ileride heap/allocator-backed array/slice modeli kullanılmalıdır.
+Çok boyutlu initializer kaynakta katmanlı yazılır; codegen bunu C benzeri row-major flat belleğe indirir. `[rows:cols]` için lineer index `row * cols + col`; daha yüksek boyutta soldan sağa `linear = linear * next_dim + index` kuralı uygulanır. Struct field array'leri de aynı flat storage ve bounds metadata kuralını izler. Her eksende negatif sabit index boyut içinde kaldığı sürece sondan indeksleme olarak normalize edilir: `arr[-1]` son elemana, `matrix[-1:-1]` son satır son kolona iner. Initializer eleman sayısı `product(dimensions)` ile eşleşmek zorundadır; eksik/fazla initializer controlled diagnostic üretir. Sabit index pozitif veya negatif tarafta array sınırını aşarsa compile-time error üretir; codegen'e out-of-bounds GEP bırakılmaz. Runtime-sized `T[]` span/view indexleri için generated bounds check üretilir: `index >= 0 && index < len`; fail path bugünkü MVP'de `abort()` ile durur. MVP'de array dimension'ları compile-time positive integer literal olmalıdır. Local primitive/pointer array storage 1 MiB üstünü aşarsa stack overflow riskine karşı diagnostic üretilir; büyük buffer için ileride heap/allocator-backed array/slice modeli kullanılmalıdır.
 
 Expression parser delimiter içinde veya operator/comma sonrasında gelen satır sonlarını expression devamı kabul eder. Bu yüzden çok boyutlu initializer, function argümanları, binary expression ve subscript indexleri okunabilir biçimde alt satıra taşınabilir.
 
@@ -585,7 +585,7 @@ main() :: int32 {
 }
 ```
 
-`span data` tüm fixed array'i `T[]` view'e çevirir. `span data[begin..end]` half-open aralık üretir; `:` çok boyutlu array notasyonuna ayrılmıştır. `unsafe_span(ptr, len)` raw pointer interop yüzeyidir ve yalnız `T[]` beklenen bağlamda anlamlıdır. `T[]` local storage deklarasyonu değildir; `int32 values[];` controlled diagnostic üretir.
+`span data` tüm fixed array'i `T[]` view'e çevirir. `span data[begin..end]` half-open aralık üretir; `:` çok boyutlu array notasyonuna ayrılmıştır. Constant range değerleri için `begin < 0`, `end < 0`, `begin > end` ve `end > fixed_dimension` controlled diagnostic üretir. Dynamic range değerleri runtime guard alır: `begin >= 0`, `end >= begin`, `end <= fixed_dimension`. `unsafe_span(ptr, len)` raw pointer interop yüzeyidir ve yalnız `T[]` beklenen bağlamda anlamlıdır; pointer element type'ı ve length integer contract'ı semantic pass'te denetlenir. `T[]` local storage deklarasyonu değildir; `int32 values[];` controlled diagnostic üretir.
 
 ## 8. Fonksiyonlar
 

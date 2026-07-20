@@ -794,6 +794,18 @@ ASTNode CStarParser::expression(bool isSubExpr, int opFor, bool isRet,
       }
       //{ return nullptr; }
     }
+  } else if (is(TokenKind::RANGE)) {
+    m_LastExpressionEndedByParen = false;
+    if (opBucket.empty() && exprBucket.size() == 1) {
+      auto atom = std::move(exprBucket.front());
+      exprBucket.pop_front();
+      return std::move(atom);
+    }
+    if (!exprBucket.empty()) {
+      auto expr = this->reduceExpression(exprBucket, opBucket);
+      return std::move(expr);
+    }
+    return nullptr;
   } else {
     assert(false && "Operator Prec: unreacheable 2!");
   }

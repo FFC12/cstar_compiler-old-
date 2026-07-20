@@ -1,0 +1,9 @@
+// expected: diagnostic
+// expected-code: CST2101
+
+main() :: int32 {
+  int32 data[2] = (1, 2);
+  int32* ptr = ref data[0];
+  int32 value = unsafe_span(ptr, 2);
+  ret value;
+}

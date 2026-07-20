@@ -44,6 +44,20 @@ ValuePtr Visitor::visit(SpanAST &spanAst) {
     end = CastValueToType(end, i64, true);
     m_LastType = previousType;
     m_LastSigned = previousSigned;
+
+    auto *zero = llvm::ConstantInt::get(i64, 0);
+    auto *arrayLength =
+        llvm::ConstantInt::get(i64, arrayType->getArrayNumElements());
+    auto *beginNonNegative = Builder->CreateICmpSGE(begin, zero,
+                                                    "span.begin.nonneg");
+    auto *endAfterBegin = Builder->CreateICmpSGE(end, begin,
+                                                 "span.end.after.begin");
+    auto *endInBounds = Builder->CreateICmpSLE(end, arrayLength,
+                                               "span.end.in.bounds");
+    auto *rangeOk = Builder->CreateAnd(beginNonNegative, endAfterBegin,
+                                       "span.range.lower.ok");
+    rangeOk = Builder->CreateAnd(rangeOk, endInBounds, "span.range.ok");
+    EmitRuntimeCheck(rangeOk, symbol->m_SymbolName + ".span.range");
   }
 
   std::vector<llvm::Value *> idxList = {llvm::ConstantInt::get(i64, 0), begin};

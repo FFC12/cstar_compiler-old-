@@ -67,6 +67,9 @@ llvm::StructType* GetSpanTy();
 llvm::Value* CreateSpanValue(llvm::Value* data, llvm::Value* length);
 llvm::Value* ExtractSpanData(llvm::Value* span);
 llvm::Value* ExtractSpanLength(llvm::Value* span);
+void EmitRuntimeCheck(llvm::Value* condition, const std::string& label);
+void EmitRuntimeBoundsCheck(llvm::Value* index, llvm::Value* length,
+                            const std::string& label);
 std::string DefinedTypeNameFromTypeAst(TypeAST* typeAst);
 std::string DefinedTypeNameFromVarAst(VarAST& varAst);
 std::string ValueOperatorMethodName(BinOpKind kind);

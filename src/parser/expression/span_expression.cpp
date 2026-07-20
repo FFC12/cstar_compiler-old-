@@ -24,38 +24,13 @@ ASTNode CStarParser::advanceSpanExpression() {
 
   if (is(TokenKind::LSQPAR)) {
     hasRange = true;
-    this->advance();
-    if (is(TokenKind::SCALARI) || is(TokenKind::SCALARD) ||
-        is(TokenKind::TRUE) || is(TokenKind::FALSE) || is(TokenKind::LITERAL)) {
-      start = this->advanceConstantOrLiteral();
-    } else if (is(TokenKind::IDENT) || is(TokenKind::STATE) ||
-               is(TokenKind::SELF)) {
-      start = this->advanceSymbol();
-    } else {
-      ParserError("`span` range begin must be a scalar or symbol",
-                  currentTokenInfo());
-    }
+    start = this->expression(true, 4);
 
     if (!is(TokenKind::RANGE)) {
       ParserError("`span` range must use `..` as in `span data[4..32]`",
                   currentTokenInfo());
     }
-    this->advance();
-    if (is(TokenKind::SCALARI) || is(TokenKind::SCALARD) ||
-        is(TokenKind::TRUE) || is(TokenKind::FALSE) || is(TokenKind::LITERAL)) {
-      end = this->advanceConstantOrLiteral();
-    } else if (is(TokenKind::IDENT) || is(TokenKind::STATE) ||
-               is(TokenKind::SELF)) {
-      end = this->advanceSymbol();
-    } else {
-      ParserError("`span` range end must be a scalar or symbol",
-                  currentTokenInfo());
-    }
-
-    if (!is(TokenKind::RSQPAR)) {
-      ParserError("`span` range must be closed with ']'", currentTokenInfo());
-    }
-    this->advance();
+    end = this->expression(true, 3);
   }
 
   auto endLoc = prevTokenInfo().getTokenPositionInfo().end;

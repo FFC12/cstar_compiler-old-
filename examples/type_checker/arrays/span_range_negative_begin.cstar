@@ -1,0 +1,12 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+take(int32[] values) :: int32 {
+  ret values[0];
+}
+
+main() :: int32 {
+  int32 data[4] = (1, 2, 3, 4);
+  ret take(span data[-1..2]);
+}
+

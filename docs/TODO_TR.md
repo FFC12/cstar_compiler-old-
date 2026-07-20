@@ -1172,18 +1172,31 @@ Data structure reality check:
 Kalanlar ve uygulanacak sıra:
 
 1. Array/span safety hardening:
-   - `span data[begin..end]` için compile-time range OOB diagnostic:
-     - `begin <= end`
-     - `end <= fixed_dimension`
-     - negatif range kararının netleştirilmesi.
-   - `T[]` runtime span indexing için safety-mode bounds check:
-     - varsayılan debug/safe modda check.
-     - system/unsafe modülde açık unchecked path.
-   - `unsafe_span(ptr, len)` yalnız beklenen `T[]` bağlamında kalmalı; local variable initializer ve return kullanımında type inference/expected-type netleşmeli.
-   - Diagnostic dosyaları:
-     - span range out-of-bounds.
-     - span range begin > end.
-     - unsafe_span pointer/length type mismatch.
+   - Tamamlandı:
+     - `span data[begin..end]` compile-time constant range diagnostics:
+       - begin negatif reddi.
+       - end negatif reddi.
+       - begin > end reddi.
+       - end > fixed dimension reddi.
+     - `T[]` runtime span read/write indexing için generated bounds check eklendi:
+       - `index >= 0 && index < len`.
+       - check fail olduğunda generated program `abort()` ile durur.
+     - Dynamic `span data[begin..end]` range creation için runtime check eklendi:
+       - begin >= 0.
+       - end >= begin.
+       - end <= fixed array length.
+     - `unsafe_span(ptr, len)` expected `T[]` bağlamı ve pointer/length type diagnostic'leri smoke/type_checker ile genişletildi.
+   - Regression:
+     - `examples/smoke/arrays/span_runtime_index_checked.cstar`
+     - `examples/type_checker/arrays/span_range_oob.cstar`
+     - `examples/type_checker/arrays/span_range_begin_gt_end.cstar`
+     - `examples/type_checker/arrays/span_range_negative_begin.cstar`
+     - `examples/type_checker/arrays/unsafe_span_type_mismatch.cstar`
+     - `examples/type_checker/arrays/unsafe_span_requires_span_context.cstar`
+   - Kalan:
+     - runtime check policy flag'i: debug/safe default, system/unsafe unchecked path.
+     - abort yerine rich runtime diagnostic/panic message.
+     - span range için dynamic begin/end diagnostic'i yerine runtime guard vardır; statik analyzer ileride symbol range proof ekleyebilir.
 
 2. Heap array allocation:
    - Proposal source: `examples/papers/allocator.cstar`, `examples/papers/collections.cstar`.

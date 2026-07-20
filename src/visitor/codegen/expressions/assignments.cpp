@@ -154,6 +154,8 @@ ValuePtr Visitor::visit(AssignmentAST &assignmentAst) {
                         ? llvm::ConstantInt::get(Builder->getInt64Ty(), 0)
                         : assignmentAst.m_SubscriptIndexes.front()->accept(*this);
       index = CastArrayIndex(index);
+      auto *length = ExtractSpanLength(spanValue);
+      EmitRuntimeBoundsCheck(index, length, targetName + ".span.bounds");
 
       auto *typedData =
           Builder->CreatePointerCast(data, llvm::PointerType::get(

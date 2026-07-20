@@ -71,6 +71,44 @@ llvm::Value *ExtractSpanLength(llvm::Value *span) {
   return Visitor::Builder->CreateExtractValue(span, {1}, "span.len");
 }
 
+void EmitRuntimeCheck(llvm::Value *condition, const std::string &label) {
+  auto *currentBlock = Visitor::Builder->GetInsertBlock();
+  if (currentBlock == nullptr) {
+    return;
+  }
+
+  auto *parent = currentBlock->getParent();
+  auto &ctx = Visitor::Builder->getContext();
+  auto *abortBB = llvm::BasicBlock::Create(ctx, label + ".abort", parent);
+  auto *contBB = llvm::BasicBlock::Create(ctx, label + ".cont", parent);
+
+  Visitor::Builder->CreateCondBr(condition, contBB, abortBB);
+
+  Visitor::Builder->SetInsertPoint(abortBB);
+  auto abortCallee = Visitor::Module->getOrInsertFunction(
+      "abort", llvm::FunctionType::get(Visitor::Builder->getVoidTy(), false));
+  Visitor::Builder->CreateCall(abortCallee);
+  Visitor::Builder->CreateUnreachable();
+
+  Visitor::Builder->SetInsertPoint(contBB);
+}
+
+void EmitRuntimeBoundsCheck(llvm::Value *index, llvm::Value *length,
+                            const std::string &label) {
+  auto *i64 = Visitor::Builder->getInt64Ty();
+  index = CastValueToType(index, i64, true);
+  length = CastValueToType(length, i64, true);
+
+  auto *zero = llvm::ConstantInt::get(i64, 0);
+  auto *lowerOk = Visitor::Builder->CreateICmpSGE(index, zero,
+                                                  label + ".lower.ok");
+  auto *upperOk = Visitor::Builder->CreateICmpSLT(index, length,
+                                                  label + ".upper.ok");
+  auto *inBounds = Visitor::Builder->CreateAnd(lowerOk, upperOk,
+                                               label + ".ok");
+  EmitRuntimeCheck(inBounds, label);
+}
+
 llvm::StructType *GetDynamicTraitObjectTy() {
   auto &ctx = Visitor::Builder->getContext();
   return llvm::StructType::get(ctx, {GetI8PtrTy(), GetI8PtrTy()});

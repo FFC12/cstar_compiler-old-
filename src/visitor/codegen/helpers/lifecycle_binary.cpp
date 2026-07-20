@@ -751,6 +751,9 @@ ValuePtr Visitor::createBinaryOp(BinaryOpAST &binaryOpAst) {
         auto *linearIndex = indexes.empty()
                                 ? llvm::ConstantInt::get(Builder->getInt64Ty(), 0)
                                 : CastArrayIndex(indexes.front());
+        auto *length = ExtractSpanLength(spanValue);
+        EmitRuntimeBoundsCheck(linearIndex, length,
+                               symbolName + ".span.bounds");
         auto *gep = Builder->CreateInBoundsGEP(elementType, typedData,
                                                linearIndex,
                                                symbolName + ".span.element");

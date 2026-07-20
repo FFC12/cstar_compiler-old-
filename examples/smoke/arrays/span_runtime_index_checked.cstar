@@ -1,0 +1,17 @@
+// expected: pass
+// expected-exit: 9
+
+read_at(int32[] values, int32 index) :: int32 {
+  ret values[index];
+}
+
+write_at(int32[] values, int32 index, int32 value) :: void {
+  values[index] = value;
+}
+
+main() :: int32 {
+  int32 data[4] = (1, 2, 3, 4);
+  write_at(span data, 2, 9);
+  ret read_at(span data, 2);
+}
+

@@ -1,0 +1,14 @@
+// expected: diagnostic
+// expected-code: CST2001
+
+take(float64[] values) :: float64 {
+  ret values[0];
+}
+
+main() :: int32 {
+  int32 data[2] = (1, 2);
+  int32* ptr = ref data[0];
+  float64 value = take(unsafe_span(ptr, 2));
+  ret cast<int32>(value);
+}
+
