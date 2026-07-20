@@ -21,13 +21,27 @@ ValuePtr Visitor::emitDropForSymbol(const std::string &symbolName,
     if (payloadType == nullptr || payloadType->isVoidTy()) {
       assert(false && "Heap allocation payload type was not found.");
     }
-    auto allocationSize = Module->getDataLayout().getTypeAllocSize(payloadType);
+    auto allocationSize =
+        Module->getDataLayout().getTypeAllocSize(payloadType).getFixedValue();
     auto allocationAlign = Module->getDataLayout().getPrefTypeAlign(payloadType)
                                .value();
-    auto *sizeValue = llvm::ConstantInt::get(Builder->getInt64Ty(),
-                                             allocationSize);
+    llvm::Value *sizeValue = llvm::ConstantInt::get(Builder->getInt64Ty(),
+                                                    allocationSize);
     auto *alignValue = llvm::ConstantInt::get(Builder->getInt64Ty(),
                                               allocationAlign);
+    if (heapInfo.isArray) {
+      if (heapInfo.arrayLength == nullptr || heapInfo.arrayElementType == nullptr) {
+        assert(false && "Heap array metadata is missing.");
+      }
+      auto elementSize =
+          Module->getDataLayout()
+              .getTypeAllocSize(heapInfo.arrayElementType)
+              .getFixedValue();
+      auto *elementSizeValue =
+          llvm::ConstantInt::get(Builder->getInt64Ty(), elementSize);
+      sizeValue = Builder->CreateMul(heapInfo.arrayLength, elementSizeValue,
+                                     "drop.heap.array.bytes");
+    }
     auto freeHeapAllocation = [&](llvm::Value *data, llvm::Value *size,
                                   llvm::Value *align) {
       if (!heapInfo.allocatorSymbol.empty() && !heapInfo.allocatorTypeName.empty()) {

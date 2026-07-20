@@ -1,0 +1,8 @@
+// expected: fail
+// expected-error: Heap array length must be greater than zero
+
+main() :: int32 {
+  int32^ values = new int32[-1];
+  drop values;
+  ret 0;
+}

@@ -1200,36 +1200,56 @@ Kalanlar ve uygulanacak sıra:
 
 2. Heap array allocation:
    - Proposal source: `examples/papers/allocator.cstar`, `examples/papers/collections.cstar`.
+   - Durum:
+     - Primitive heap array MVP tamamlandı:
+       - `int32^ values = new int32[capacity];`
+       - `int32^ values = new(arena) int32[capacity];`
+       - allocation byte size `sizeof(T) * capacity` olarak hesaplanır.
+       - runtime guard: `capacity > 0`.
+       - runtime guard: byte-size overflow reddi.
+       - primitive payload zero-init edilir.
+       - `drop values;` default heap `free` veya explicit allocator `free(ptr, bytes, align)` çağırır.
+       - indexing için ownership pointer doğrudan array değildir; `unsafe_span(values, capacity)` ile `T[]` view üretilir ve span bounds-check hattı kullanılır.
    - Syntax hedefleri:
-     - `int32^ values = new int32[capacity];`
-     - `int32^? values = new? int32[capacity];`
-     - `Point^ points = new(arena) Point[capacity];`
+     - `[x]` `int32^ values = new int32[capacity];`
+     - `[x]` `int32^ values = new(arena) int32[capacity];`
+     - `[ ]` `int32^? values = new? int32[capacity];`
+     - `[ ]` `Point^ points = new(arena) Point[capacity];`
    - Semantic:
-     - element type sized/storable olmalı.
-     - `sizeof(T) * capacity` overflow guard.
-     - primitive element zero-init.
+     - `[x]` element type sized/storable olmalı.
+     - `[x]` `sizeof(T) * capacity` overflow guard.
+     - `[x]` primitive element zero-init.
      - struct element initialization policy netleşmeli:
        - default constructor varsa constructor loop.
        - default constructor yoksa controlled diagnostic.
        - unsafe uninitialized storage ayrı yüzey olmadan açılmamalı.
      - array ownership pointer drop:
-       - primitive array: allocator free.
+       - `[x]` primitive array: allocator free.
        - struct array: initialized element destructors reverse order + allocator free.
    - Codegen:
-     - payload byte size hesabı.
-     - allocator/default heap call.
+     - `[x]` payload byte size hesabı.
+     - `[x]` allocator/default heap call.
      - array length metadata için karar:
        - unique array handle'a length metadata mı eklenecek,
        - yoksa `span values[0..capacity]` çağrısında length ayrı mı tutulacak.
      - nullable `new?` failure branch.
    - Smoke:
-     - primitive heap array allocate/write/read/drop.
-     - allocator-backed primitive heap array free count.
+     - `[x]` primitive heap array allocate/write/read/drop.
+       - `examples/smoke/ownership/primitive_heap_array_span.cstar`
+     - `[x]` allocator-backed primitive heap array free count.
+       - `examples/smoke/ownership/primitive_heap_array_allocator.cstar`
      - struct heap array default constructor/destructor count.
    - Type checker:
      - unsized/void element reddi.
-     - capacity non-integer reddi.
-     - non-default-constructible struct array reddi.
+     - `[x]` capacity non-integer reddi.
+       - `examples/type_checker/ownership/heap_array_non_integer_capacity.cstar`
+     - `[x]` zero/negative constant capacity reddi.
+       - `examples/type_checker/ownership/heap_array_zero_capacity.cstar`
+       - `examples/type_checker/ownership/heap_array_negative_capacity.cstar`
+     - `[x]` struct heap array şu an controlled diagnostic üretir.
+       - `examples/type_checker/ownership/heap_array_struct_pending.cstar`
+     - `[x]` shared heap array şu an controlled diagnostic üretir.
+       - `examples/type_checker/ownership/heap_array_shared_pending.cstar`
      - stack alias array drop reddi.
 
 3. Reallocation/growth contract:

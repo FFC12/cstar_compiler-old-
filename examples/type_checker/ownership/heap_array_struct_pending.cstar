@@ -1,0 +1,16 @@
+// expected: fail
+// expected-error: Heap array allocation currently supports sized primitive element types
+
+struct Point {
+  int32 x;
+
+  constructor(int32 value) {
+    self.x = value;
+  }
+}
+
+main() :: int32 {
+  Point^ points = new Point[4];
+  drop points;
+  ret 0;
+}

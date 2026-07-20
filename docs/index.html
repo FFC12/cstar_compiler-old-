@@ -516,6 +516,10 @@ main() :: int32 {
   ret a + b + c;
 }
 
+read_at(int32[] values, int32 index) :: int32 {
+  ret values[index];
+}
+
 main() :: int32 {
   int32 matrix[2:3] = ((1, 2, 3),
                        (4, 5, 6));
@@ -1021,6 +1025,33 @@ main() :: int32 {
       <li class="en"><code>unsafe_span(ptr, len)</code> is the raw pointer + length interop surface and is valid only where <code>T[]</code> is expected.</li>
       <li class="tr"><code>copy data</code> yalnız açık yazıldığında array kopyası üretir; normal argüman geçişi büyük buffer'ı gizlice kopyalamaz.</li>
       <li class="en"><code>copy data</code> produces an array copy only when spelled explicitly; ordinary argument passing never hides a large buffer copy.</li>
+    </ul>
+
+    <h3><span class="h3-no">10.6</span><span class="tr">Primitive Heap Array Allocation</span><span class="en">Primitive Heap Array Allocation</span></h3>
+    <p class="tr">Primitive element tipleri heap üzerinde unique ownership pointer olarak allocate edilebilir. <code>new T[count]</code> default heap'i, <code>new(allocator) T[count]</code> ise <code>#[lang(allocator)]</code> trait'ini sağlayan explicit allocator değerini kullanır. Payload zero-init edilir; count ve byte-size için runtime guard üretilir.</p>
+    <p class="en">Primitive element types can be allocated on the heap as unique ownership pointers. <code>new T[count]</code> uses the default heap; <code>new(allocator) T[count]</code> uses an explicit allocator value that satisfies the <code>#[lang(allocator)]</code> trait. The payload is zero-initialized, and runtime guards are emitted for count and byte-size.</p>
+    <div class="code"><div class="code-bar"><span class="code-name">heap-array.cstar</span><span class="grow"></span><span class="tag ok">✓ pass</span></div><pre><code class="lang-cstar">fill(int32[] values) :: void {
+  values[0] = 11;
+  values[3] = 18;
+}
+
+main() :: int32 {
+  int32^ values = new int32[4];
+
+  fill(unsafe_span(values, 4));
+  int32 out = read_at(unsafe_span(values, 4), 0) +
+              read_at(unsafe_span(values, 4), 3);
+
+  drop values;       // free veya allocator.free çağrılır / calls free
+  ret out;
+}</code></pre></div>
+    <ul>
+      <li class="tr"><code>T^</code> heap array pointer'ı ownership taşır; bounds metadata taşıyan bir array view değildir.</li>
+      <li class="en"><code>T^</code> heap array pointers carry ownership; they are not array views with bounds metadata.</li>
+      <li class="tr">Indexing ve fonksiyon parametreleri için <code>unsafe_span(values, count)</code> ile açık <code>T[]</code> view üretilir.</li>
+      <li class="en">Indexing and function parameters use an explicit <code>T[]</code> view created with <code>unsafe_span(values, count)</code>.</li>
+      <li class="tr">Struct/shared heap array allocation constructor/destructor element loop ve shared metadata modeli tamamlanana kadar diagnostic üretir.</li>
+      <li class="en">Struct/shared heap array allocation produces a diagnostic until constructor/destructor element loops and shared metadata are complete.</li>
     </ul>
   </section>
   <!-- ============ 11 POINTER ============ -->

@@ -1,5 +1,7 @@
 #include <visitor/semantic/semantic_private.hpp>
 
+#include <functional>
+
 SymbolInfo Visitor::preVisit(NewAST &newAst) {
   SymbolInfo symbolInfo;
   symbolInfo.begin = newAst.m_SemLoc.begin;
@@ -89,6 +91,92 @@ SymbolInfo Visitor::preVisit(NewAST &newAst) {
             symbolInfo);
       }
     }
+  }
+
+  if (newAst.m_IsArrayAllocation) {
+    if (newAst.m_IsShared) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Shared heap array allocation is not supported yet; use unique "
+          "`new T[count]` and pass a `T[]` view with `unsafe_span`",
+          symbolInfo);
+      return symbolInfo;
+    }
+
+    if (!targetIsPrimitive) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Heap array allocation currently supports sized primitive element "
+          "types; struct arrays need constructor/destructor element loops",
+          symbolInfo);
+      return symbolInfo;
+    }
+
+    if (newAst.m_ArrayLength == nullptr) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Heap array allocation expects an element count", symbolInfo);
+      return symbolInfo;
+    }
+
+    auto previousLastSymbol = m_LastSymbolInfo;
+    auto previousExpectedType = m_ExpectedType;
+    m_LastSymbolInfo = {};
+    m_LastSymbolInfo.type = TypeSpecifier::SPEC_I64;
+    m_ExpectedType = TypeSpecifier::SPEC_I64;
+    SymbolInfo lengthInfo;
+    if (auto *scalar =
+            dynamic_cast<ScalarOrLiteralAST *>(newAst.m_ArrayLength.get())) {
+      lengthInfo = InferScalarLiteralType(scalar);
+    } else {
+      lengthInfo = newAst.m_ArrayLength->acceptBefore(*this);
+    }
+    m_LastSymbolInfo = previousLastSymbol;
+    m_ExpectedType = previousExpectedType;
+
+    if (!IsIntegerType(lengthInfo.type) || lengthInfo.indirectionLevel > 0) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Heap array length must be an integer value", lengthInfo);
+      return symbolInfo;
+    }
+
+    std::function<bool(IAST *, int64_t &)> constantLength =
+        [&](IAST *node, int64_t &out) -> bool {
+      if (auto *scalar = dynamic_cast<ScalarOrLiteralAST *>(node)) {
+        if (!scalar->isIntegral() || scalar->isFloat()) {
+          return false;
+        }
+        try {
+          out = std::stoll(scalar->getValue());
+          return true;
+        } catch (...) {
+          this->m_TypeErrorMessages.emplace_back(
+              "Heap array length literal is out of range", lengthInfo);
+          return false;
+        }
+      }
+      if (auto *unary = dynamic_cast<UnaryOpAST *>(node)) {
+        int64_t nested = 0;
+        if (!constantLength(unary->m_Node.get(), nested)) {
+          return false;
+        }
+        if (unary->m_UnaryOpKind == U_NEGATIVE) {
+          out = -nested;
+          return true;
+        }
+        if (unary->m_UnaryOpKind == U_POSITIVE) {
+          out = nested;
+          return true;
+        }
+      }
+      return false;
+    };
+
+    int64_t staticLength = 0;
+    if (constantLength(newAst.m_ArrayLength.get(), staticLength) &&
+        staticLength <= 0) {
+      this->m_TypeErrorMessages.emplace_back(
+          "Heap array length must be greater than zero", lengthInfo);
+    }
+
+    return symbolInfo;
   }
 
   std::vector<IAST *> argNodes;

@@ -47,8 +47,27 @@ ASTNode CStarParser::advanceNewExpression(bool isShared) {
     typeName = advanceDefinedTypeName();
   }
 
-  expected(TokenKind::LPAREN);
   ASTNode args = nullptr;
+  ASTNode arrayLength = nullptr;
+  bool isArrayAllocation = false;
+
+  if (is(TokenKind::LSQPAR)) {
+    isArrayAllocation = true;
+    arrayLength = expression(true, 3);
+    if (is(TokenKind::LPAREN)) {
+      ParserError("Heap array allocation uses `new T[count]`; constructor "
+                  "arguments are not part of the array allocation form",
+                  currentTokenInfo());
+    }
+    auto endPos = prevTokenInfo().getTokenPositionInfo();
+    SemanticLoc semLoc(startPos.begin, endPos.end, startPos.line);
+    return std::make_unique<NewAST>(
+        typeSpec, typeName, std::move(allocator), std::move(args),
+        std::move(arrayLength), isShared, isFallible, isArrayAllocation,
+        semLoc);
+  }
+
+  expected(TokenKind::LPAREN);
   bool outOfSize = false;
   auto tokenAfterOpen = nextTokenInfo(outOfSize).getTokenKind();
   if (outOfSize) {
@@ -64,6 +83,7 @@ ASTNode CStarParser::advanceNewExpression(bool isShared) {
   auto endPos = prevTokenInfo().getTokenPositionInfo();
   SemanticLoc semLoc(startPos.begin, endPos.end, startPos.line);
   return std::make_unique<NewAST>(typeSpec, typeName, std::move(allocator),
-                                  std::move(args), isShared, isFallible,
+                                  std::move(args), std::move(arrayLength),
+                                  isShared, isFallible, isArrayAllocation,
                                   semLoc);
 }

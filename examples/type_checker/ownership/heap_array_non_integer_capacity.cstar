@@ -1,0 +1,8 @@
+// expected: fail
+// expected-error: Heap array length must be an integer value
+
+main() :: int32 {
+  int32^ values = new int32[1.5];
+  drop values;
+  ret 0;
+}

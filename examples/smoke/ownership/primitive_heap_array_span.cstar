@@ -1,0 +1,22 @@
+// expected: pass
+// expected-exit: 29
+
+write_at(int32[] values, int32 index, int32 value) :: void {
+  values[index] = value;
+}
+
+read_at(int32[] values, int32 index) :: int32 {
+  ret values[index];
+}
+
+main() :: int32 {
+  int32^ values = new int32[4];
+
+  write_at(unsafe_span(values, 4), 0, 11);
+  write_at(unsafe_span(values, 4), 3, 18);
+  int32 result = read_at(unsafe_span(values, 4), 0) +
+                 read_at(unsafe_span(values, 4), 3);
+
+  drop values;
+  ret result;
+}

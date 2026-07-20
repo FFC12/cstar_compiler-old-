@@ -188,12 +188,18 @@ class Visitor {
   std::vector<std::string> m_CodegenProtocolStateOrder;
   bool m_EmittingProtocolScopeExit = false;
   std::set<std::string> m_CodegenDroppedSymbols;
+  bool m_LastNewIsArrayAllocation = false;
+  llvm::Value* m_LastNewArrayLengthValue = nullptr;
+  llvm::Type* m_LastNewArrayElementType = nullptr;
   struct HeapAllocationInfo {
     TypeSpecifier type = TypeSpecifier::SPEC_DEFINED;
     std::string typeName;
     std::string allocatorSymbol;
     std::string allocatorTypeName;
     bool isShared = false;
+    bool isArray = false;
+    llvm::Value* arrayLength = nullptr;
+    llvm::Type* arrayElementType = nullptr;
   };
   std::map<std::string, HeapAllocationInfo> m_HeapAllocations;
   std::vector<llvm::BasicBlock*> m_LoopBreakTargets;

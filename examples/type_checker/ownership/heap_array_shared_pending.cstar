@@ -1,0 +1,8 @@
+// expected: fail
+// expected-error: Shared heap array allocation is not supported yet
+
+main() :: int32 {
+  int32* values = shared new int32[4];
+  drop values;
+  ret 0;
+}

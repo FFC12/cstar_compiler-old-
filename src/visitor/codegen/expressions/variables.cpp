@@ -373,6 +373,13 @@ ValuePtr Visitor::visit(VarAST &varAst) {
     allocationInfo.type = newAst->m_TypeSpec;
     allocationInfo.typeName = newAst->m_TypeName;
     allocationInfo.isShared = newAst->m_IsShared;
+    allocationInfo.isArray = newAst->m_IsArrayAllocation;
+    allocationInfo.arrayLength = m_LastNewIsArrayAllocation
+                                     ? m_LastNewArrayLengthValue
+                                     : nullptr;
+    allocationInfo.arrayElementType = m_LastNewIsArrayAllocation
+                                          ? m_LastNewArrayElementType
+                                          : nullptr;
     if (newAst->m_Allocator != nullptr &&
         newAst->m_Allocator->m_ExprKind == ExprKind::SymbolExpr) {
       auto *allocatorSymbol =

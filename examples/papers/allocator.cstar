@@ -23,8 +23,12 @@
 // Implemented MVP note:
 // - Struct unique/shared `new`, explicit allocator `new(allocator)`, nullable
 //   `new?`, and primitive sized allocation such as `new int32(7)` are working.
+// - Primitive heap arrays are working with `new int32[count]` and
+//   `new(allocator) int32[count]`. Payload is zero-initialized, size overflow is
+//   guarded, and `drop` calls the matching heap/allocator free hook.
 // - Remaining proposal/hardening areas are visible desugar output, allocation
-//   failure policy, array allocation/reallocation, and optional fused shared
+//   failure policy, nullable array allocation failure branches,
+//   struct/shared array allocation/reallocation, and optional fused shared
 //   control-block layout.
 
 #[lang(allocator)]
@@ -116,18 +120,16 @@ try_create_primitive(ArenaAllocator& arena) :: int32^? {
 }
 
 create_heap_array(ArenaAllocator& arena, usize capacity) :: int32^? {
-    // Proposal:
-    //
-    // int32^? values = new?(arena) int32[capacity];
-    // ret values;
-    //
-    // Required semantics:
-    // - payload bytes = sizeof(int32) * capacity with overflow diagnostic;
-    // - zero-init primitive elements unless an explicit uninitialized surface is
-    //   introduced for unsafe/system modules;
-    // - `drop values;` frees the allocation exactly once;
-    // - `span values[0..capacity]` creates a runtime-sized view without copy.
-    ret nil;
+    int32^? values = new?(arena) int32[capacity];
+    ret values;
+}
+
+sum_heap_array_view(int32[] view) :: int32 {
+    ret view[0];
+}
+
+sum_heap_array(int32^ values, usize capacity) :: int32 {
+    ret sum_heap_array_view(unsafe_span(values, capacity));
 }
 
 resize_heap_array(ArenaAllocator& arena, int32^ old_values,

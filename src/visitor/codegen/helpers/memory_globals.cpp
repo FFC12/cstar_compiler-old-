@@ -298,6 +298,12 @@ llvm::Value *CreateDefaultHeapAlloc(llvm::Type *type,
   return Visitor::Builder->CreateCall(GetMallocFunction(), {sizeValue}, name);
 }
 
+llvm::Value *CreateDefaultHeapAllocBytes(llvm::Value *byteSize,
+                                         const llvm::Twine &name) {
+  byteSize = CastValueToType(byteSize, Visitor::Builder->getInt64Ty(), false);
+  return Visitor::Builder->CreateCall(GetMallocFunction(), {byteSize}, name);
+}
+
 void CreateDefaultHeapFree(llvm::Value *ptr) {
   auto *asI8 = Visitor::Builder->CreatePointerCast(ptr, GetI8PtrTy());
   Visitor::Builder->CreateCall(GetFreeFunction(), {asI8});

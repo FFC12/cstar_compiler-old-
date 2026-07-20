@@ -128,9 +128,16 @@ use_ranges() :: void {
     draw_fixed(copy data);
 }
 
+use_heap_array(Allocator& allocator, usize capacity) :: int32 {
+    int32^ values = new(allocator) int32[capacity];
+    draw_range(unsafe_span(values, capacity));
+    drop values;
+    ret 0;
+}
+
 // Dynamic collections are library types over allocator-backed heap arrays.
-// This syntax is proposal-level until generic containers and heap array
-// allocation are implemented.
+// Primitive heap array allocation is implemented; the generic container layer
+// remains proposal-level until generic structs and reallocation contracts land.
 include "std:collections" as collections
 
 use_vector(Allocator& allocator) :: int32 {

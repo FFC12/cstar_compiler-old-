@@ -1,5 +1,7 @@
 #include <visitor/codegen/codegen_private.hpp>
 
+#include <limits>
+
 llvm::Function *Visitor::declareFunction(FuncAST &funcAst) {
   if (auto *function = Visitor::Module->getFunction(funcAst.m_FuncName)) {
     return function;
@@ -584,6 +586,10 @@ ValuePtr Visitor::visit(FuncCallAST &funcCallAst) {
 }
 
 ValuePtr Visitor::visit(NewAST &newAst) {
+  m_LastNewIsArrayAllocation = false;
+  m_LastNewArrayLengthValue = nullptr;
+  m_LastNewArrayElementType = nullptr;
+
   const bool targetIsDefined = newAst.m_TypeSpec == TypeSpecifier::SPEC_DEFINED;
   llvm::Type *payloadType = nullptr;
   if (targetIsDefined) {
@@ -596,6 +602,87 @@ ValuePtr Visitor::visit(NewAST &newAst) {
     if (payloadType == nullptr || payloadType->isVoidTy()) {
       assert(false && "`new` target primitive type must be sized.");
     }
+  }
+
+  if (newAst.m_IsArrayAllocation) {
+    if (targetIsDefined || newAst.m_IsShared || newAst.m_ArrayLength == nullptr) {
+      assert(false && "Heap array semantic validation failed.");
+    }
+
+    llvm::Type *previousType = m_LastType;
+    bool previousSigned = m_LastSigned;
+    m_LastType = Builder->getInt64Ty();
+    m_LastSigned = true;
+    auto *elementCount = newAst.m_ArrayLength->accept(*this);
+    elementCount = CastValueToType(elementCount, Builder->getInt64Ty(), true);
+    m_LastType = previousType;
+    m_LastSigned = previousSigned;
+
+    auto *zero = llvm::ConstantInt::get(Builder->getInt64Ty(), 0);
+    auto *countPositive =
+        Builder->CreateICmpSGT(elementCount, zero, "new.array.count.positive");
+    EmitRuntimeCheck(countPositive, "new.array.count");
+
+    const auto elementSize =
+        Module->getDataLayout().getTypeAllocSize(payloadType).getFixedValue();
+    const auto elementAlign =
+        Module->getDataLayout().getPrefTypeAlign(payloadType).value();
+    auto *elementSizeValue =
+        llvm::ConstantInt::get(Builder->getInt64Ty(), elementSize);
+    auto *maxElementCount = llvm::ConstantInt::get(
+        Builder->getInt64Ty(), std::numeric_limits<uint64_t>::max() /
+                                 elementSize);
+    auto *fits =
+        Builder->CreateICmpULE(elementCount, maxElementCount,
+                               "new.array.count.fits");
+    EmitRuntimeCheck(fits, "new.array.size.overflow");
+
+    auto *byteSize =
+        Builder->CreateMul(elementCount, elementSizeValue, "new.array.bytes");
+    auto *alignValue = llvm::ConstantInt::get(Builder->getInt64Ty(),
+                                             elementAlign);
+
+    llvm::Value *storage = nullptr;
+    if (newAst.m_Allocator != nullptr &&
+        newAst.m_Allocator->m_ExprKind == ExprKind::SymbolExpr) {
+      auto *allocatorSymbol =
+          static_cast<SymbolAST *>(newAst.m_Allocator.get());
+      auto allocatorInfo = getSymbolInfo(allocatorSymbol->m_SymbolName);
+      auto *allocatorStorage =
+          FindStorage(m_LocalVarsOnScope, m_GlobalVars,
+                      allocatorSymbol->m_SymbolName);
+      auto *allocFunction =
+          Module->getFunction(allocatorInfo.definedTypeName + ".alloc");
+      if (allocatorStorage != nullptr && allocFunction != nullptr) {
+        if (allocatorInfo.isRef &&
+            m_ReferenceParamValueTypes.count(allocatorSymbol->m_SymbolName) >
+                0) {
+          auto *slotType = GetPointeeType(allocatorStorage);
+          allocatorStorage = CreateLoad(
+              allocatorStorage, slotType,
+              allocatorSymbol->m_SymbolName + ".array.allocator.ref");
+        }
+        storage = Builder->CreateCall(
+            allocFunction, {allocatorStorage, byteSize, alignValue},
+            "new.array.alloc");
+      }
+    }
+
+    if (storage == nullptr) {
+      storage = CreateDefaultHeapAllocBytes(byteSize, "new.array.malloc");
+    }
+
+    auto *payloadPointerType = GetType(newAst.m_TypeSpec, 1);
+    storage = Builder->CreatePointerCast(storage, payloadPointerType);
+    Builder->CreateMemSet(storage, llvm::ConstantInt::get(Builder->getInt8Ty(), 0),
+                          byteSize, llvm::MaybeAlign(1));
+
+    m_LastNewIsArrayAllocation = true;
+    m_LastNewArrayLengthValue = elementCount;
+    m_LastNewArrayElementType = payloadType;
+    m_LastType = payloadPointerType;
+    m_LastSigned = false;
+    return storage;
   }
 
   std::vector<IAST *> argNodes;

@@ -142,6 +142,8 @@ llvm::FunctionCallee GetMallocFunction();
 llvm::FunctionCallee GetFreeFunction();
 llvm::Value* CreateDefaultHeapAlloc(llvm::Type* type,
                                     const llvm::Twine& name);
+llvm::Value* CreateDefaultHeapAllocBytes(llvm::Value* byteSize,
+                                         const llvm::Twine& name);
 void CreateDefaultHeapFree(llvm::Value* ptr);
 llvm::Value* CreateLoad(llvm::Value* address, llvm::Type* type,
                         const llvm::Twine& name = "");

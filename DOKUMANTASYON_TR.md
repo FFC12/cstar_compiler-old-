@@ -587,6 +587,8 @@ main() :: int32 {
 
 `span data` tüm fixed array'i `T[]` view'e çevirir. `span data[begin..end]` half-open aralık üretir; `:` çok boyutlu array notasyonuna ayrılmıştır. Constant range değerleri için `begin < 0`, `end < 0`, `begin > end` ve `end > fixed_dimension` controlled diagnostic üretir. Dynamic range değerleri runtime guard alır: `begin >= 0`, `end >= begin`, `end <= fixed_dimension`. `unsafe_span(ptr, len)` raw pointer interop yüzeyidir ve yalnız `T[]` beklenen bağlamda anlamlıdır; pointer element type'ı ve length integer contract'ı semantic pass'te denetlenir. `T[]` local storage deklarasyonu değildir; `int32 values[];` controlled diagnostic üretir.
 
+Heap array allocation primitive element tipleri için çalışır. `new int32[capacity]` veya `new(arena) int32[capacity]` unique ownership pointer (`int32^`) üretir; allocation boyutu `sizeof(int32) * capacity` olarak hesaplanır, overflow ve `capacity <= 0` runtime guard alır, payload zero-init edilir. Bu pointer doğrudan bounds metadata taşıyan array değildir; fonksiyonlara runtime-sized view geçirmek için `unsafe_span(values, capacity)` kullanılmalıdır. `drop values;` default heap `free` veya explicit allocator `free(ptr, bytes, align)` çağırır. Struct/shared heap array allocation için constructor/destructor element loop ve shared metadata modeli tamamlanana kadar controlled diagnostic üretilir.
+
 ## 8. Fonksiyonlar
 
 ### 8.1 Temel syntax
